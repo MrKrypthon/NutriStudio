@@ -1,0 +1,9 @@
+node_modules/
+dist/
+storage/documents/*.pdf
+.env
+*.local
+.DS_Store
+npm-debug.log*
+.claude/
+.directory

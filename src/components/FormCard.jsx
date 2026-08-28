@@ -1,0 +1,1 @@
+export default function FormCard({title,fields}) { return <div className="form-card"><h3>{title}</h3><div className="form-grid">{fields.map((f,i)=>{const [label,value]=f.split('|');return <label key={label}>{label}{i===fields.length-1&&value===''?<textarea placeholder="Añade una nota..." />:<input value={value} readOnly />}</label>})}</div></div> }

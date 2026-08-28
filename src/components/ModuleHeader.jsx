@@ -1,0 +1,1 @@
+export default function ModuleHeader({ eyebrow, title, subtitle, action }) { return <div className="module-header"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="subtitle">{subtitle}</p></div>{action}</div> }

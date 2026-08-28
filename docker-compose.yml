@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: nutri-studio-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nutri
+      POSTGRES_PASSWORD: nutri
+      POSTGRES_DB: nutri_studio
+    ports:
+      - "5432:5432"
+    volumes:
+      - nutri_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  nutri_postgres_data:

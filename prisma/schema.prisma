@@ -1,0 +1,343 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  NUTRITIONIST
+  ASSISTANT
+}
+
+enum RecordStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  PENDING_CONFIRMATION
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AppointmentType {
+  INITIAL
+  FOLLOW_UP
+  QUICK_CONTROL
+  EMERGENCY
+  BLOCK
+}
+
+enum ConsultationStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum PlanStatus {
+  DRAFT
+  READY
+  PUBLISHED
+  SUPERSEDED
+}
+
+model Practice {
+  id             String        @id @default(uuid())
+  name           String
+  timeZone       String        @default("America/Mexico_City")
+  locale         String        @default("es-MX")
+  defaultPalette String        @default("minimal")
+  users          User[]
+  patients       Patient[]
+  appointments   Appointment[]
+  recipes        Recipe[]
+  ingredients    Ingredient[]
+  tasks          Task[]
+  auditEvents    AuditEvent[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model User {
+  id             String         @id @default(uuid())
+  practiceId     String
+  practice       Practice       @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  name           String
+  email          String
+  role           UserRole       @default(NUTRITIONIST)
+  status         RecordStatus   @default(ACTIVE)
+  consultations  Consultation[]
+  auditEvents    AuditEvent[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@unique([practiceId, email])
+  @@index([practiceId, status])
+}
+
+model Patient {
+  id                 String         @id @default(uuid())
+  practiceId         String
+  practice           Practice       @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  firstName          String
+  lastName           String
+  birthDate          DateTime?
+  sex                String?
+  occupation         String?
+  email              String?
+  phone              String?
+  status             RecordStatus   @default(ACTIVE)
+  consentDataAt      DateTime?
+  consentRecordingAt DateTime?
+  appointments       Appointment[]
+  consultations      Consultation[]
+  measurements       Measurement[]
+  plans              NutritionPlan[]
+  documents          Document[]
+  tasks              Task[]
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  archivedAt         DateTime?
+
+  @@index([practiceId, lastName, firstName])
+  @@index([practiceId, status])
+}
+
+model Appointment {
+  id            String             @id @default(uuid())
+  practiceId    String
+  practice      Practice           @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  patientId     String?
+  patient       Patient?           @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  startAt       DateTime
+  endAt         DateTime
+  type          AppointmentType
+  status        AppointmentStatus  @default(SCHEDULED)
+  notifyVia     String[]
+  internalNote  String?
+  patientNote   String?
+  recurrenceRule String?
+  timeZone      String
+  consultation  Consultation?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([practiceId, startAt, endAt])
+  @@index([patientId, startAt])
+}
+
+model Consultation {
+  id             String             @id @default(uuid())
+  patientId      String
+  patient        Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointmentId  String?            @unique
+  appointment    Appointment?       @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  nutritionistId String
+  nutritionist   User               @relation(fields: [nutritionistId], references: [id])
+  status         ConsultationStatus @default(DRAFT)
+  version        Int                @default(1)
+  templateId     String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  sections       ClinicalSection[]
+  measurements   Measurement[]
+  diagnoses      Diagnosis[]
+  plans          NutritionPlan[]
+  documents      Document[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([patientId, createdAt])
+}
+
+model ClinicalSection {
+  id             String       @id @default(uuid())
+  consultationId String
+  consultation   Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  sectionKey     String
+  payload        Json
+  completionState String      @default("empty")
+  lastSavedAt    DateTime     @updatedAt
+  lastSavedBy    String
+
+  @@unique([consultationId, sectionKey])
+}
+
+model Measurement {
+  id              String        @id @default(uuid())
+  patientId       String
+  patient         Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultationId  String
+  consultation    Consultation  @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  measuredAt      DateTime
+  weightKg        Decimal?      @db.Decimal(6, 2)
+  heightCm        Decimal?      @db.Decimal(6, 2)
+  waistCm         Decimal?      @db.Decimal(6, 2)
+  hipCm           Decimal?      @db.Decimal(6, 2)
+  bodyFatPercent  Decimal?      @db.Decimal(5, 2)
+  muscleMassKg    Decimal?      @db.Decimal(6, 2)
+  method          String?
+  notes           String?
+  createdAt       DateTime      @default(now())
+
+  @@index([patientId, measuredAt])
+}
+
+model Diagnosis {
+  id             String       @id @default(uuid())
+  consultationId String
+  consultation   Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  domain         String
+  code           String?
+  problem        String
+  etiology       String?
+  evidence       String?
+  createdAt      DateTime     @default(now())
+}
+
+model NutritionPlan {
+  id               String        @id @default(uuid())
+  patientId        String
+  patient          Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultationId   String
+  consultation     Consultation  @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  status           PlanStatus    @default(DRAFT)
+  version          Int           @default(1)
+  goal             String?
+  formula          String?
+  activityMethod   String?
+  activityFactor   Decimal?      @db.Decimal(5, 3)
+  metsPayload      Json?
+  targetKcal       Int?
+  carbsPercent     Decimal?      @db.Decimal(5, 2)
+  proteinPercent   Decimal?      @db.Decimal(5, 2)
+  fatPercent       Decimal?      @db.Decimal(5, 2)
+  evaluation       Json?
+  menuSnapshot     Json?
+  publishedAt      DateTime?
+  mealSlots        MealSlot[]
+  documents        Document[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@index([patientId, status])
+}
+
+model MealSlot {
+  id          String        @id @default(uuid())
+  planId      String
+  plan        NutritionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int
+  mealType    String
+  recipeId    String?
+  recipe      Recipe?       @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  servings    Decimal?      @db.Decimal(5, 2)
+  notes       String?
+
+  @@unique([planId, dayOfWeek, mealType])
+}
+
+model Recipe {
+  id            String      @id @default(uuid())
+  practiceId    String
+  practice      Practice    @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  name          String
+  mealTypes     String[]
+  portions      Decimal?    @db.Decimal(5, 2)
+  instructions String?
+  nutrition     Json
+  restrictions  String[]
+  imageUrl      String?
+  status        RecordStatus @default(ACTIVE)
+  version       Int         @default(1)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  ingredients   RecipeIngredient[]
+  mealSlots     MealSlot[]
+}
+
+model Ingredient {
+  id             String       @id @default(uuid())
+  practiceId     String
+  practice       Practice     @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  name           String
+  group          String
+  unit           String
+  nutrition      Json
+  equivalence    Json?
+  status         RecordStatus @default(ACTIVE)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  recipes         RecipeIngredient[]
+}
+
+model RecipeIngredient {
+  id           String     @id @default(uuid())
+  recipeId     String
+  recipe       Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  quantity     Decimal    @db.Decimal(8, 3)
+  unit         String
+  equivalence  Decimal?   @db.Decimal(8, 3)
+  createdAt    DateTime   @default(now())
+
+  @@unique([recipeId, ingredientId])
+  @@index([ingredientId])
+}
+
+model Document {
+  id             String        @id @default(uuid())
+  patientId      String
+  patient        Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultationId String?
+  consultation   Consultation? @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  planId         String?
+  plan           NutritionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  type           String
+  version        Int           @default(1)
+  sections       Json
+  storageKey     String?
+  checksum       String?
+  generatedAt    DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime      @default(now())
+}
+
+model Task {
+  id          String    @id @default(uuid())
+  practiceId  String
+  practice    Practice  @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  patientId   String?
+  patient     Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  type        String
+  dueAt       DateTime
+  status      String    @default("pending")
+  referenceId String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([practiceId, status, dueAt])
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
+  practiceId String
+  practice   Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entity     String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([practiceId, entity, entityId])
+}
