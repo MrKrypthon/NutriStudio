@@ -28,6 +28,7 @@ const moduleToSlug = { 'Hoy': 'hoy', 'Agenda': 'agenda', 'Pacientes': 'pacientes
 
 export default function App() {
   const [active, setActiveState] = useState(() => pathToModule[window.location.pathname] || 'Hoy')
+  const [selectedPatientId, setSelectedPatientId] = useState(DEMO_PATIENT_ID)
   const setActive = (next) => {
     setActiveState(next)
     const slug = moduleToSlug[next]
@@ -69,20 +70,20 @@ export default function App() {
 
   if (active === 'Hoy') return <DashboardPage setActive={setActive} />
   if (active === 'Agenda') return <AgendaPage setActive={setActive} />
-  if (active === 'Pacientes') return <PatientsPage setActive={setActive} />
-  if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} />
+  if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
+  if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nueva receta') return <NewRecipePage setActive={setActive} />
   if (active === 'Configuración') return <SettingsPage setActive={setActive} />
   if (active === 'Importar alimentos') return <ImportFoodsPage setActive={setActive} />
-  if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} />
-  if (active === 'Plan nutricional') return <NutritionCalculatorPage setActive={setActive} />
-  if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} />
+  if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} />
+  if (active === 'Plan nutricional') return <NutritionCalculatorPage setActive={setActive} patientId={selectedPatientId} />
+  if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Distribución de macros') return <MacroDistributionPage setActive={setActive} />
-  if (active === 'Documento') return <DocumentPage setActive={setActive} />
+  if (active === 'Documento') return <DocumentPage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
   if (active === 'Seguimientos') return <FollowupsPage setActive={setActive} />
-  if (active === 'Consultas') return <ConsultationsPage setActive={setActive} />
-  if (active === 'Consulta + plan') return <PatientWorkspacePage setActive={setActive} />
+  if (active === 'Consultas') return <ConsultationsPage setActive={setActive} patientId={selectedPatientId} />
+  if (active === 'Consulta + plan') return <PatientWorkspacePage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Plantillas') return <TemplatesPage setActive={setActive} />
   if (active === 'Recetas') return <RecipesPage setActive={setActive} />
   if (active === 'Ingredientes') return <IngredientsPage setActive={setActive} />

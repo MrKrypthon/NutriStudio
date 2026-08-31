@@ -3,7 +3,7 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import DocumentPage from '../documents/DocumentPage.jsx'
 import { patientsApi, plansApi, recipesApi } from '../../lib/api.js'
-import { DEMO_PATIENT_ID } from '../../lib/demoContext.js'
+import { usePatient } from '../../lib/usePatient.js'
 
 const MEAL_TYPES = [
   { key: 'breakfast', label: 'Desayuno' },
@@ -23,7 +23,10 @@ const DAYS = [
 const RECIPE_COLORS = ['coral', 'blue', 'yellow', 'purple']
 const slotKey = (day, mealType) => `${day}:${mealType}`
 
-export default function PlanStudioPage({ setActive }) {
+export default function PlanStudioPage({ setActive, patientId }) {
+  const { patient } = usePatient(patientId)
+  const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
+  const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
   const [step, setStep] = useState(0)
   const steps = ['Evaluación', 'Plan alimentario', 'Distribución', 'Semana', 'Entrega']
 
@@ -39,7 +42,7 @@ export default function PlanStudioPage({ setActive }) {
     let cancelled = false
     async function load() {
       try {
-        const [plansResponse, recipesResponse] = await Promise.all([patientsApi.plans(DEMO_PATIENT_ID), recipesApi.list()])
+        const [plansResponse, recipesResponse] = await Promise.all([patientsApi.plans(patientId), recipesApi.list()])
         if (cancelled) return
         const activePlan = (plansResponse.items || []).find((item) => item.status !== 'PUBLISHED') || null
         const initialSlots = {}
@@ -54,7 +57,7 @@ export default function PlanStudioPage({ setActive }) {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [patientId])
 
   const recipeById = (id) => recipes.find((recipe) => recipe.id === id)
 
@@ -108,7 +111,7 @@ export default function PlanStudioPage({ setActive }) {
 
   const meals = MEAL_TYPES.map((m) => m.label)
 
-  return <AppChrome active="Plan nutricional" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Mariana Torres</button><div className="clinical-person"><span className="person-avatar coral">MT</span><div><h2>Plan nutricional</h2><span>Borrador · Se guarda automáticamente</span></div></div><button className="primary">Guardar borrador</button></div><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => setStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
+  return <AppChrome active="Plan nutricional" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← {patientName}</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>Plan nutricional</h2><span>Borrador · Se guarda automáticamente</span></div></div><button className="primary">Guardar borrador</button></div><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => setStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
 
     {step === 0 && <><ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="La información del expediente se utiliza para iniciar este plan." action={<button className="secondary">Usar plantilla</button>} /><div className="plan-grid"><div className="plan-card panel"><h3>Datos antropométricos</h3><div className="form-grid three"><label>Sexo<input value="Femenino" readOnly /></label><label>Fecha nacimiento<input value="14/02/1998" readOnly /></label><label>Edad<input value="28 años" readOnly /></label><label>Peso actual<input value="72.4 kg" readOnly /></label><label>Talla<input value="165 cm" readOnly /></label><label>IMC calculado<input value="26.6" readOnly /></label></div></div><div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3><div className="ideal-number">62.5 <small>– 67.8 kg</small></div><p className="muted">Rango estimado para su estatura</p><div className="range"><i /></div><div className="range-labels"><span>Mínimo</span><span>Ideal</span><span>Máximo</span></div></div><div className="plan-card panel full"><h3>Objetivo terapéutico</h3><div className="tag-row"><span>Reducir peso</span><span>Mejorar energía</span><span>Cambio de hábitos</span></div><textarea className="wide-textarea" placeholder="Resultado clínico y conductual esperado..." defaultValue="Reducir 4 kg en 12 semanas, priorizando energía y adherencia sostenible." /></div></div></>}
 
@@ -135,11 +138,11 @@ export default function PlanStudioPage({ setActive }) {
         {MEAL_TYPES.map((meal) => <div className="week-row" key={meal.key}><span>{meal.label}</span>{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <div className="week-meal" key={day.n} onClick={() => openPicker(meal.key, day.n)} style={{ cursor: 'pointer' }}>{recipe ? <><div className="week-image coral">✦</div><small>{recipe.name}</small></> : <small className="muted">+ Elegir</small>}{recipe && <button type="button" className="link-button" onClick={(e) => { e.stopPropagation(); clearSlot(meal.key, day.n) }}>Quitar</button>}</div> })}</div>)}
       </div>}
       {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea una consulta y un plan para esta paciente antes de armar la semana.</p></div>}
-      <div className="recommendations panel"><h3>Indicaciones para Mariana</h3><div className="form-grid"><label>Consumo de agua<textarea defaultValue="8 vasos (2 L) al día" /></label><label>Recomendaciones generales<textarea placeholder="Añade recomendaciones, educación o suplementos..." /></label></div></div>
+      <div className="recommendations panel"><h3>Indicaciones para {patientName}</h3><div className="form-grid"><label>Consumo de agua<textarea defaultValue="8 vasos (2 L) al día" /></label><label>Recomendaciones generales<textarea placeholder="Añade recomendaciones, educación o suplementos..." /></label></div></div>
       {pickerTarget && <div className="recipe-overlay"><div className="recipe-modal panel"><div className="modal-head"><div><p className="eyebrow">RECETAS PARA {MEAL_TYPES.find((m) => m.key === pickerTarget.mealType)?.label.toUpperCase()}{pickerTarget.day ? ` · ${DAYS.find((d) => d.n === pickerTarget.day)?.label}` : ''}</p><h2>Elige una preparación</h2></div><button onClick={() => setPickerTarget(null)}>×</button></div><div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div><div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas del catálogo para este tiempo de comida.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => chooseRecipe(recipe)} key={recipe.id}><div className={'recipe-image ' + RECIPE_COLORS[i % RECIPE_COLORS.length]}><span>✦</span></div><b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal</small></button>)}</div></div></div>}
     </>}
 
-    {step === 4 && <DocumentPage setActive={setActive} />}
+    {step === 4 && <DocumentPage setActive={setActive} patientId={patientId} />}
 
     <div className="wizard-footer"><button className="secondary" onClick={() => setStep(Math.max(0, step - 1))}>← Anterior</button><span>{saveState === 'saving' ? 'Guardando…' : saveState === 'saved' ? 'Guardado automáticamente' : saveState === 'error' ? 'Error al guardar los últimos cambios' : 'Guardado automáticamente'}</span><button className="primary" onClick={() => step === 4 ? setActive('Documentos') : setStep(Math.min(step + 1, 4))}>Siguiente paso <span>→</span></button></div>
   </div></AppChrome>

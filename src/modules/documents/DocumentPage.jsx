@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import { documentsApi, patientsApi, plansApi } from '../../lib/api.js'
-import { DEMO_PATIENT_ID } from '../../lib/demoContext.js'
+import { usePatient } from '../../lib/usePatient.js'
 
 const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', lunch: 'Comida', snack: 'Colación', dinner: 'Cena' }
 const DAY_LABELS = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 7: 'Domingo' }
 
-export default function DocumentPage({ setActive }) {
+export default function DocumentPage({ setActive, patientId }) {
+  const { patient } = usePatient(patientId)
+  const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const [preview, setPreview] = useState(false)
   const [loadState, setLoadState] = useState('loading')
   const [plan, setPlan] = useState(null)
@@ -19,13 +21,13 @@ export default function DocumentPage({ setActive }) {
     let cancelled = false
     async function load() {
       try {
-        const plansResponse = await patientsApi.plans(DEMO_PATIENT_ID)
+        const plansResponse = await patientsApi.plans(patientId)
         const items = plansResponse.items || []
         const activePlan = items.find((item) => item.status === 'PUBLISHED') || items[0] || null
         if (cancelled) return
         setPlan(activePlan)
         if (activePlan?.status === 'PUBLISHED') {
-          const documentsResponse = await documentsApi.list(`?patientId=${DEMO_PATIENT_ID}&type=nutrition_plan`)
+          const documentsResponse = await documentsApi.list(`?patientId=${patientId}&type=nutrition_plan`)
           if (cancelled) return
           const existing = (documentsResponse.items || []).find((doc) => doc.planId === activePlan.id)
           if (existing) setDocument(existing)
@@ -37,7 +39,7 @@ export default function DocumentPage({ setActive }) {
     }
     load()
     return () => { cancelled = true }
-  }, [])
+  }, [patientId])
 
   const publishPlan = async () => {
     if (!plan) return
@@ -87,7 +89,7 @@ export default function DocumentPage({ setActive }) {
         <button className="back-button" onClick={() => setActive('Plan nutricional')}>← Regresar al plan</button>
         <p className="eyebrow">ENTREGA · PLAN DE ALIMENTACIÓN</p>
         <h1>Publicar y entregar</h1>
-        <p className="subtitle">{plan ? `Paciente: ${plan.patient ? `${plan.patient.firstName} ${plan.patient.lastName}` : 'Mariana Torres'}` : 'No hay un plan para esta paciente todavía.'}</p>
+        <p className="subtitle">{plan ? `Paciente: ${patientName}` : 'No hay un plan para esta paciente todavía.'}</p>
       </div>
       <div>
         <button className="secondary" onClick={() => setPreview(!preview)}>{preview ? 'Editar' : 'Vista previa'}</button>
@@ -108,7 +110,7 @@ export default function DocumentPage({ setActive }) {
         <div className="paper-toolbar"><span>Vista previa del plan</span><small>{plan.status === 'PUBLISHED' ? 'Publicado · no se modificará' : 'Borrador · aún puede cambiar'}</small></div>
         <div className="paper">
           <div className="paper-brand"><div className="brand-mark">N</div><div><b>nutri·studio</b><small>PLAN DE ALIMENTACIÓN</small></div></div>
-          <div className="paper-meta"><b>Menú semanal</b><span>Paciente: {plan.patient ? `${plan.patient.firstName} ${plan.patient.lastName}` : 'Mariana Torres'}</span><span>Nutrióloga: Gabriela Alonso</span></div>
+          <div className="paper-meta"><b>Menú semanal</b><span>Paciente: {patientName}</span><span>Nutrióloga: Gabriela Alonso</span></div>
           {plan.targetKcal && <div className="paper-highlight"><b>Objetivo: {plan.goal || 'Sin objetivo registrado'}</b><p>{plan.targetKcal} kcal/día · {plan.carbsPercent}% carbohidratos · {plan.proteinPercent}% proteína · {plan.fatPercent}% grasas</p></div>}
           {byDay.size === 0 && <p className="muted">Este plan todavía no tiene recetas asignadas en la distribución semanal.</p>}
           {[...byDay.entries()].sort((a, b) => a[0] - b[0]).map(([dayOfWeek, entries]) => <div className="paper-section" key={dayOfWeek}><b>{DAY_LABELS[dayOfWeek] || `Día ${dayOfWeek}`}</b><p>{entries.map((entry) => `${MEAL_TYPE_LABELS[entry.mealType] || entry.mealType}: ${entry.recipeName} (${entry.kcal} kcal)`).join(' · ')}</p></div>)}

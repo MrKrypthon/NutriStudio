@@ -42,6 +42,12 @@ app.post('/api/v1/patients', async (request, reply) => {
   return reply.code(201).send(patient)
 })
 
+app.get('/api/v1/patients/:patientId', async (request, reply) => {
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  return patient
+})
+
 app.get('/api/v1/patients/:patientId/consultations', async (request) => {
   const consultations = await prisma.consultation.findMany({ where: { patientId: request.params.patientId }, include: { sections: true, measurements: true, diagnoses: true, plans: true }, orderBy: { createdAt: 'desc' } })
   return { items: consultations }
