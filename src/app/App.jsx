@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react'
-import { appointmentsApi } from '../lib/api.js'
 import { DEMO_PATIENT_ID } from '../lib/demoContext.js'
 
 import DashboardPage from '../modules/dashboard/DashboardPage.jsx'
 import AgendaPage from '../modules/calendar/AgendaPage.jsx'
 import PatientsPage from '../modules/patients/PatientsPage.jsx'
 import NewPatientPage from '../modules/patients/NewPatientPage.jsx'
-import PatientWorkspacePage from '../modules/patients/PatientWorkspacePage.jsx'
 import ClinicalRecordPage from '../modules/clinical-record/ClinicalRecordPage.jsx'
 import ConsultationsPage from '../modules/clinical-record/ConsultationsPage.jsx'
 import NutritionCalculatorPage from '../modules/nutrition-plan/NutritionCalculatorPage.jsx'
@@ -50,24 +48,6 @@ export default function App() {
     return () => document.removeEventListener('click', onSidebarConfig)
   }, [])
 
-  useEffect(() => {
-    const onAppointmentSubmit = async (event) => {
-      const button = event.target.closest('.appointment-modal .modal-actions .primary')
-      if (!button) return
-      const modal = button.closest('.appointment-modal')
-      const fields = modal?.querySelectorAll('select')
-      const date = modal?.querySelector('input[type="date"]')?.value
-      const time = fields?.[1]?.value || '14:00'
-      const duration = Number((fields?.[2]?.value || '60').match(/\d+/)?.[0] || 60)
-      const notes = modal?.querySelectorAll('textarea')
-      try {
-        await appointmentsApi.create({ patientId: DEMO_PATIENT_ID, startAt: `${date}T${time}:00`, durationMinutes: duration, type: 'FOLLOW_UP', notifyVia: ['whatsapp'], internalNote: notes?.[0]?.value, patientNote: notes?.[1]?.value })
-      } catch { /* The modal remains usable in demo mode. */ }
-    }
-    document.addEventListener('click', onAppointmentSubmit)
-    return () => document.removeEventListener('click', onAppointmentSubmit)
-  }, [])
-
   if (active === 'Hoy') return <DashboardPage setActive={setActive} />
   if (active === 'Agenda') return <AgendaPage setActive={setActive} />
   if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
@@ -83,7 +63,6 @@ export default function App() {
   if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
   if (active === 'Seguimientos') return <FollowupsPage setActive={setActive} />
   if (active === 'Consultas') return <ConsultationsPage setActive={setActive} patientId={selectedPatientId} />
-  if (active === 'Consulta + plan') return <PatientWorkspacePage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Plantillas') return <TemplatesPage setActive={setActive} />
   if (active === 'Recetas') return <RecipesPage setActive={setActive} />
   if (active === 'Ingredientes') return <IngredientsPage setActive={setActive} />
