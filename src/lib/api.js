@@ -91,6 +91,12 @@ export const documentsApi = {
   downloadUrl: (id) => `${import.meta.env.VITE_API_URL || ''}/documents/${id}/download`,
 }
 
+export const tasksApi = {
+  list: (query = '') => apiRequest(`/tasks${query}`),
+  create: (payload) => apiRequest('/tasks', { method: 'POST', body: JSON.stringify(payload) }),
+  complete: (id) => apiRequest(`/tasks/${id}/complete`, { method: 'POST' }),
+}
+
 export const recipesApi = {
   list: (query = '') => apiRequest(`/recipes${query}`),
   create: (payload) => apiRequest('/recipes', { method: 'POST', body: JSON.stringify(payload) }),
