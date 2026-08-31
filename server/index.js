@@ -60,7 +60,11 @@ app.get('/api/v1/patients/:patientId/plans', async (request) => {
 
 app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => {
   const { appointmentId, nutritionistId, templateId } = request.body || {}
-  const userId = nutritionistId || request.headers['x-user-id']
+  // Sin sesión real todavía (ver auditoría de seguridad pendiente), no hay forma de saber
+  // qué profesional está trabajando; se usa el primero de la práctica como responsable.
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  let userId = nutritionistId || request.headers['x-user-id']
+  if (!userId) userId = (await prisma.user.findFirst({ where: { practiceId } }))?.id
   if (!userId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La consulta necesita un profesional responsable.', fields: { nutritionistId: 'required' } })
   const consultation = await prisma.consultation.create({ data: { patientId: request.params.patientId, appointmentId, nutritionistId: userId, templateId, status: 'IN_PROGRESS', startedAt: new Date() } })
   if (appointmentId) await prisma.appointment.update({ where: { id: appointmentId }, data: { status: 'COMPLETED' } })
