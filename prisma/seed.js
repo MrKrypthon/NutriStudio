@@ -56,7 +56,7 @@ async function main() {
   await prisma.clinicalSection.createMany({ data: [
     { consultationId: consultation.id, sectionKey: 'summary', lastSavedBy: nutritionist.id, completionState: 'complete', payload: { reason: 'Mejorar composición corporal y energía', goal: 'Reducir 4 kg en 12 semanas' } },
     { consultationId: consultation.id, sectionKey: 'general', lastSavedBy: nutritionist.id, completionState: 'complete', payload: { referral: 'Recomendación médica', priority: 'Composición corporal' } },
-    { consultationId: consultation.id, sectionKey: 'anthropometric', lastSavedBy: nutritionist.id, completionState: 'complete', payload: { weightKg: 72.4, heightCm: 165, bmi: 26.6, waistCm: 84, bodyFatPercent: 31.2 } },
+    { consultationId: consultation.id, sectionKey: 'anthropometric', lastSavedBy: nutritionist.id, completionState: 'complete', payload: { 'Peso (kg)': '72.4', 'Talla (cm)': '165', 'IMC calculado': '26.6', 'Análisis de peso y talla': 'Sobrepeso, con tendencia favorable', 'Cintura (cm)': '84' } },
     { consultationId: consultation.id, sectionKey: 'dietary', lastSavedBy: nutritionist.id, completionState: 'in_progress', payload: { mealsPerDay: 3, waterLiters: 1.2, preferences: ['Avena', 'Pollo', 'Fruta'] } },
     { consultationId: consultation.id, sectionKey: 'treatment', lastSavedBy: nutritionist.id, completionState: 'in_progress', payload: { recommendations: ['Aumentar agua', 'Incluir fibra', 'Caminar 30 minutos'] } },
   ] })

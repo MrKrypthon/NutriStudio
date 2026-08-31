@@ -78,8 +78,8 @@ export const plansApi = {
 
 export const clinicalApi = {
   get: (id) => apiRequest(`/consultations/${id}`),
-  create: (patientId, payload) => apiRequest(`/patients/${patientId}/consultations`, { method: 'POST', headers: { 'x-user-id': '00000000-0000-0000-0000-000000000002' }, body: JSON.stringify(payload) }),
-  saveSection: (consultationId, sectionKey, payload, updatedAt) => apiRequest(`/consultations/${consultationId}/sections/${sectionKey}`, { method: 'PUT', headers: { 'x-user-id': '00000000-0000-0000-0000-000000000002' }, body: JSON.stringify({ payload, updatedAt }) }),
+  create: (patientId, payload) => apiRequest(`/patients/${patientId}/consultations`, { method: 'POST', body: JSON.stringify(payload) }),
+  saveSection: (consultationId, sectionKey, payload, updatedAt) => apiRequest(`/consultations/${consultationId}/sections/${sectionKey}`, { method: 'PUT', body: JSON.stringify({ payload, updatedAt }) }),
   complete: (id) => apiRequest(`/consultations/${id}/complete`, { method: 'POST' }),
 }
 
