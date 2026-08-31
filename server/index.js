@@ -236,13 +236,14 @@ app.get('/api/v1/dashboard/today', async (request) => {
   const start = new Date(`${date}T00:00:00.000Z`)
   const end = new Date(`${date}T23:59:59.999Z`)
   const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
-  const [appointments, pendingConfirmations, followUps, activePatients] = await prisma.$transaction([
+  const [appointments, pendingConfirmations, followUps, activePatients, tasks] = await prisma.$transaction([
     prisma.appointment.findMany({ where: { practiceId, startAt: { gte: start, lte: end } }, include: { patient: true }, orderBy: { startAt: 'asc' } }),
     prisma.appointment.count({ where: { practiceId, startAt: { gte: start, lte: end }, status: 'PENDING_CONFIRMATION' } }),
     prisma.task.count({ where: { practiceId, status: 'pending', type: { in: ['nutrition_plan', 'consultation_report'] } } }),
     prisma.patient.count({ where: { practiceId, status: 'ACTIVE' } }),
+    prisma.task.findMany({ where: { practiceId, status: 'pending' }, include: { patient: true }, orderBy: { dueAt: 'asc' }, take: 3 }),
   ])
-  return { date, stats: { appointments: appointments.length, pendingConfirmations, followUps, activePatients }, appointments, tasks: [] }
+  return { date, stats: { appointments: appointments.length, pendingConfirmations, followUps, activePatients }, appointments, tasks }
 })
 
 app.post('/api/v1/nutrition-plans/calculate', async (request, reply) => {
