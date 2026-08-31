@@ -133,12 +133,15 @@ app.post('/api/v1/tasks', async (request, reply) => {
   const { patientId, type, dueAt, referenceId } = request.body || {}
   if (!patientId || !type || !dueAt) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Paciente, tipo y fecha límite son obligatorios.', fields: { patientId: !patientId, type: !type, dueAt: !dueAt } })
   const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: { patientId: 'not_found' } })
   const task = await prisma.task.create({ data: { practiceId, patientId, type, dueAt: new Date(dueAt), referenceId }, include: { patient: true } })
   return reply.code(201).send(task)
 })
 
 app.post('/api/v1/tasks/:taskId/complete', async (request, reply) => {
-  const task = await prisma.task.findUnique({ where: { id: request.params.taskId } })
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const task = await prisma.task.findFirst({ where: { id: request.params.taskId, practiceId } })
   if (!task) return reply.code(404).send({ code: 'TASK_NOT_FOUND', message: 'Seguimiento no encontrado.', fields: {} })
   if (task.status === 'completed') return reply.code(409).send({ code: 'TASK_ALREADY_COMPLETED', message: 'Este seguimiento ya se marcó como entregado.', fields: {} })
   return prisma.task.update({ where: { id: task.id }, data: { status: 'completed', completedAt: new Date() }, include: { patient: true } })
