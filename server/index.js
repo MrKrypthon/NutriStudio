@@ -115,6 +115,35 @@ app.post('/api/v1/appointments/:appointmentId/confirm', async (request, reply) =
   return prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'CONFIRMED' }, include: { patient: true } })
 })
 
+app.get('/api/v1/tasks', async (request) => {
+  const { status, type } = request.query
+  const tasks = await prisma.task.findMany({
+    where: {
+      practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID,
+      ...(status ? { status } : {}),
+      ...(type ? { type } : {}),
+    },
+    include: { patient: true },
+    orderBy: { dueAt: 'asc' },
+  })
+  return { items: tasks }
+})
+
+app.post('/api/v1/tasks', async (request, reply) => {
+  const { patientId, type, dueAt, referenceId } = request.body || {}
+  if (!patientId || !type || !dueAt) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Paciente, tipo y fecha límite son obligatorios.', fields: { patientId: !patientId, type: !type, dueAt: !dueAt } })
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const task = await prisma.task.create({ data: { practiceId, patientId, type, dueAt: new Date(dueAt), referenceId }, include: { patient: true } })
+  return reply.code(201).send(task)
+})
+
+app.post('/api/v1/tasks/:taskId/complete', async (request, reply) => {
+  const task = await prisma.task.findUnique({ where: { id: request.params.taskId } })
+  if (!task) return reply.code(404).send({ code: 'TASK_NOT_FOUND', message: 'Seguimiento no encontrado.', fields: {} })
+  if (task.status === 'completed') return reply.code(409).send({ code: 'TASK_ALREADY_COMPLETED', message: 'Este seguimiento ya se marcó como entregado.', fields: {} })
+  return prisma.task.update({ where: { id: task.id }, data: { status: 'completed', completedAt: new Date() }, include: { patient: true } })
+})
+
 app.get('/api/v1/recipes', async (request) => {
   const { search = '', mealType, status = 'ACTIVE' } = request.query
   const where = {

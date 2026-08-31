@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "api": "node server/index.js",
-    "dev:all": "concurrently -k -n API,WEB -c green,blue \"npm run api\" \"VITE_API_URL=http://localhost:3001 npm run dev\"",
+    "dev:all": "concurrently -k -n API,WEB -c green,blue \"npm run api\" \"VITE_API_URL=http://localhost:3001/api/v1 npm run dev\"",
     "build": "vite build",
     "preview": "vite preview",
     "db:generate": "prisma generate",
