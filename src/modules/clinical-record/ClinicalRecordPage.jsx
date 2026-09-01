@@ -11,6 +11,13 @@ const SAVE_LABELS = { idle: '● Guardado', editing: '● Editando…', saving: 
 const FAMILY_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'HTA', 'Dislipidemias', 'Nefropatías', 'Cáncer', 'Enf. cerebrovasculares', 'Otros']
 const RELATIVES = ['Mamá/Papá', 'Abuelos', 'Tíos']
 const SYMPTOMS = ['Diarrea', 'Estreñimiento', 'Náusea', 'Úlcera', 'Pirosis', 'Ceguera nocturna', 'Vómito', 'Gastritis', 'Poliuria', 'Polidipsia', 'Polifagia']
+const PHYSICAL_EXAM = [
+  ['Piel y ojos', ['Petequias', 'Xerosis conjuntival', 'Piel seca', 'Dermatitis pelagrosa', 'Manchas de Bitot', 'Hiperqueratosis folicular', 'Edema', 'Queratomalacia', 'Conjuntivas pálidas', 'Cianosis', 'Xantelasma', 'Piel quebradiza y escamosa']],
+  ['Cabello', ['Caídas', 'Frágil y delgado']],
+  ['Boca', ['Sialorrea', 'Halitosis', 'Queilosis', 'Glositis', 'Sangrado de encías', 'Xerostomía', 'Atrofia papilar']],
+  ['Dentadura', ['Sarro', 'Movilización de piezas dentales', 'Deterioro del esmalte']],
+  ['Uñas', ['Fragilidad', 'Reblandecimiento', 'Onicolisis', 'Hiperqueratosis subungueal', 'Coiloniquia']],
+]
 
 function TogglePill({ active, label, onClick }) {
   return <button type="button" className={active ? 'toggle-pill active' : 'toggle-pill'} onClick={onClick}>{label}</button>
@@ -187,8 +194,14 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
       </div>
 
       : tab === 'Clínico' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Clínico</h1><p className="subtitle">Revisión de síntomas de {patientName}. Marca los que aplican.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Clínico</h1><p className="subtitle">Revisión de síntomas y exploración física de {patientName}. Marca los que aplican.</p>
+        <h3 className="exam-subhead">Síntomas</h3>
         <div className="symptom-grid">{SYMPTOMS.map((symptom) => { const active = !!currentValues[symptom]; return <TogglePill key={symptom} active={active} label={symptom} onClick={() => updateField(symptom, !active)} /> })}</div>
+        <h3 className="exam-subhead">Exploración física</h3>
+        {PHYSICAL_EXAM.map(([group, findings]) => <div key={group} className="exam-group">
+          <b className="exam-group-title">{group}</b>
+          <div className="symptom-grid">{findings.map((finding) => { const key = `Exploración: ${finding}`; const active = !!currentValues[key]; return <TogglePill key={finding} active={active} label={finding} onClick={() => updateField(key, !active)} /> })}</div>
+        </div>)}
         <FormCard title="Notas adicionales" fields={['Notas clínicas|']} values={currentValues} onFieldChange={updateField} />
       </div>
 
