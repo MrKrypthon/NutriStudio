@@ -40,8 +40,9 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Recetas** | Estado de sincronización, macros y tipo de comida correctos por receta |
 | **Configuración** | Nombre profesional, email y zona horaria de la práctica, reales y persistentes |
 | **Editar paciente + línea de tiempo** | `PATCH /patients/:id` real; el cajón de cada paciente muestra el historial real de citas, consultas, planes y documentos |
+| **Entrega de documentos** | "Marcar como entregado" real sobre `POST /documents/:id/deliver`; el PDF de informe clínico ya imprime mediciones, diagnóstico y tratamiento reales en vez de texto genérico |
 
-(Negrita = construido en esta sesión: fase 3, 4, 5, 6, 7, y los bugfixes de Recetas, control de acceso y CORS.)
+(Negrita = construido en esta sesión: fase 3 a 8, y los bugfixes de Recetas, control de acceso y CORS.)
 
 ## Backend real, pantalla sin conectar
 
@@ -49,8 +50,6 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 |---|---|
 | Editar paciente | No existe ni `PATCH /patients/:id` ni botón — hay que construir ambos |
 | Línea de tiempo del paciente | No existe, ni backend ni pantalla |
-| Entrega por WhatsApp/email | `POST /documents/:id/deliver` existe; ningún botón de la interfaz lo llama |
-| PDF de informe clínico | Se genera pero con texto genérico — trae mediciones y diagnósticos reales de la BD y nunca los imprime |
 | Configuración — horarios y logo | "Horarios de atención" y "Logo de la práctica" siguen estáticos: no hay modelo para disponibilidad semanal ni almacenamiento de archivos todavía. Nombre/email/zona horaria ya son reales |
 
 ## No existe todavía (ni modelo, ni API, ni pantalla real)
@@ -62,12 +61,13 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | Editar estado del paciente (activo/archivado) | `PATCH /patients/:id` no toca `status` todavía; sólo datos de contacto |
 | Biblioteca de educación | Pantalla completamente estática, sin modelo |
 | Auditoría | Modelo `AuditEvent` existe; ninguna ruta lo usa |
+| Envío real por WhatsApp/email | "Marcar como entregado" ya es real, pero sigue siendo un registro manual — no manda nada. La integración de envío real sigue diferida, como dice RF-09 del documento original |
 | Equivalentes SMAE | Bloqueado a propósito — la tabla oficial mexicana requiere licenciarse |
 | Grabación / transcripción | Diferido a propósito — exige consentimiento y revisión humana antes de tocarlo |
 
 ## Deuda técnica encontrada esta sesión (no bloquea, pero hay que volver)
 
-- **Mismo patrón de control de acceso roto que se corrigió en `/tasks`** existe en endpoints más viejos que nadie ha auditado: `GET/POST /consultations/:id`, `PUT .../sections/:key`, `POST /appointments/:id/confirm`, `GET/PUT/POST /recipes/:id`, `GET/PUT/POST /plans/:id`, endpoints de `/documents`. Ninguno valida que el recurso pertenezca a la práctica de quien llama. Vale la pena una pasada dedicada, probablemente junto con la fase de autenticación.
+- **Mismo patrón de control de acceso roto que se corrigió en `/tasks`** existe en endpoints más viejos que nadie ha auditado: `GET/POST /consultations/:id`, `PUT .../sections/:key`, `POST /appointments/:id/confirm`, `GET/PUT/POST /recipes/:id`. Ya se corrigió en `/patients/:id`, `/patients/:id/timeline`, `/plans/:id/publish`, `/documents/nutrition-plan`, `/documents/:id/generate`, `/documents/:id/download` y `/documents/:id/deliver` (fases 7 y 8). Falta una pasada dedicada sobre lo que queda, probablemente junto con la fase de autenticación.
 - El bug de `Content-Type: application/json` forzado en peticiones sin body (ya corregido en el helper compartido `apiRequest`) y el de horas calculadas con reloj local en vez de UTC (ya corregido en Agenda/Hoy/Seguimientos) son clases de bug a vigilar si se agrega código nuevo con fechas o `POST`/endpoints sin body.
 - **`@fastify/cors` sin `methods` configurado limita a `GET,HEAD,POST` por default (cambió en v11).** Todo endpoint `PUT` de este API (secciones de expediente, evaluación/distribución de plan, ingredientes de receta, práctica) fallaba en silencio con cualquier llamada cross-origin — solo funcionaba a través del proxy de Vite (mismo origen). Ya corregido explícitamente en el registro de `cors`, pero es la clase de bug que solo aparece al probar contra `npm run dev:all` o en producción real (front y API en dominios distintos) — vale la pena probar ahí, no solo contra el proxy de Vite.
 
@@ -77,6 +77,6 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 
 1. ~~Configuración real~~ — hecho (fase 6): nombre profesional, email, zona horaria. Horarios de atención y logo siguen pendientes por falta de modelo.
 2. ~~Editar paciente + línea de tiempo~~ — hecho (fase 7): `PATCH /patients/:id` real, y el cajón de cada paciente muestra su historial de citas/consultas/planes/documentos. Falta editar `status` (activo/archivado).
-3. **Entrega por WhatsApp/email + PDF de informe con datos reales** — cierra el círculo de "Entrega" que quedó a medias.
-4. **Autenticación** — la más grande. Antes de empezarla conviene una sesión aparte solo para decidir alcance (login+sesión nada más, vs. aplicar roles owner/nutritionist/assistant en cada endpoint, vs. además arreglar el patrón de control de acceso de arriba).
+3. ~~Entrega + PDF de informe con datos reales~~ — hecho (fase 8): "Marcar como entregado" real, y el PDF de informe clínico imprime mediciones/diagnóstico/tratamiento reales. El envío real por WhatsApp/email sigue diferido a propósito.
+4. **Autenticación** — la más grande. Antes de empezarla conviene una sesión aparte solo para decidir alcance (login+sesión nada más, vs. aplicar roles owner/nutritionist/assistant en cada endpoint, vs. además la pasada de control de acceso que sigue pendiente en `consultations`, `appointments/confirm` y `recipes`).
 5. **Plantillas / Biblioteca de educación** — quedan al final porque necesitan diseño de esquema nuevo y no bloquean nada del flujo clínico principal.

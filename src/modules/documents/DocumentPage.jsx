@@ -15,6 +15,7 @@ export default function DocumentPage({ setActive, patientId }) {
   const [document, setDocument] = useState(null)
   const [publishState, setPublishState] = useState('idle')
   const [genState, setGenState] = useState('idle')
+  const [deliverState, setDeliverState] = useState('idle')
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -79,6 +80,20 @@ export default function DocumentPage({ setActive, patientId }) {
     link.click()
   }
 
+  const markDelivered = async () => {
+    if (!document) return
+    setDeliverState('delivering')
+    setError('')
+    try {
+      const delivered = await documentsApi.deliver(document.id)
+      setDocument(delivered)
+      setDeliverState('delivered')
+    } catch (err) {
+      setDeliverState('error')
+      setError(err.message || 'No se pudo registrar la entrega.')
+    }
+  }
+
   const menu = plan?.menuSnapshot || []
   const byDay = new Map()
   for (const entry of menu) { if (!byDay.has(entry.dayOfWeek)) byDay.set(entry.dayOfWeek, []); byDay.get(entry.dayOfWeek).push(entry) }
@@ -121,10 +136,13 @@ export default function DocumentPage({ setActive, patientId }) {
         <p className="eyebrow">ESTADO DE LA ENTREGA</p>
         <h2>{plan.status === 'PUBLISHED' ? 'Plan publicado' : 'Plan en borrador'}</h2>
         <p className="muted">{plan.status === 'PUBLISHED' ? 'El menú quedó congelado: aunque edites una receta después, este documento no cambiará.' : 'Publica el plan para congelar el menú y poder generar su PDF.'}</p>
-        <div className="document-summary"><span>{menu.length} comidas asignadas</span><b>{plan.status === 'PUBLISHED' ? (document?.storageKey ? 'PDF listo' : 'Falta generar el PDF') : 'Falta publicar'}</b></div>
+        <div className="document-summary"><span>{menu.length} comidas asignadas</span><b>{plan.status === 'PUBLISHED' ? (document?.storageKey ? (document.deliveredAt ? 'Entregado' : 'PDF listo') : 'Falta generar el PDF') : 'Falta publicar'}</b></div>
         {plan.status !== 'PUBLISHED' && <button className="primary full-button" disabled={publishState === 'publishing' || !menu.length} onClick={publishPlan}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar plan'} <span>→</span></button>}
         {plan.status === 'PUBLISHED' && !document?.storageKey && <button className="primary full-button" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Generando…' : 'Generar PDF'} <span>→</span></button>}
         {plan.status === 'PUBLISHED' && document?.storageKey && <button className="primary full-button" onClick={downloadPdf}>Descargar PDF <span>→</span></button>}
+        {plan.status === 'PUBLISHED' && document?.storageKey && (document.deliveredAt
+          ? <p className="muted">✓ Marcado como entregado el {new Date(document.deliveredAt).toLocaleDateString('es-MX')}. El envío por WhatsApp/email todavía se hace fuera de la app.</p>
+          : <button className="secondary full-button" disabled={deliverState === 'delivering'} onClick={markDelivered}>{deliverState === 'delivering' ? 'Registrando…' : 'Marcar como entregado'}</button>)}
       </aside>
     </div>}
   </div></AppChrome>
