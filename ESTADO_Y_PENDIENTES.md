@@ -52,6 +52,7 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Editar paciente + línea de tiempo** | `PATCH /patients/:id` real; el cajón de cada paciente muestra el historial real de citas, consultas, planes y documentos |
 | **Entrega de documentos** | "Marcar como entregado" real sobre `POST /documents/:id/deliver`; el PDF de informe clínico ya imprime mediciones, diagnóstico y tratamiento reales en vez de texto genérico |
 | **Autenticación** | Login real con contraseña (bcrypt) + sesión (JWT en `Authorization: Bearer`, sin cookies). `practiceId`/`userId` ya no vienen de un header que cualquiera puede mandar — vienen de la sesión verificada. Esto cierra TODO el patrón de control de acceso roto de golpe, sin necesidad de la auditoría endpoint por endpoint que seguía pendiente. Sin roles aplicados todavía (ver abajo) |
+| **Flujo completo tallas → receta → plan** | Probado de punta a punta con una paciente real (Valeria Mendoza Ruiz): expediente con mediciones reales → cálculo de requerimiento (Mifflin-St Jeor, 2114 kcal/día) → 4 alimentos importados en vivo de USDA (pollo, quinoa, espinaca, aguacate) → 2 recetas propias con esos ingredientes y macros calculados de verdad → distribución de 7 días × 4 tiempos → plan publicado → PDF de menú semanal generado y descargado. Queda como paciente de ejemplo real en la base |
 
 (Negrita = construido en esta sesión: fase 3 a 9, y los bugfixes de Recetas, control de acceso y CORS.)
 
@@ -60,6 +61,8 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | Qué falta conectar | Detalle |
 |---|---|
 | Configuración — horarios y logo | "Horarios de atención" y "Logo de la práctica" siguen estáticos: no hay modelo para disponibilidad semanal ni almacenamiento de archivos todavía. Nombre/email/zona horaria ya son reales |
+| Registrar medición (Measurement) | `POST /consultations/:id/measurements` ya existe (creado al armar el flujo de Valeria) pero ningún botón de la pestaña Antropométrico lo llama todavía — sin esto, el PDF de informe clínico sigue diciendo "Sin mediciones registradas" aunque la sección se haya guardado |
+| Crear informe clínico (consultation_report) | Solo existe `POST /documents/nutrition-plan`; no hay endpoint para generar el documento de tipo informe de consulta bajo demanda — los únicos que existen los creó el seed |
 
 ## No existe todavía (ni modelo, ni API, ni pantalla real)
 
@@ -79,6 +82,7 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 - El bug de `Content-Type: application/json` forzado en peticiones sin body (ya corregido en el helper compartido `apiRequest`) y el de horas calculadas con reloj local en vez de UTC (ya corregido en Agenda/Hoy/Seguimientos) son clases de bug a vigilar si se agrega código nuevo con fechas o `POST`/endpoints sin body.
 - **Agenda y Hoy estaban anclados a una fecha demo fija (26 de agosto de 2026)** en vez de la fecha real del sistema — al navegar a la semana actual no se marcaba ningún día como "hoy", y el saludo/agenda de Hoy siempre mostraba el miércoles 26 sin importar qué día fuera en realidad. Ya corregido en ambas pantallas para usar la fecha real (ver AgendaPage y DashboardPage). Si aparece el mismo patrón en otra pantalla, es la misma clase de bug.
 - **`@fastify/cors` sin `methods` configurado limita a `GET,HEAD,POST` por default (cambió en v11).** Todo endpoint `PUT` de este API (secciones de expediente, evaluación/distribución de plan, ingredientes de receta, práctica) fallaba en silencio con cualquier llamada cross-origin — solo funcionaba a través del proxy de Vite (mismo origen). Ya corregido explícitamente en el registro de `cors`, pero es la clase de bug que solo aparece al probar contra `npm run dev:all` o en producción real (front y API en dominios distintos) — vale la pena probar ahí, no solo contra el proxy de Vite.
+- **`NewRecipePage` guardaba recetas casi inservibles, en silencio, desde que se conectó a la API.** Tres bugs en el mismo archivo, encontrados al construir el flujo de Valeria: (1) mandaba `mealTypes` en español minúsculas (`desayuno`, `comida`...) en vez de las claves en inglés que usa el resto del sistema (`breakfast`, `lunch`...) — el picker de recetas del Constructor de plan filtra por esa clave exacta, así que **ninguna receta creada desde la pantalla real podía aparecer nunca al armar un plan**; (2) "Porciones" y "Preparación" no estaban conectados a estado — lo que se escribiera ahí se descartaba y siempre se guardaba `portions:1` e `instructions:'Preparación pendiente de completar.'`; (3) nunca llamaba a `recipesApi.recalculate` tras crear, así que toda receta nueva se quedaba con `nutrition: {}` (0 kcal) hasta que alguien la recalculara a mano por API. Los tres ya están corregidos y probados por la UI real, no solo por API.
 
 ## Siguiente fase sugerida
 
