@@ -9,7 +9,9 @@ import { fileURLToPath } from 'node:url'
 // (DIETOCALCULO.xlsx) — the raw spreadsheet is not committed to the repo.
 //
 // Usage: node prisma/import-smae.js [practiceId]
-// Re-running is safe: existing SMAE-sourced ingredients for the practice are replaced.
+// Re-running is safe: matches existing SMAE-sourced ingredients by name and updates them in
+// place instead of delete+recreate — a delete would fail once a recipe references one of these
+// ingredients (RecipeIngredient.ingredientId is onDelete: Restrict).
 
 const prisma = new PrismaClient()
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -63,9 +65,26 @@ async function main() {
     }
   })
 
-  await prisma.ingredient.deleteMany({ where: { practiceId, equivalence: { path: ['source'], equals: 'SMAE' } } })
-  const result = await prisma.ingredient.createMany({ data: ingredients })
-  console.log(`Importados ${result.count} alimentos del Sistema Mexicano de Equivalentes para la práctica ${practiceId}.`)
+  const existing = await prisma.ingredient.findMany({ where: { practiceId, equivalence: { path: ['source'], equals: 'SMAE' } }, select: { id: true, name: true } })
+  const existingByName = new Map(existing.map((item) => [item.name, item.id]))
+
+  let created = 0
+  let updated = 0
+  for (const data of ingredients) {
+    const existingId = existingByName.get(data.name)
+    if (existingId) {
+      await prisma.ingredient.update({ where: { id: existingId }, data })
+      existingByName.delete(data.name)
+      updated += 1
+    } else {
+      await prisma.ingredient.create({ data })
+      created += 1
+    }
+  }
+  // Whatever's left in existingByName was in the DB under this SMAE source but is no longer in
+  // the source file (e.g. a duplicate name collapsed) — safe to leave in place rather than risk
+  // a Restrict-constraint failure against a recipe that references it.
+  console.log(`SMAE: ${created} alimentos nuevos, ${updated} actualizados para la práctica ${practiceId}.`)
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1 }).finally(() => prisma.$disconnect())
