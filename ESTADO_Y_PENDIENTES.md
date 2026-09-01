@@ -47,7 +47,7 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Seguimientos** | Cola real de documentos (plan/informe) pendientes de entrega, marcar entregado, crear |
 | **Hoy** | "Próxima acción" con datos reales de Seguimientos; horas de cita correctas |
 | **Consultas** | Historial real de sesiones del paciente |
-| **Recetas** | Estado de sincronización, macros y tipo de comida correctos por receta |
+| **Recetas** | Catálogo real, con búsqueda por nombre, filtro por tiempo de comida y por restricción (server-side, con debounce). Editar y archivar receta ahora son reales (antes ninguno de los dos existía, ni backend ni pantalla) |
 | **Configuración** | Nombre profesional, email y zona horaria de la práctica, reales y persistentes |
 | **Editar paciente + línea de tiempo** | `PATCH /patients/:id` real; el cajón de cada paciente muestra el historial real de citas, consultas, planes y documentos |
 | **Entrega de documentos** | "Marcar como entregado" real sobre `POST /documents/:id/deliver`; el PDF de informe clínico ya imprime mediciones, diagnóstico y tratamiento reales en vez de texto genérico |
@@ -55,7 +55,7 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Flujo completo tallas → receta → plan** | Probado de punta a punta con una paciente real (Valeria Mendoza Ruiz): expediente con mediciones reales → cálculo de requerimiento (Mifflin-St Jeor, 2114 kcal/día) → 4 alimentos importados en vivo de USDA (pollo, quinoa, espinaca, aguacate) → 2 recetas propias con esos ingredientes y macros calculados de verdad → distribución de 7 días × 4 tiempos → plan publicado → PDF de menú semanal generado y descargado. Queda como paciente de ejemplo real en la base |
 | **Plantillas** | Modelo `Template` nuevo. Una plantilla se crea clonando la consulta o el plan más reciente de un paciente (snapshot, no referencia viva); "Usar plantilla" la copia sobre otro paciente — precarga sus secciones de expediente o reemplaza la distribución semanal de su plan en borrador. Probado de punta a punta: plantilla de expediente y de plan creadas desde Valeria, aplicadas a Diego Ramírez y Sofía Hernández respectivamente |
 
-(Negrita = construido en esta sesión: fase 3 a 10, y los bugfixes de Recetas, control de acceso y CORS.)
+(Negrita = construido en esta sesión: fase 3 a 11, y los bugfixes de Recetas, control de acceso y CORS.)
 
 ## Backend real, pantalla sin conectar
 
@@ -78,7 +78,7 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 
 ## Deuda técnica encontrada esta sesión (no bloquea, pero hay que volver)
 
-- ~~Patrón de control de acceso roto (endpoints que confiaban en el header `x-practice-id`, que cualquiera puede mandar)~~ — **resuelto de raíz en fase 9**: ya no existe ese header en absoluto. `practiceId`/`userId` salen de la sesión JWT verificada en un hook global (`onRequest`), así que cada endpoint queda protegido automáticamente, incluidos los que seguían pendientes de auditoría (`consultations`, `appointments/confirm`, `recipes`).
+- ~~Patrón de control de acceso roto (endpoints que confiaban en el header `x-practice-id`, que cualquiera puede mandar)~~ — la fase 9 exige sesión válida en todo `/api/v1/*`, pero **corrección a lo que dije entonces**: eso por sí solo no bastaba. Auth confirma *quién eres*; cada endpoint todavía tenía que filtrar explícitamente por `practiceId` para asegurar que solo tocas *tus propios* datos — varios endpoints nunca habían tenido ese filtro (ni el header viejo ni nada), así que seguían dejando pasar a cualquier usuario autenticado hacia recursos de otra práctica. Ya cerrados: `recipes` (fase 11) y `consultations`/`appointments/confirm` (encontrados y corregidos también en fase 11, al hacer esta misma revisión). Si aparece un endpoint nuevo con `findUnique({ where: { id } })` sin `practiceId` en el `where`, es la misma clase de bug.
 - El bug de `Content-Type: application/json` forzado en peticiones sin body (ya corregido en el helper compartido `apiRequest`) y el de horas calculadas con reloj local en vez de UTC (ya corregido en Agenda/Hoy/Seguimientos) son clases de bug a vigilar si se agrega código nuevo con fechas o `POST`/endpoints sin body.
 - **Agenda y Hoy estaban anclados a una fecha demo fija (26 de agosto de 2026)** en vez de la fecha real del sistema — al navegar a la semana actual no se marcaba ningún día como "hoy", y el saludo/agenda de Hoy siempre mostraba el miércoles 26 sin importar qué día fuera en realidad. Ya corregido en ambas pantallas para usar la fecha real (ver AgendaPage y DashboardPage). Si aparece el mismo patrón en otra pantalla, es la misma clase de bug.
 - **`@fastify/cors` sin `methods` configurado limita a `GET,HEAD,POST` por default (cambió en v11).** Todo endpoint `PUT` de este API (secciones de expediente, evaluación/distribución de plan, ingredientes de receta, práctica) fallaba en silencio con cualquier llamada cross-origin — solo funcionaba a través del proxy de Vite (mismo origen). Ya corregido explícitamente en el registro de `cors`, pero es la clase de bug que solo aparece al probar contra `npm run dev:all` o en producción real (front y API en dominios distintos) — vale la pena probar ahí, no solo contra el proxy de Vite.
