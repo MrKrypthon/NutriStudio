@@ -396,7 +396,8 @@ app.put('/api/v1/plans/:planId/distribution', async (request, reply) => {
 })
 
 app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
-  const plan = await prisma.nutritionPlan.findUnique({ where: { id: request.params.planId }, include: { mealSlots: { include: { recipe: true } } } })
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId } }, include: { mealSlots: { include: { recipe: true } } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_ALREADY_PUBLISHED', message: 'Este plan ya fue publicado.', fields: {} })
   if (!plan.mealSlots.length) return reply.code(400).send({ code: 'EMPTY_PLAN', message: 'Agrega al menos un tiempo de comida antes de publicar.', fields: {} })
@@ -408,7 +409,8 @@ app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
 app.post('/api/v1/documents/nutrition-plan', async (request, reply) => {
   const { planId } = request.body || {}
   if (!planId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'planId es obligatorio.', fields: { planId: 'required' } })
-  const plan = await prisma.nutritionPlan.findUnique({ where: { id: planId } })
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: planId, patient: { practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status !== 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_NOT_PUBLISHED', message: 'Publica el plan antes de generar su documento.', fields: {} })
   const document = await prisma.document.create({ data: { patientId: plan.patientId, consultationId: plan.consultationId, planId: plan.id, type: 'nutrition_plan', sections: { menu: true, macros: true, recommendations: true }, version: 0 } })
@@ -437,13 +439,40 @@ function drawConsultationReport(file, document) {
   file.fillColor('#34745f').fontSize(11).text('Resumen de la consulta', 62, file.y + 14)
   file.fillColor('#4c5b53').fontSize(9).text('Documento generado desde la valoración clínica de Nutri Studio.', 62, file.y + 33, { width: 480 })
   file.y += 95
-  for (const section of ['Datos generales', 'Antropometría', 'Diagnóstico nutricio', 'Tratamiento']) {
-    file.fillColor('#34745f').fontSize(13).text(section)
-    file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#dce8df').stroke()
-    file.moveDown()
-    file.fillColor('#6e6e73').fontSize(9).text('Información registrada y validada por la profesional responsable.')
-    file.moveDown(1.5)
-  }
+
+  const consultation = document.consultation
+  const sections = consultation?.sections || []
+  const payloadOf = (key) => sections.find((section) => section.sectionKey === key)?.payload || {}
+  const measurement = (consultation?.measurements || [])[0]
+  const diagnoses = consultation?.diagnoses || []
+
+  const drawTitle = (title) => { file.fillColor('#34745f').fontSize(13).text(title); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#dce8df').stroke(); file.moveDown() }
+  const drawLine = (text) => file.fillColor('#4c5b53').fontSize(9).text(text, { width: 480 })
+  const drawEntries = (payload) => { const entries = Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== '') ; if (!entries.length) return false; for (const [key, value] of entries) drawLine(`${key}: ${Array.isArray(value) ? value.join(', ') : value}`); return true }
+
+  drawTitle('Datos generales')
+  if (!drawEntries(payloadOf('general'))) drawLine('Sin datos generales registrados.')
+  file.moveDown(1.5)
+
+  drawTitle('Antropometría')
+  if (measurement) {
+    drawLine(`Peso: ${measurement.weightKg ?? '—'} kg · Talla: ${measurement.heightCm ?? '—'} cm`)
+    if (measurement.waistCm) drawLine(`Cintura: ${measurement.waistCm} cm`)
+    if (measurement.hipCm) drawLine(`Cadera: ${measurement.hipCm} cm`)
+    if (measurement.bodyFatPercent) drawLine(`% grasa corporal: ${measurement.bodyFatPercent}%`)
+    if (measurement.method) drawLine(`Método: ${measurement.method}`)
+  } else drawLine('Sin mediciones registradas.')
+  file.moveDown(1.5)
+
+  drawTitle('Diagnóstico nutricio')
+  if (diagnoses.length) for (const d of diagnoses) drawLine(`${d.code} (${d.domain}) — ${d.problem}. Causa: ${d.etiology}. Evidencia: ${d.evidence}`)
+  else drawLine('Sin diagnóstico registrado.')
+  file.moveDown(1.5)
+
+  drawTitle('Tratamiento')
+  if (!drawEntries(payloadOf('treatment'))) drawLine('Sin recomendaciones registradas.')
+  file.moveDown(1.5)
+
   file.fillColor('#8e9a94').fontSize(9).text('Gabriela Alonso · Nutrióloga', { align: 'center' })
 }
 
@@ -479,7 +508,8 @@ function drawNutritionPlanMenu(file, document) {
 }
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
-  const document = await prisma.document.findUnique({ where: { id: request.params.documentId }, include: { patient: true, consultation: { include: { measurements: true, diagnoses: true } }, plan: true } })
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } }, include: { patient: true, consultation: { include: { measurements: true, diagnoses: true, sections: true } }, plan: true } })
   if (!document) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
   const pdf = await new Promise((resolve, reject) => {
     const chunks = []
@@ -494,10 +524,11 @@ app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
   const directory = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents'); await mkdir(directory, { recursive: true }); const fileName = `${document.id}-v${document.version + 1}.pdf`; const filePath = path.join(directory, fileName); await writeFile(filePath, pdf); const checksum = createHash('sha256').update(pdf).digest('hex'); const generated = await prisma.document.update({ where: { id: document.id }, data: { generatedAt: new Date(), version: { increment: 1 }, checksum, storageKey: fileName } }); return { ...generated, downloadUrl: `/api/v1/documents/${document.id}/download` }
 })
 
-app.get('/api/v1/documents/:documentId/download', async (request, reply) => { const document = await prisma.document.findUnique({ where: { id: request.params.documentId } }); if (!document?.storageKey) return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'Genera el documento antes de descargarlo.', fields: {} }); const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey); const file = await readFile(filePath); return reply.type('application/pdf').header('Content-Disposition', `attachment; filename="${document.storageKey}"`).send(file) })
+app.get('/api/v1/documents/:documentId/download', async (request, reply) => { const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID; const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } }); if (!document?.storageKey) return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'Genera el documento antes de descargarlo.', fields: {} }); const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey); const file = await readFile(filePath); return reply.type('application/pdf').header('Content-Disposition', `attachment; filename="${document.storageKey}"`).send(file) })
 
 app.post('/api/v1/documents/:documentId/deliver', async (request, reply) => {
-  const document = await prisma.document.findUnique({ where: { id: request.params.documentId } })
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } })
   if (!document) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
   if (!document.generatedAt) return reply.code(409).send({ code: 'DOCUMENT_NOT_GENERATED', message: 'Genera el documento antes de entregarlo.', fields: {} })
   return prisma.document.update({ where: { id: document.id }, data: { deliveredAt: new Date() } })
