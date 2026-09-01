@@ -3,12 +3,13 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { appointmentsApi, patientsApi } from '../../lib/api.js'
 
-// The rest of the app treats 2026-08-26 as "today" (see DashboardPage's fixture date);
-// the agenda anchors its default week on the same date so both screens agree on "hoy".
 // All date math here runs in UTC: appointment.startAt is stored and seeded as the practice's
 // wall-clock time tagged with a "Z" suffix (see prisma/seed.js), so reading it back with the
 // UTC getters is what keeps "09:00" meaning 09:00 regardless of the viewer's system timezone.
-const TODAY = new Date('2026-08-26T00:00:00.000Z')
+// "Today" follows that same convention: the viewer's local calendar date, repackaged as a UTC
+// midnight — a fixed demo date used to highlight and jump to "today" for a stale one instead.
+const now = new Date()
+const TODAY = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
 const DEFAULT_HOURS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00']
 const DAY_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
