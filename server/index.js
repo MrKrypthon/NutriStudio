@@ -210,9 +210,9 @@ app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (req
 app.post('/api/v1/consultations/:consultationId/measurements', async (request, reply) => {
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
-  const { measuredAt, weightKg, heightCm, waistCm, hipCm, bodyFatPercent, muscleMassKg, method, notes } = request.body || {}
+  const { measuredAt, weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes } = request.body || {}
   const measurement = await prisma.measurement.create({
-    data: { patientId: consultation.patientId, consultationId: consultation.id, measuredAt: measuredAt ? new Date(measuredAt) : new Date(), weightKg, heightCm, waistCm, hipCm, bodyFatPercent, muscleMassKg, method, notes },
+    data: { patientId: consultation.patientId, consultationId: consultation.id, measuredAt: measuredAt ? new Date(measuredAt) : new Date(), weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes },
   })
   return reply.code(201).send(measurement)
 })
