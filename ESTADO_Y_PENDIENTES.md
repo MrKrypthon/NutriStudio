@@ -65,7 +65,6 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 
 | Módulo | Nota |
 |---|---|
-| Roles aplicados (Propietaria/Nutrióloga/Asistente) | El modelo `User.role` existe y ya viaja en la sesión (`request.userRole`), pero ningún endpoint todavía restringe nada por rol — cualquier usuario logueado puede hacer cualquier cosa dentro de su práctica |
 | Plantillas | Ni siquiera hay modelo `Template` en la base — necesita diseño de esquema nuevo |
 | Editar estado del paciente (activo/archivado) | `PATCH /patients/:id` no toca `status` todavía; sólo datos de contacto |
 | Biblioteca de educación | Pantalla completamente estática, sin modelo |
@@ -88,6 +87,5 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 1. ~~Configuración real~~ — hecho (fase 6): nombre profesional, email, zona horaria. Horarios de atención y logo siguen pendientes por falta de modelo.
 2. ~~Editar paciente + línea de tiempo~~ — hecho (fase 7): `PATCH /patients/:id` real, y el cajón de cada paciente muestra su historial de citas/consultas/planes/documentos. Falta editar `status` (activo/archivado).
 3. ~~Entrega + PDF de informe con datos reales~~ — hecho (fase 8): "Marcar como entregado" real, y el PDF de informe clínico imprime mediciones/diagnóstico/tratamiento reales. El envío real por WhatsApp/email sigue diferido a propósito.
-4. ~~Autenticación~~ — hecho (fase 9), alcance "login + sesión, sin roles": contraseña con hash real (bcrypt), login/logout, sesión JWT verificada server-side. De paso cierra todo el patrón de control de acceso pendiente (ver deuda técnica). Falta aplicar permisos por rol (Propietaria/Nutrióloga/Asistente) — el modelo y el rol en la sesión ya existen, nadie los exige todavía.
+4. ~~Autenticación~~ — hecho (fase 9), alcance "login + sesión, sin roles": contraseña con hash real (bcrypt), login/logout, sesión JWT verificada server-side. De paso cierra todo el patrón de control de acceso pendiente (ver deuda técnica). **Decisión explícita del usuario: no se van a aplicar permisos por rol** (Propietaria/Nutrióloga/Asistente) — el modelo y el rol en la sesión quedan ahí sin usarse, y no es un pendiente a retomar.
 5. **Plantillas / Biblioteca de educación** — quedan al final porque necesitan diseño de esquema nuevo y no bloquean nada del flujo clínico principal.
-6. **Roles aplicados** — natural siguiente paso sobre la autenticación ya construida: usar `request.userRole` para restringir qué puede hacer un Asistente (agenda y contacto sí, notas clínicas y diagnósticos no, según RF-04 del documento original).
