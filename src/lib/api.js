@@ -1,3 +1,5 @@
+import { getToken, notifyUnauthorized } from './auth.js'
+
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
 
 /**
@@ -9,10 +11,12 @@ export async function apiRequest(path, options = {}) {
   if (import.meta.env.DEV && !import.meta.env.VITE_API_URL) {
     throw Object.assign(new Error('API no configurada: usando datos de demostración.'), { code: 'DEMO_MODE' })
   }
+  const token = getToken()
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
   })
@@ -20,11 +24,20 @@ export async function apiRequest(path, options = {}) {
   if (!response.ok) {
     let error = { code: 'REQUEST_FAILED', message: 'No fue posible completar la solicitud.', fields: {} }
     try { error = await response.json() } catch { /* Response may not contain JSON. */ }
+    // Only a dead/invalid session (our own UNAUTHORIZED code) should force a logout — a
+    // rejected login attempt (INVALID_CREDENTIALS) is also a 401 but isn't a session loss.
+    if (error.code === 'UNAUTHORIZED') notifyUnauthorized()
     throw Object.assign(new Error(error.message), error)
   }
 
   if (response.status === 204) return null
   return response.json()
+}
+
+export const authApi = {
+  login: (email, password) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  logout: () => apiRequest('/auth/logout', { method: 'POST' }),
+  me: () => apiRequest('/auth/me'),
 }
 
 export const dashboardApi = {

@@ -15,19 +15,21 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "@prisma/client": "^6.19.0",
     "@fastify/cors": "latest",
+    "@prisma/client": "^6.19.0",
+    "@vitejs/plugin-react": "latest",
+    "bcryptjs": "^3.0.3",
     "dotenv": "^16.4.7",
-    "pdfkit": "^0.17.2",
     "fastify": "latest",
-    "vite": "latest",
+    "jsonwebtoken": "^9.0.3",
+    "pdfkit": "^0.17.2",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "vite": "latest"
   },
   "devDependencies": {
-    "prisma": "^6.19.0",
     "concurrently": "^9.1.2",
+    "prisma": "^6.19.0",
     "vitest": "^3.2.4"
   },
   "prisma": {
