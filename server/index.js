@@ -6,6 +6,8 @@ import PDFDocument from 'pdfkit'
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
 import { DAY_LABELS, MEAL_TYPE_LABELS, buildMenuSnapshot } from './domain/documents.js'
@@ -15,30 +17,73 @@ const prisma = new PrismaClient()
 
 if (!process.env.DATABASE_URL) app.log.warn('DATABASE_URL no está configurada. Copia .env.example a .env antes de usar persistencia.')
 
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) app.log.warn('JWT_SECRET no está configurada. Copia .env.example a .env antes de usar autenticación.')
+const SESSION_TTL = '7d'
+
+// Public routes need no session: the login endpoint itself, and Fastify's own CORS
+// preflight (@fastify/cors replies to OPTIONS before this hook runs, but excluded here too
+// in case that ever changes) and health check.
+const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login'])
+
 // @fastify/cors defaults `methods` to 'GET,HEAD,POST' only (the CORS-spec "simple methods"),
 // so without this every PUT here has silently failed preflight for any cross-origin caller
 // (e.g. `npm run dev:all`, or the SPA and API on separate domains in production) — it only
 // ever worked same-origin through Vite's dev proxy.
 await app.register(cors, { origin: true, methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] })
 
+app.addHook('onRequest', async (request, reply) => {
+  if (request.method === 'OPTIONS' || PUBLIC_ROUTES.has(request.url.split('?')[0])) return
+  if (!request.url.startsWith('/api/v1/')) return
+  const header = request.headers.authorization
+  if (!header?.startsWith('Bearer ')) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Inicia sesión para continuar.', fields: {} })
+  try {
+    const payload = jwt.verify(header.slice(7), JWT_SECRET)
+    request.userId = payload.sub
+    request.practiceId = payload.practiceId
+    request.userRole = payload.role
+  } catch {
+    return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Tu sesión expiró o no es válida. Inicia sesión de nuevo.', fields: {} })
+  }
+})
+
 app.get('/health', async () => ({ status: 'ok', service: 'nutri-studio-api' }))
 
-// Sin sesión real todavía (ver ESTADO_Y_PENDIENTES.md), "el usuario actual" se resuelve
-// igual que en el resto del API: el primero de la práctica.
+app.post('/api/v1/auth/login', async (request, reply) => {
+  const { email, password } = request.body || {}
+  if (!email || !password) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Email y contraseña son obligatorios.', fields: { email: !email, password: !password } })
+  // Email is only unique per practice, not globally — this picks the first active match.
+  // Fine for today's single-practice, single-user reality; revisit if multi-practice logins matter later.
+  const user = await prisma.user.findFirst({ where: { email, status: 'ACTIVE' }, include: { practice: true } })
+  const valid = user ? await bcrypt.compare(password, user.passwordHash) : false
+  if (!user || !valid) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Email o contraseña incorrectos.', fields: {} })
+  const token = jwt.sign({ sub: user.id, practiceId: user.practiceId, role: user.role }, JWT_SECRET, { expiresIn: SESSION_TTL })
+  return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, practice: { id: user.practice.id, name: user.practice.name } }
+})
+
+// Stateless JWT: there is no server-side session to invalidate yet, so this only exists for
+// symmetry with login and as a hook point for a future token-blacklist. Logging out is really
+// the client discarding its token.
+app.post('/api/v1/auth/logout', async (request, reply) => reply.code(204).send())
+
+app.get('/api/v1/auth/me', async (request, reply) => {
+  const user = await prisma.user.findUnique({ where: { id: request.userId }, include: { practice: true } })
+  if (!user) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Sesión inválida.', fields: {} })
+  return { user: { id: user.id, name: user.name, email: user.email, role: user.role }, practice: { id: user.practice.id, name: user.practice.name } }
+})
+
 app.get('/api/v1/practice', async (request, reply) => {
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
-  const practice = await prisma.practice.findUnique({ where: { id: practiceId } })
+  const practice = await prisma.practice.findUnique({ where: { id: request.practiceId } })
   if (!practice) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Práctica no encontrada.', fields: {} })
-  const user = await prisma.user.findFirst({ where: { practiceId }, orderBy: { createdAt: 'asc' } })
+  const user = await prisma.user.findUnique({ where: { id: request.userId } })
   return { ...practice, user }
 })
 
 app.put('/api/v1/practice', async (request, reply) => {
   const { name, timeZone, userName, userEmail } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
-  const practice = await prisma.practice.update({ where: { id: practiceId }, data: { name, timeZone } })
-  let user = await prisma.user.findFirst({ where: { practiceId }, orderBy: { createdAt: 'asc' } })
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone } })
+  let user = await prisma.user.findUnique({ where: { id: request.userId } })
   if (user && (userName || userEmail)) user = await prisma.user.update({ where: { id: user.id }, data: { name: userName || user.name, email: userEmail || user.email } })
   return { ...practice, user }
 })
@@ -48,7 +93,7 @@ app.get('/api/v1/patients', async (request) => {
   const currentPage = Math.max(Number(page), 1)
   const take = Math.min(Math.max(Number(pageSize), 1), 100)
   const where = {
-    practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID,
+    practiceId: request.practiceId,
     status,
     ...(search ? { OR: [{ firstName: { contains: search, mode: 'insensitive' } }, { lastName: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }] } : {}),
   }
@@ -62,18 +107,18 @@ app.get('/api/v1/patients', async (request) => {
 app.post('/api/v1/patients', async (request, reply) => {
   const { firstName, lastName, email, phone, birthDate, sex, occupation } = request.body || {}
   if (!firstName || !lastName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido son obligatorios.', fields: { firstName: !firstName, lastName: !lastName } })
-  const patient = await prisma.patient.create({ data: { practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID, firstName, lastName, email, phone, sex, occupation, birthDate: birthDate ? new Date(birthDate) : undefined } })
+  const patient = await prisma.patient.create({ data: { practiceId: request.practiceId, firstName, lastName, email, phone, sex, occupation, birthDate: birthDate ? new Date(birthDate) : undefined } })
   return reply.code(201).send(patient)
 })
 
 app.get('/api/v1/patients/:patientId', async (request, reply) => {
-  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID } })
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   return patient
 })
 
 app.patch('/api/v1/patients/:patientId', async (request, reply) => {
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   const { firstName, lastName, email, phone, birthDate, sex, occupation } = request.body || {}
@@ -94,7 +139,7 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
 })
 
 app.get('/api/v1/patients/:patientId/timeline', async (request, reply) => {
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const patientId = request.params.patientId
   const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
@@ -125,10 +170,10 @@ app.get('/api/v1/patients/:patientId/plans', async (request) => {
 
 app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => {
   const { appointmentId, nutritionistId, templateId } = request.body || {}
-  // Sin sesión real todavía (ver auditoría de seguridad pendiente), no hay forma de saber
-  // qué profesional está trabajando; se usa el primero de la práctica como responsable.
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
-  let userId = nutritionistId || request.headers['x-user-id']
+  const practiceId = request.practiceId
+  // nutritionistId lets one professional open a consultation on another's behalf; otherwise
+  // it defaults to whoever is logged in, falling back to the oldest user in the practice.
+  let userId = nutritionistId || request.userId
   if (!userId) userId = (await prisma.user.findFirst({ where: { practiceId } }))?.id
   if (!userId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La consulta necesita un profesional responsable.', fields: { nutritionistId: 'required' } })
   const consultation = await prisma.consultation.create({ data: { patientId: request.params.patientId, appointmentId, nutritionistId: userId, templateId, status: 'IN_PROGRESS', startedAt: new Date() } })
@@ -152,13 +197,13 @@ app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (req
   const { payload = {}, completionState = 'in_progress', updatedAt } = request.body || {}
   const existing = await prisma.clinicalSection.findUnique({ where: { consultationId_sectionKey: { consultationId: request.params.consultationId, sectionKey: request.params.sectionKey } } })
   if (existing && updatedAt && new Date(updatedAt).getTime() !== new Date(existing.lastSavedAt).getTime()) return reply.code(409).send({ code: 'CONCURRENT_EDIT', message: 'La sección cambió en otra sesión. Recarga antes de guardar.', fields: {} })
-  const section = await prisma.clinicalSection.upsert({ where: { consultationId_sectionKey: { consultationId: request.params.consultationId, sectionKey: request.params.sectionKey } }, create: { consultationId: request.params.consultationId, sectionKey: request.params.sectionKey, payload, completionState, lastSavedBy: request.headers['x-user-id'] || 'system' }, update: { payload, completionState, lastSavedBy: request.headers['x-user-id'] || 'system' } })
+  const section = await prisma.clinicalSection.upsert({ where: { consultationId_sectionKey: { consultationId: request.params.consultationId, sectionKey: request.params.sectionKey } }, create: { consultationId: request.params.consultationId, sectionKey: request.params.sectionKey, payload, completionState, lastSavedBy: request.userId || 'system' }, update: { payload, completionState, lastSavedBy: request.userId || 'system' } })
   return section
 })
 
 app.get('/api/v1/appointments', async (request) => {
   const { from, to } = request.query
-  const appointments = await prisma.appointment.findMany({ where: { practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID, startAt: { gte: new Date(from), lte: new Date(to) } }, include: { patient: true }, orderBy: { startAt: 'asc' } })
+  const appointments = await prisma.appointment.findMany({ where: { practiceId: request.practiceId, startAt: { gte: new Date(from), lte: new Date(to) } }, include: { patient: true }, orderBy: { startAt: 'asc' } })
   return { items: appointments }
 })
 
@@ -167,7 +212,7 @@ app.post('/api/v1/appointments', async (request, reply) => {
   const start = new Date(startAt)
   const end = endAt ? new Date(endAt) : new Date(start.getTime() + Number(durationMinutes || 60) * 60000)
   if (!patientId || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Paciente, fecha y duración válida son obligatorios.', fields: {} })
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const overlap = await prisma.appointment.findFirst({ where: { practiceId, status: { notIn: ['CANCELLED', 'NO_SHOW'] }, startAt: { lt: end }, endAt: { gt: start } } })
   if (overlap) return reply.code(409).send({ code: 'APPOINTMENT_OVERLAP', message: 'Ese horario ya está ocupado.', fields: { startAt: 'overlap', endAt: 'overlap' } })
   const appointment = await prisma.appointment.create({ data: { practiceId, patientId, startAt: start, endAt: end, type, status: notifyVia.length ? 'PENDING_CONFIRMATION' : 'SCHEDULED', notifyVia, internalNote, patientNote, timeZone }, include: { patient: true } })
@@ -184,7 +229,7 @@ app.get('/api/v1/tasks', async (request) => {
   const { status, type } = request.query
   const tasks = await prisma.task.findMany({
     where: {
-      practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID,
+      practiceId: request.practiceId,
       ...(status ? { status } : {}),
       ...(type ? { type } : {}),
     },
@@ -197,7 +242,7 @@ app.get('/api/v1/tasks', async (request) => {
 app.post('/api/v1/tasks', async (request, reply) => {
   const { patientId, type, dueAt, referenceId } = request.body || {}
   if (!patientId || !type || !dueAt) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Paciente, tipo y fecha límite son obligatorios.', fields: { patientId: !patientId, type: !type, dueAt: !dueAt } })
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: { patientId: 'not_found' } })
   const task = await prisma.task.create({ data: { practiceId, patientId, type, dueAt: new Date(dueAt), referenceId }, include: { patient: true } })
@@ -205,7 +250,7 @@ app.post('/api/v1/tasks', async (request, reply) => {
 })
 
 app.post('/api/v1/tasks/:taskId/complete', async (request, reply) => {
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const task = await prisma.task.findFirst({ where: { id: request.params.taskId, practiceId } })
   if (!task) return reply.code(404).send({ code: 'TASK_NOT_FOUND', message: 'Seguimiento no encontrado.', fields: {} })
   if (task.status === 'completed') return reply.code(409).send({ code: 'TASK_ALREADY_COMPLETED', message: 'Este seguimiento ya se marcó como entregado.', fields: {} })
@@ -215,7 +260,7 @@ app.post('/api/v1/tasks/:taskId/complete', async (request, reply) => {
 app.get('/api/v1/recipes', async (request) => {
   const { search = '', mealType, status = 'ACTIVE' } = request.query
   const where = {
-    practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID,
+    practiceId: request.practiceId,
     status,
     ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
     ...(mealType ? { mealTypes: { has: mealType } } : {}),
@@ -227,9 +272,9 @@ app.get('/api/v1/recipes', async (request) => {
 app.post('/api/v1/recipes', async (request, reply) => {
   const { name, mealTypes = [], portions, instructions, nutrition = {}, restrictions = [], imageUrl, ingredients = [] } = request.body || {}
   if (!name || !mealTypes.length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y al menos un tiempo de comida son obligatorios.', fields: { name: !name, mealTypes: !mealTypes.length } })
-  const validIngredients = ingredients.length ? await prisma.ingredient.findMany({ where: { id: { in: ingredients.map((item) => item.ingredientId).filter(Boolean) }, practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID }, select: { id: true } }) : []
+  const validIngredients = ingredients.length ? await prisma.ingredient.findMany({ where: { id: { in: ingredients.map((item) => item.ingredientId).filter(Boolean) }, practiceId: request.practiceId }, select: { id: true } }) : []
   const validIds = new Set(validIngredients.map((item) => item.id))
-  const recipe = await prisma.recipe.create({ data: { practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID, name, mealTypes, portions, instructions, nutrition, restrictions, imageUrl, ingredients: { create: ingredients.filter((item) => validIds.has(item.ingredientId)).map((item) => ({ ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) } }, include: { ingredients: { include: { ingredient: true } } } })
+  const recipe = await prisma.recipe.create({ data: { practiceId: request.practiceId, name, mealTypes, portions, instructions, nutrition, restrictions, imageUrl, ingredients: { create: ingredients.filter((item) => validIds.has(item.ingredientId)).map((item) => ({ ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) } }, include: { ingredients: { include: { ingredient: true } } } })
   return reply.code(201).send(recipe)
 })
 
@@ -277,14 +322,14 @@ app.post('/api/v1/recipes/:recipeId/recalculate', async (request, reply) => {
 
 app.get('/api/v1/ingredients', async (request) => {
   const { search = '', group } = request.query
-  const ingredients = await prisma.ingredient.findMany({ where: { practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID, status: 'ACTIVE', ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}), ...(group ? { group } : {}) }, orderBy: { name: 'asc' }, take: 200 })
+  const ingredients = await prisma.ingredient.findMany({ where: { practiceId: request.practiceId, status: 'ACTIVE', ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}), ...(group ? { group } : {}) }, orderBy: { name: 'asc' }, take: 200 })
   return { items: ingredients }
 })
 
 app.post('/api/v1/ingredients/import', async (request, reply) => {
   const { externalId, source, name, group, unit = 'g', nutrition = {}, equivalence = {}, imageUrl } = request.body || {}
   if (!externalId || !source || !name || !group) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fuente, identificador, nombre y grupo son obligatorios.', fields: {} })
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const ingredient = await prisma.ingredient.create({ data: { practiceId, name, group, unit, nutrition, equivalence: { ...equivalence, source: { provider: source, externalId, importedAt: new Date().toISOString() } } } })
   return reply.code(201).send({ ...ingredient, imageUrl: imageUrl || null })
 })
@@ -303,7 +348,7 @@ app.get('/api/v1/dashboard/today', async (request) => {
   const date = request.query.date || new Date().toISOString().slice(0, 10)
   const start = new Date(`${date}T00:00:00.000Z`)
   const end = new Date(`${date}T23:59:59.999Z`)
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const [appointments, pendingConfirmations, followUps, activePatients, tasks] = await prisma.$transaction([
     prisma.appointment.findMany({ where: { practiceId, startAt: { gte: start, lte: end } }, include: { patient: true }, orderBy: { startAt: 'asc' } }),
     prisma.appointment.count({ where: { practiceId, startAt: { gte: start, lte: end }, status: 'PENDING_CONFIRMATION' } }),
@@ -396,7 +441,7 @@ app.put('/api/v1/plans/:planId/distribution', async (request, reply) => {
 })
 
 app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId } }, include: { mealSlots: { include: { recipe: true } } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_ALREADY_PUBLISHED', message: 'Este plan ya fue publicado.', fields: {} })
@@ -409,7 +454,7 @@ app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
 app.post('/api/v1/documents/nutrition-plan', async (request, reply) => {
   const { planId } = request.body || {}
   if (!planId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'planId es obligatorio.', fields: { planId: 'required' } })
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: planId, patient: { practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status !== 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_NOT_PUBLISHED', message: 'Publica el plan antes de generar su documento.', fields: {} })
@@ -419,7 +464,7 @@ app.post('/api/v1/documents/nutrition-plan', async (request, reply) => {
 
 app.get('/api/v1/documents', async (request) => {
   const { patientId, type } = request.query
-  const documents = await prisma.document.findMany({ where: { patientId: patientId || undefined, type: type || undefined, patient: { practiceId: request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID } }, include: { patient: true, plan: true }, orderBy: { createdAt: 'desc' }, take: 100 })
+  const documents = await prisma.document.findMany({ where: { patientId: patientId || undefined, type: type || undefined, patient: { practiceId: request.practiceId } }, include: { patient: true, plan: true }, orderBy: { createdAt: 'desc' }, take: 100 })
   return { items: documents }
 })
 
@@ -508,7 +553,7 @@ function drawNutritionPlanMenu(file, document) {
 }
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } }, include: { patient: true, consultation: { include: { measurements: true, diagnoses: true, sections: true } }, plan: true } })
   if (!document) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
   const pdf = await new Promise((resolve, reject) => {
@@ -524,10 +569,10 @@ app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
   const directory = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents'); await mkdir(directory, { recursive: true }); const fileName = `${document.id}-v${document.version + 1}.pdf`; const filePath = path.join(directory, fileName); await writeFile(filePath, pdf); const checksum = createHash('sha256').update(pdf).digest('hex'); const generated = await prisma.document.update({ where: { id: document.id }, data: { generatedAt: new Date(), version: { increment: 1 }, checksum, storageKey: fileName } }); return { ...generated, downloadUrl: `/api/v1/documents/${document.id}/download` }
 })
 
-app.get('/api/v1/documents/:documentId/download', async (request, reply) => { const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID; const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } }); if (!document?.storageKey) return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'Genera el documento antes de descargarlo.', fields: {} }); const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey); const file = await readFile(filePath); return reply.type('application/pdf').header('Content-Disposition', `attachment; filename="${document.storageKey}"`).send(file) })
+app.get('/api/v1/documents/:documentId/download', async (request, reply) => { const practiceId = request.practiceId; const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } }); if (!document?.storageKey) return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'Genera el documento antes de descargarlo.', fields: {} }); const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey); const file = await readFile(filePath); return reply.type('application/pdf').header('Content-Disposition', `attachment; filename="${document.storageKey}"`).send(file) })
 
 app.post('/api/v1/documents/:documentId/deliver', async (request, reply) => {
-  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practiceId = request.practiceId
   const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } })
   if (!document) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
   if (!document.generatedAt) return reply.code(409).send({ code: 'DOCUMENT_NOT_GENERATED', message: 'Genera el documento antes de entregarlo.', fields: {} })

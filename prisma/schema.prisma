@@ -71,6 +71,7 @@ model User {
   practice       Practice       @relation(fields: [practiceId], references: [id], onDelete: Cascade)
   name           String
   email          String
+  passwordHash   String
   role           UserRole       @default(NUTRITIONIST)
   status         RecordStatus   @default(ACTIVE)
   consultations  Consultation[]

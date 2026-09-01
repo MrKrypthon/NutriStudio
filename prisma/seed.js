@@ -1,7 +1,11 @@
 import { PrismaClient } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
 const prisma = new PrismaClient()
 const practiceId = '00000000-0000-0000-0000-000000000001'
+
+// Dev-only seeded credential — log in with gabriela@nutristudio.local / nutristudio2026.
+const DEV_PASSWORD_HASH = bcrypt.hashSync('nutristudio2026', 10)
 
 async function main() {
   const practice = await prisma.practice.upsert({
@@ -12,8 +16,8 @@ async function main() {
 
   const nutritionist = await prisma.user.upsert({
     where: { practiceId_email: { practiceId: practice.id, email: 'gabriela@nutristudio.local' } },
-    update: {},
-    create: { practiceId: practice.id, name: 'Gabriela Alonso', email: 'gabriela@nutristudio.local', role: 'OWNER' },
+    update: { passwordHash: DEV_PASSWORD_HASH },
+    create: { practiceId: practice.id, name: 'Gabriela Alonso', email: 'gabriela@nutristudio.local', role: 'OWNER', passwordHash: DEV_PASSWORD_HASH },
   })
 
   const people = [

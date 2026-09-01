@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { DEMO_PATIENT_ID } from '../lib/demoContext.js'
+import { useAuth } from '../lib/AuthContext.jsx'
 
+import LoginPage from '../modules/auth/LoginPage.jsx'
 import DashboardPage from '../modules/dashboard/DashboardPage.jsx'
 import AgendaPage from '../modules/calendar/AgendaPage.jsx'
 import PatientsPage from '../modules/patients/PatientsPage.jsx'
@@ -25,6 +27,7 @@ const pathToModule = { '/': 'Hoy', '/hoy': 'Hoy', '/agenda': 'Agenda', '/pacient
 const moduleToSlug = { 'Hoy': 'hoy', 'Agenda': 'agenda', 'Pacientes': 'pacientes', 'Recetas': 'recetas', 'Ingredientes': 'ingredientes', 'Plantillas': 'plantillas', 'Plan nutricional': 'plan', 'Constructor de plan': 'constructor-plan', 'Distribución de macros': 'distribucion', 'Documentos': 'documentos', 'Nuevo paciente': 'nuevo-paciente', 'Configuración': 'configuracion', 'Importar alimentos': 'importar-alimentos', 'Documento': 'documentos', 'Expediente': 'pacientes' }
 
 export default function App() {
+  const { status } = useAuth()
   const [active, setActiveState] = useState(() => pathToModule[window.location.pathname] || 'Hoy')
   const [selectedPatientId, setSelectedPatientId] = useState(DEMO_PATIENT_ID)
   const setActive = (next) => {
@@ -47,6 +50,9 @@ export default function App() {
     document.addEventListener('click', onSidebarConfig)
     return () => document.removeEventListener('click', onSidebarConfig)
   }, [])
+
+  if (status === 'checking') return null
+  if (status === 'anonymous') return <LoginPage />
 
   if (active === 'Hoy') return <DashboardPage setActive={setActive} />
   if (active === 'Agenda') return <AgendaPage setActive={setActive} />
