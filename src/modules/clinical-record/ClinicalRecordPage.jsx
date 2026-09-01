@@ -8,6 +8,14 @@ const TABS = ['Resumen', 'General', 'Antropométrico', 'Bioquímico', 'Clínico'
 const SECTION_KEYS = { Resumen: 'summary', General: 'general', Antropométrico: 'anthropometric', Bioquímico: 'biochemical', Clínico: 'clinical', Dietético: 'dietary', 'Estilo de vida': 'lifestyle', Sociocultural: 'sociocultural', Diagnóstico: 'diagnosis', Tratamiento: 'treatment', Monitoreo: 'monitoring', Notas: 'notes' }
 const SAVE_LABELS = { idle: '● Guardado', editing: '● Editando…', saving: '● Guardando…', saved: '● Guardado', error: '⚠ Error al guardar', conflict: '⚠ Se editó en otra sesión, recarga para ver el cambio' }
 
+const FAMILY_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'HTA', 'Dislipidemias', 'Nefropatías', 'Cáncer', 'Enf. cerebrovasculares', 'Otros']
+const RELATIVES = ['Mamá/Papá', 'Abuelos', 'Tíos']
+const SYMPTOMS = ['Diarrea', 'Estreñimiento', 'Náusea', 'Úlcera', 'Pirosis', 'Ceguera nocturna', 'Vómito', 'Gastritis', 'Poliuria', 'Polidipsia', 'Polifagia']
+
+function TogglePill({ active, label, onClick }) {
+  return <button type="button" className={active ? 'toggle-pill active' : 'toggle-pill'} onClick={onClick}>{label}</button>
+}
+
 export default function ClinicalRecordPage({ setActive, patientId }) {
   const { patient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
@@ -164,6 +172,24 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
         <div className="section-heading"><div><p className="eyebrow">SECCIÓN 9 DE 12 · TND</p><h1>Diagnóstico nutricio</h1><p className="subtitle">Selecciona uno o más diagnósticos por dominio.</p></div><button className="secondary">Buscar diagnóstico</button></div>
         <div className="diagnosis-domains">{[['INGESTIÓN', 'Problemas relacionados con ingesta, nutrientes y sustancias bioactivas.', 'mint'], ['CLÍNICOS', 'Hallazgos relacionados con condiciones físicas o médicas.', 'yellow'], ['CONDUCTUALES-AMBIENTALES', 'Conocimiento, actitudes y factores del entorno.', 'blue'], ['OTROS', 'Diagnósticos fuera de los dominios anteriores.', 'purple']].map(([title, desc, color]) => <div className={'domain-card ' + color} key={title}><span>◉</span><b>{title}</b><small>{desc}</small><strong>0 seleccionados</strong></div>)}</div>
         <div className="diagnosis-selected"><p className="eyebrow">DIAGNÓSTICOS SELECCIONADOS</p><p className="muted">Todavía no hay diagnósticos registrados para esta consulta.</p><label>Notas y evidencia<textarea placeholder="Añade la evidencia que sustenta el diagnóstico..." /></label></div>
+      </div>
+
+      : tab === 'General' ? <div className="panel generic-section">
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>General</h1><p className="subtitle">Antecedentes heredofamiliares de {patientName}.</p>
+        <div className="heredo-table">
+          <div className="heredo-head"><span>Enfermedad</span>{RELATIVES.map((rel) => <b key={rel}>{rel}</b>)}</div>
+          {FAMILY_DISEASES.map((disease) => <div className="heredo-row" key={disease}>
+            <span>{disease}</span>
+            {RELATIVES.map((rel) => { const key = `${disease}__${rel}`; const active = !!currentValues[key]; return <TogglePill key={rel} active={active} label={active ? '✓' : ''} onClick={() => updateField(key, !active)} /> })}
+          </div>)}
+        </div>
+        <FormCard title="Notas adicionales" fields={['Notas de antecedentes|']} values={currentValues} onFieldChange={updateField} />
+      </div>
+
+      : tab === 'Clínico' ? <div className="panel generic-section">
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Clínico</h1><p className="subtitle">Revisión de síntomas de {patientName}. Marca los que aplican.</p>
+        <div className="symptom-grid">{SYMPTOMS.map((symptom) => { const active = !!currentValues[symptom]; return <TogglePill key={symptom} active={active} label={symptom} onClick={() => updateField(symptom, !active)} /> })}</div>
+        <FormCard title="Notas adicionales" fields={['Notas clínicas|']} values={currentValues} onFieldChange={updateField} />
       </div>
 
       : tab === 'Monitoreo' ? <div className="panel generic-section">
