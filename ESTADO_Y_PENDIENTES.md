@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 1 de septiembre de 2026.
+Última verificación contra código real (no contra specs): 1 de septiembre de 2026 (tarde).
 
 ## Iniciar sesión en local
 
@@ -54,16 +54,16 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Autenticación** | Login real con contraseña (bcrypt) + sesión (JWT en `Authorization: Bearer`, sin cookies). `practiceId`/`userId` ya no vienen de un header que cualquiera puede mandar — vienen de la sesión verificada. Exigir sesión no bastaba por sí solo para cerrar el control de acceso (ver deuda técnica) — eso se terminó de cerrar en fase 11. Sin roles aplicados todavía (ver abajo) |
 | **Flujo completo tallas → receta → plan** | Probado de punta a punta con una paciente real (Valeria Mendoza Ruiz): expediente con mediciones reales → cálculo de requerimiento (Mifflin-St Jeor, 2114 kcal/día) → 4 alimentos importados en vivo de USDA (pollo, quinoa, espinaca, aguacate) → 2 recetas propias con esos ingredientes y macros calculados de verdad → distribución de 7 días × 4 tiempos → plan publicado → PDF de menú semanal generado y descargado. Queda como paciente de ejemplo real en la base |
 | **Plantillas** | Modelo `Template` nuevo. Una plantilla se crea clonando la consulta o el plan más reciente de un paciente (snapshot, no referencia viva); "Usar plantilla" la copia sobre otro paciente — precarga sus secciones de expediente o reemplaza la distribución semanal de su plan en borrador. Probado de punta a punta: plantilla de expediente y de plan creadas desde Valeria, aplicadas a Diego Ramírez y Sofía Hernández respectivamente |
+| **Registrar medición** | Botón "Registrar medición de hoy" en la pestaña Antropométrico llama al `POST /consultations/:id/measurements` existente (creado en el flujo de Valeria, nunca conectado hasta ahora) |
+| **Generar informe clínico bajo demanda** | Botón "Generar informe"/"Descargar informe" en el expediente crea (`POST /documents/consultation-report`, nuevo) y genera un documento `consultation_report` para la consulta en curso, sin depender de que el seed lo haya creado de antemano |
 
-(Negrita = construido en esta sesión: fase 3 a 11, y los bugfixes de Recetas, control de acceso y CORS.)
+(Negrita = construido en esta sesión: fase 3 a 12, y los bugfixes de Recetas, control de acceso y CORS. Fase 11 y fase 12 se ramificaron ambas desde `main` justo después de fase 10, por eso llegan aquí fusionadas — esta rama incorpora los cambios de `main` con fase 12 ya mergeada.)
 
 ## Backend real, pantalla sin conectar
 
 | Qué falta conectar | Detalle |
 |---|---|
 | Configuración — horarios y logo | "Horarios de atención" y "Logo de la práctica" siguen estáticos: no hay modelo para disponibilidad semanal ni almacenamiento de archivos todavía. Nombre/email/zona horaria ya son reales |
-| Registrar medición (Measurement) | `POST /consultations/:id/measurements` ya existe (creado al armar el flujo de Valeria) pero ningún botón de la pestaña Antropométrico lo llama todavía — sin esto, el PDF de informe clínico sigue diciendo "Sin mediciones registradas" aunque la sección se haya guardado |
-| Crear informe clínico (consultation_report) | Solo existe `POST /documents/nutrition-plan`; no hay endpoint para generar el documento de tipo informe de consulta bajo demanda — los únicos que existen los creó el seed |
 
 ## No existe todavía (ni modelo, ni API, ni pantalla real)
 
@@ -93,4 +93,6 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 3. ~~Entrega + PDF de informe con datos reales~~ — hecho (fase 8): "Marcar como entregado" real, y el PDF de informe clínico imprime mediciones/diagnóstico/tratamiento reales. El envío real por WhatsApp/email sigue diferido a propósito.
 4. ~~Autenticación~~ — hecho (fase 9), alcance "login + sesión, sin roles": contraseña con hash real (bcrypt), login/logout, sesión JWT verificada server-side. De paso cierra todo el patrón de control de acceso pendiente (ver deuda técnica). **Decisión explícita del usuario: no se van a aplicar permisos por rol** (Propietaria/Nutrióloga/Asistente) — el modelo y el rol en la sesión quedan ahí sin usarse, y no es un pendiente a retomar.
 5. ~~Plantillas~~ — hecho (fase 10): modelo `Template` nuevo, clonables para expediente y plan, probado creando y aplicando ambos tipos entre pacientes reales.
-6. **Biblioteca de educación** — es lo único que queda del backlog original. Pantalla completamente estática, sin modelo; necesita diseño de esquema nuevo (qué es "material educativo": ¿archivos, texto, links?) y no bloquea nada del flujo clínico principal.
+6. ~~Recetas al nivel de Avena/HeyNutre~~ — hecho (fase 11): catálogo real con búsqueda/filtro por tiempo de comida y restricción, editar/archivar, macros reales. De paso se corrigieron tres bugs silenciosos en `NewRecipePage` (ver deuda técnica).
+7. ~~Registrar medición + generar informe bajo demanda~~ — hecho (fase 12): dos huecos backend-real-pero-sin-conectar, cerrados. "Registrar medición de hoy" ya alimenta el histórico de `Measurement`; "Generar informe" crea y genera el PDF de consulta sin depender del seed.
+8. **Biblioteca de educación** — es lo único que queda del backlog original. Pantalla completamente estática, sin modelo; necesita diseño de esquema nuevo (qué es "material educativo": ¿archivos, texto, links?) y no bloquea nada del flujo clínico principal. Diferido explícitamente por el usuario ("dejemos la biblioteca para después") — no retomar sin que lo pida.

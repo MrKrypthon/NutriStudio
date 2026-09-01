@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import FormCard from '../../components/FormCard.jsx'
 import { usePatient } from '../../lib/usePatient.js'
-import { clinicalApi, patientsApi } from '../../lib/api.js'
+import { clinicalApi, documentsApi, patientsApi } from '../../lib/api.js'
 
 const TABS = ['Resumen', 'General', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas']
 const SECTION_KEYS = { Resumen: 'summary', General: 'general', Antropométrico: 'anthropometric', Bioquímico: 'biochemical', Clínico: 'clinical', Dietético: 'dietary', 'Estilo de vida': 'lifestyle', Sociocultural: 'sociocultural', Diagnóstico: 'diagnosis', Tratamiento: 'treatment', Monitoreo: 'monitoring', Notas: 'notes' }
@@ -18,6 +18,9 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
   const [consultation, setConsultation] = useState(null)
   const [sections, setSections] = useState({})
   const [saveState, setSaveState] = useState('idle')
+  const [measurementState, setMeasurementState] = useState('idle')
+  const [report, setReport] = useState(null)
+  const [reportState, setReportState] = useState('idle')
   const saveTimer = useRef(null)
 
   useEffect(() => {
@@ -43,6 +46,15 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
     return () => { cancelled = true; clearTimeout(saveTimer.current) }
   }, [patientId])
 
+  useEffect(() => {
+    if (!consultation) return
+    let cancelled = false
+    documentsApi.list(`?patientId=${patientId}&type=consultation_report`)
+      .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); if (existing) setReport(existing) } })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [consultation, patientId])
+
   const sectionKey = SECTION_KEYS[tab]
   const currentValues = sections[sectionKey]?.payload || {}
 
@@ -67,13 +79,53 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
   }
 
   const saveLabel = SAVE_LABELS[saveState]
+  const anthro = sections.anthropometric?.payload || {}
+  const numOrUndefined = (value) => value !== undefined && value !== '' ? Number(value) : undefined
+
+  const registerMeasurement = async () => {
+    if (!consultation) return
+    setMeasurementState('saving')
+    try {
+      await clinicalApi.registerMeasurement(consultation.id, {
+        weightKg: numOrUndefined(anthro['Peso (kg)']),
+        heightCm: numOrUndefined(anthro['Talla (cm)']),
+        waistCm: numOrUndefined(anthro['Cintura (cm)']),
+        hipCm: numOrUndefined(anthro['Cadera (cm)']),
+      })
+      setMeasurementState('saved')
+    } catch {
+      setMeasurementState('error')
+    }
+  }
+
+  const generateReport = async () => {
+    if (!consultation) return
+    if (report?.storageKey) {
+      const link = window.document.createElement('a')
+      link.href = documentsApi.downloadUrl(report.id)
+      link.download = report.storageKey
+      link.click()
+      return
+    }
+    setReportState('working')
+    try {
+      const doc = report || await documentsApi.createForReport(consultation.id)
+      const generated = await documentsApi.generate(doc.id)
+      setReport(generated)
+      setReportState('idle')
+    } catch {
+      setReportState('error')
+    }
+  }
 
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
       <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Consulta nutricional · en curso</span></div></div>
-      <div className="clinical-actions"><button className="secondary">▱ Agendar</button><button className="primary">Guardar</button></div>
+      <div className="clinical-actions"><button className="secondary">▱ Agendar</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Descargar informe' : 'Generar informe'}</button></div>
     </div>
+    {reportState === 'error' && <div className="form-error">⚠ No se pudo generar el informe.</div>}
+    {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
     <div className="record-tabs">{TABS.map((x) => <button className={tab === x ? 'active' : ''} onClick={() => setTab(x)} key={x}>{x}</button>)}</div>
     <div className="record-banner"><span className="spark">✦</span><div><b>Consulta en curso</b><small>Los cambios se guardan automáticamente · {saveLabel}</small></div><button className="secondary">Grabar consulta</button></div>
 
@@ -92,7 +144,7 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
           <FormCard title="Circunferencias" fields={['Cintura (cm)|', 'Cadera (cm)|', 'Brazo (cm)|', 'ICC calculado|']} values={currentValues} onFieldChange={updateField} />
           <FormCard title="Pliegues cutáneos" fields={['Tricipital (mm)|', 'Bicipital (mm)|', 'Subescapular (mm)|', 'Suprailiaco (mm)|']} values={currentValues} onFieldChange={updateField} />
         </section>
-        <aside className="record-aside panel"><p className="eyebrow">RESUMEN DE HOY</p><div className="measure-highlight"><small>Peso actual</small><b>{currentValues['Peso (kg)'] || '—'} kg</b></div><div className="measure-highlight"><small>% grasa corporal</small><b>—</b><span className="muted">Aún no capturado</span></div><button className="link-button">Ver historial completo →</button></aside>
+        <aside className="record-aside panel"><p className="eyebrow">RESUMEN DE HOY</p><div className="measure-highlight"><small>Peso actual</small><b>{currentValues['Peso (kg)'] || '—'} kg</b></div><div className="measure-highlight"><small>% grasa corporal</small><b>—</b><span className="muted">Aún no capturado</span></div><button className="link-button" disabled={measurementState === 'saving' || (!anthro['Peso (kg)'] && !anthro['Talla (cm)'])} onClick={registerMeasurement}>{measurementState === 'saving' ? 'Registrando…' : measurementState === 'saved' ? '✓ Medición registrada' : 'Registrar medición de hoy →'}</button></aside>
       </div>
 
       : tab === 'Bioquímico' ? <div className="clinical-layout">

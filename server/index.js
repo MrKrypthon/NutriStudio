@@ -571,6 +571,15 @@ app.post('/api/v1/documents/nutrition-plan', async (request, reply) => {
   return reply.code(201).send(document)
 })
 
+app.post('/api/v1/documents/consultation-report', async (request, reply) => {
+  const { consultationId } = request.body || {}
+  if (!consultationId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'consultationId es obligatorio.', fields: { consultationId: 'required' } })
+  const consultation = await prisma.consultation.findFirst({ where: { id: consultationId, patient: { practiceId: request.practiceId } } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const document = await prisma.document.create({ data: { patientId: consultation.patientId, consultationId: consultation.id, type: 'consultation_report', sections: { summary: true, anthropometric: true, diagnosis: true, treatment: true }, version: 0 } })
+  return reply.code(201).send(document)
+})
+
 app.get('/api/v1/documents', async (request) => {
   const { patientId, type } = request.query
   const documents = await prisma.document.findMany({ where: { patientId: patientId || undefined, type: type || undefined, patient: { practiceId: request.practiceId } }, include: { patient: true, plan: true }, orderBy: { createdAt: 'desc' }, take: 100 })

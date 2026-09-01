@@ -101,6 +101,7 @@ export const clinicalApi = {
   create: (patientId, payload) => apiRequest(`/patients/${patientId}/consultations`, { method: 'POST', body: JSON.stringify(payload) }),
   saveSection: (consultationId, sectionKey, payload, updatedAt) => apiRequest(`/consultations/${consultationId}/sections/${sectionKey}`, { method: 'PUT', body: JSON.stringify({ payload, updatedAt }) }),
   complete: (id) => apiRequest(`/consultations/${id}/complete`, { method: 'POST' }),
+  registerMeasurement: (consultationId, payload) => apiRequest(`/consultations/${consultationId}/measurements`, { method: 'POST', body: JSON.stringify(payload) }),
 }
 
 export const templatesApi = {
@@ -112,6 +113,7 @@ export const templatesApi = {
 export const documentsApi = {
   list: (query = '') => apiRequest(`/documents${query}`),
   createForPlan: (planId) => apiRequest('/documents/nutrition-plan', { method: 'POST', body: JSON.stringify({ planId }) }),
+  createForReport: (consultationId) => apiRequest('/documents/consultation-report', { method: 'POST', body: JSON.stringify({ consultationId }) }),
   generate: (id) => apiRequest(`/documents/${id}/generate`, { method: 'POST' }),
   deliver: (id) => apiRequest(`/documents/${id}/deliver`, { method: 'POST' }),
   downloadUrl: (id) => `${import.meta.env.VITE_API_URL || ''}/documents/${id}/download`,
