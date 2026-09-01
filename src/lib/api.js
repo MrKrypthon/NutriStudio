@@ -31,6 +31,11 @@ export const dashboardApi = {
   today: (date) => apiRequest(`/dashboard/today?date=${date}`),
 }
 
+export const practiceApi = {
+  get: () => apiRequest('/practice'),
+  update: (payload) => apiRequest('/practice', { method: 'PUT', body: JSON.stringify(payload) }),
+}
+
 export const patientsApi = {
   list: (query = '') => apiRequest(`/patients${query}`),
   get: (id) => apiRequest(`/patients/${id}`),

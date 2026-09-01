@@ -38,8 +38,9 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Hoy** | "Próxima acción" con datos reales de Seguimientos; horas de cita correctas |
 | **Consultas** | Historial real de sesiones del paciente |
 | **Recetas** | Estado de sincronización, macros y tipo de comida correctos por receta |
+| **Configuración** | Nombre profesional, email y zona horaria de la práctica, reales y persistentes |
 
-(Negrita = construido en esta sesión: fase 3, 4, 5, y los bugfixes de Recetas y control de acceso.)
+(Negrita = construido en esta sesión: fase 3, 4, 5, 6, y los bugfixes de Recetas, control de acceso y CORS.)
 
 ## Backend real, pantalla sin conectar
 
@@ -49,13 +50,13 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | Línea de tiempo del paciente | No existe, ni backend ni pantalla |
 | Entrega por WhatsApp/email | `POST /documents/:id/deliver` existe; ningún botón de la interfaz lo llama |
 | PDF de informe clínico | Se genera pero con texto genérico — trae mediciones y diagnósticos reales de la BD y nunca los imprime |
+| Configuración — horarios y logo | "Horarios de atención" y "Logo de la práctica" siguen estáticos: no hay modelo para disponibilidad semanal ni almacenamiento de archivos todavía. Nombre/email/zona horaria ya son reales |
 
 ## No existe todavía (ni modelo, ni API, ni pantalla real)
 
 | Módulo | Nota |
 |---|---|
 | Autenticación | Usuario fijo "Gabriela Alonso", sin login/sesión/roles aplicados. Es la más grande — necesita decisión de alcance antes de empezar (ver abajo) |
-| Configuración / Ajustes | `Practice` (nombre, zona horaria, paleta) y `User` sí existen en el esquema; la pantalla es 100% estática. Se puede conectar sin tocar el esquema |
 | Plantillas | Ni siquiera hay modelo `Template` en la base — necesita diseño de esquema nuevo |
 | Biblioteca de educación | Pantalla completamente estática, sin modelo |
 | Auditoría | Modelo `AuditEvent` existe; ninguna ruta lo usa |
@@ -66,12 +67,13 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 
 - **Mismo patrón de control de acceso roto que se corrigió en `/tasks`** existe en endpoints más viejos que nadie ha auditado: `GET/POST /consultations/:id`, `PUT .../sections/:key`, `POST /appointments/:id/confirm`, `GET/PUT/POST /recipes/:id`, `GET/PUT/POST /plans/:id`, endpoints de `/documents`. Ninguno valida que el recurso pertenezca a la práctica de quien llama. Vale la pena una pasada dedicada, probablemente junto con la fase de autenticación.
 - El bug de `Content-Type: application/json` forzado en peticiones sin body (ya corregido en el helper compartido `apiRequest`) y el de horas calculadas con reloj local en vez de UTC (ya corregido en Agenda/Hoy/Seguimientos) son clases de bug a vigilar si se agrega código nuevo con fechas o `POST`/endpoints sin body.
+- **`@fastify/cors` sin `methods` configurado limita a `GET,HEAD,POST` por default (cambió en v11).** Todo endpoint `PUT` de este API (secciones de expediente, evaluación/distribución de plan, ingredientes de receta, práctica) fallaba en silencio con cualquier llamada cross-origin — solo funcionaba a través del proxy de Vite (mismo origen). Ya corregido explícitamente en el registro de `cors`, pero es la clase de bug que solo aparece al probar contra `npm run dev:all` o en producción real (front y API en dominios distintos) — vale la pena probar ahí, no solo contra el proxy de Vite.
 
 ## Siguiente fase sugerida
 
 Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en orden de valor/costo:
 
-1. **Configuración real** — usa `Practice`/`User` que ya existen, sin tocar esquema. Nombre de la práctica, zona horaria, paleta.
+1. ~~Configuración real~~ — hecho (fase 6): nombre profesional, email, zona horaria. Horarios de atención y logo siguen pendientes por falta de modelo.
 2. **Editar paciente + línea de tiempo** — cierra el último hueco de "backend real, pantalla sin conectar" que además es barato (una tabla, sin modelos nuevos).
 3. **Entrega por WhatsApp/email + PDF de informe con datos reales** — cierra el círculo de "Entrega" que quedó a medias.
 4. **Autenticación** — la más grande. Antes de empezarla conviene una sesión aparte solo para decidir alcance (login+sesión nada más, vs. aplicar roles owner/nutritionist/assistant en cada endpoint, vs. además arreglar el patrón de control de acceso de arriba).

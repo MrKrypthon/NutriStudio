@@ -15,9 +15,33 @@ const prisma = new PrismaClient()
 
 if (!process.env.DATABASE_URL) app.log.warn('DATABASE_URL no está configurada. Copia .env.example a .env antes de usar persistencia.')
 
-await app.register(cors, { origin: true })
+// @fastify/cors defaults `methods` to 'GET,HEAD,POST' only (the CORS-spec "simple methods"),
+// so without this every PUT here has silently failed preflight for any cross-origin caller
+// (e.g. `npm run dev:all`, or the SPA and API on separate domains in production) — it only
+// ever worked same-origin through Vite's dev proxy.
+await app.register(cors, { origin: true, methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] })
 
 app.get('/health', async () => ({ status: 'ok', service: 'nutri-studio-api' }))
+
+// Sin sesión real todavía (ver ESTADO_Y_PENDIENTES.md), "el usuario actual" se resuelve
+// igual que en el resto del API: el primero de la práctica.
+app.get('/api/v1/practice', async (request, reply) => {
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practice = await prisma.practice.findUnique({ where: { id: practiceId } })
+  if (!practice) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Práctica no encontrada.', fields: {} })
+  const user = await prisma.user.findFirst({ where: { practiceId }, orderBy: { createdAt: 'asc' } })
+  return { ...practice, user }
+})
+
+app.put('/api/v1/practice', async (request, reply) => {
+  const { name, timeZone, userName, userEmail } = request.body || {}
+  if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const practice = await prisma.practice.update({ where: { id: practiceId }, data: { name, timeZone } })
+  let user = await prisma.user.findFirst({ where: { practiceId }, orderBy: { createdAt: 'asc' } })
+  if (user && (userName || userEmail)) user = await prisma.user.update({ where: { id: user.id }, data: { name: userName || user.name, email: userEmail || user.email } })
+  return { ...practice, user }
+})
 
 app.get('/api/v1/patients', async (request) => {
   const { search = '', status = 'ACTIVE', page = 1, pageSize = 25 } = request.query
