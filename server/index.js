@@ -270,6 +270,73 @@ app.post('/api/v1/tasks/:taskId/complete', async (request, reply) => {
   return prisma.task.update({ where: { id: task.id }, data: { status: 'completed', completedAt: new Date() }, include: { patient: true } })
 })
 
+app.get('/api/v1/templates', async (request) => {
+  const { type } = request.query
+  const templates = await prisma.template.findMany({
+    where: { practiceId: request.practiceId, status: 'ACTIVE', ...(type ? { type } : {}) },
+    orderBy: { updatedAt: 'desc' },
+  })
+  return { items: templates }
+})
+
+app.post('/api/v1/templates', async (request, reply) => {
+  const { name, type, description, sourceConsultationId, sourcePlanId } = request.body || {}
+  if (!name || !type) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y tipo son obligatorios.', fields: { name: !name, type: !type } })
+  if (!['clinical', 'plan'].includes(type)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Tipo de plantilla no soportado.', fields: { type: 'invalid' } })
+
+  let sections = null
+  let mealSlots = null
+  if (type === 'clinical') {
+    if (!sourceConsultationId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Selecciona una consulta de origen.', fields: { sourceConsultationId: 'required' } })
+    const consultation = await prisma.consultation.findFirst({ where: { id: sourceConsultationId, patient: { practiceId: request.practiceId } }, include: { sections: true } })
+    if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta de origen no encontrada.', fields: {} })
+    sections = Object.fromEntries(consultation.sections.map((section) => [section.sectionKey, section.payload]))
+  } else {
+    if (!sourcePlanId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Selecciona un plan de origen.', fields: { sourcePlanId: 'required' } })
+    const plan = await prisma.nutritionPlan.findFirst({ where: { id: sourcePlanId, patient: { practiceId: request.practiceId } }, include: { mealSlots: true } })
+    if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan de origen no encontrado.', fields: {} })
+    mealSlots = plan.mealSlots.map((slot) => ({ dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: slot.recipeId, servings: slot.servings }))
+  }
+
+  const template = await prisma.template.create({ data: { practiceId: request.practiceId, type, name, description, sections, mealSlots } })
+  return reply.code(201).send(template)
+})
+
+// Applying a template is a one-time copy, not a live link: a 'clinical' template seeds a new
+// (or the patient's in-progress) consultation's sections, a 'plan' template seeds a draft
+// plan's mealSlots. Editing the template afterward never reaches back into what was created.
+app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
+  const { patientId } = request.body || {}
+  if (!patientId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'patientId es obligatorio.', fields: { patientId: 'required' } })
+  const template = await prisma.template.findFirst({ where: { id: request.params.templateId, practiceId: request.practiceId } })
+  if (!template) return reply.code(404).send({ code: 'TEMPLATE_NOT_FOUND', message: 'Plantilla no encontrada.', fields: {} })
+  const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId: request.practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+
+  await prisma.template.update({ where: { id: template.id }, data: { usageCount: { increment: 1 } } })
+
+  if (template.type === 'clinical') {
+    let consultation = await prisma.consultation.findFirst({ where: { patientId, status: 'IN_PROGRESS' } })
+    if (!consultation) consultation = await prisma.consultation.create({ data: { patientId, nutritionistId: request.userId, templateId: template.id, status: 'IN_PROGRESS', startedAt: new Date() } })
+    const sections = template.sections || {}
+    await prisma.$transaction(Object.entries(sections).map(([sectionKey, payload]) =>
+      prisma.clinicalSection.upsert({ where: { consultationId_sectionKey: { consultationId: consultation.id, sectionKey } }, create: { consultationId: consultation.id, sectionKey, payload, lastSavedBy: request.userId }, update: { payload, lastSavedBy: request.userId } })
+    ))
+    return { type: 'clinical', consultationId: consultation.id, patientId }
+  }
+
+  let consultation = await prisma.consultation.findFirst({ where: { patientId }, orderBy: { createdAt: 'desc' } })
+  if (!consultation) consultation = await prisma.consultation.create({ data: { patientId, nutritionistId: request.userId, status: 'IN_PROGRESS', startedAt: new Date() } })
+  let plan = await prisma.nutritionPlan.findFirst({ where: { patientId, status: { not: 'PUBLISHED' } }, orderBy: { createdAt: 'desc' } })
+  if (!plan) plan = await prisma.nutritionPlan.create({ data: { patientId, consultationId: consultation.id } })
+  const slots = template.mealSlots || []
+  await prisma.$transaction([
+    prisma.mealSlot.deleteMany({ where: { planId: plan.id } }),
+    prisma.mealSlot.createMany({ data: slots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: slot.recipeId, servings: slot.servings })) }),
+  ])
+  return { type: 'plan', planId: plan.id, patientId }
+})
+
 app.get('/api/v1/recipes', async (request) => {
   const { search = '', mealType, status = 'ACTIVE' } = request.query
   const where = {

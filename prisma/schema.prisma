@@ -61,6 +61,7 @@ model Practice {
   ingredients    Ingredient[]
   tasks          Task[]
   auditEvents    AuditEvent[]
+  templates      Template[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 }
@@ -326,6 +327,26 @@ model Task {
   completedAt DateTime?
 
   @@index([practiceId, status, dueAt])
+}
+
+// A snapshot, not a live reference: applying a template copies its sections/mealSlots onto a
+// new consultation or plan, the same way publishing a plan freezes a menu snapshot — editing
+// the template afterward must not reach back and change anything already created from it.
+model Template {
+  id          String       @id @default(uuid())
+  practiceId  String
+  practice    Practice     @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  type        String       // 'clinical' | 'plan'
+  name        String
+  description String?
+  sections    Json?        // clinical: { [sectionKey]: payload }
+  mealSlots   Json?        // plan: [{ dayOfWeek, mealType, recipeId, servings }]
+  usageCount  Int          @default(0)
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([practiceId, type, status])
 }
 
 model AuditEvent {

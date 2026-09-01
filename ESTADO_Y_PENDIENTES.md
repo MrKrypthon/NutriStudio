@@ -53,8 +53,9 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Entrega de documentos** | "Marcar como entregado" real sobre `POST /documents/:id/deliver`; el PDF de informe clínico ya imprime mediciones, diagnóstico y tratamiento reales en vez de texto genérico |
 | **Autenticación** | Login real con contraseña (bcrypt) + sesión (JWT en `Authorization: Bearer`, sin cookies). `practiceId`/`userId` ya no vienen de un header que cualquiera puede mandar — vienen de la sesión verificada. Esto cierra TODO el patrón de control de acceso roto de golpe, sin necesidad de la auditoría endpoint por endpoint que seguía pendiente. Sin roles aplicados todavía (ver abajo) |
 | **Flujo completo tallas → receta → plan** | Probado de punta a punta con una paciente real (Valeria Mendoza Ruiz): expediente con mediciones reales → cálculo de requerimiento (Mifflin-St Jeor, 2114 kcal/día) → 4 alimentos importados en vivo de USDA (pollo, quinoa, espinaca, aguacate) → 2 recetas propias con esos ingredientes y macros calculados de verdad → distribución de 7 días × 4 tiempos → plan publicado → PDF de menú semanal generado y descargado. Queda como paciente de ejemplo real en la base |
+| **Plantillas** | Modelo `Template` nuevo. Una plantilla se crea clonando la consulta o el plan más reciente de un paciente (snapshot, no referencia viva); "Usar plantilla" la copia sobre otro paciente — precarga sus secciones de expediente o reemplaza la distribución semanal de su plan en borrador. Probado de punta a punta: plantilla de expediente y de plan creadas desde Valeria, aplicadas a Diego Ramírez y Sofía Hernández respectivamente |
 
-(Negrita = construido en esta sesión: fase 3 a 9, y los bugfixes de Recetas, control de acceso y CORS.)
+(Negrita = construido en esta sesión: fase 3 a 10, y los bugfixes de Recetas, control de acceso y CORS.)
 
 ## Backend real, pantalla sin conectar
 
@@ -68,7 +69,6 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 
 | Módulo | Nota |
 |---|---|
-| Plantillas | Ni siquiera hay modelo `Template` en la base — necesita diseño de esquema nuevo |
 | Editar estado del paciente (activo/archivado) | `PATCH /patients/:id` no toca `status` todavía; sólo datos de contacto |
 | Biblioteca de educación | Pantalla completamente estática, sin modelo |
 | Auditoría | Modelo `AuditEvent` existe; ninguna ruta lo usa |
@@ -92,4 +92,5 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 2. ~~Editar paciente + línea de tiempo~~ — hecho (fase 7): `PATCH /patients/:id` real, y el cajón de cada paciente muestra su historial de citas/consultas/planes/documentos. Falta editar `status` (activo/archivado).
 3. ~~Entrega + PDF de informe con datos reales~~ — hecho (fase 8): "Marcar como entregado" real, y el PDF de informe clínico imprime mediciones/diagnóstico/tratamiento reales. El envío real por WhatsApp/email sigue diferido a propósito.
 4. ~~Autenticación~~ — hecho (fase 9), alcance "login + sesión, sin roles": contraseña con hash real (bcrypt), login/logout, sesión JWT verificada server-side. De paso cierra todo el patrón de control de acceso pendiente (ver deuda técnica). **Decisión explícita del usuario: no se van a aplicar permisos por rol** (Propietaria/Nutrióloga/Asistente) — el modelo y el rol en la sesión quedan ahí sin usarse, y no es un pendiente a retomar.
-5. **Plantillas / Biblioteca de educación** — quedan al final porque necesitan diseño de esquema nuevo y no bloquean nada del flujo clínico principal.
+5. ~~Plantillas~~ — hecho (fase 10): modelo `Template` nuevo, clonables para expediente y plan, probado creando y aplicando ambos tipos entre pacientes reales.
+6. **Biblioteca de educación** — es lo único que queda del backlog original. Pantalla completamente estática, sin modelo; necesita diseño de esquema nuevo (qué es "material educativo": ¿archivos, texto, links?) y no bloquea nada del flujo clínico principal.

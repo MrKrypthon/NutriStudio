@@ -69,7 +69,7 @@ export default function App() {
   if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
   if (active === 'Seguimientos') return <FollowupsPage setActive={setActive} />
   if (active === 'Consultas') return <ConsultationsPage setActive={setActive} patientId={selectedPatientId} />
-  if (active === 'Plantillas') return <TemplatesPage setActive={setActive} />
+  if (active === 'Plantillas') return <TemplatesPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Recetas') return <RecipesPage setActive={setActive} />
   if (active === 'Ingredientes') return <IngredientsPage setActive={setActive} />
   if (active === 'Educación') return <EducationPage setActive={setActive} />
