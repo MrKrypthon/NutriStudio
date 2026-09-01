@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 1 de septiembre de 2026 (tarde).
+Última verificación contra código real (no contra specs): 1 de septiembre de 2026 (noche).
 
 ## Iniciar sesión en local
 
@@ -56,10 +56,11 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Plantillas** | Modelo `Template` nuevo. Una plantilla se crea clonando la consulta o el plan más reciente de un paciente (snapshot, no referencia viva); "Usar plantilla" la copia sobre otro paciente — precarga sus secciones de expediente o reemplaza la distribución semanal de su plan en borrador. Probado de punta a punta: plantilla de expediente y de plan creadas desde Valeria, aplicadas a Diego Ramírez y Sofía Hernández respectivamente |
 | **Registrar medición** | Botón "Registrar medición de hoy" en la pestaña Antropométrico llama al `POST /consultations/:id/measurements` existente (creado en el flujo de Valeria, nunca conectado hasta ahora) |
 | **Generar informe clínico bajo demanda** | Botón "Generar informe"/"Descargar informe" en el expediente crea (`POST /documents/consultation-report`, nuevo) y genera un documento `consultation_report` para la consulta en curso, sin depender de que el seed lo haya creado de antemano |
+| **Biblioteca de educación** | Modelo `EducationMaterial` nuevo. Catálogo real con búsqueda y filtro por categoría (server-side, con debounce), crear/editar en una pantalla dedicada, archivar, y "Compartir" real que copia título + contenido al portapapeles (envío real por WhatsApp/email sigue diferido, como el resto de la app). 6 materiales de ejemplo sembrados por `seed.js`, probado creando, editando, compartiendo y archivando uno de prueba |
 
-(Negrita = construido en esta sesión: fase 3 a 10 y 12 en esta rama — fase 11, Recetas, vive en la rama `fase-11-recetas` con su propio PR — más los bugfixes de control de acceso y CORS.)
+(Negrita = construido en esta sesión: fase 3 a 10 y 12 en esta rama — fase 11 (Recetas) vive en la rama `fase-11-recetas` con su propio PR, y fase 13 (Biblioteca de educación) es este trabajo — más los bugfixes de control de acceso y CORS.)
 
-**Nota de ramas paralelas:** `fase-11-recetas` (Recetas al nivel de Avena/HeyNutre) y `fase-12-informe-y-medicion` (este trabajo) se ramificaron ambas desde `main` después de fase 10, así que cada una tiene su propia actualización de este documento. Al mergear la segunda, revisa conflictos en esta tabla — no deberían pisarse porque tocan filas distintas, pero mezclar ambas versiones manualmente es más seguro que aceptar una y descartar la otra.
+**Nota de ramas paralelas:** `fase-11-recetas` se ramificó de `main` después de fase 10 y sigue con su propio PR sin mergear; esta rama (`biblioteca-educacion`, fase 13) se ramificó de `main` después de fase 12. Al mergear fase 11, revisa conflictos en esta tabla — no deberían pisarse porque tocan filas distintas, pero mezclar ambas versiones manualmente es más seguro que aceptar una y descartar la otra.
 
 ## Backend real, pantalla sin conectar
 
@@ -72,7 +73,6 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | Módulo | Nota |
 |---|---|
 | Editar estado del paciente (activo/archivado) | `PATCH /patients/:id` no toca `status` todavía; sólo datos de contacto |
-| Biblioteca de educación | Pantalla completamente estática, sin modelo |
 | Auditoría | Modelo `AuditEvent` existe; ninguna ruta lo usa |
 | Envío real por WhatsApp/email | "Marcar como entregado" ya es real, pero sigue siendo un registro manual — no manda nada. La integración de envío real sigue diferida, como dice RF-09 del documento original |
 | Equivalentes SMAE | Bloqueado a propósito — la tabla oficial mexicana requiere licenciarse |
@@ -97,4 +97,11 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 5. ~~Plantillas~~ — hecho (fase 10): modelo `Template` nuevo, clonables para expediente y plan, probado creando y aplicando ambos tipos entre pacientes reales.
 6. ~~Recetas al nivel de Avena/HeyNutre~~ — hecho (fase 11, rama `fase-11-recetas` con PR propio, pendiente de mergear): catálogo real con búsqueda/filtro por tiempo de comida y restricción, editar/archivar, macros reales. De paso se corrigieron tres bugs silenciosos en `NewRecipePage` (ver deuda técnica).
 7. ~~Registrar medición + generar informe bajo demanda~~ — hecho (fase 12): dos huecos backend-real-pero-sin-conectar, cerrados. "Registrar medición de hoy" ya alimenta el histórico de `Measurement`; "Generar informe" crea y genera el PDF de consulta sin depender del seed.
-8. **Biblioteca de educación** — es lo único que queda del backlog original. Pantalla completamente estática, sin modelo; necesita diseño de esquema nuevo (qué es "material educativo": ¿archivos, texto, links?) y no bloquea nada del flujo clínico principal. Diferido explícitamente por el usuario ("dejemos la biblioteca para después") — no retomar sin que lo pida.
+8. ~~Biblioteca de educación~~ — hecho (fase 13): modelo `EducationMaterial` nuevo, catálogo real con búsqueda/filtro/crear/editar/archivar y "Compartir" que copia el contenido al portapapeles. Decisión de scope: sin subir archivos (no hay almacenamiento todavía, mismo límite que "Logo de la práctica" en Configuración) — el contenido es texto que se copia para pegar donde se necesite, no un PDF real.
+
+Con esto se completó todo el backlog original del documento de requerimientos. Lo que queda son huecos de infraestructura transversales, no un módulo nuevo:
+
+- **Almacenamiento de archivos** — bloquea tanto el logo de la práctica como adjuntar archivos reales a un material educativo (hoy todo es texto). Sin esto no avanza ninguno de los dos.
+- **Instalar `gh` CLI** — sigue pendiente desde fase 9, cada PR se sigue creando a mano.
+- **Envío real por WhatsApp/email** — diferido a propósito en todos los módulos que lo tocan (Seguimientos, Educación); es la integración más grande que falta y no bloquea nada mientras "marcar como entregado"/"copiar contenido" sigan siendo el flujo manual.
+- **Editar estado del paciente (activo/archivado)** y **Auditoría** (ver tabla de arriba) son los dos huecos menores que quedan sueltos.

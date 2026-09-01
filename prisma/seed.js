@@ -97,6 +97,16 @@ async function main() {
   ] })
   await prisma.document.create({ data: { patientId: patients[0].id, consultationId: consultation.id, planId: plan.id, type: 'consultation_report', sections: { summary: true, anthropometric: true, diagnosis: true, treatment: true }, version: 1 } })
 
+  await prisma.educationMaterial.deleteMany({ where: { practiceId: practice.id } })
+  await prisma.educationMaterial.createMany({ data: [
+    { practiceId: practice.id, title: 'Método visual de porciones', category: 'Guías prácticas', description: 'Aprende a estimar porciones sin báscula usando tus manos y utensilios.', body: 'Una palma abierta equivale aproximadamente a una porción de proteína; un puño, a una porción de verdura o fruta; una mano ahuecada, a una porción de cereal o tubérculo; y el pulgar completo, a una porción de grasa.', color: 'mint', readMinutes: 8 },
+    { practiceId: practice.id, title: 'Leer etiquetas nutricionales', category: 'Material para paciente', description: 'Identifica azúcares añadidos, fibra y tamaños de porción.', body: 'Revisa siempre el tamaño de porción antes que cualquier otro dato: los demás valores de la tabla están calculados sobre esa cantidad, no sobre el envase completo. Busca "azúcares añadidos" por separado de los azúcares naturales.', color: 'yellow', readMinutes: 5 },
+    { practiceId: practice.id, title: 'Ideas para aumentar el agua', category: 'Hábitos saludables', description: 'Estrategias simples para mantener una hidratación constante.', body: 'Ten siempre una botella visible en tu espacio de trabajo, asocia un vaso de agua a cada comida y usa una alarma o app si te cuesta recordarlo durante el día.', color: 'blue', readMinutes: 4 },
+    { practiceId: practice.id, title: 'Plato balanceado', category: 'Infografía', description: 'Una guía visual para construir comidas completas.', body: 'La mitad del plato con verduras de todos los colores, un cuarto con una fuente de proteína magra y un cuarto con cereal integral o tubérculo.', color: 'coral', readMinutes: 3 },
+    { practiceId: practice.id, title: 'Proteínas y equivalentes', category: 'Guía de consulta', description: 'Tabla rápida para elegir y sustituir fuentes de proteína.', body: '30 g de pollo o pescado, 1 huevo, 1/2 taza de leguminosas cocidas o 40 g de queso panela aportan una porción de proteína equivalente entre sí.', color: 'purple', readMinutes: 10 },
+    { practiceId: practice.id, title: 'Preparación semanal', category: 'Hábitos saludables', description: 'Planifica tus comidas para reducir decisiones durante la semana.', body: 'Elige un día fijo para planear el menú, cocina bases (granos, proteínas, vegetales asados) por adelantado y arma tus platos combinándolas durante la semana.', color: 'mint', readMinutes: 6 },
+  ] })
+
   await prisma.task.deleteMany({ where: { practiceId: practice.id } })
   await prisma.task.createMany({ data: [
     { practiceId: practice.id, patientId: patients[0].id, type: 'nutrition_plan', dueAt: new Date('2026-08-25T18:00:00.000Z') },
