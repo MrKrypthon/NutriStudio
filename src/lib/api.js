@@ -103,6 +103,12 @@ export const clinicalApi = {
   complete: (id) => apiRequest(`/consultations/${id}/complete`, { method: 'POST' }),
 }
 
+export const templatesApi = {
+  list: (query = '') => apiRequest(`/templates${query}`),
+  create: (payload) => apiRequest('/templates', { method: 'POST', body: JSON.stringify(payload) }),
+  apply: (id, patientId) => apiRequest(`/templates/${id}/apply`, { method: 'POST', body: JSON.stringify({ patientId }) }),
+}
+
 export const documentsApi = {
   list: (query = '') => apiRequest(`/documents${query}`),
   createForPlan: (planId) => apiRequest('/documents/nutrition-plan', { method: 'POST', body: JSON.stringify({ planId }) }),
