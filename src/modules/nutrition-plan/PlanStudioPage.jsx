@@ -37,6 +37,8 @@ export default function PlanStudioPage({ setActive, patientId }) {
   const [saveState, setSaveState] = useState('idle')
   const [pickerTarget, setPickerTarget] = useState(null)
   const [pickerSearch, setPickerSearch] = useState('')
+  const [adequacy, setAdequacy] = useState(null)
+  const [adequacyState, setAdequacyState] = useState('idle')
 
   useEffect(() => {
     let cancelled = false
@@ -96,6 +98,16 @@ export default function PlanStudioPage({ setActive, patientId }) {
     persistSlots(nextSlots)
   }
 
+  useEffect(() => {
+    if (step !== 3 || !plan) return
+    let cancelled = false
+    setAdequacyState('loading')
+    plansApi.adequacy(plan.id)
+      .then((response) => { if (!cancelled) { setAdequacy(response); setAdequacyState('ready') } })
+      .catch(() => { if (!cancelled) setAdequacyState('error') })
+    return () => { cancelled = true }
+  }, [step, plan])
+
   const averageKcalForMeal = (mealType) => {
     const assigned = DAYS.map((day) => recipeById(slots[slotKey(day.n, mealType)])).filter(Boolean)
     if (!assigned.length) return null
@@ -126,7 +138,7 @@ export default function PlanStudioPage({ setActive, patientId }) {
         <div className="distribution-head"><span>Tiempo de comida</span>{meals.map((x) => <b key={x}>{x}</b>)}</div>
         <div className="distribution-row"><span>Receta base de la semana</span>{MEAL_TYPES.map((meal) => { const sample = recipeById(slots[slotKey(1, meal.key)]); return <button key={meal.key} type="button" className="text-button" onClick={() => openPicker(meal.key)}>{sample ? sample.name : '+ Elegir receta'}</button> })}</div>
         <div className="distribution-total"><span>Calorías estimadas</span>{MEAL_TYPES.map((meal) => { const kcal = averageKcalForMeal(meal.key); return <b key={meal.key}>{kcal != null ? `${kcal} kcal` : '—'}</b> })}</div>
-        <p className="muted">La distribución por grupos de equivalentes (SMAE) requiere licenciar la tabla oficial; por ahora la asignación se hace por receta.</p>
+        <p className="muted">El catálogo de ingredientes ya incluye el Sistema Mexicano de Equivalentes; la asignación de esta semana se sigue haciendo por receta, no por grupo de equivalentes directamente.</p>
       </div>}
       {pickerTarget && <div className="recipe-overlay"><div className="recipe-modal panel"><div className="modal-head"><div><p className="eyebrow">RECETAS PARA {MEAL_TYPES.find((m) => m.key === pickerTarget.mealType)?.label.toUpperCase()}{pickerTarget.day ? ` · ${DAYS.find((d) => d.n === pickerTarget.day)?.label}` : ' · TODA LA SEMANA'}</p><h2>Elige una preparación</h2></div><button onClick={() => setPickerTarget(null)}>×</button></div><div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div><div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas del catálogo para este tiempo de comida.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => chooseRecipe(recipe)} key={recipe.id}><div className={'recipe-image ' + RECIPE_COLORS[i % RECIPE_COLORS.length]}><span>✦</span></div><b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal</small></button>)}</div></div></div>}
     </>}
@@ -138,6 +150,22 @@ export default function PlanStudioPage({ setActive, patientId }) {
         {MEAL_TYPES.map((meal) => <div className="week-row" key={meal.key}><span>{meal.label}</span>{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <div className="week-meal" key={day.n} onClick={() => openPicker(meal.key, day.n)} style={{ cursor: 'pointer' }}>{recipe ? <><div className="week-image coral">✦</div><small>{recipe.name}</small></> : <small className="muted">+ Elegir</small>}{recipe && <button type="button" className="link-button" onClick={(e) => { e.stopPropagation(); clearSlot(meal.key, day.n) }}>Quitar</button>}</div> })}</div>)}
       </div>}
       {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea una consulta y un plan para esta paciente antes de armar la semana.</p></div>}
+      {loadState === 'ready' && plan && <div className="panel adequacy-panel">
+        <h3>% Adecuación de micronutrientes</h3>
+        {adequacyState === 'loading' && <p className="muted">Calculando…</p>}
+        {adequacyState === 'error' && <div className="form-error">⚠ No se pudo calcular la adecuación de micronutrientes.</div>}
+        {adequacyState === 'ready' && !adequacy?.bracket && <p className="muted">Completa edad y sexo en la Evaluación del paciente para calcular la adecuación.</p>}
+        {adequacyState === 'ready' && adequacy?.bracket && !adequacy.nutrients.length && <p className="muted">Asigna al menos una receta a la semana para calcular la adecuación.</p>}
+        {adequacyState === 'ready' && adequacy?.nutrients.length > 0 && <>
+          <p className="muted">Referencia: {adequacy.bracketLabel}. Promedio diario de los días con al menos una receta asignada.</p>
+          <div className="adequacy-rows">{adequacy.nutrients.map((n) => <div className="adequacy-row" key={n.key}>
+            <span>{n.label}</span>
+            <div className="adequacy-bar"><i style={{ width: `${Math.min(n.percent, 100)}%` }} className={n.percent < 70 ? 'low' : n.percent > 110 ? 'high' : ''} /></div>
+            <b>{n.percent}%</b>
+            <small>{n.value} / {n.target} {n.unit}</small>
+          </div>)}</div>
+        </>}
+      </div>}
       <div className="recommendations panel"><h3>Indicaciones para {patientName}</h3><div className="form-grid"><label>Consumo de agua<textarea defaultValue="8 vasos (2 L) al día" /></label><label>Recomendaciones generales<textarea placeholder="Añade recomendaciones, educación o suplementos..." /></label></div></div>
       {pickerTarget && <div className="recipe-overlay"><div className="recipe-modal panel"><div className="modal-head"><div><p className="eyebrow">RECETAS PARA {MEAL_TYPES.find((m) => m.key === pickerTarget.mealType)?.label.toUpperCase()}{pickerTarget.day ? ` · ${DAYS.find((d) => d.n === pickerTarget.day)?.label}` : ''}</p><h2>Elige una preparación</h2></div><button onClick={() => setPickerTarget(null)}>×</button></div><div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div><div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas del catálogo para este tiempo de comida.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => chooseRecipe(recipe)} key={recipe.id}><div className={'recipe-image ' + RECIPE_COLORS[i % RECIPE_COLORS.length]}><span>✦</span></div><b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal</small></button>)}</div></div></div>}
     </>}

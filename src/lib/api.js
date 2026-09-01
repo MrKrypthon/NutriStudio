@@ -94,6 +94,7 @@ export const plansApi = {
   evaluate: (id, payload) => apiRequest(`/plans/${id}/evaluation`, { method: 'PUT', body: JSON.stringify(payload) }),
   saveDistribution: (id, mealSlots) => apiRequest(`/plans/${id}/distribution`, { method: 'PUT', body: JSON.stringify({ mealSlots }) }),
   publish: (id) => apiRequest(`/plans/${id}/publish`, { method: 'POST' }),
+  adequacy: (id) => apiRequest(`/plans/${id}/adequacy`),
 }
 
 export const clinicalApi = {
