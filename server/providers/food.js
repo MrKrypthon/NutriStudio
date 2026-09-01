@@ -1,3 +1,5 @@
+import { translateFoodQuery } from '../domain/foodDictionary.js'
+
 const USDA_URL = 'https://api.nal.usda.gov/fdc/v1'
 const OFF_URL = 'https://world.openfoodfacts.org'
 const userAgent = 'NutriStudio/0.1 (nutrition-platform)'
@@ -40,18 +42,25 @@ export async function searchOpenFoodFacts(query, pageSize = 20) {
   return { source: 'openfoodfacts', total: data.count || 0, items: (data.products || []).filter((product) => product.product_name).map((product) => ({ externalId: product.code, source: 'openfoodfacts', name: product.product_name, brand: product.brands || null, serving: { quantity: 100, unit: 'g' }, nutrition: { kcal: product.nutriments?.['energy-kcal_100g'] || 0, protein: product.nutriments?.proteins_100g || 0, carbs: product.nutriments?.carbohydrates_100g || 0, fat: product.nutriments?.fat_100g || 0, fiber: product.nutriments?.fiber_100g || 0, sugar: product.nutriments?.sugars_100g || 0, sodium: product.nutriments?.sodium_100g || 0 }, allergens: product.allergens_tags || [], imageUrl: product.image_front_url || null, attribution: 'Open Food Facts (ODbL / CC BY-SA para imágenes)', confidence: 'medium' })) }
 }
 
-export async function searchFoods(source, query, pageSize = 20) {
-  if (!query || query.trim().length < 2) throw Object.assign(new Error('La búsqueda debe tener al menos 2 caracteres.'), { statusCode: 400, code: 'INVALID_QUERY' })
+export async function searchFoods(source, rawQuery, pageSize = 20) {
+  if (!rawQuery || rawQuery.trim().length < 2) throw Object.assign(new Error('La búsqueda debe tener al menos 2 caracteres.'), { statusCode: 400, code: 'INVALID_QUERY' })
+  // USDA and Open Food Facts are English-language databases — a Spanish query returns nothing
+  // useful there. Translate it when we have a known match (fase 20); fall back to the original
+  // query otherwise, so this can only improve results, never break an existing search.
+  const trimmed = rawQuery.trim()
+  const translated = translateFoodQuery(trimmed)
+  const query = translated || trimmed
+  const meta = translated ? { translatedFrom: trimmed, translatedQuery: translated } : {}
   if (source === 'usda') {
-    try { return await searchUsda(query.trim(), pageSize) } catch (error) {
-      if (error.statusCode === 429) return { ...(await searchOpenFoodFacts(query.trim(), pageSize)), fallbackFrom: 'usda', fallbackReason: 'USDA alcanzó el límite de solicitudes.' }
+    try { return { ...(await searchUsda(query, pageSize)), ...meta } } catch (error) {
+      if (error.statusCode === 429) return { ...(await searchOpenFoodFacts(query, pageSize)), ...meta, fallbackFrom: 'usda', fallbackReason: 'USDA alcanzó el límite de solicitudes.' }
       throw error
     }
   }
-  if (source === 'openfoodfacts') return searchOpenFoodFacts(query.trim(), pageSize)
+  if (source === 'openfoodfacts') return { ...(await searchOpenFoodFacts(query, pageSize)), ...meta }
   if (source === 'all') {
-    const results = await Promise.allSettled([searchUsda(query.trim(), pageSize), searchOpenFoodFacts(query.trim(), pageSize)])
-    return { source: 'all', total: results.reduce((sum, result) => result.status === 'fulfilled' ? sum + result.value.total : sum, 0), items: results.flatMap((result) => result.status === 'fulfilled' ? result.value.items : []) }
+    const results = await Promise.allSettled([searchUsda(query, pageSize), searchOpenFoodFacts(query, pageSize)])
+    return { source: 'all', total: results.reduce((sum, result) => result.status === 'fulfilled' ? sum + result.value.total : sum, 0), items: results.flatMap((result) => result.status === 'fulfilled' ? result.value.items : []), ...meta }
   }
   throw Object.assign(new Error('Proveedor de alimentos no soportado.'), { statusCode: 400, code: 'UNKNOWN_SOURCE' })
 }
