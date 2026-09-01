@@ -182,22 +182,24 @@ app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => 
 })
 
 app.get('/api/v1/consultations/:consultationId', async (request, reply) => {
-  const consultation = await prisma.consultation.findUnique({ where: { id: request.params.consultationId }, include: { patient: true, sections: true, measurements: true, diagnoses: true, plans: true } })
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } }, include: { patient: true, sections: true, measurements: true, diagnoses: true, plans: true } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   return consultation
 })
 
 app.post('/api/v1/consultations/:consultationId/complete', async (request, reply) => {
-  const consultation = await prisma.consultation.findUnique({ where: { id: request.params.consultationId } })
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   return prisma.consultation.update({ where: { id: consultation.id }, data: { status: 'COMPLETED', completedAt: new Date() } })
 })
 
 app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (request, reply) => {
   const { payload = {}, completionState = 'in_progress', updatedAt } = request.body || {}
-  const existing = await prisma.clinicalSection.findUnique({ where: { consultationId_sectionKey: { consultationId: request.params.consultationId, sectionKey: request.params.sectionKey } } })
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const existing = await prisma.clinicalSection.findUnique({ where: { consultationId_sectionKey: { consultationId: consultation.id, sectionKey: request.params.sectionKey } } })
   if (existing && updatedAt && new Date(updatedAt).getTime() !== new Date(existing.lastSavedAt).getTime()) return reply.code(409).send({ code: 'CONCURRENT_EDIT', message: 'La sección cambió en otra sesión. Recarga antes de guardar.', fields: {} })
-  const section = await prisma.clinicalSection.upsert({ where: { consultationId_sectionKey: { consultationId: request.params.consultationId, sectionKey: request.params.sectionKey } }, create: { consultationId: request.params.consultationId, sectionKey: request.params.sectionKey, payload, completionState, lastSavedBy: request.userId || 'system' }, update: { payload, completionState, lastSavedBy: request.userId || 'system' } })
+  const section = await prisma.clinicalSection.upsert({ where: { consultationId_sectionKey: { consultationId: consultation.id, sectionKey: request.params.sectionKey } }, create: { consultationId: consultation.id, sectionKey: request.params.sectionKey, payload, completionState, lastSavedBy: request.userId || 'system' }, update: { payload, completionState, lastSavedBy: request.userId || 'system' } })
   return section
 })
 
@@ -233,7 +235,7 @@ app.post('/api/v1/appointments', async (request, reply) => {
 })
 
 app.post('/api/v1/appointments/:appointmentId/confirm', async (request, reply) => {
-  const appointment = await prisma.appointment.findUnique({ where: { id: request.params.appointmentId } })
+  const appointment = await prisma.appointment.findFirst({ where: { id: request.params.appointmentId, practiceId: request.practiceId } })
   if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
   return prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'CONFIRMED' }, include: { patient: true } })
 })
@@ -338,12 +340,13 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
 })
 
 app.get('/api/v1/recipes', async (request) => {
-  const { search = '', mealType, status = 'ACTIVE' } = request.query
+  const { search = '', mealType, restriction, status = 'ACTIVE' } = request.query
   const where = {
     practiceId: request.practiceId,
     status,
     ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
     ...(mealType ? { mealTypes: { has: mealType } } : {}),
+    ...(restriction ? { restrictions: { has: restriction } } : {}),
   }
   const recipes = await prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' }, take: 100 })
   return { items: recipes }
@@ -358,11 +361,37 @@ app.post('/api/v1/recipes', async (request, reply) => {
   return reply.code(201).send(recipe)
 })
 
-app.get('/api/v1/recipes/:recipeId', async (request) => prisma.recipe.findUnique({ where: { id: request.params.recipeId }, include: { ingredients: { include: { ingredient: true } } } }))
+app.get('/api/v1/recipes/:recipeId', async (request, reply) => {
+  const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId }, include: { ingredients: { include: { ingredient: true } } } })
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
+  return recipe
+})
+
+app.patch('/api/v1/recipes/:recipeId', async (request, reply) => {
+  const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
+  const { name, mealTypes, portions, instructions, restrictions, imageUrl, status } = request.body || {}
+  if (name !== undefined && !name) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El nombre no puede quedar vacío.', fields: { name: true } })
+  if (mealTypes !== undefined && !mealTypes.length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Selecciona al menos un tiempo de comida.', fields: { mealTypes: true } })
+  const updated = await prisma.recipe.update({
+    where: { id: recipe.id },
+    data: {
+      ...(name !== undefined ? { name } : {}),
+      ...(mealTypes !== undefined ? { mealTypes } : {}),
+      ...(portions !== undefined ? { portions } : {}),
+      ...(instructions !== undefined ? { instructions } : {}),
+      ...(restrictions !== undefined ? { restrictions } : {}),
+      ...(imageUrl !== undefined ? { imageUrl } : {}),
+      ...(status !== undefined ? { status } : {}),
+    },
+    include: { ingredients: { include: { ingredient: true } } },
+  })
+  return updated
+})
 
 app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
   const { ingredients = [] } = request.body || {}
-  const recipe = await prisma.recipe.findUnique({ where: { id: request.params.recipeId } })
+  const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   if (!ingredients.length) return reply.code(400).send({ code: 'EMPTY_RECIPE', message: 'La receta debe conservar al menos un ingrediente.', fields: {} })
   const updated = await prisma.$transaction(async (transaction) => {
@@ -378,7 +407,7 @@ app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
 })
 
 app.get('/api/v1/recipes/:recipeId/nutrition', async (request, reply) => {
-  const recipe = await prisma.recipe.findUnique({ where: { id: request.params.recipeId }, include: { ingredients: { include: { ingredient: true } } } })
+  const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId }, include: { ingredients: { include: { ingredient: true } } } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0 }
   for (const item of recipe.ingredients) {
@@ -390,7 +419,7 @@ app.get('/api/v1/recipes/:recipeId/nutrition', async (request, reply) => {
 })
 
 app.post('/api/v1/recipes/:recipeId/recalculate', async (request, reply) => {
-  const recipe = await prisma.recipe.findUnique({ where: { id: request.params.recipeId }, include: { ingredients: { include: { ingredient: true } } } })
+  const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId }, include: { ingredients: { include: { ingredient: true } } } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0 }
   for (const item of recipe.ingredients) { const nutrition = item.ingredient.nutrition || {}; const factor = Number(item.quantity) / 100; for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor }

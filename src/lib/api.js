@@ -127,7 +127,10 @@ export const tasksApi = {
 
 export const recipesApi = {
   list: (query = '') => apiRequest(`/recipes${query}`),
+  get: (id) => apiRequest(`/recipes/${id}`),
   create: (payload) => apiRequest('/recipes', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) => apiRequest(`/recipes/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  archive: (id) => apiRequest(`/recipes/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ARCHIVED' }) }),
   nutrition: (id) => apiRequest(`/recipes/${id}/nutrition`),
   recalculate: (id) => apiRequest(`/recipes/${id}/recalculate`, { method: 'POST' }),
   replaceIngredients: (id, ingredients) => apiRequest(`/recipes/${id}/ingredients`, { method: 'PUT', body: JSON.stringify({ ingredients }) }),
