@@ -147,7 +147,7 @@ async function main() {
       createdCount += 1
     }
 
-    const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, vitaminA: 0, vitaminC: 0, folicAcid: 0, calcium: 0, iron: 0 }
+    const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0, vitaminA: 0, vitaminC: 0, folicAcid: 0, calcium: 0, iron: 0, vitaminD: 0, vitaminE: 0, vitaminK: 0, vitaminB12: 0, zinc: 0, iodine: 0, selenium: 0 }
     for (const item of saved.ingredients) {
       const nutrition = item.ingredient.nutrition || {}
       const factor = Number(item.quantity) / 100

@@ -63,6 +63,15 @@ describe('computeMicronutrientAdequacy', () => {
     expect(result.nutrients.find((n) => n.key === 'fiber')).toBeUndefined()
   })
 
+  it('covers the nutrients added in fase 17 (zinc/iodine/selenium/vitamins D/E/K/B12)', () => {
+    const richSlot = { dayOfWeek: 1, servings: 1, recipe: { nutrition: { zinc: 5.5, iodine: 75, selenium: 35, vitaminD: 200, vitaminE: 7.5, vitaminK: 40, vitaminB12: 1.2 } } }
+    const result = computeMicronutrientAdequacy([richSlot], 35, 'female')
+    const zinc = result.nutrients.find((n) => n.key === 'zinc')
+    expect(zinc.target).toBe(15)
+    expect(zinc.percent).toBeCloseTo((5.5 / 15) * 100, 1)
+    expect(result.nutrients.map((n) => n.key)).toEqual(expect.arrayContaining(['iodine', 'selenium', 'vitaminD', 'vitaminE', 'vitaminK', 'vitaminB12']))
+  })
+
   it('returns an empty nutrient list when the age has no matching bracket', () => {
     const result = computeMicronutrientAdequacy([slot()], 8, 'female')
     expect(result.bracket).toBeNull()
