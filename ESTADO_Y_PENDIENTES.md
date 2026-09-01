@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 1 de septiembre de 2026 (tarde).
+Última verificación contra código real (no contra specs): 1 de septiembre de 2026 (madrugada, fase 14).
 
 ## Iniciar sesión en local
 
@@ -12,6 +12,10 @@ Desde la fase 9 la app pide login real. Credencial de desarrollo sembrada por `p
 - Contraseña: `nutristudio2026`
 
 `JWT_SECRET` vive en `.env` (no en el repo — cópialo de `.env.example` si falta). Si cambias el usuario/contraseña sembrado, actualiza `DEV_PASSWORD_HASH` en `prisma/seed.js` y vuelve a correr `npm run db:seed`.
+
+## Catálogo SMAE (fase 14)
+
+La usuaria tiene un Excel de trabajo propio (`DIETOCALCULO.xlsx`, en la raíz del repo pero **no versionado** — está en `.gitignore` de facto por no haberse agregado nunca) con 16 hojas: historia clínica, antropometría, GET, EQ, seguimiento, estructura de menú, cálculo de macros/micros, catálogo SMAE (2,871 alimentos), base de alimentos (175), IDR por edad/sexo, diccionario español-inglés (996 términos) y ~40 recetas en texto libre. El catálogo SMAE ya se extrajo y vive limpio en `prisma/data/smae.json` (committeado, sin el Excel original). Para recargarlo en una base nueva: `node prisma/import-smae.js [practiceId]` (re-ejecutar es seguro, reemplaza solo los ingredientes con `equivalence.source === 'SMAE'` de esa práctica). El resto del Excel (BASE_IDR, Recetas, BASE_ALIMENTOS, diccionario) todavía no se extrajo — ver "Siguiente fase sugerida".
 
 ## Cómo usar este documento en una sesión nueva
 
@@ -56,8 +60,9 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Plantillas** | Modelo `Template` nuevo. Una plantilla se crea clonando la consulta o el plan más reciente de un paciente (snapshot, no referencia viva); "Usar plantilla" la copia sobre otro paciente — precarga sus secciones de expediente o reemplaza la distribución semanal de su plan en borrador. Probado de punta a punta: plantilla de expediente y de plan creadas desde Valeria, aplicadas a Diego Ramírez y Sofía Hernández respectivamente |
 | **Registrar medición** | Botón "Registrar medición de hoy" en la pestaña Antropométrico llama al `POST /consultations/:id/measurements` existente (creado en el flujo de Valeria, nunca conectado hasta ahora) |
 | **Generar informe clínico bajo demanda** | Botón "Generar informe"/"Descargar informe" en el expediente crea (`POST /documents/consultation-report`, nuevo) y genera un documento `consultation_report` para la consulta en curso, sin depender de que el seed lo haya creado de antemano |
+| **Catálogo SMAE** | 2,871 alimentos del Sistema Mexicano de Equivalentes de Alimentos (19 grupos oficiales) importados al catálogo de Ingredientes, con energía, macros completos, ácidos grasos, colesterol, fibra, vitaminas, minerales, índice y carga glicémica por 100 g. Fuente: `DIETOCALCULO.xlsx` de la usuaria (no se commitea el Excel; los datos limpios viven en `prisma/data/smae.json`, cargados con `node prisma/import-smae.js`). `IngredientsPage` reescrita con búsqueda y filtro por grupo real (server-side, con debounce) — antes tenía 4 ingredientes de ejemplo y filtros decorativos. El picker de ingredientes de `NewRecipePage` también se reescribió para buscar en vez de listar sin filtro (con miles de alimentos, listar todo ya no era usable) |
 
-(Negrita = construido en esta sesión: fase 3 a 12, y los bugfixes de Recetas, control de acceso y CORS. Fase 11 y fase 12 se ramificaron ambas desde `main` justo después de fase 10, por eso llegan aquí fusionadas — esta rama incorpora los cambios de `main` con fase 12 ya mergeada.)
+(Negrita = construido en esta sesión: fase 3 a 12 y 14 en esta rama — fase 13 (Biblioteca de educación) vive en la rama `biblioteca-educacion` con su propio PR — más los bugfixes de Recetas, control de acceso y CORS.)
 
 ## Backend real, pantalla sin conectar
 
@@ -73,7 +78,7 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | Biblioteca de educación | Pantalla completamente estática, sin modelo |
 | Auditoría | Modelo `AuditEvent` existe; ninguna ruta lo usa |
 | Envío real por WhatsApp/email | "Marcar como entregado" ya es real, pero sigue siendo un registro manual — no manda nada. La integración de envío real sigue diferida, como dice RF-09 del documento original |
-| Equivalentes SMAE | Bloqueado a propósito — la tabla oficial mexicana requiere licenciarse |
+| % Adecuación de micronutrientes | La tabla `BASE_IDR` del Excel de la usuaria (Ingesta Diaria Recomendada por edad/sexo) todavía no está en la base de datos ni hay cálculo de adecuación en el plan — el catálogo SMAE (fase 14) ya trae los micronutrientes necesarios para calcularlo, falta el modelo de referencia y la UI |
 | Grabación / transcripción | Diferido a propósito — exige consentimiento y revisión humana antes de tocarlo |
 
 ## Deuda técnica encontrada esta sesión (no bloquea, pero hay que volver)
@@ -83,6 +88,7 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 - **Agenda y Hoy estaban anclados a una fecha demo fija (26 de agosto de 2026)** en vez de la fecha real del sistema — al navegar a la semana actual no se marcaba ningún día como "hoy", y el saludo/agenda de Hoy siempre mostraba el miércoles 26 sin importar qué día fuera en realidad. Ya corregido en ambas pantallas para usar la fecha real (ver AgendaPage y DashboardPage). Si aparece el mismo patrón en otra pantalla, es la misma clase de bug.
 - **`@fastify/cors` sin `methods` configurado limita a `GET,HEAD,POST` por default (cambió en v11).** Todo endpoint `PUT` de este API (secciones de expediente, evaluación/distribución de plan, ingredientes de receta, práctica) fallaba en silencio con cualquier llamada cross-origin — solo funcionaba a través del proxy de Vite (mismo origen). Ya corregido explícitamente en el registro de `cors`, pero es la clase de bug que solo aparece al probar contra `npm run dev:all` o en producción real (front y API en dominios distintos) — vale la pena probar ahí, no solo contra el proxy de Vite.
 - **`NewRecipePage` guardaba recetas casi inservibles, en silencio, desde que se conectó a la API.** Tres bugs en el mismo archivo, encontrados al construir el flujo de Valeria: (1) mandaba `mealTypes` en español minúsculas (`desayuno`, `comida`...) en vez de las claves en inglés que usa el resto del sistema (`breakfast`, `lunch`...) — el picker de recetas del Constructor de plan filtra por esa clave exacta, así que **ninguna receta creada desde la pantalla real podía aparecer nunca al armar un plan**; (2) "Porciones" y "Preparación" no estaban conectados a estado — lo que se escribiera ahí se descartaba y siempre se guardaba `portions:1` e `instructions:'Preparación pendiente de completar.'`; (3) nunca llamaba a `recipesApi.recalculate` tras crear, así que toda receta nueva se quedaba con `nutrition: {}` (0 kcal) hasta que alguien la recalculara a mano por API. Los tres ya están corregidos y probados por la UI real, no solo por API.
+- **El picker de ingredientes de `NewRecipePage` cargaba el catálogo completo sin filtro (`ingredientsApi.list()` a secas, tope de 200).** Con 4 ingredientes de ejemplo pasaba desapercibido; en cuanto se importó el catálogo SMAE (2,871 alimentos, fase 14) se volvió inservible — se veían 200 alimentos en orden alfabético sin forma de buscar, así que casi ningún ingrediente real era alcanzable. Corregido en el mismo commit de fase 14: ahora busca por nombre contra el servidor (debounce, mínimo 2 letras) igual que el resto de los catálogos. Si se agrega otro selector de ingredientes/recetas en el futuro, cuidado con este mismo patrón — cualquier lista "cargar todo sin filtro" deja de funcionar en cuanto el catálogo real crece.
 
 ## Siguiente fase sugerida
 
@@ -95,4 +101,7 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 5. ~~Plantillas~~ — hecho (fase 10): modelo `Template` nuevo, clonables para expediente y plan, probado creando y aplicando ambos tipos entre pacientes reales.
 6. ~~Recetas al nivel de Avena/HeyNutre~~ — hecho (fase 11): catálogo real con búsqueda/filtro por tiempo de comida y restricción, editar/archivar, macros reales. De paso se corrigieron tres bugs silenciosos en `NewRecipePage` (ver deuda técnica).
 7. ~~Registrar medición + generar informe bajo demanda~~ — hecho (fase 12): dos huecos backend-real-pero-sin-conectar, cerrados. "Registrar medición de hoy" ya alimenta el histórico de `Measurement`; "Generar informe" crea y genera el PDF de consulta sin depender del seed.
-8. **Biblioteca de educación** — es lo único que queda del backlog original. Pantalla completamente estática, sin modelo; necesita diseño de esquema nuevo (qué es "material educativo": ¿archivos, texto, links?) y no bloquea nada del flujo clínico principal. Diferido explícitamente por el usuario ("dejemos la biblioteca para después") — no retomar sin que lo pida.
+8. **Biblioteca de educación** — completa el backlog original. Vive en la rama `biblioteca-educacion` con su propio PR (no incluida en esta rama).
+9. ~~Catálogo SMAE~~ — hecho (fase 14): revisé `DIETOCALCULO.xlsx` (el Excel de trabajo de la usuaria, con 16 hojas: historia clínica, antropometría, GET, catálogo SMAE, base de alimentos, IDR, recetas, seguimiento, diccionario español-inglés y más) e importé el catálogo de 2,871 alimentos del Sistema Mexicano de Equivalentes al catálogo de Ingredientes. De paso corregí el picker de ingredientes de `NewRecipePage`, que se volvió inservible con un catálogo de ese tamaño (ver deuda técnica).
+10. **% Adecuación de micronutrientes (BASE_IDR)** — pendiente, pedido explícitamente por la usuaria junto con fase 14. Requiere: modelo de referencia IDR por edad/sexo (la hoja `BASE_IDR` del Excel), y comparar el total de micronutrientes de un plan/menú contra ese objetivo. El catálogo SMAE ya trae los micronutrientes necesarios (vit. A/C, ácido fólico, calcio, hierro, potasio, fósforo).
+11. **Sembrar recetas reales del Excel** — pendiente, pedido junto con fase 14. La hoja `Recetas` del Excel tiene ~40 recetas en texto libre (nombre + lista de ingredientes + preparación); requiere interpretar cada una para mapear sus ingredientes contra el catálogo SMAE ya importado, más trabajo por receta que las dos anteriores.
