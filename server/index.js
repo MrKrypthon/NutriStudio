@@ -201,6 +201,19 @@ app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (req
   return section
 })
 
+// The anthropometric ClinicalSection payload is free-form (whatever labels the form on
+// screen happens to use) so the record report and the PDF instead read structured
+// Measurement rows — this is the only way to create one; nothing wrote it before.
+app.post('/api/v1/consultations/:consultationId/measurements', async (request, reply) => {
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const { measuredAt, weightKg, heightCm, waistCm, hipCm, bodyFatPercent, muscleMassKg, method, notes } = request.body || {}
+  const measurement = await prisma.measurement.create({
+    data: { patientId: consultation.patientId, consultationId: consultation.id, measuredAt: measuredAt ? new Date(measuredAt) : new Date(), weightKg, heightCm, waistCm, hipCm, bodyFatPercent, muscleMassKg, method, notes },
+  })
+  return reply.code(201).send(measurement)
+})
+
 app.get('/api/v1/appointments', async (request) => {
   const { from, to } = request.query
   const appointments = await prisma.appointment.findMany({ where: { practiceId: request.practiceId, startAt: { gte: new Date(from), lte: new Date(to) } }, include: { patient: true }, orderBy: { startAt: 'asc' } })
