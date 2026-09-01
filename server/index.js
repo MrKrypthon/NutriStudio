@@ -122,8 +122,9 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
   const practiceId = request.practiceId
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
-  const { firstName, lastName, email, phone, birthDate, sex, occupation } = request.body || {}
+  const { firstName, lastName, email, phone, birthDate, sex, occupation, status } = request.body || {}
   if ((firstName !== undefined && !firstName) || (lastName !== undefined && !lastName)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido no pueden quedar vacíos.', fields: { firstName: firstName !== undefined && !firstName, lastName: lastName !== undefined && !lastName } })
+  if (status !== undefined && !['ACTIVE', 'ARCHIVED'].includes(status)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Estado inválido.', fields: { status: true } })
   const updated = await prisma.patient.update({
     where: { id: patient.id },
     data: {
@@ -134,6 +135,7 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
       ...(birthDate !== undefined ? { birthDate: birthDate ? new Date(birthDate) : null } : {}),
       ...(sex !== undefined ? { sex } : {}),
       ...(occupation !== undefined ? { occupation } : {}),
+      ...(status !== undefined ? { status, archivedAt: status === 'ARCHIVED' ? new Date() : null } : {}),
     },
   })
   return updated

@@ -2,7 +2,9 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 1 de septiembre de 2026 (madrugada, fase 21).
+Última verificación contra código real (no contra specs): 1 de septiembre de 2026 (madrugada, fase 22).
+
+**Nota de sincronización:** las fases 14 a 21 (todo lo relacionado con `DIETOCALCULO.xlsx`) ya están mergeadas en `main`. `biblioteca-educacion` (fase 13) sigue con su propio PR sin mergear — es independiente, no depende de ninguna fase del Excel.
 
 ## Iniciar sesión en local
 
@@ -70,8 +72,9 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **General y Clínico (antecedentes + síntomas reales)** | Dos pestañas más del expediente que eran stubs genéricos, ahora con contenido real de las hojas `HCN_AB`/`HCN_CD` del Excel: "General" captura antecedentes heredofamiliares (9 enfermedades × Mamá-Papá/Abuelos/Tíos, con pastillas de toggle) y "Clínico" una revisión de 11 síntomas (diarrea, náusea, pirosis, poliuria, etc.). Sin modelo ni endpoint nuevo — mismo mecanismo de `ClinicalSection` que Monitoreo |
 | **Traducción automática en Importar alimentos** | La hoja `DICCIONARIO` (175 pares español-inglés, ver nota arriba) ahora traduce la búsqueda antes de mandarla a USDA/Open Food Facts (`server/domain/foodDictionary.js`, 4 pruebas unitarias) — esas bases son en inglés, así que buscar "chayote" antes devolvía poco o nada relevante. Coincidencia exacta primero, si no hay, la coincidencia parcial más específica; si no hay ninguna, la búsqueda sigue igual que antes (nunca puede empeorar un resultado, solo mejorarlo). La UI muestra "Buscado como…" cuando tradujo algo, para que quede claro por qué salieron esos resultados |
 | **Exploración física completa** | "Clínico" ganó los ~29 hallazgos de exploración física de `HCN_CD` que se habían dejado fuera en fase 19 por alcance: piel y ojos (12), cabello (2), boca (7), dentadura (3) y uñas (5), organizados en subgrupos con pastillas de toggle, debajo de la revisión de síntomas ya existente. Mismo mecanismo sin modelo nuevo |
+| **Editar estado del paciente** | Archivar/reactivar un paciente desde el cajón de detalle (`PATCH /patients/:id` ya aceptaba `status`, solo no estaba conectado). El filtro "Activos/Archivados" de la lista de Pacientes, antes decorativo, ahora funciona de verdad — un paciente archivado desaparece de la vista activa y aparece en la de archivados, y viceversa al reactivar |
 
-(Negrita = construido en esta sesión: fase 3 a 12 y 14 a 21 en esta rama — fase 13 (Biblioteca de educación) vive en la rama `biblioteca-educacion` con su propio PR — más los bugfixes de Recetas, control de acceso y CORS.)
+(Negrita = construido en esta sesión: fase 3 a 12 y 14 a 22 en esta rama — fase 13 (Biblioteca de educación) vive en la rama `biblioteca-educacion` con su propio PR — más los bugfixes de Recetas, control de acceso y CORS.)
 
 ## Backend real, pantalla sin conectar
 
@@ -83,8 +86,7 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 
 | Módulo | Nota |
 |---|---|
-| Editar estado del paciente (activo/archivado) | `PATCH /patients/:id` no toca `status` todavía; sólo datos de contacto |
-| Biblioteca de educación | Pantalla completamente estática, sin modelo |
+| Biblioteca de educación | Pantalla completamente estática, sin modelo (construida en la rama `biblioteca-educacion`, pendiente de mergear) |
 | Auditoría | Modelo `AuditEvent` existe; ninguna ruta lo usa |
 | Envío real por WhatsApp/email | "Marcar como entregado" ya es real, pero sigue siendo un registro manual — no manda nada. La integración de envío real sigue diferida, como dice RF-09 del documento original |
 | Grabación / transcripción | Diferido a propósito — exige consentimiento y revisión humana antes de tocarlo |
@@ -116,7 +118,7 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 5. ~~Plantillas~~ — hecho (fase 10): modelo `Template` nuevo, clonables para expediente y plan, probado creando y aplicando ambos tipos entre pacientes reales.
 6. ~~Recetas al nivel de Avena/HeyNutre~~ — hecho (fase 11): catálogo real con búsqueda/filtro por tiempo de comida y restricción, editar/archivar, macros reales. De paso se corrigieron tres bugs silenciosos en `NewRecipePage` (ver deuda técnica).
 7. ~~Registrar medición + generar informe bajo demanda~~ — hecho (fase 12): dos huecos backend-real-pero-sin-conectar, cerrados. "Registrar medición de hoy" ya alimenta el histórico de `Measurement`; "Generar informe" crea y genera el PDF de consulta sin depender del seed.
-8. **Biblioteca de educación** — completa el backlog original. Vive en la rama `biblioteca-educacion` con su propio PR (no incluida en esta rama).
+8. Biblioteca de educación — ver punto 18 más abajo (sigue pendiente de mergear).
 9. ~~Catálogo SMAE~~ — hecho (fase 14): revisé `DIETOCALCULO.xlsx` (el Excel de trabajo de la usuaria, con 16 hojas: historia clínica, antropometría, GET, catálogo SMAE, base de alimentos, IDR, recetas, seguimiento, diccionario español-inglés y más) e importé el catálogo de 2,871 alimentos del Sistema Mexicano de Equivalentes al catálogo de Ingredientes. De paso corregí el picker de ingredientes de `NewRecipePage`, que se volvió inservible con un catálogo de ese tamaño (ver deuda técnica).
 10. ~~% Adecuación de micronutrientes (BASE_IDR)~~ — hecho (fase 15): panel en Constructor de plan → Semana, cubre fibra/vit. A/vit. C/ácido fólico/calcio/hierro (los únicos con dato de referencia IDR Y dato por ingrediente reales a la vez — potasio y fósforo tienen dato SMAE pero no IDR; zinc/yodo/selenio/vit. D/E/K/B12 tienen IDR pero no están en el catálogo SMAE). De paso se encontraron y corrigieron dos bugs reales (ver deuda técnica): más control de acceso roto en `/plans`, y un bug donde el cálculo de nutrición de receta descartaba en silencio cualquier micronutriente fuera de las 7 llaves originales — sin ese segundo fix, la adecuación habría dado 0% siempre.
 11. ~~Sembrar recetas reales del Excel~~ — hecho (fase 16): las ~72 recetas de la hoja `Recetas` (texto libre, sin columnas) se interpretaron a mano una por una y se mapearon contra el catálogo SMAE — ver `prisma/import-recetas.js` para el criterio de conversión de cantidades. El recetario pasó de 5 a 77 recetas reales, todas con macros y micronutrientes calculados (participan en % de adecuación).
@@ -126,4 +128,10 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 15. ~~Diccionario español-inglés~~ — hecho (fase 20): traduce la búsqueda de "Importar alimentos" antes de mandarla a USDA/Open Food Facts. Resultó ser 175 pares (no 996 — ver la corrección más arriba), la misma traducción de `BASE_ALIMENTOS`.
 16. ~~Exploración física completa~~ — hecho (fase 21): "Clínico" ganó los ~29 hallazgos de piel/ojos/cabello/boca/dentadura/uñas de `HCN_CD` que se habían dejado fuera en fase 19 por alcance.
 
-**Con esto se terminó de extraer todo lo aprovechable de `DIETOCALCULO.xlsx`.** No queda nada pendiente del Excel — la siguiente sesión que retome este documento debería mirar hacia adelante (nuevas funciones, no más extracción del Excel) salvo que la usuaria comparta un Excel actualizado o pida algo puntual de las hojas que quedaron sin usar del todo (GET/Antropometria/EQ, que ya estaban cubiertas por el motor nutricional propio; BaseDatosMedicamentos, que solo tenía 2 filas de ejemplo).
+**Con la fase 21 se terminó de extraer todo lo aprovechable de `DIETOCALCULO.xlsx`.** No queda nada pendiente del Excel — salvo que la usuaria comparta un Excel actualizado o pida algo puntual de las hojas que quedaron sin usar del todo (GET/Antropometria/EQ, ya cubiertas por el motor nutricional propio; BaseDatosMedicamentos, que solo tenía 2 filas de ejemplo), lo que sigue es el backlog original del documento de requerimientos:
+
+17. ~~Editar estado del paciente (activo/archivado)~~ — hecho (fase 22): archivar/reactivar desde el cajón de detalle de Pacientes; el filtro Activos/Archivados de la lista, antes decorativo, ahora es real.
+18. **Biblioteca de educación** — completa el backlog original, con PR propio (`biblioteca-educacion`) pendiente de mergear desde hace varias fases. Es lo único que sigue sin mezclarse a `main`.
+19. **Almacenamiento de archivos** — pendiente. Desbloquea logo de la práctica y horarios de atención en Configuración, y adjuntos reales en materiales educativos. Requiere decidir dónde viven los archivos (disco local del servidor es lo más simple sin infra nueva).
+20. **Auditoría** — pendiente. Modelo `AuditEvent` existe desde el inicio del proyecto; ninguna ruta lo usa todavía.
+21. **Envío real por WhatsApp/email** — pendiente, la integración más grande que falta. Necesita credenciales de un proveedor (Twilio, Meta Cloud API, SendGrid, etc.) que la usuaria tendría que compartir — no se puede avanzar sin eso.
