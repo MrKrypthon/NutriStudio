@@ -343,7 +343,7 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
 // kcal/protein/carbs/fat/fiber/sugar/sodium feed the macro summary shown everywhere; the
 // micronutrients feed the % de adecuación (fase 15) — both come from the same ingredient
 // nutrition JSON, per 100 g, scaled by ingredient quantity.
-const RECIPE_NUTRITION_KEYS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'sodium', 'vitaminA', 'vitaminC', 'folicAcid', 'calcium', 'iron']
+const RECIPE_NUTRITION_KEYS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'sodium', 'vitaminA', 'vitaminC', 'folicAcid', 'calcium', 'iron', 'vitaminD', 'vitaminE', 'vitaminK', 'vitaminB12', 'zinc', 'iodine', 'selenium']
 const emptyNutritionTotals = () => Object.fromEntries(RECIPE_NUTRITION_KEYS.map((key) => [key, 0]))
 
 app.get('/api/v1/recipes', async (request) => {
