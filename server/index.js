@@ -72,6 +72,47 @@ app.get('/api/v1/patients/:patientId', async (request, reply) => {
   return patient
 })
 
+app.patch('/api/v1/patients/:patientId', async (request, reply) => {
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  const { firstName, lastName, email, phone, birthDate, sex, occupation } = request.body || {}
+  if ((firstName !== undefined && !firstName) || (lastName !== undefined && !lastName)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido no pueden quedar vacíos.', fields: { firstName: firstName !== undefined && !firstName, lastName: lastName !== undefined && !lastName } })
+  const updated = await prisma.patient.update({
+    where: { id: patient.id },
+    data: {
+      ...(firstName !== undefined ? { firstName } : {}),
+      ...(lastName !== undefined ? { lastName } : {}),
+      ...(email !== undefined ? { email } : {}),
+      ...(phone !== undefined ? { phone } : {}),
+      ...(birthDate !== undefined ? { birthDate: birthDate ? new Date(birthDate) : null } : {}),
+      ...(sex !== undefined ? { sex } : {}),
+      ...(occupation !== undefined ? { occupation } : {}),
+    },
+  })
+  return updated
+})
+
+app.get('/api/v1/patients/:patientId/timeline', async (request, reply) => {
+  const practiceId = request.headers['x-practice-id'] || process.env.DEFAULT_PRACTICE_ID
+  const patientId = request.params.patientId
+  const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  const [appointments, consultations, plans, documents] = await prisma.$transaction([
+    prisma.appointment.findMany({ where: { patientId }, orderBy: { startAt: 'desc' }, take: 20 }),
+    prisma.consultation.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
+    prisma.nutritionPlan.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
+    prisma.document.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
+  ])
+  const events = [
+    ...appointments.map((a) => ({ kind: 'appointment', date: a.startAt, status: a.status, subtype: a.type, id: a.id })),
+    ...consultations.map((c) => ({ kind: 'consultation', date: c.startedAt || c.createdAt, status: c.status, id: c.id })),
+    ...plans.map((p) => ({ kind: 'plan', date: p.publishedAt || p.createdAt, status: p.status, id: p.id })),
+    ...documents.map((d) => ({ kind: 'document', date: d.generatedAt || d.createdAt, status: d.deliveredAt ? 'DELIVERED' : d.generatedAt ? 'GENERATED' : 'PENDING', subtype: d.type, id: d.id })),
+  ].sort((a, b) => new Date(b.date) - new Date(a.date))
+  return { items: events }
+})
+
 app.get('/api/v1/patients/:patientId/consultations', async (request) => {
   const consultations = await prisma.consultation.findMany({ where: { patientId: request.params.patientId }, include: { sections: true, measurements: true, diagnoses: true, plans: true }, orderBy: { createdAt: 'desc' } })
   return { items: consultations }

@@ -39,8 +39,9 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Consultas** | Historial real de sesiones del paciente |
 | **Recetas** | Estado de sincronización, macros y tipo de comida correctos por receta |
 | **Configuración** | Nombre profesional, email y zona horaria de la práctica, reales y persistentes |
+| **Editar paciente + línea de tiempo** | `PATCH /patients/:id` real; el cajón de cada paciente muestra el historial real de citas, consultas, planes y documentos |
 
-(Negrita = construido en esta sesión: fase 3, 4, 5, 6, y los bugfixes de Recetas, control de acceso y CORS.)
+(Negrita = construido en esta sesión: fase 3, 4, 5, 6, 7, y los bugfixes de Recetas, control de acceso y CORS.)
 
 ## Backend real, pantalla sin conectar
 
@@ -58,6 +59,7 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 |---|---|
 | Autenticación | Usuario fijo "Gabriela Alonso", sin login/sesión/roles aplicados. Es la más grande — necesita decisión de alcance antes de empezar (ver abajo) |
 | Plantillas | Ni siquiera hay modelo `Template` en la base — necesita diseño de esquema nuevo |
+| Editar estado del paciente (activo/archivado) | `PATCH /patients/:id` no toca `status` todavía; sólo datos de contacto |
 | Biblioteca de educación | Pantalla completamente estática, sin modelo |
 | Auditoría | Modelo `AuditEvent` existe; ninguna ruta lo usa |
 | Equivalentes SMAE | Bloqueado a propósito — la tabla oficial mexicana requiere licenciarse |
@@ -74,7 +76,7 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en orden de valor/costo:
 
 1. ~~Configuración real~~ — hecho (fase 6): nombre profesional, email, zona horaria. Horarios de atención y logo siguen pendientes por falta de modelo.
-2. **Editar paciente + línea de tiempo** — cierra el último hueco de "backend real, pantalla sin conectar" que además es barato (una tabla, sin modelos nuevos).
+2. ~~Editar paciente + línea de tiempo~~ — hecho (fase 7): `PATCH /patients/:id` real, y el cajón de cada paciente muestra su historial de citas/consultas/planes/documentos. Falta editar `status` (activo/archivado).
 3. **Entrega por WhatsApp/email + PDF de informe con datos reales** — cierra el círculo de "Entrega" que quedó a medias.
 4. **Autenticación** — la más grande. Antes de empezarla conviene una sesión aparte solo para decidir alcance (login+sesión nada más, vs. aplicar roles owner/nutritionist/assistant en cada endpoint, vs. además arreglar el patrón de control de acceso de arriba).
 5. **Plantillas / Biblioteca de educación** — quedan al final porque necesitan diseño de esquema nuevo y no bloquean nada del flujo clínico principal.

@@ -40,8 +40,10 @@ export const patientsApi = {
   list: (query = '') => apiRequest(`/patients${query}`),
   get: (id) => apiRequest(`/patients/${id}`),
   create: (payload) => apiRequest('/patients', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) => apiRequest(`/patients/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   consultations: (id) => apiRequest(`/patients/${id}/consultations`),
   plans: (id) => apiRequest(`/patients/${id}/plans`),
+  timeline: (id) => apiRequest(`/patients/${id}/timeline`),
 }
 
 export const appointmentsApi = {
