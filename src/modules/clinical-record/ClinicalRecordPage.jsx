@@ -91,6 +91,9 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
         heightCm: numOrUndefined(anthro['Talla (cm)']),
         waistCm: numOrUndefined(anthro['Cintura (cm)']),
         hipCm: numOrUndefined(anthro['Cadera (cm)']),
+        abdomenCm: numOrUndefined(anthro['Abdomen (cm)']),
+        bodyFatPercent: numOrUndefined(anthro['% Grasa corporal']),
+        muscleMassKg: numOrUndefined(anthro['Kg de músculo']),
       })
       setMeasurementState('saved')
     } catch {
@@ -141,10 +144,11 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
             <div className="chart-lines"><i /><i /><i /><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points="10,25 190,65 380,48 590,85" fill="none" stroke="var(--green)" strokeWidth="3" /><circle cx="10" cy="25" r="5" fill="var(--green)" /><circle cx="190" cy="65" r="5" fill="var(--green)" /><circle cx="380" cy="48" r="5" fill="var(--green)" /><circle cx="590" cy="85" r="5" fill="var(--green)" /></svg><div className="chart-labels"><span>18 jun<br />pendiente</span><span>18 jul<br />pendiente</span><span>18 ago<br />pendiente</span></div></div>
           </div>
           <FormCard title="Peso y talla" fields={['Peso (kg)|', 'Talla (cm)|', 'IMC calculado|', 'Análisis de peso y talla|']} values={currentValues} onFieldChange={updateField} />
-          <FormCard title="Circunferencias" fields={['Cintura (cm)|', 'Cadera (cm)|', 'Brazo (cm)|', 'ICC calculado|']} values={currentValues} onFieldChange={updateField} />
+          <FormCard title="Circunferencias" fields={['Cintura (cm)|', 'Cadera (cm)|', 'Abdomen (cm)|', 'Brazo (cm)|', 'ICC calculado|']} values={currentValues} onFieldChange={updateField} />
+          <FormCard title="Composición corporal" fields={['% Grasa corporal|', 'Kg de grasa|', 'Kg de músculo|', '% Músculo|']} values={currentValues} onFieldChange={updateField} />
           <FormCard title="Pliegues cutáneos" fields={['Tricipital (mm)|', 'Bicipital (mm)|', 'Subescapular (mm)|', 'Suprailiaco (mm)|']} values={currentValues} onFieldChange={updateField} />
         </section>
-        <aside className="record-aside panel"><p className="eyebrow">RESUMEN DE HOY</p><div className="measure-highlight"><small>Peso actual</small><b>{currentValues['Peso (kg)'] || '—'} kg</b></div><div className="measure-highlight"><small>% grasa corporal</small><b>—</b><span className="muted">Aún no capturado</span></div><button className="link-button" disabled={measurementState === 'saving' || (!anthro['Peso (kg)'] && !anthro['Talla (cm)'])} onClick={registerMeasurement}>{measurementState === 'saving' ? 'Registrando…' : measurementState === 'saved' ? '✓ Medición registrada' : 'Registrar medición de hoy →'}</button></aside>
+        <aside className="record-aside panel"><p className="eyebrow">RESUMEN DE HOY</p><div className="measure-highlight"><small>Peso actual</small><b>{currentValues['Peso (kg)'] || '—'} kg</b></div><div className="measure-highlight">{currentValues['% Grasa corporal'] ? <><small>% grasa corporal</small><b>{currentValues['% Grasa corporal']}%</b></> : <><small>% grasa corporal</small><b>—</b><span className="muted">Aún no capturado</span></>}</div><button className="link-button" disabled={measurementState === 'saving' || (!anthro['Peso (kg)'] && !anthro['Talla (cm)'])} onClick={registerMeasurement}>{measurementState === 'saving' ? 'Registrando…' : measurementState === 'saved' ? '✓ Medición registrada' : 'Registrar medición de hoy →'}</button></aside>
       </div>
 
       : tab === 'Bioquímico' ? <div className="clinical-layout">
@@ -160,6 +164,14 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
         <div className="section-heading"><div><p className="eyebrow">SECCIÓN 9 DE 12 · TND</p><h1>Diagnóstico nutricio</h1><p className="subtitle">Selecciona uno o más diagnósticos por dominio.</p></div><button className="secondary">Buscar diagnóstico</button></div>
         <div className="diagnosis-domains">{[['INGESTIÓN', 'Problemas relacionados con ingesta, nutrientes y sustancias bioactivas.', 'mint'], ['CLÍNICOS', 'Hallazgos relacionados con condiciones físicas o médicas.', 'yellow'], ['CONDUCTUALES-AMBIENTALES', 'Conocimiento, actitudes y factores del entorno.', 'blue'], ['OTROS', 'Diagnósticos fuera de los dominios anteriores.', 'purple']].map(([title, desc, color]) => <div className={'domain-card ' + color} key={title}><span>◉</span><b>{title}</b><small>{desc}</small><strong>0 seleccionados</strong></div>)}</div>
         <div className="diagnosis-selected"><p className="eyebrow">DIAGNÓSTICOS SELECCIONADOS</p><p className="muted">Todavía no hay diagnósticos registrados para esta consulta.</p><label>Notas y evidencia<textarea placeholder="Añade la evidencia que sustenta el diagnóstico..." /></label></div>
+      </div>
+
+      : tab === 'Monitoreo' ? <div className="panel generic-section">
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Monitoreo</h1><p className="subtitle">Seguimiento entre consultas de {patientName}: apego, síntomas y ajustes al plan.</p>
+        <FormCard title="Apego a macros reportado" fields={['% Carbohidratos consumidos|', '% Proteína consumida|', '% Lípidos consumidos|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Seguimiento subjetivo" fields={['Estado de ánimo|', 'Apego al plan|', 'Antojos|', 'Hambre|', 'Consumo de agua|', 'Ejercicio|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Síntomas" fields={['Diarrea o estreñimiento|', 'Inflamación|', 'Cefalea|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Evaluación de la consulta" fields={['Calidad de preparación de comidas|', 'Modificaciones al plan|', 'Tema para la próxima consulta|', 'Observaciones|']} values={currentValues} onFieldChange={updateField} />
       </div>
 
       : <div className="panel generic-section">

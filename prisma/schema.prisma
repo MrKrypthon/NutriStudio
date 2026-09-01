@@ -183,6 +183,7 @@ model Measurement {
   heightCm        Decimal?      @db.Decimal(6, 2)
   waistCm         Decimal?      @db.Decimal(6, 2)
   hipCm           Decimal?      @db.Decimal(6, 2)
+  abdomenCm       Decimal?      @db.Decimal(6, 2)
   bodyFatPercent  Decimal?      @db.Decimal(5, 2)
   muscleMassKg    Decimal?      @db.Decimal(6, 2)
   method          String?
