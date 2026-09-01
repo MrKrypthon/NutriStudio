@@ -32,6 +32,7 @@ export default function App() {
   const [active, setActiveState] = useState(() => pathToModule[window.location.pathname] || 'Hoy')
   const [selectedPatientId, setSelectedPatientId] = useState(DEMO_PATIENT_ID)
   const [selectedMaterialId, setSelectedMaterialId] = useState(null)
+  const [selectedRecipeId, setSelectedRecipeId] = useState(null)
   const setActive = (next) => {
     setActiveState(next)
     const slug = moduleToSlug[next]
@@ -61,6 +62,7 @@ export default function App() {
   if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nueva receta') return <NewRecipePage setActive={setActive} />
+  if (active === 'Editar receta') return <NewRecipePage setActive={setActive} recipeId={selectedRecipeId} />
   if (active === 'Configuración') return <SettingsPage setActive={setActive} />
   if (active === 'Importar alimentos') return <ImportFoodsPage setActive={setActive} />
   if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} />
@@ -72,7 +74,7 @@ export default function App() {
   if (active === 'Seguimientos') return <FollowupsPage setActive={setActive} />
   if (active === 'Consultas') return <ConsultationsPage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Plantillas') return <TemplatesPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
-  if (active === 'Recetas') return <RecipesPage setActive={setActive} />
+  if (active === 'Recetas') return <RecipesPage setActive={setActive} onSelectRecipe={setSelectedRecipeId} />
   if (active === 'Ingredientes') return <IngredientsPage setActive={setActive} />
   if (active === 'Educación') return <EducationPage setActive={setActive} onSelectMaterial={setSelectedMaterialId} />
   if (active === 'Nuevo material') return <NewMaterialPage setActive={setActive} />
