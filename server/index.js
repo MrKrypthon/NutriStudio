@@ -11,6 +11,7 @@ import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
 import { DAY_LABELS, MEAL_TYPE_LABELS, buildMenuSnapshot } from './domain/documents.js'
+import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
 const app = Fastify({ logger: true })
 const prisma = new PrismaClient()
@@ -339,6 +340,12 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
   return { type: 'plan', planId: plan.id, patientId }
 })
 
+// kcal/protein/carbs/fat/fiber/sugar/sodium feed the macro summary shown everywhere; the
+// micronutrients feed the % de adecuación (fase 15) — both come from the same ingredient
+// nutrition JSON, per 100 g, scaled by ingredient quantity.
+const RECIPE_NUTRITION_KEYS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'sodium', 'vitaminA', 'vitaminC', 'folicAcid', 'calcium', 'iron']
+const emptyNutritionTotals = () => Object.fromEntries(RECIPE_NUTRITION_KEYS.map((key) => [key, 0]))
+
 app.get('/api/v1/recipes', async (request) => {
   const { search = '', mealType, restriction, status = 'ACTIVE' } = request.query
   const where = {
@@ -399,7 +406,7 @@ app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
     await transaction.recipeIngredient.createMany({ data: ingredients.map((item) => ({ recipeId: recipe.id, ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) })
     return transaction.recipe.findUnique({ where: { id: recipe.id }, include: { ingredients: { include: { ingredient: true } } } })
   })
-  const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0 }
+  const totals = emptyNutritionTotals()
   for (const item of updated.ingredients) { const nutrition = item.ingredient.nutrition || {}; const factor = Number(item.quantity) / 100; for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor }
   const servings = Number(updated.portions || 1)
   const nutrition = Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round((value / servings) * 10) / 10]))
@@ -409,7 +416,7 @@ app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
 app.get('/api/v1/recipes/:recipeId/nutrition', async (request, reply) => {
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId }, include: { ingredients: { include: { ingredient: true } } } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
-  const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0 }
+  const totals = emptyNutritionTotals()
   for (const item of recipe.ingredients) {
     const nutrition = item.ingredient.nutrition || {}
     const factor = Number(item.quantity) / 100
@@ -421,7 +428,7 @@ app.get('/api/v1/recipes/:recipeId/nutrition', async (request, reply) => {
 app.post('/api/v1/recipes/:recipeId/recalculate', async (request, reply) => {
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId }, include: { ingredients: { include: { ingredient: true } } } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
-  const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, sodium: 0 }
+  const totals = emptyNutritionTotals()
   for (const item of recipe.ingredients) { const nutrition = item.ingredient.nutrition || {}; const factor = Number(item.quantity) / 100; for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor }
   const servings = Number(recipe.portions || 1)
   const nutrition = Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round((value / servings) * 10) / 10]))
@@ -495,19 +502,29 @@ app.post('/api/v1/nutrition-plans/macros', async (request, reply) => {
 app.post('/api/v1/patients/:patientId/plans', async (request, reply) => {
   const { consultationId, goal } = request.body || {}
   if (!consultationId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La consulta asociada es obligatoria.', fields: { consultationId: 'required' } })
-  const plan = await prisma.nutritionPlan.create({ data: { patientId: request.params.patientId, consultationId, goal } })
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  const plan = await prisma.nutritionPlan.create({ data: { patientId: patient.id, consultationId, goal } })
   return reply.code(201).send(plan)
 })
 
 app.get('/api/v1/plans/:planId', async (request, reply) => {
-  const plan = await prisma.nutritionPlan.findUnique({ where: { id: request.params.planId }, include: { patient: true, mealSlots: true, documents: true } })
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } }, include: { patient: true, mealSlots: true, documents: true } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   return plan
 })
 
+app.get('/api/v1/plans/:planId/adequacy', async (request, reply) => {
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } }, include: { mealSlots: { include: { recipe: true } } } })
+  if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
+  const inputs = plan.evaluation?.inputs
+  if (!inputs?.age || !inputs?.sex) return { bracket: null, bracketLabel: null, nutrients: [], reason: 'MISSING_EVALUATION' }
+  return computeMicronutrientAdequacy(plan.mealSlots, inputs.age, inputs.sex)
+})
+
 app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
   const { sex, age, weightKg, heightCm, bodyFatPercent, formula = 'mifflin', activityFactor, mets, carbsPercent, proteinPercent, fatPercent, goal } = request.body || {}
-  const plan = await prisma.nutritionPlan.findUnique({ where: { id: request.params.planId } })
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados no pueden modificarse.', fields: {} })
 
@@ -543,7 +560,7 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
 
 app.put('/api/v1/plans/:planId/distribution', async (request, reply) => {
   const { mealSlots = [] } = request.body || {}
-  const plan = await prisma.nutritionPlan.findUnique({ where: { id: request.params.planId } })
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan || plan.status === 'PUBLISHED') return reply.code(plan ? 409 : 404).send({ code: plan ? 'PLAN_LOCKED' : 'PLAN_NOT_FOUND', message: plan ? 'Los planes publicados no pueden modificarse.' : 'Plan no encontrado.', fields: {} })
   await prisma.$transaction([prisma.mealSlot.deleteMany({ where: { planId: plan.id } }), prisma.mealSlot.createMany({ data: mealSlots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: slot.recipeId, servings: slot.servings, notes: slot.notes })) })])
   return prisma.nutritionPlan.findUnique({ where: { id: plan.id }, include: { mealSlots: true } })
