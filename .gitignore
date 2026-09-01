@@ -3,6 +3,7 @@ dist/
 storage/documents/*.pdf
 .env
 *.local
+DIETOCALCULO.xlsx
 .DS_Store
 npm-debug.log*
 .claude/

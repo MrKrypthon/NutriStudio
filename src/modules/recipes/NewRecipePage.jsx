@@ -8,6 +8,7 @@ const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', lunch: 'Comida', snack: 'Colac
 
 export default function NewRecipePage({ setActive, recipeId }) {
   const [catalog, setCatalog] = useState([])
+  const [ingredientSearch, setIngredientSearch] = useState('')
   const [chosen, setChosen] = useState([])
   const [name, setName] = useState('')
   const [meal, setMeal] = useState('Desayuno')
@@ -18,7 +19,14 @@ export default function NewRecipePage({ setActive, recipeId }) {
   const [saveState, setSaveState] = useState('idle')
   const [saveError, setSaveError] = useState('')
 
-  useEffect(() => { ingredientsApi.list().then((response) => setCatalog(response.items || [])).catch(() => {}) }, [])
+  useEffect(() => {
+    const query = ingredientSearch.trim()
+    if (query.length < 2) { setCatalog([]); return }
+    const timer = setTimeout(() => {
+      ingredientsApi.list(`?search=${encodeURIComponent(query)}`).then((response) => setCatalog(response.items || [])).catch(() => {})
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [ingredientSearch])
 
   useEffect(() => {
     if (!recipeId) return
@@ -73,7 +81,9 @@ export default function NewRecipePage({ setActive, recipeId }) {
         <div className="form-section-title"><span>01</span><div><h2>Información de la receta</h2><p>Define cómo aparecerá en el plan del paciente.</p></div></div>
         <label>Nombre de la receta *<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Bowl de pollo con verduras" /></label>
         <div className="form-grid"><label>Tiempo de comida<select value={meal} onChange={(e) => setMeal(e.target.value)}><option>Desayuno</option><option>Comida</option><option>Colación</option><option>Cena</option></select></label><label>Porciones<input type="number" value={portions} min="1" onChange={(e) => setPortions(Number(e.target.value))} /></label></div>
-        <div className="form-section-title second"><span>02</span><div><h2>Ingredientes locales</h2><p>Selecciona alimentos y ajusta sus cantidades.</p></div></div>
+        <div className="form-section-title second"><span>02</span><div><h2>Ingredientes locales</h2><p>Busca en tu catálogo (Sistema Mexicano de Equivalentes) y ajusta sus cantidades.</p></div></div>
+        <div className="search-field">⌕ <input value={ingredientSearch} onChange={(e) => setIngredientSearch(e.target.value)} placeholder="Buscar ingrediente (mín. 2 letras)..." /></div>
+        {ingredientSearch.trim().length >= 2 && catalog.length === 0 && <p className="muted" style={{ margin: '10px 0' }}>Sin resultados para "{ingredientSearch.trim()}".</p>}
         <div className="ingredient-suggestions">{catalog.map((item) => <button type="button" onClick={() => add(item)} className={chosen.some((x) => x.id === item.id) ? 'added' : ''} key={item.id}><span>+</span>{item.name}<small>{item.group}</small></button>)}</div>
         <div className="recipe-form-ingredients">{chosen.map((item) => <div key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.name}</b><small>{item.group} · {item.equivalence?.serving || 'Equivalencia local'}</small></div><input type="number" value={item.quantity} onChange={(e) => update(item.id, 'quantity', e.target.value)} /><span className="unit-label">g</span><button type="button" onClick={() => setChosen(chosen.filter((x) => x.id !== item.id))}>×</button></div>)}</div>
         <div className="form-section-title second"><span>03</span><div><h2>Preparación</h2><p>Estos pasos se mostrarán al paciente.</p></div></div>
