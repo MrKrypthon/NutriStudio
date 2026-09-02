@@ -161,12 +161,16 @@ app.get('/api/v1/patients/:patientId/timeline', async (request, reply) => {
   return { items: events }
 })
 
-app.get('/api/v1/patients/:patientId/consultations', async (request) => {
+app.get('/api/v1/patients/:patientId/consultations', async (request, reply) => {
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   const consultations = await prisma.consultation.findMany({ where: { patientId: request.params.patientId }, include: { sections: true, measurements: true, diagnoses: true, plans: true }, orderBy: { createdAt: 'desc' } })
   return { items: consultations }
 })
 
-app.get('/api/v1/patients/:patientId/plans', async (request) => {
+app.get('/api/v1/patients/:patientId/plans', async (request, reply) => {
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   const plans = await prisma.nutritionPlan.findMany({ where: { patientId: request.params.patientId }, include: { mealSlots: true, documents: true }, orderBy: [{ createdAt: 'desc' }, { version: 'desc' }] })
   return { items: plans }
 })
@@ -174,13 +178,20 @@ app.get('/api/v1/patients/:patientId/plans', async (request) => {
 app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => {
   const { appointmentId, nutritionistId, templateId } = request.body || {}
   const practiceId = request.practiceId
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  let appointment = null
+  if (appointmentId) {
+    appointment = await prisma.appointment.findFirst({ where: { id: appointmentId, practiceId } })
+    if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
+  }
   // nutritionistId lets one professional open a consultation on another's behalf; otherwise
   // it defaults to whoever is logged in, falling back to the oldest user in the practice.
   let userId = nutritionistId || request.userId
   if (!userId) userId = (await prisma.user.findFirst({ where: { practiceId } }))?.id
   if (!userId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La consulta necesita un profesional responsable.', fields: { nutritionistId: 'required' } })
   const consultation = await prisma.consultation.create({ data: { patientId: request.params.patientId, appointmentId, nutritionistId: userId, templateId, status: 'IN_PROGRESS', startedAt: new Date() } })
-  if (appointmentId) await prisma.appointment.update({ where: { id: appointmentId }, data: { status: 'COMPLETED' } })
+  if (appointment) await prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'COMPLETED' } })
   return reply.code(201).send(consultation)
 })
 
