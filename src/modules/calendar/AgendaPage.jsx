@@ -38,7 +38,7 @@ function formatRangeLabel(days) {
   return sameMonth ? `${first.getUTCDate()} – ${last.getUTCDate()} ${MONTHS[first.getUTCMonth()]} ${first.getUTCFullYear()}` : `${first.getUTCDate()} ${MONTHS[first.getUTCMonth()]} – ${last.getUTCDate()} ${MONTHS[last.getUTCMonth()]} ${first.getUTCFullYear()}`
 }
 
-export default function AgendaPage({ setActive }) {
+export default function AgendaPage({ setActive, onStartConsultation }) {
   const [view, setView] = useState('Semana')
   const [anchor, setAnchor] = useState(TODAY)
   const [appointments, setAppointments] = useState([])
@@ -141,8 +141,10 @@ export default function AgendaPage({ setActive }) {
                 const height = Math.max(30, (durationMinutes / 60) * 63 - 8)
                 const color = TYPE_COLORS[appointment.type] || 'coral'
                 const pending = appointment.status === 'PENDING_CONFIRMATION'
+                const confirmed = appointment.status === 'CONFIRMED'
                 const name = appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Paciente'
-                return <div className={`event ${color}-event`} style={{ top, height, cursor: pending ? 'pointer' : 'default' }} onClick={() => pending && confirmAppointment(appointment.id)} key={appointment.id} title={pending ? 'Clic para confirmar la cita' : undefined}>
+                const onClick = () => { if (pending) confirmAppointment(appointment.id); else if (confirmed) onStartConsultation?.(appointment.patientId, appointment.id) }
+                return <div className={`event ${color}-event`} style={{ top, height, cursor: pending || confirmed ? 'pointer' : 'default' }} onClick={onClick} key={appointment.id} title={pending ? 'Clic para confirmar la cita' : confirmed ? 'Clic para iniciar la consulta' : undefined}>
                   <b>{name}</b>
                   <small>{TYPE_LABELS[appointment.type] || appointment.type}{pending ? ' · Por confirmar' : ` · ${durationMinutes} min`}</small>
                 </div>
