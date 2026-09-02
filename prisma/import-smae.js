@@ -9,9 +9,13 @@ import { fileURLToPath } from 'node:url'
 // (DIETOCALCULO.xlsx) — the raw spreadsheet is not committed to the repo.
 //
 // Usage: node prisma/import-smae.js [practiceId]
-// Re-running is safe: matches existing SMAE-sourced ingredients by name and updates them in
-// place instead of delete+recreate — a delete would fail once a recipe references one of these
-// ingredients (RecipeIngredient.ingredientId is onDelete: Restrict).
+// Re-running is safe: matches existing SMAE-sourced ingredients by (name, group, serving) and
+// updates them in place instead of delete+recreate — a delete would fail once a recipe
+// references one of these ingredients (RecipeIngredient.ingredientId is onDelete: Restrict).
+// Name alone isn't a safe match key: 47 names in the source Excel appear more than once, some
+// as genuine duplicate rows and some as the same food listed under two different SMAE
+// categories/servings (e.g. "Doritos Nachos" at 20 g vs. 0.33 bolsita) — (name, group, serving)
+// is the smallest key that's actually 1:1 with a distinct source row.
 
 const prisma = new PrismaClient()
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -65,25 +69,28 @@ async function main() {
     }
   })
 
-  const existing = await prisma.ingredient.findMany({ where: { practiceId, equivalence: { path: ['source'], equals: 'SMAE' } }, select: { id: true, name: true } })
-  const existingByName = new Map(existing.map((item) => [item.name, item.id]))
+  const existing = await prisma.ingredient.findMany({ where: { practiceId, equivalence: { path: ['source'], equals: 'SMAE' } }, select: { id: true, name: true, group: true, equivalence: true } })
+  const matchKey = (name, group, serving) => `${name}|${group}|${serving}`
+  const existingByKey = new Map(existing.map((item) => [matchKey(item.name, item.group, item.equivalence?.serving || ''), item.id]))
 
   let created = 0
   let updated = 0
   for (const data of ingredients) {
-    const existingId = existingByName.get(data.name)
+    const key = matchKey(data.name, data.group, data.equivalence.serving)
+    const existingId = existingByKey.get(key)
     if (existingId) {
       await prisma.ingredient.update({ where: { id: existingId }, data })
-      existingByName.delete(data.name)
       updated += 1
     } else {
-      await prisma.ingredient.create({ data })
+      const row = await prisma.ingredient.create({ data })
+      existingByKey.set(key, row.id)
       created += 1
     }
   }
-  // Whatever's left in existingByName was in the DB under this SMAE source but is no longer in
-  // the source file (e.g. a duplicate name collapsed) — safe to leave in place rather than risk
-  // a Restrict-constraint failure against a recipe that references it.
+  // Deliberately not deleting anything left unmatched in existingByKey: a delete would fail
+  // once a recipe references one of these ingredients (RecipeIngredient.ingredientId is
+  // onDelete: Restrict), and an orphaned row from a source row that got renamed/removed is
+  // safer to leave in place than to risk that failure mid-import.
   console.log(`SMAE: ${created} alimentos nuevos, ${updated} actualizados para la práctica ${practiceId}.`)
 }
 
