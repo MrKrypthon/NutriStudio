@@ -213,10 +213,19 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
   const generateReport = async () => {
     if (!consultation) return
     if (report?.storageKey) {
-      const link = window.document.createElement('a')
-      link.href = documentsApi.downloadUrl(report.id)
-      link.download = report.storageKey
-      link.click()
+      setReportState('working')
+      try {
+        const blob = await documentsApi.downloadBlob(report.id)
+        const url = URL.createObjectURL(blob)
+        const link = window.document.createElement('a')
+        link.href = url
+        link.download = report.storageKey
+        link.click()
+        URL.revokeObjectURL(url)
+        setReportState('idle')
+      } catch {
+        setReportState('error')
+      }
       return
     }
     setReportState('working')
@@ -236,7 +245,7 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
       <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Consulta nutricional · en curso</span></div></div>
       <div className="clinical-actions"><button className="secondary">▱ Agendar</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Descargar informe' : 'Generar informe'}</button></div>
     </div>
-    {reportState === 'error' && <div className="form-error">⚠ No se pudo generar el informe.</div>}
+    {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
     {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
     <div className="record-tabs">{TABS.map((x) => <button className={tab === x ? 'active' : ''} onClick={() => setTab(x)} key={x}>{x}</button>)}</div>
     <div className="record-banner"><span className="spark">✦</span><div><b>Consulta en curso</b><small>Los cambios se guardan automáticamente · {saveLabel}</small></div><button className="secondary" onClick={() => setTab('Transcripción')}>Grabar consulta</button></div>
