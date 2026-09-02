@@ -100,7 +100,7 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
   }
 
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content">
-    <ModuleHeader eyebrow="TU ESPACIO · 24 ACTIVOS" title="Pacientes" subtitle="Conoce el progreso y el contexto de cada persona." action={<div className="module-actions"><span className={'sync-label ' + status}>● {status === 'online' ? 'Sincronizados' : 'Datos de demostración'}</span><button className="primary"><span>+</span> Nuevo paciente</button></div>} />
+    <ModuleHeader eyebrow="TU ESPACIO · 24 ACTIVOS" title="Pacientes" subtitle="Conoce el progreso y el contexto de cada persona." action={<div className="module-actions"><span className={'sync-label ' + status}>● {status === 'online' ? 'Sincronizados' : 'Datos de demostración'}</span><button className="primary" onClick={() => setActive('Nuevo paciente')}><span>+</span> Nuevo paciente</button></div>} />
     <div className="filter-bar panel"><div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o email..." /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="ACTIVE">Activos</option><option value="ARCHIVED">Archivados</option></select></div>
     <div className="table-panel panel">
       <div className="table-meta">Mostrando <b>{visible.length} pacientes</b><button>Ordenar por: <b>Más recientes⌄</b></button></div>
@@ -121,7 +121,7 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
       {!selected[6] && <p className="muted">Este es un registro de demostración, no tiene expediente ni plan reales.</p>}
       <div className="drawer-actions">
         <button className="primary" disabled={!selected[6]} onClick={() => goTo('Expediente')}>Abrir expediente</button>
-        <button className="secondary" disabled={!selected[6]} onClick={() => goTo('Plan nutricional')}>Ir al plan</button>
+        <button className="secondary" disabled={!selected[6]} onClick={() => goTo('Constructor de plan')}>Ir al plan</button>
       </div>
       {selected[6] && <button className="link-button" onClick={startEdit}>Editar datos del paciente →</button>}
       {selected[6] && <button className="link-button" disabled={archiveState === 'saving'} onClick={toggleArchive}>{archiveState === 'saving' ? 'Guardando…' : selected[7]?.status === 'ARCHIVED' ? 'Reactivar paciente →' : 'Archivar paciente →'}</button>}

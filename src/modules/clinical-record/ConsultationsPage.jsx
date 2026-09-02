@@ -34,7 +34,7 @@ export default function ConsultationsPage({ setActive, patientId }) {
       <p className="eyebrow">¿POR DÓNDE QUIERES COMENZAR HOY?</p>
       <div className="session-options">
         <button className="session-option" onClick={() => setActive('Expediente')}><span className="session-icon mint">▤</span><b>Grabar consulta / informe</b><small>Registra la anamnesis, evaluación y diagnóstico nutricio.</small><strong>Ir al informe <span>→</span></strong></button>
-        <button className="session-option" onClick={() => setActive('Plan nutricional')}><span className="session-icon blue">▦</span><b>Diseñar plan de alimentación</b><small>Distribuye macros, crea menús y programa la semana.</small><strong>Ir al plan <span>→</span></strong></button>
+        <button className="session-option" onClick={() => setActive('Constructor de plan')}><span className="session-icon blue">▦</span><b>Diseñar plan de alimentación</b><small>Distribuye macros, crea menús y programa la semana.</small><strong>Ir al plan <span>→</span></strong></button>
       </div>
       <div className="session-note">↗ Podrás cambiar entre Consulta y Plan en cualquier momento.</div>
     </div>

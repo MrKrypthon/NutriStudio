@@ -2,9 +2,9 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 1 de septiembre de 2026 (madrugada, fase 22).
+Última verificación contra código real (no contra specs): 1 de septiembre de 2026 (madrugada, fase 23).
 
-**Nota de sincronización:** las fases 14 a 21 (todo lo relacionado con `DIETOCALCULO.xlsx`) ya están mergeadas en `main`. `biblioteca-educacion` (fase 13) sigue con su propio PR sin mergear — es independiente, no depende de ninguna fase del Excel.
+**Nota de sincronización:** las fases 13 a 22 ya están mergeadas en `main` (incluida `biblioteca-educacion`). Nada pendiente de mergear al cierre de fase 23.
 
 ## Iniciar sesión en local
 
@@ -73,8 +73,21 @@ Eso evita que la sesión tenga que releer módulo por módulo para saber qué ya
 | **Traducción automática en Importar alimentos** | La hoja `DICCIONARIO` (175 pares español-inglés, ver nota arriba) ahora traduce la búsqueda antes de mandarla a USDA/Open Food Facts (`server/domain/foodDictionary.js`, 4 pruebas unitarias) — esas bases son en inglés, así que buscar "chayote" antes devolvía poco o nada relevante. Coincidencia exacta primero, si no hay, la coincidencia parcial más específica; si no hay ninguna, la búsqueda sigue igual que antes (nunca puede empeorar un resultado, solo mejorarlo). La UI muestra "Buscado como…" cuando tradujo algo, para que quede claro por qué salieron esos resultados |
 | **Exploración física completa** | "Clínico" ganó los ~29 hallazgos de exploración física de `HCN_CD` que se habían dejado fuera en fase 19 por alcance: piel y ojos (12), cabello (2), boca (7), dentadura (3) y uñas (5), organizados en subgrupos con pastillas de toggle, debajo de la revisión de síntomas ya existente. Mismo mecanismo sin modelo nuevo |
 | **Editar estado del paciente** | Archivar/reactivar un paciente desde el cajón de detalle (`PATCH /patients/:id` ya aceptaba `status`, solo no estaba conectado). El filtro "Activos/Archivados" de la lista de Pacientes, antes decorativo, ahora funciona de verdad — un paciente archivado desaparece de la vista activa y aparece en la de archivados, y viceversa al reactivar |
+| **Sidebar reparado (fase 23)** | Ver sección "Navegación (fase 23)" más abajo para el detalle completo — resumen: de 16 ítems planos a 12 agrupados en 3 secciones; "Plan nutricional" y "Constructor de plan" (dos pantallas distintas para el mismo flujo de 5 pasos) se fusionaron en una sola real de punta a punta; "Configuración" dejó de estar duplicado; "+ Nuevo paciente" (roto, sin `onClick`) y "+ Importar alimento" (sin entrada real) quedaron conectados |
 
-(Negrita = construido en esta sesión: fase 3 a 12 y 14 a 22 en esta rama — fase 13 (Biblioteca de educación) vive en la rama `biblioteca-educacion` con su propio PR — más los bugfixes de Recetas, control de acceso y CORS.)
+(Negrita = construido en esta sesión: fase 3 a 12 y 14 a 23 en esta rama — todo mergeado en `main` — más los bugfixes de Recetas, control de acceso y CORS.)
+
+## Navegación (fase 23)
+
+La usuaria reportó que el sidebar tenía "varios ítems ligados que confunden". Al revisar `AppChrome.jsx`/`navItems.js`/`App.jsx` aparecieron varios problemas reales, no solo de agrupación visual:
+
+- **"Plan nutricional" y "Constructor de plan" eran dos pantallas separadas para el mismo flujo de 5 pasos** (`NutritionCalculatorPage.jsx` y `PlanStudioPage.jsx`, cada una con su propio indicador "1 Evaluación · 2 Requerimiento/Plan alimentario · 3 Distribución · 4 Semana · 5 Entrega"). `NutritionCalculatorPage` tenía la única implementación real de "Evaluación + cálculo de requerimiento" (formulario conectado, llamaba a `nutritionApi.calculate` y guardaba con `plansApi.evaluate`); los pasos 0 y 1 de `PlanStudioPage` eran decorativos de principio a fin (Sexo "Femenino" fijo, GET "1,842 kcal" fijo, etc.) — de hecho el panel de % adecuación de fase 15/17 ya *asumía* que existía una evaluación guardada y decía "completa edad y sexo en la Evaluación", pero esa evaluación solo se podía guardar desde la OTRA pantalla. Se fusionaron: el calculador real de `NutritionCalculatorPage` ahora es el paso "Plan alimentario" de `PlanStudioPage`, y el paso "Evaluación" pasó a ser un resumen de solo lectura de lo último calculado/guardado (sexo y fecha de nacimiento reales del paciente, peso/talla/IMC/rango de peso ideal del último `plan.evaluation`, objetivo terapéutico de `plan.goal`). `MacroDistributionPage.jsx` (una calculadora de macros %, con nombre de paciente fijo en "Mariana Torres" sin importar a quién estuvieras viendo, sin guardar nada) quedó completamente redundante con esto y también se eliminó. Los tres call-sites reales que apuntaban a `'Plan nutricional'` (`PatientsPage` "Ir al plan", `ConsultationsPage` "Diseñar plan de alimentación", `DocumentPage` "Regresar al plan") ahora apuntan a `'Constructor de plan'`.
+- **"Configuración" estaba duplicado**: aparecía una vez dentro de la lista `navItems` (sin `onClick` real) y otra vez como botón aparte al fondo del sidebar (tampoco con `onClick` — se resolvía con un listener de `click` en todo el `document` en `App.jsx` que buscaba cualquier botón con el texto "Configuración"). Ahora hay un solo botón, con `onClick` directo; el listener global se eliminó.
+- **"+ Nuevo paciente" en la cabecera de Pacientes no tenía `onClick`** — no hacía nada al hacer clic. Estaba "cubierto" porque el sidebar tenía su propio ítem "Nuevo paciente" que sí funcionaba. Al sacar ese ítem del sidebar (es una acción de creación, no un destino de navegación) hubo que conectar el botón real primero.
+- **"Importar alimentos" no tenía ninguna entrada real fuera del sidebar** — se agregó un botón "+ Importar alimento" en la cabecera de Ingredientes antes de quitarlo del menú.
+- **"Nueva receta" ya tenía su botón real en Recetas** (de fase 11) — se quitó del sidebar sin necesidad de tocar nada más.
+
+Resultado: el sidebar pasó de 16 ítems sueltos a 12, agrupados en "Tu espacio" (Hoy, Agenda, Pacientes, Consultas, Seguimientos), "Planificación" (Constructor de plan, Recetas, Ingredientes, Plantillas, Documentos) y "Biblioteca" (Educación), más Configuración fijo abajo. `navItems.js` ahora exporta `navGroups` (array de `{ label, items }`) en vez de una lista plana.
 
 ## Backend real, pantalla sin conectar
 
