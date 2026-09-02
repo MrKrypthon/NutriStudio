@@ -438,6 +438,52 @@ app.post('/api/v1/recipes/:recipeId/recalculate', async (request, reply) => {
   return { recipe: updated, nutrition, version: updated.version }
 })
 
+app.get('/api/v1/education-materials', async (request) => {
+  const { search = '', category, status = 'ACTIVE' } = request.query
+  const where = {
+    practiceId: request.practiceId,
+    status,
+    ...(search ? { title: { contains: search, mode: 'insensitive' } } : {}),
+    ...(category ? { category } : {}),
+  }
+  const materials = await prisma.educationMaterial.findMany({ where, orderBy: { title: 'asc' }, take: 100 })
+  return { items: materials }
+})
+
+app.post('/api/v1/education-materials', async (request, reply) => {
+  const { title, category, description, body, color = 'mint', readMinutes } = request.body || {}
+  if (!title || !category) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Título y categoría son obligatorios.', fields: { title: !title, category: !category } })
+  const material = await prisma.educationMaterial.create({ data: { practiceId: request.practiceId, title, category, description: description || '', body: body || '', color, readMinutes: readMinutes ? Number(readMinutes) : 5 } })
+  return reply.code(201).send(material)
+})
+
+app.get('/api/v1/education-materials/:materialId', async (request, reply) => {
+  const material = await prisma.educationMaterial.findFirst({ where: { id: request.params.materialId, practiceId: request.practiceId } })
+  if (!material) return reply.code(404).send({ code: 'MATERIAL_NOT_FOUND', message: 'Material no encontrado.', fields: {} })
+  return material
+})
+
+app.patch('/api/v1/education-materials/:materialId', async (request, reply) => {
+  const material = await prisma.educationMaterial.findFirst({ where: { id: request.params.materialId, practiceId: request.practiceId } })
+  if (!material) return reply.code(404).send({ code: 'MATERIAL_NOT_FOUND', message: 'Material no encontrado.', fields: {} })
+  const { title, category, description, body, color, readMinutes, status } = request.body || {}
+  if (title !== undefined && !title) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El título no puede quedar vacío.', fields: { title: true } })
+  if (category !== undefined && !category) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La categoría no puede quedar vacía.', fields: { category: true } })
+  const updated = await prisma.educationMaterial.update({
+    where: { id: material.id },
+    data: {
+      ...(title !== undefined ? { title } : {}),
+      ...(category !== undefined ? { category } : {}),
+      ...(description !== undefined ? { description } : {}),
+      ...(body !== undefined ? { body } : {}),
+      ...(color !== undefined ? { color } : {}),
+      ...(readMinutes !== undefined ? { readMinutes: Number(readMinutes) } : {}),
+      ...(status !== undefined ? { status } : {}),
+    },
+  })
+  return updated
+})
+
 app.get('/api/v1/ingredients', async (request) => {
   const { search = '', group } = request.query
   const ingredients = await prisma.ingredient.findMany({ where: { practiceId: request.practiceId, status: 'ACTIVE', ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}), ...(group ? { group } : {}) }, orderBy: { name: 'asc' }, take: 200 })

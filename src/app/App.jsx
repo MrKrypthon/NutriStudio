@@ -21,6 +21,7 @@ import DocumentsPage from '../modules/documents/DocumentsPage.jsx'
 import DocumentPage from '../modules/documents/DocumentPage.jsx'
 import FollowupsPage from '../modules/tasks/FollowupsPage.jsx'
 import EducationPage from '../modules/education/EducationPage.jsx'
+import NewMaterialPage from '../modules/education/NewMaterialPage.jsx'
 import SettingsPage from '../modules/settings/SettingsPage.jsx'
 
 const pathToModule = { '/': 'Hoy', '/hoy': 'Hoy', '/agenda': 'Agenda', '/pacientes': 'Pacientes', '/recetas': 'Recetas', '/ingredientes': 'Ingredientes', '/plantillas': 'Plantillas', '/plan': 'Plan nutricional', '/constructor-plan': 'Constructor de plan', '/distribucion': 'Distribución de macros', '/documentos': 'Documentos', '/nuevo-paciente': 'Nuevo paciente', '/configuracion': 'Configuración', '/importar-alimentos': 'Importar alimentos' }
@@ -30,6 +31,7 @@ export default function App() {
   const { status } = useAuth()
   const [active, setActiveState] = useState(() => pathToModule[window.location.pathname] || 'Hoy')
   const [selectedPatientId, setSelectedPatientId] = useState(DEMO_PATIENT_ID)
+  const [selectedMaterialId, setSelectedMaterialId] = useState(null)
   const [selectedRecipeId, setSelectedRecipeId] = useState(null)
   const setActive = (next) => {
     setActiveState(next)
@@ -74,7 +76,9 @@ export default function App() {
   if (active === 'Plantillas') return <TemplatesPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Recetas') return <RecipesPage setActive={setActive} onSelectRecipe={setSelectedRecipeId} />
   if (active === 'Ingredientes') return <IngredientsPage setActive={setActive} />
-  if (active === 'Educación') return <EducationPage setActive={setActive} />
+  if (active === 'Educación') return <EducationPage setActive={setActive} onSelectMaterial={setSelectedMaterialId} />
+  if (active === 'Nuevo material') return <NewMaterialPage setActive={setActive} />
+  if (active === 'Editar material') return <NewMaterialPage setActive={setActive} materialId={selectedMaterialId} />
 
   return <DashboardPage setActive={setActive} />
 }

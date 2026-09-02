@@ -137,6 +137,14 @@ export const recipesApi = {
   replaceIngredients: (id, ingredients) => apiRequest(`/recipes/${id}/ingredients`, { method: 'PUT', body: JSON.stringify({ ingredients }) }),
 }
 
+export const educationApi = {
+  list: (query = '') => apiRequest(`/education-materials${query}`),
+  get: (id) => apiRequest(`/education-materials/${id}`),
+  create: (payload) => apiRequest('/education-materials', { method: 'POST', body: JSON.stringify(payload) }),
+  update: (id, payload) => apiRequest(`/education-materials/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  archive: (id) => apiRequest(`/education-materials/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ARCHIVED' }) }),
+}
+
 export const ingredientsApi = {
   list: (query = '') => apiRequest(`/ingredients${query}`),
   import: (payload) => apiRequest('/ingredients/import', { method: 'POST', body: JSON.stringify(payload) }),

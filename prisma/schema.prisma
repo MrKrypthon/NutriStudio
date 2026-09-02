@@ -62,6 +62,7 @@ model Practice {
   tasks          Task[]
   auditEvents    AuditEvent[]
   templates      Template[]
+  educationMaterials EducationMaterial[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 }
@@ -264,6 +265,23 @@ model Recipe {
   updatedAt     DateTime    @updatedAt
   ingredients   RecipeIngredient[]
   mealSlots     MealSlot[]
+}
+
+model EducationMaterial {
+  id          String       @id @default(uuid())
+  practiceId  String
+  practice    Practice     @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  title       String
+  category    String
+  description String
+  body        String
+  color       String       @default("mint")
+  readMinutes Int          @default(5)
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([practiceId, status])
 }
 
 model Ingredient {
