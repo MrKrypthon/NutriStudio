@@ -413,10 +413,13 @@ app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
   const { ingredients = [] } = request.body || {}
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
-  if (!ingredients.length) return reply.code(400).send({ code: 'EMPTY_RECIPE', message: 'La receta debe conservar al menos un ingrediente.', fields: {} })
+  const validIngredients = ingredients.length ? await prisma.ingredient.findMany({ where: { id: { in: ingredients.map((item) => item.ingredientId).filter(Boolean) }, practiceId: request.practiceId }, select: { id: true } }) : []
+  const validIds = new Set(validIngredients.map((item) => item.id))
+  const filteredIngredients = ingredients.filter((item) => validIds.has(item.ingredientId))
+  if (!filteredIngredients.length) return reply.code(400).send({ code: 'EMPTY_RECIPE', message: 'La receta debe conservar al menos un ingrediente.', fields: {} })
   const updated = await prisma.$transaction(async (transaction) => {
     await transaction.recipeIngredient.deleteMany({ where: { recipeId: recipe.id } })
-    await transaction.recipeIngredient.createMany({ data: ingredients.map((item) => ({ recipeId: recipe.id, ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) })
+    await transaction.recipeIngredient.createMany({ data: filteredIngredients.map((item) => ({ recipeId: recipe.id, ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) })
     return transaction.recipe.findUnique({ where: { id: recipe.id }, include: { ingredients: { include: { ingredient: true } } } })
   })
   const totals = emptyNutritionTotals()
@@ -621,7 +624,10 @@ app.put('/api/v1/plans/:planId/distribution', async (request, reply) => {
   const { mealSlots = [] } = request.body || {}
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan || plan.status === 'PUBLISHED') return reply.code(plan ? 409 : 404).send({ code: plan ? 'PLAN_LOCKED' : 'PLAN_NOT_FOUND', message: plan ? 'Los planes publicados no pueden modificarse.' : 'Plan no encontrado.', fields: {} })
-  await prisma.$transaction([prisma.mealSlot.deleteMany({ where: { planId: plan.id } }), prisma.mealSlot.createMany({ data: mealSlots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: slot.recipeId, servings: slot.servings, notes: slot.notes })) })])
+  const recipeIds = [...new Set(mealSlots.map((slot) => slot.recipeId).filter(Boolean))]
+  const validRecipes = recipeIds.length ? await prisma.recipe.findMany({ where: { id: { in: recipeIds }, practiceId: request.practiceId }, select: { id: true } }) : []
+  const validRecipeIds = new Set(validRecipes.map((item) => item.id))
+  await prisma.$transaction([prisma.mealSlot.deleteMany({ where: { planId: plan.id } }), prisma.mealSlot.createMany({ data: mealSlots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: validRecipeIds.has(slot.recipeId) ? slot.recipeId : null, servings: slot.servings, notes: slot.notes })) })])
   return prisma.nutritionPlan.findUnique({ where: { id: plan.id }, include: { mealSlots: true } })
 })
 
