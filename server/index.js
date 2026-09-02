@@ -230,6 +230,42 @@ app.post('/api/v1/consultations/:consultationId/measurements', async (request, r
   return reply.code(201).send(measurement)
 })
 
+app.post('/api/v1/consultations/:consultationId/diagnoses', async (request, reply) => {
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const { domain, code, problem, etiology, evidence } = request.body || {}
+  if (!domain || !problem) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Dominio y problema son obligatorios.', fields: { domain: !domain, problem: !problem } })
+  const diagnosis = await prisma.diagnosis.create({ data: { consultationId: consultation.id, domain, code: code || null, problem, etiology: etiology || null, evidence: evidence || null } })
+  return reply.code(201).send(diagnosis)
+})
+
+app.patch('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async (request, reply) => {
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const diagnosis = await prisma.diagnosis.findFirst({ where: { id: request.params.diagnosisId, consultationId: consultation.id } })
+  if (!diagnosis) return reply.code(404).send({ code: 'DIAGNOSIS_NOT_FOUND', message: 'Diagnóstico no encontrado.', fields: {} })
+  const { problem, etiology, evidence } = request.body || {}
+  if (problem !== undefined && !problem) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El problema no puede quedar vacío.', fields: { problem: true } })
+  const updated = await prisma.diagnosis.update({
+    where: { id: diagnosis.id },
+    data: {
+      ...(problem !== undefined ? { problem } : {}),
+      ...(etiology !== undefined ? { etiology } : {}),
+      ...(evidence !== undefined ? { evidence } : {}),
+    },
+  })
+  return updated
+})
+
+app.delete('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async (request, reply) => {
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const diagnosis = await prisma.diagnosis.findFirst({ where: { id: request.params.diagnosisId, consultationId: consultation.id } })
+  if (!diagnosis) return reply.code(404).send({ code: 'DIAGNOSIS_NOT_FOUND', message: 'Diagnóstico no encontrado.', fields: {} })
+  await prisma.diagnosis.delete({ where: { id: diagnosis.id } })
+  return reply.code(204).send()
+})
+
 app.get('/api/v1/appointments', async (request) => {
   const { from, to } = request.query
   const appointments = await prisma.appointment.findMany({ where: { practiceId: request.practiceId, startAt: { gte: new Date(from), lte: new Date(to) } }, include: { patient: true }, orderBy: { startAt: 'asc' } })

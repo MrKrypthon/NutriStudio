@@ -104,6 +104,9 @@ export const clinicalApi = {
   saveSection: (consultationId, sectionKey, payload, updatedAt) => apiRequest(`/consultations/${consultationId}/sections/${sectionKey}`, { method: 'PUT', body: JSON.stringify({ payload, updatedAt }) }),
   complete: (id) => apiRequest(`/consultations/${id}/complete`, { method: 'POST' }),
   registerMeasurement: (consultationId, payload) => apiRequest(`/consultations/${consultationId}/measurements`, { method: 'POST', body: JSON.stringify(payload) }),
+  addDiagnosis: (consultationId, payload) => apiRequest(`/consultations/${consultationId}/diagnoses`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateDiagnosis: (consultationId, diagnosisId, payload) => apiRequest(`/consultations/${consultationId}/diagnoses/${diagnosisId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  removeDiagnosis: (consultationId, diagnosisId) => apiRequest(`/consultations/${consultationId}/diagnoses/${diagnosisId}`, { method: 'DELETE' }),
 }
 
 export const templatesApi = {

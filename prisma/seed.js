@@ -65,7 +65,7 @@ async function main() {
     { consultationId: consultation.id, sectionKey: 'treatment', lastSavedBy: nutritionist.id, completionState: 'in_progress', payload: { recommendations: ['Aumentar agua', 'Incluir fibra', 'Caminar 30 minutos'] } },
   ] })
   await prisma.measurement.create({ data: { patientId: patients[0].id, consultationId: consultation.id, measuredAt: new Date(`${day}T09:15:00.000Z`), weightKg: 72.4, heightCm: 165, waistCm: 84, hipCm: 103, bodyFatPercent: 31.2, method: 'Bioimpedancia' } })
-  await prisma.diagnosis.create({ data: { consultationId: consultation.id, domain: 'INGESTION', code: 'NI-1.5', problem: 'Ingesta energética excesiva', etiology: 'Patrón de comidas irregular', evidence: 'IMC 26.6 y recordatorio de 24 horas' } })
+  await prisma.diagnosis.create({ data: { consultationId: consultation.id, domain: 'INGESTIÓN', code: 'NI-1.5', problem: 'Ingesta energética excesiva', etiology: 'Patrón de comidas irregular', evidence: 'IMC 26.6 y recordatorio de 24 horas' } })
   await prisma.recipe.deleteMany({ where: { practiceId: practice.id } })
   await prisma.recipe.createMany({ data: [
     { practiceId: practice.id, name: 'Avena cocida con manzana', mealTypes: ['breakfast'], portions: 1, nutrition: { kcal: 204, carbs: 29.1, protein: 7.4, fat: 7.2, fiber: 6.3 }, restrictions: [], instructions: 'Cocinar la avena y servir con manzana.' },
