@@ -40,15 +40,18 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
   const [editError, setEditError] = useState('')
   const [timeline, setTimeline] = useState([])
   const [timelineState, setTimelineState] = useState('idle')
+  const [statusFilter, setStatusFilter] = useState('ACTIVE')
+  const [archiveState, setArchiveState] = useState('idle')
 
   useEffect(() => {
-    patientsApi.list('?status=ACTIVE')
+    setStatus('loading')
+    patientsApi.list(`?status=${statusFilter}`)
       .then((payload) => {
-        if (payload?.items?.length) setRows(payload.items.map((p, i) => [p.firstName.slice(0, 1) + p.lastName.slice(0, 1), `${p.firstName} ${p.lastName}`, `${p.sex || 'Paciente'}`, 'Sin cita', 'Paciente activo', ['coral', 'blue', 'purple', 'yellow'][i % 4], p.id, p]))
+        setRows(payload?.items?.length ? payload.items.map((p, i) => [p.firstName.slice(0, 1) + p.lastName.slice(0, 1), `${p.firstName} ${p.lastName}`, `${p.sex || 'Paciente'}`, 'Sin cita', p.status === 'ARCHIVED' ? 'Archivado' : 'Paciente activo', ['coral', 'blue', 'purple', 'yellow'][i % 4], p.id, p]) : [])
         setStatus('online')
       })
       .catch(() => setStatus('demo'))
-  }, [])
+  }, [statusFilter])
 
   useEffect(() => {
     if (!selected?.[6]) { setTimeline([]); setTimelineState('idle'); return }
@@ -65,6 +68,20 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
   const closeDrawer = () => { setSelected(null); setEditing(false) }
   const startEdit = () => { setEditForm(emptyEditForm(selected[7])); setEditState('idle'); setEditError(''); setEditing(true) }
   const updateField = (key, value) => setEditForm((prev) => ({ ...prev, [key]: value }))
+
+  const toggleArchive = async () => {
+    if (!selected?.[6]) return
+    const nextStatus = selected[7]?.status === 'ARCHIVED' ? 'ACTIVE' : 'ARCHIVED'
+    setArchiveState('saving')
+    try {
+      await patientsApi.update(selected[6], { status: nextStatus })
+      setRows((prev) => prev.filter((row) => row[6] !== selected[6]))
+      setSelected(null)
+      setArchiveState('idle')
+    } catch {
+      setArchiveState('error')
+    }
+  }
 
   const saveEdit = async (event) => {
     event.preventDefault()
@@ -84,12 +101,12 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
 
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content">
     <ModuleHeader eyebrow="TU ESPACIO · 24 ACTIVOS" title="Pacientes" subtitle="Conoce el progreso y el contexto de cada persona." action={<div className="module-actions"><span className={'sync-label ' + status}>● {status === 'online' ? 'Sincronizados' : 'Datos de demostración'}</span><button className="primary"><span>+</span> Nuevo paciente</button></div>} />
-    <div className="filter-bar panel"><div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o email..." /></div><select><option>Todos los estados</option><option>Activos</option></select><button className="filter-button">≡ Filtros</button></div>
+    <div className="filter-bar panel"><div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o email..." /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="ACTIVE">Activos</option><option value="ARCHIVED">Archivados</option></select></div>
     <div className="table-panel panel">
       <div className="table-meta">Mostrando <b>{visible.length} pacientes</b><button>Ordenar por: <b>Más recientes⌄</b></button></div>
       <div className="patient-table">
         <div className="table-head"><span>Paciente</span><span>Última consulta</span><span>Próxima cita</span><span>Estado</span><span /></div>
-        {visible.map((p, i) => <div className="patient-row" key={p[1]} onClick={() => openPatient(p)}><div className="patient-name"><span className={'person-avatar ' + p[5]}>{p[0]}</span><div><b>{p[1]}</b><small>{p[2]}</small></div></div><span className="muted">{i < 2 ? '18 ago, 2026' : '—'}</span><span><b className="appointment-date">{p[3]}</b><small className="muted">{p[4]}</small></span><span className="status confirmed">Activo</span><span className="row-arrow">→</span></div>)}
+        {visible.map((p, i) => <div className="patient-row" key={p[1]} onClick={() => openPatient(p)}><div className="patient-name"><span className={'person-avatar ' + p[5]}>{p[0]}</span><div><b>{p[1]}</b><small>{p[2]}</small></div></div><span className="muted">{i < 2 ? '18 ago, 2026' : '—'}</span><span><b className="appointment-date">{p[3]}</b><small className="muted">{p[4]}</small></span><span className={p[7]?.status === 'ARCHIVED' ? 'status pending' : 'status confirmed'}>{p[7]?.status === 'ARCHIVED' ? 'Archivado' : 'Activo'}</span><span className="row-arrow">→</span></div>)}
       </div>
     </div>
   </div>
@@ -107,6 +124,8 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
         <button className="secondary" disabled={!selected[6]} onClick={() => goTo('Plan nutricional')}>Ir al plan</button>
       </div>
       {selected[6] && <button className="link-button" onClick={startEdit}>Editar datos del paciente →</button>}
+      {selected[6] && <button className="link-button" disabled={archiveState === 'saving'} onClick={toggleArchive}>{archiveState === 'saving' ? 'Guardando…' : selected[7]?.status === 'ARCHIVED' ? 'Reactivar paciente →' : 'Archivar paciente →'}</button>}
+      {archiveState === 'error' && <div className="form-error">⚠ No se pudo actualizar el estado del paciente.</div>}
     </> : <form onSubmit={saveEdit}>
       <h2>Editar paciente</h2>
       <div className="form-grid">
