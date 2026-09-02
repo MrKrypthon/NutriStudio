@@ -9,6 +9,13 @@ const SECTION_KEYS = { Resumen: 'summary', General: 'general', Antropométrico: 
 const TRANSCRIPT_FIELD = 'Transcripción de la consulta'
 const SAVE_LABELS = { idle: '● Guardado', editing: '● Editando…', saving: '● Guardando…', saved: '● Guardado', error: '⚠ Error al guardar', conflict: '⚠ Se editó en otra sesión, recarga para ver el cambio' }
 
+const DIAGNOSIS_DOMAINS = [
+  ['INGESTIÓN', 'Problemas relacionados con ingesta, nutrientes y sustancias bioactivas.', 'mint'],
+  ['CLÍNICOS', 'Hallazgos relacionados con condiciones físicas o médicas.', 'yellow'],
+  ['CONDUCTUALES-AMBIENTALES', 'Conocimiento, actitudes y factores del entorno.', 'blue'],
+  ['OTROS', 'Diagnósticos fuera de los dominios anteriores.', 'purple'],
+]
+
 const FAMILY_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'HTA', 'Dislipidemias', 'Nefropatías', 'Cáncer', 'Enf. cerebrovasculares', 'Otros']
 const RELATIVES = ['Mamá/Papá', 'Abuelos', 'Tíos']
 const SYMPTOMS = ['Diarrea', 'Estreñimiento', 'Náusea', 'Úlcera', 'Pirosis', 'Ceguera nocturna', 'Vómito', 'Gastritis', 'Poliuria', 'Polidipsia', 'Polifagia']
@@ -124,6 +131,9 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
   const [sections, setSections] = useState({})
   const [saveState, setSaveState] = useState('idle')
   const [measurementState, setMeasurementState] = useState('idle')
+  const [diagnoses, setDiagnoses] = useState([])
+  const [diagnosisForm, setDiagnosisForm] = useState(null)
+  const [diagnosisSaveState, setDiagnosisSaveState] = useState('idle')
   const [report, setReport] = useState(null)
   const [reportState, setReportState] = useState('idle')
   const saveTimer = useRef(null)
@@ -145,6 +155,7 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
         const bySectionKey = {}
         for (const section of full.sections || []) bySectionKey[section.sectionKey] = section
         setSections(bySectionKey)
+        setDiagnoses(full.diagnoses || [])
         setLoadState('ready')
       } catch {
         if (!cancelled) setLoadState('error')
@@ -211,6 +222,31 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
     } catch {
       setMeasurementState('error')
     }
+  }
+
+  const openDiagnosisForm = (domain) => { setDiagnosisSaveState('idle'); setDiagnosisForm({ domain, problem: '', etiology: '', evidence: '' }) }
+  const closeDiagnosisForm = () => setDiagnosisForm(null)
+  const updateDiagnosisForm = (key, value) => setDiagnosisForm((prev) => ({ ...prev, [key]: value }))
+
+  const saveDiagnosis = async () => {
+    if (!consultation || !diagnosisForm?.problem) return
+    setDiagnosisSaveState('saving')
+    try {
+      const created = await clinicalApi.addDiagnosis(consultation.id, diagnosisForm)
+      setDiagnoses((prev) => [...prev, created])
+      setDiagnosisForm(null)
+      setDiagnosisSaveState('idle')
+    } catch {
+      setDiagnosisSaveState('error')
+    }
+  }
+
+  const removeDiagnosis = async (id) => {
+    if (!consultation) return
+    try {
+      await clinicalApi.removeDiagnosis(consultation.id, id)
+      setDiagnoses((prev) => prev.filter((d) => d.id !== id))
+    } catch { /* leave it in the list; the professional can retry */ }
   }
 
   const generateReport = async () => {
@@ -282,9 +318,26 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
       </div>
 
       : tab === 'Diagnóstico' ? <div className="panel diagnosis-panel">
-        <div className="section-heading"><div><p className="eyebrow">SECCIÓN 9 DE 13 · TND</p><h1>Diagnóstico nutricio</h1><p className="subtitle">Selecciona uno o más diagnósticos por dominio.</p></div><button className="secondary">Buscar diagnóstico</button></div>
-        <div className="diagnosis-domains">{[['INGESTIÓN', 'Problemas relacionados con ingesta, nutrientes y sustancias bioactivas.', 'mint'], ['CLÍNICOS', 'Hallazgos relacionados con condiciones físicas o médicas.', 'yellow'], ['CONDUCTUALES-AMBIENTALES', 'Conocimiento, actitudes y factores del entorno.', 'blue'], ['OTROS', 'Diagnósticos fuera de los dominios anteriores.', 'purple']].map(([title, desc, color]) => <div className={'domain-card ' + color} key={title}><span>◉</span><b>{title}</b><small>{desc}</small><strong>0 seleccionados</strong></div>)}</div>
-        <div className="diagnosis-selected"><p className="eyebrow">DIAGNÓSTICOS SELECCIONADOS</p><p className="muted">Todavía no hay diagnósticos registrados para esta consulta.</p><label>Notas y evidencia<textarea placeholder="Añade la evidencia que sustenta el diagnóstico..." /></label></div>
+        <div className="section-heading"><div><p className="eyebrow">SECCIÓN 9 DE 13 · TND</p><h1>Diagnóstico nutricio</h1><p className="subtitle">Registra uno o más diagnósticos por dominio, en formato PES (problema, etiología, evidencia).</p></div><button className="secondary" onClick={() => openDiagnosisForm(DIAGNOSIS_DOMAINS[0][0])}>+ Nuevo diagnóstico</button></div>
+        <div className="diagnosis-domains">{DIAGNOSIS_DOMAINS.map(([title, desc, color]) => <div className={'domain-card ' + color} key={title} onClick={() => openDiagnosisForm(title)} style={{ cursor: 'pointer' }}><span>◉</span><b>{title}</b><small>{desc}</small><strong>{diagnoses.filter((d) => d.domain === title).length} seleccionados</strong></div>)}</div>
+
+        {diagnosisForm && <div className="diagnosis-form panel">
+          <p className="eyebrow">NUEVO DIAGNÓSTICO · {diagnosisForm.domain}</p>
+          <label>Problema<input value={diagnosisForm.problem} onChange={(e) => updateDiagnosisForm('problem', e.target.value)} placeholder="Ej. Ingesta excesiva de energía" /></label>
+          <label>Etiología (relacionado con…)<textarea value={diagnosisForm.etiology} onChange={(e) => updateDiagnosisForm('etiology', e.target.value)} placeholder="Causa o factores contribuyentes..." /></label>
+          <label>Evidencia (evidenciado por…)<textarea value={diagnosisForm.evidence} onChange={(e) => updateDiagnosisForm('evidence', e.target.value)} placeholder="Signos, síntomas o datos que lo sustentan..." /></label>
+          {diagnosisSaveState === 'error' && <div className="form-error">⚠ No se pudo guardar el diagnóstico.</div>}
+          <div className="modal-actions"><button type="button" className="secondary" onClick={closeDiagnosisForm}>Cancelar</button><button className="primary" disabled={!diagnosisForm.problem || diagnosisSaveState === 'saving'} onClick={saveDiagnosis}>{diagnosisSaveState === 'saving' ? 'Guardando…' : 'Guardar diagnóstico'}</button></div>
+        </div>}
+
+        <div className="diagnosis-selected">
+          <p className="eyebrow">DIAGNÓSTICOS SELECCIONADOS</p>
+          {!diagnoses.length && <p className="muted">Todavía no hay diagnósticos registrados para esta consulta.</p>}
+          {diagnoses.map((d) => <div className="diagnosis-entry" key={d.id}>
+            <div><b>{d.domain}</b><span>{d.problem}</span>{d.etiology && <small>Relacionado con: {d.etiology}</small>}{d.evidence && <small>Evidenciado por: {d.evidence}</small>}</div>
+            <button type="button" className="link-button" onClick={() => removeDiagnosis(d.id)}>Quitar</button>
+          </div>)}
+        </div>
       </div>
 
       : tab === 'General' ? <div className="panel generic-section">
