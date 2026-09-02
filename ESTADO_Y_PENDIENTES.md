@@ -2,9 +2,9 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 2 de septiembre de 2026 (fase 37).
+Última verificación contra código real (no contra specs): 2 de septiembre de 2026 (fase 38).
 
-**Nota de sincronización:** las fases 13 a 36 ya están mergeadas en `main`. Nada pendiente de mergear al cierre de fase 37.
+**Nota de sincronización:** las fases 13 a 37 ya están mergeadas en `main`. Nada pendiente de mergear al cierre de fase 38.
 
 ## Iniciar sesión en local
 
@@ -109,6 +109,14 @@ La usuaria pidió adaptar el diseño de la app a una plantilla que descargó: `d
 **Límite conocido:** el audit en vivo solo visitó las pantallas y pestañas listadas arriba — modales o vistas no visitadas en esta pasada (ej. "Nueva cita", "Nuevo paciente", detalle de un ingrediente o receta específica, vista previa de un material educativo) pueden tener sus propios verdes sueltos sin descubrir todavía. Si aparece alguno, el mismo script (`audit-green.js`, en el scratchpad de esta sesión — no se guardó en el repo) se puede adaptar para visitarlos.
 
 **Fase 37 — hecho: primer cambio estructural real (no solo color), en "Hoy".** Comparado contra la captura real del dashboard de Datta Able, la diferencia más aprovechable no era decorativa: la plantilla siempre destaca UNA métrica con una tarjeta de color sólido (morado, texto blanco) entre varias iguales, para crear jerarquía visual — algo que "Hoy" no tenía (sus 4 tarjetas de estadística se veían todas idénticas). Se le dio ese tratamiento a "Citas de hoy" (la métrica más accionable del día para la nutrióloga) vía una clase `.stat-card.featured` nueva, reutilizando el token `var(--green)` (ya morado desde fase 34) — ninguna dependencia nueva. Deliberadamente **no** se copiaron los gráficos de ventas/dona de la referencia: son contenido de ejemplo de un dashboard de e-commerce sin equivalente real en los datos de la app (no hay ninguna métrica de tendencia/analítica construida todavía), y agregar un gráfico con datos inventados habría contradicho la filosofía de "funcionalidad primero" de esta sesión.
+
+**Fase 38 — hecho: primer refinamiento página por página, en "Pacientes".** Con el chrome y el recolor global ya cerrados (fases 34-36), tocó empezar a revisar pantalla por pantalla contra la referencia real. En la tabla de Pacientes se corrigieron 4 detalles menores encontrados al comparar contra `_table.scss` de la plantilla y contra el resto de `globals.css` ya migrado:
+- `.patient-row:hover` pasó de un gris verdoso plano (`#f8fcf9`) a `color-mix(in srgb, var(--green) 4%, #fff)` — Datta Able tiñe el hover de fila con un 3% del color primario (`transparentize($primary, .97)`), no con gris; usar `color-mix` sobre la variable ya existente significa que si la marca cambia de nuevo, el hover se ajusta solo, igual que ya pasa con otros usos de `color-mix` en el archivo.
+- `.table-head` (encabezado de la tabla) pasó de `#fafcf9` a `#fafafc`, quitándole el matiz verde que se le había colado al fondo neutro.
+- `.filter-button` (texto del botón de filtro) se rotó de `#537269` a `#575372` con la misma rotación de matiz de fase 36, ya que se había quedado fuera de aquel barrido.
+- `.patient-drawer` (sombra del cajón de detalle) pasó de un tinte verde (`#143a2a1f`) a un tinte del `--ink` de la plantilla (`#1c232f1f`), consistente con las sombras ya migradas en fase 35.
+
+Verificado con Playwright contra una instancia aislada: captura de la tabla con hover activo y captura del cajón de detalle abierto, sin errores de consola ni de red.
 
 **Pendiente (fases futuras, no empezadas):** rehacer el markup de cada pantalla para usar componentes al estilo Datta Able (cards, tablas, formularios) — esto sí requeriría decidir si se adopta Bootstrap/react-bootstrap de verdad (con el cuidado de que su CSS no se filtre a pantallas no migradas) o si se sigue extrayendo el estilo a mano como en fases 34/35/36. También pendiente: decidir si se migra el enrutamiento casero (`active`/`setActive` en `App.jsx`) a `react-router-dom` real — la plantilla lo usa, pero estas fases deliberadamente no lo tocaron para mantener el cambio acotado. Nota práctica para cuando se necesite comparar contra la plantilla real de nuevo: `cd datta-able-free-react-admin-template/react && npm install && npx vite --port <puerto>`, sirve en `/react/free/...` (revisar `src/routes/` de la plantilla para las rutas exactas de cada vista de ejemplo).
 
