@@ -118,7 +118,15 @@ export const documentsApi = {
   createForReport: (consultationId) => apiRequest('/documents/consultation-report', { method: 'POST', body: JSON.stringify({ consultationId }) }),
   generate: (id) => apiRequest(`/documents/${id}/generate`, { method: 'POST' }),
   deliver: (id) => apiRequest(`/documents/${id}/deliver`, { method: 'POST' }),
-  downloadUrl: (id) => `${import.meta.env.VITE_API_URL || ''}/documents/${id}/download`,
+  // A plain <a href> click can't carry the Authorization header the download route requires
+  // (every /api/v1/* route needs a session) — fetch it as an authenticated request instead and
+  // hand back a Blob the caller can wrap in an object URL to trigger the actual download.
+  downloadBlob: async (id) => {
+    const token = getToken()
+    const response = await fetch(`${API_BASE}/documents/${id}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!response.ok) throw Object.assign(new Error('No se pudo descargar el documento.'), { code: 'DOWNLOAD_FAILED' })
+    return response.blob()
+  },
 }
 
 export const tasksApi = {

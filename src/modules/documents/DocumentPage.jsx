@@ -75,12 +75,19 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
     }
   }
 
-  const downloadPdf = () => {
+  const downloadPdf = async () => {
     if (!document?.storageKey) return
-    const link = window.document.createElement('a')
-    link.href = documentsApi.downloadUrl(document.id)
-    link.download = document.storageKey
-    link.click()
+    try {
+      const blob = await documentsApi.downloadBlob(document.id)
+      const url = URL.createObjectURL(blob)
+      const link = window.document.createElement('a')
+      link.href = url
+      link.download = document.storageKey
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err.message || 'No se pudo descargar el PDF.')
+    }
   }
 
   const markDelivered = async () => {
