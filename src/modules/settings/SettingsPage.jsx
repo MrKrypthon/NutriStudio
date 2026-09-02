@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
-import ThemePicker from '../../components/ThemePicker.jsx'
 import { practiceApi } from '../../lib/api.js'
 
 const TIME_ZONE_OPTIONS = [
@@ -60,8 +59,7 @@ export default function SettingsPage({ setActive }) {
           </div>
         </div>
         <div className="panel settings-card">
-          <div><h2>Identidad visual</h2><p>Elige los colores que se usarán en la aplicación y en tus documentos.</p></div>
-          <div className="settings-theme-row"><div><b>Apariencia de la aplicación</b><small>La paleta predeterminada es minimalista y de bajo contraste.</small></div><ThemePicker /></div>
+          <div><h2>Identidad visual</h2><p>El logo se incluirá en informes y planes nutricionales.</p></div>
           <div className="logo-row"><div className="brand-mark">N</div><div><b>Logo de la práctica</b><small>Se incluirá en informes y planes nutricionales.</small></div><button className="secondary">Cambiar logo</button></div>
         </div>
         <div className="panel settings-card">

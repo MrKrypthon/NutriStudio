@@ -4,6 +4,8 @@ storage/documents/*.pdf
 .env
 *.local
 DIETOCALCULO.xlsx
+datta-able-free-react-admin-template/
+dashboardkit-free-admin-template-v3.2.0.zip
 .DS_Store
 npm-debug.log*
 .claude/
