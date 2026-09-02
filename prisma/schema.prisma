@@ -225,6 +225,8 @@ model NutritionPlan {
   fatPercent       Decimal?      @db.Decimal(5, 2)
   evaluation       Json?
   menuSnapshot     Json?
+  hydrationNote    String?
+  recommendations  String?
   publishedAt      DateTime?
   mealSlots        MealSlot[]
   documents        Document[]

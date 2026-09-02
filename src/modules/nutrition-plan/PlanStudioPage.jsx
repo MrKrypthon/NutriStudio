@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import DocumentPage from '../documents/DocumentPage.jsx'
-import { nutritionApi, patientsApi, plansApi, recipesApi } from '../../lib/api.js'
+import { clinicalApi, nutritionApi, patientsApi, plansApi, recipesApi } from '../../lib/api.js'
 import { usePatient } from '../../lib/usePatient.js'
 
 const DEFAULT_MACROS = { carbsPercent: 50, proteinPercent: 25, fatPercent: 25 }
@@ -35,13 +35,14 @@ const DAYS = [
 const RECIPE_COLORS = ['coral', 'blue', 'yellow', 'purple']
 const slotKey = (day, mealType) => `${day}:${mealType}`
 
-export default function PlanStudioPage({ setActive, patientId }) {
+export default function PlanStudioPage({ setActive, patientId, onSelectPatient }) {
   const { patient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
   const [step, setStep] = useState(0)
   const steps = ['Evaluación', 'Plan alimentario', 'Distribución', 'Semana', 'Entrega']
 
+  const [patients, setPatients] = useState([])
   const [loadState, setLoadState] = useState('loading')
   const [plan, setPlan] = useState(null)
   const [recipes, setRecipes] = useState([])
@@ -57,6 +58,12 @@ export default function PlanStudioPage({ setActive, patientId }) {
   const [calcError, setCalcError] = useState('')
   const [evalSaveState, setEvalSaveState] = useState('idle')
   const [evalSaveError, setEvalSaveError] = useState('')
+  const [createPlanState, setCreatePlanState] = useState('idle')
+  const [notesForm, setNotesForm] = useState({ hydrationNote: '', recommendations: '' })
+  const [notesSaveState, setNotesSaveState] = useState('idle')
+  const notesSaveTimer = useRef(null)
+
+  useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   useEffect(() => {
     if (!patient) return
@@ -66,6 +73,7 @@ export default function PlanStudioPage({ setActive, patientId }) {
   useEffect(() => {
     if (!plan) return
     setForm((prev) => ({ ...prev, goal: plan.goal || prev.goal }))
+    setNotesForm({ hydrationNote: plan.hydrationNote || '', recommendations: plan.recommendations || '' })
   }, [plan?.id])
 
   useEffect(() => {
@@ -119,6 +127,40 @@ export default function PlanStudioPage({ setActive, patientId }) {
     } catch (error) {
       setEvalSaveState('error')
       setEvalSaveError(error.message || 'No se pudo guardar el plan.')
+    }
+  }
+
+  const updateNotes = (key, value) => {
+    const next = { ...notesForm, [key]: value }
+    setNotesForm(next)
+    if (!plan) return
+    setNotesSaveState('editing')
+    clearTimeout(notesSaveTimer.current)
+    notesSaveTimer.current = setTimeout(async () => {
+      setNotesSaveState('saving')
+      try {
+        const updated = await plansApi.update(plan.id, next)
+        setPlan(updated)
+        setNotesSaveState('saved')
+      } catch {
+        setNotesSaveState('error')
+      }
+    }, 800)
+  }
+
+  const createPlan = async () => {
+    if (!patientId) return
+    setCreatePlanState('creating')
+    try {
+      const consultationsResponse = await patientsApi.consultations(patientId)
+      let consultation = (consultationsResponse.items || []).find((item) => item.status === 'IN_PROGRESS')
+      if (!consultation) consultation = await clinicalApi.create(patientId, {})
+      const created = await plansApi.create(patientId, { consultationId: consultation.id })
+      setPlan(created)
+      setSlots({})
+      setCreatePlanState('idle')
+    } catch {
+      setCreatePlanState('error')
     }
   }
 
@@ -182,7 +224,7 @@ export default function PlanStudioPage({ setActive, patientId }) {
 
   const meals = MEAL_TYPES.map((m) => m.label)
 
-  return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← {patientName}</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>Plan nutricional</h2><span>Borrador · Se guarda automáticamente</span></div></div><button className="primary">Guardar borrador</button></div><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => setStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
+  return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Borrador · Se guarda automáticamente</span></div></div><label className="patient-switch">Paciente<select value={patientId || ''} onChange={(e) => onSelectPatient?.(e.target.value)}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => setStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
 
     {step === 0 && <><ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="Resumen del expediente y del último cálculo guardado en el paso Plan alimentario." action={<button className="secondary" onClick={() => setStep(1)}>Ir al cálculo →</button>} /><div className="plan-grid"><div className="plan-card panel"><h3>Datos antropométricos</h3><div className="form-grid three"><label>Sexo<input value={patient?.sex || '—'} readOnly /></label><label>Fecha nacimiento<input value={formatUTCDate(patient?.birthDate) || '—'} readOnly /></label><label>Edad<input value={computeAge(patient?.birthDate) ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label><label>Peso actual<input value={plan?.evaluation?.inputs?.weightKg ? `${plan.evaluation.inputs.weightKg} kg` : '—'} readOnly /></label><label>Talla<input value={plan?.evaluation?.inputs?.heightCm ? `${plan.evaluation.inputs.heightCm} cm` : '—'} readOnly /></label><label>IMC calculado<input value={plan?.evaluation?.bmi ?? '—'} readOnly /></label></div></div><div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3>{plan?.evaluation?.idealWeightRange ? <div className="ideal-number">{plan.evaluation.idealWeightRange.minKg} <small>– {plan.evaluation.idealWeightRange.maxKg} kg</small></div> : <p className="muted">Calcula el requerimiento en el paso "Plan alimentario" para ver el rango.</p>}<p className="muted">Rango estimado para su estatura</p></div><div className="plan-card panel full"><h3>Objetivo terapéutico</h3>{plan?.goal ? <p>{plan.goal}</p> : <p className="muted">Sin definir todavía — se guarda junto con el cálculo en el paso "Plan alimentario".</p>}</div></div></>}
 
@@ -192,7 +234,7 @@ export default function PlanStudioPage({ setActive, patientId }) {
       <ModuleHeader eyebrow="PLAN ALIMENTARIO · DISTRIBUCIÓN" title="Distribuye por tiempos" subtitle="Elige la receta base de cada tiempo de comida para toda la semana; luego ajusta día por día en el paso Semana." action={<span className={'sync-label ' + (saveState === 'saving' ? 'loading' : saveState === 'error' ? 'demo' : 'online')}>{saveState === 'saving' ? '● Guardando…' : saveState === 'error' ? '● Error al guardar' : plan ? '● Sincronizado' : '● Sin plan en borrador'}</span>} />
       {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando plan y recetas…</h3></div>}
       {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar el plan o el catálogo de recetas.</div>}
-      {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea una consulta y un plan para esta paciente antes de distribuir recetas.</p></div>}
+      {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea un plan para {patientName} antes de distribuir recetas.</p><button className="primary" disabled={createPlanState === 'creating'} onClick={createPlan}>{createPlanState === 'creating' ? 'Creando…' : 'Crear plan'}</button>{createPlanState === 'error' && <div className="form-error">⚠ No se pudo crear el plan.</div>}</div>}
       {loadState === 'ready' && plan && <div className="distribution panel">
         <div className="distribution-head"><span>Tiempo de comida</span>{meals.map((x) => <b key={x}>{x}</b>)}</div>
         <div className="distribution-row"><span>Receta base de la semana</span>{MEAL_TYPES.map((meal) => { const sample = recipeById(slots[slotKey(1, meal.key)]); return <button key={meal.key} type="button" className="text-button" onClick={() => openPicker(meal.key)}>{sample ? sample.name : '+ Elegir receta'}</button> })}</div>
@@ -208,7 +250,7 @@ export default function PlanStudioPage({ setActive, patientId }) {
         <div className="week-head"><span>Tiempo</span>{DAYS.map((d) => <b key={d.n}>{d.label}</b>)}</div>
         {MEAL_TYPES.map((meal) => <div className="week-row" key={meal.key}><span>{meal.label}</span>{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <div className="week-meal" key={day.n} onClick={() => openPicker(meal.key, day.n)} style={{ cursor: 'pointer' }}>{recipe ? <><div className="week-image coral">✦</div><small>{recipe.name}</small></> : <small className="muted">+ Elegir</small>}{recipe && <button type="button" className="link-button" onClick={(e) => { e.stopPropagation(); clearSlot(meal.key, day.n) }}>Quitar</button>}</div> })}</div>)}
       </div>}
-      {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea una consulta y un plan para esta paciente antes de armar la semana.</p></div>}
+      {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea un plan para {patientName} antes de armar la semana.</p><button className="primary" disabled={createPlanState === 'creating'} onClick={createPlan}>{createPlanState === 'creating' ? 'Creando…' : 'Crear plan'}</button>{createPlanState === 'error' && <div className="form-error">⚠ No se pudo crear el plan.</div>}</div>}
       {loadState === 'ready' && plan && <div className="panel adequacy-panel">
         <h3>% Adecuación de micronutrientes</h3>
         {adequacyState === 'loading' && <p className="muted">Calculando…</p>}
@@ -225,7 +267,7 @@ export default function PlanStudioPage({ setActive, patientId }) {
           </div>)}</div>
         </>}
       </div>}
-      <div className="recommendations panel"><h3>Indicaciones para {patientName}</h3><div className="form-grid"><label>Consumo de agua<textarea defaultValue="8 vasos (2 L) al día" /></label><label>Recomendaciones generales<textarea placeholder="Añade recomendaciones, educación o suplementos..." /></label></div></div>
+      <div className="recommendations panel"><h3>Indicaciones para {patientName}</h3><span className="saved">{notesSaveState === 'saving' ? '● Guardando…' : notesSaveState === 'editing' ? '● Editando…' : notesSaveState === 'error' ? '⚠ Error al guardar' : '● Guardado'}</span><div className="form-grid"><label>Consumo de agua<textarea placeholder="Ej. 8 vasos (2 L) al día" value={notesForm.hydrationNote} onChange={(e) => updateNotes('hydrationNote', e.target.value)} disabled={!plan} /></label><label>Recomendaciones generales<textarea placeholder="Añade recomendaciones, educación o suplementos..." value={notesForm.recommendations} onChange={(e) => updateNotes('recommendations', e.target.value)} disabled={!plan} /></label></div>{!plan && <p className="muted">Crea el plan (paso "Distribución") para poder guardar estas indicaciones.</p>}</div>
       {pickerTarget && <div className="recipe-overlay"><div className="recipe-modal panel"><div className="modal-head"><div><p className="eyebrow">RECETAS PARA {MEAL_TYPES.find((m) => m.key === pickerTarget.mealType)?.label.toUpperCase()}{pickerTarget.day ? ` · ${DAYS.find((d) => d.n === pickerTarget.day)?.label}` : ''}</p><h2>Elige una preparación</h2></div><button onClick={() => setPickerTarget(null)}>×</button></div><div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div><div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas del catálogo para este tiempo de comida.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => chooseRecipe(recipe)} key={recipe.id}><div className={'recipe-image ' + RECIPE_COLORS[i % RECIPE_COLORS.length]}><span>✦</span></div><b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal</small></button>)}</div></div></div>}
     </>}
 

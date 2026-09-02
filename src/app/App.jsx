@@ -55,7 +55,7 @@ export default function App() {
   if (active === 'Configuración') return <SettingsPage setActive={setActive} />
   if (active === 'Importar alimentos') return <ImportFoodsPage setActive={setActive} />
   if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} />
-  if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} patientId={selectedPatientId} />
+  if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} />
   if (active === 'Documento') return <DocumentPage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
   if (active === 'Seguimientos') return <FollowupsPage setActive={setActive} />

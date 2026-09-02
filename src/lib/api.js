@@ -91,6 +91,7 @@ export const nutritionApi = {
 export const plansApi = {
   create: (patientId, payload) => apiRequest(`/patients/${patientId}/plans`, { method: 'POST', body: JSON.stringify(payload) }),
   get: (id) => apiRequest(`/plans/${id}`),
+  update: (id, payload) => apiRequest(`/plans/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   evaluate: (id, payload) => apiRequest(`/plans/${id}/evaluation`, { method: 'PUT', body: JSON.stringify(payload) }),
   saveDistribution: (id, mealSlots) => apiRequest(`/plans/${id}/distribution`, { method: 'PUT', body: JSON.stringify({ mealSlots }) }),
   publish: (id) => apiRequest(`/plans/${id}/publish`, { method: 'POST' }),
