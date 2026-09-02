@@ -134,6 +134,7 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
   const [diagnoses, setDiagnoses] = useState([])
   const [diagnosisForm, setDiagnosisForm] = useState(null)
   const [diagnosisSaveState, setDiagnosisSaveState] = useState('idle')
+  const [labForm, setLabForm] = useState(null)
   const [report, setReport] = useState(null)
   const [reportState, setReportState] = useState('idle')
   const saveTimer = useRef(null)
@@ -249,6 +250,17 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
     } catch { /* leave it in the list; the professional can retry */ }
   }
 
+  const labs = currentValues['Estudios'] || []
+  const openLabForm = () => setLabForm({ name: '', value: '', unit: '', range: '', status: 'Normal' })
+  const closeLabForm = () => setLabForm(null)
+  const updateLabForm = (key, value) => setLabForm((prev) => ({ ...prev, [key]: value }))
+  const saveLab = () => {
+    if (!labForm?.name || !labForm?.value) return
+    updateField('Estudios', [...labs, { ...labForm, id: `${Date.now()}` }])
+    setLabForm(null)
+  }
+  const removeLab = (id) => updateField('Estudios', labs.filter((lab) => lab.id !== id))
+
   const generateReport = async () => {
     if (!consultation) return
     if (report?.storageKey) {
@@ -310,11 +322,22 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
 
       : tab === 'Bioquímico' ? <div className="clinical-layout">
         <section className="record-main panel">
-          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 4 DE 13</p><h1>Bioquímico</h1><p className="subtitle">Registra estudios y marca hallazgos para el abordaje.</p></div><button className="primary">+ Agregar estudio</button></div>
-          <div className="lab-empty"><span>▧</span><b>Sin estudios adjuntos</b><small>Sube un archivo o registra los resultados manualmente.</small><button className="secondary">Subir laboratorio</button></div>
-          <div className="lab-list">{[['Glucosa', 'mg/dL', '92', 'Normal', 'confirmed'], ['HbA1c', '%', '5.4', 'Normal', 'confirmed'], ['Colesterol total', 'mg/dL', '218', 'Elevado', 'pending'], ['Triglicéridos', 'mg/dL', '148', 'Normal', 'confirmed'], ['TSH', 'µUI/mL', '—', 'Pendiente', 'pending']].map(([name, unit, value, state, color]) => <div className="lab-row" key={name}><div><b>{name}</b><small>{unit}</small></div><input value={value} readOnly /><span className={'status ' + color}>{state}</span><button>•••</button></div>)}</div>
+          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 4 DE 13</p><h1>Bioquímico</h1><p className="subtitle">Registra estudios y marca hallazgos para el abordaje.</p></div><button className="primary" onClick={openLabForm}>+ Agregar estudio</button></div>
+          {!labs.length && <div className="lab-empty"><span>▧</span><b>Sin estudios adjuntos</b><small>Registra los resultados manualmente con "+ Agregar estudio".</small></div>}
+          {labForm && <div className="diagnosis-form panel">
+            <p className="eyebrow">NUEVO ESTUDIO</p>
+            <div className="form-grid three">
+              <label>Estudio<input value={labForm.name} onChange={(e) => updateLabForm('name', e.target.value)} placeholder="Ej. Glucosa" /></label>
+              <label>Valor<input value={labForm.value} onChange={(e) => updateLabForm('value', e.target.value)} placeholder="Ej. 92" /></label>
+              <label>Unidad<input value={labForm.unit} onChange={(e) => updateLabForm('unit', e.target.value)} placeholder="Ej. mg/dL" /></label>
+              <label>Rango de referencia<input value={labForm.range} onChange={(e) => updateLabForm('range', e.target.value)} placeholder="Ej. 70-100" /></label>
+              <label>Estado<select value={labForm.status} onChange={(e) => updateLabForm('status', e.target.value)}><option>Normal</option><option>Elevado</option><option>Bajo</option><option>Pendiente</option></select></label>
+            </div>
+            <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name || !labForm.value} onClick={saveLab}>Guardar estudio</button></div>
+          </div>}
+          {labs.length > 0 && <div className="lab-list">{labs.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : lab.status === 'Pendiente' ? 'pending' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} readOnly /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
         </section>
-        <aside className="record-aside panel"><p className="eyebrow">LECTURA RÁPIDA</p><div className="lab-score">4<span>/5</span></div><b>Resultados registrados</b><p className="muted">Un hallazgo requiere seguimiento en el tratamiento.</p><div className="tag-row"><span>Colesterol elevado</span></div></aside>
+        <aside className="record-aside panel"><p className="eyebrow">LECTURA RÁPIDA</p><div className="lab-score">{labs.filter((l) => l.status === 'Normal').length}<span>/{labs.length}</span></div><b>Resultados normales</b>{labs.some((l) => l.status === 'Elevado' || l.status === 'Bajo') ? <p className="muted">Hay hallazgos fuera de rango que requieren seguimiento en el tratamiento.</p> : <p className="muted">{labs.length ? 'Todos los estudios registrados están en rango normal.' : 'Todavía no hay estudios registrados.'}</p>}<div className="tag-row">{labs.filter((l) => l.status === 'Elevado' || l.status === 'Bajo').map((l) => <span key={l.id}>{l.name} {l.status.toLowerCase()}</span>)}</div></aside>
       </div>
 
       : tab === 'Diagnóstico' ? <div className="panel diagnosis-panel">
@@ -373,6 +396,26 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
       </div>
 
       : tab === 'Transcripción' ? <TranscriptionTab values={currentValues} updateField={updateField} updateFields={updateFields} patientName={patientName} />
+
+      : tab === 'Dietético' ? <div className="panel generic-section">
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Dietético</h1><p className="subtitle">Hábitos alimentarios de {patientName}.</p>
+        <FormCard title="Patrón de alimentación" fields={['Núm. de comidas al día|', 'Horario habitual|', 'Apetito|', 'Preferencias alimentarias|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Alergias e intolerancias" fields={['Alergias alimentarias|', 'Intolerancias|', 'Restricciones dietéticas|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Suplementos y consumo de agua" fields={['Suplementos que toma|', 'Consumo de agua habitual|', 'Notas dietéticas|']} values={currentValues} onFieldChange={updateField} />
+      </div>
+
+      : tab === 'Estilo de vida' ? <div className="panel generic-section">
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Estilo de vida</h1><p className="subtitle">Actividad física y hábitos de {patientName}.</p>
+        <FormCard title="Actividad física" fields={['Tipo de ejercicio|', 'Frecuencia semanal|', 'Duración por sesión|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Descanso" fields={['Horas de sueño|', 'Calidad del sueño|', 'Nivel de estrés percibido|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Consumo de sustancias" fields={['Tabaquismo|', 'Consumo de alcohol|', 'Notas de estilo de vida|']} values={currentValues} onFieldChange={updateField} />
+      </div>
+
+      : tab === 'Sociocultural' ? <div className="panel generic-section">
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Sociocultural</h1><p className="subtitle">Contexto socioeconómico y cultural de {patientName}.</p>
+        <FormCard title="Contexto socioeconómico" fields={['Ocupación|', 'Quién prepara los alimentos|', 'Acceso a alimentos|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Cultura y creencias" fields={['Restricciones religiosas o culturales|', 'Creencias sobre alimentación|', 'Notas socioculturales|']} values={currentValues} onFieldChange={updateField} />
+      </div>
 
       : <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>{tab}</h1><p className="subtitle">Registra los datos de {tab.toLowerCase()} de {patientName}.</p>
