@@ -9,9 +9,7 @@ import PatientsPage from '../modules/patients/PatientsPage.jsx'
 import NewPatientPage from '../modules/patients/NewPatientPage.jsx'
 import ClinicalRecordPage from '../modules/clinical-record/ClinicalRecordPage.jsx'
 import ConsultationsPage from '../modules/clinical-record/ConsultationsPage.jsx'
-import NutritionCalculatorPage from '../modules/nutrition-plan/NutritionCalculatorPage.jsx'
 import PlanStudioPage from '../modules/nutrition-plan/PlanStudioPage.jsx'
-import MacroDistributionPage from '../modules/nutrition-plan/MacroDistributionPage.jsx'
 import RecipesPage from '../modules/recipes/RecipesPage.jsx'
 import NewRecipePage from '../modules/recipes/NewRecipePage.jsx'
 import IngredientsPage from '../modules/ingredients/IngredientsPage.jsx'
@@ -24,8 +22,8 @@ import EducationPage from '../modules/education/EducationPage.jsx'
 import NewMaterialPage from '../modules/education/NewMaterialPage.jsx'
 import SettingsPage from '../modules/settings/SettingsPage.jsx'
 
-const pathToModule = { '/': 'Hoy', '/hoy': 'Hoy', '/agenda': 'Agenda', '/pacientes': 'Pacientes', '/recetas': 'Recetas', '/ingredientes': 'Ingredientes', '/plantillas': 'Plantillas', '/plan': 'Plan nutricional', '/constructor-plan': 'Constructor de plan', '/distribucion': 'Distribución de macros', '/documentos': 'Documentos', '/nuevo-paciente': 'Nuevo paciente', '/configuracion': 'Configuración', '/importar-alimentos': 'Importar alimentos' }
-const moduleToSlug = { 'Hoy': 'hoy', 'Agenda': 'agenda', 'Pacientes': 'pacientes', 'Recetas': 'recetas', 'Ingredientes': 'ingredientes', 'Plantillas': 'plantillas', 'Plan nutricional': 'plan', 'Constructor de plan': 'constructor-plan', 'Distribución de macros': 'distribucion', 'Documentos': 'documentos', 'Nuevo paciente': 'nuevo-paciente', 'Configuración': 'configuracion', 'Importar alimentos': 'importar-alimentos', 'Documento': 'documentos', 'Expediente': 'pacientes' }
+const pathToModule = { '/': 'Hoy', '/hoy': 'Hoy', '/agenda': 'Agenda', '/pacientes': 'Pacientes', '/recetas': 'Recetas', '/ingredientes': 'Ingredientes', '/plantillas': 'Plantillas', '/constructor-plan': 'Constructor de plan', '/documentos': 'Documentos', '/nuevo-paciente': 'Nuevo paciente', '/configuracion': 'Configuración', '/importar-alimentos': 'Importar alimentos' }
+const moduleToSlug = { 'Hoy': 'hoy', 'Agenda': 'agenda', 'Pacientes': 'pacientes', 'Recetas': 'recetas', 'Ingredientes': 'ingredientes', 'Plantillas': 'plantillas', 'Constructor de plan': 'constructor-plan', 'Documentos': 'documentos', 'Nuevo paciente': 'nuevo-paciente', 'Configuración': 'configuracion', 'Importar alimentos': 'importar-alimentos', 'Documento': 'documentos', 'Expediente': 'pacientes' }
 
 export default function App() {
   const { status } = useAuth()
@@ -45,15 +43,6 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
-  useEffect(() => {
-    const onSidebarConfig = (event) => {
-      const button = event.target.closest('.sidebar > button.nav-item')
-      if (button?.textContent.includes('Configuración')) setActive('Configuración')
-    }
-    document.addEventListener('click', onSidebarConfig)
-    return () => document.removeEventListener('click', onSidebarConfig)
-  }, [])
-
   if (status === 'checking') return null
   if (status === 'anonymous') return <LoginPage />
 
@@ -66,9 +55,7 @@ export default function App() {
   if (active === 'Configuración') return <SettingsPage setActive={setActive} />
   if (active === 'Importar alimentos') return <ImportFoodsPage setActive={setActive} />
   if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} />
-  if (active === 'Plan nutricional') return <NutritionCalculatorPage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} patientId={selectedPatientId} />
-  if (active === 'Distribución de macros') return <MacroDistributionPage setActive={setActive} />
   if (active === 'Documento') return <DocumentPage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
   if (active === 'Seguimientos') return <FollowupsPage setActive={setActive} />

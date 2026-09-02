@@ -2,8 +2,20 @@ import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import DocumentPage from '../documents/DocumentPage.jsx'
-import { patientsApi, plansApi, recipesApi } from '../../lib/api.js'
+import { nutritionApi, patientsApi, plansApi, recipesApi } from '../../lib/api.js'
 import { usePatient } from '../../lib/usePatient.js'
+
+const DEFAULT_MACROS = { carbsPercent: 50, proteinPercent: 25, fatPercent: 25 }
+const sexToFormValue = (sex) => (sex && sex.toLowerCase().startsWith('m') ? 'male' : 'female')
+const computeAge = (birthDate) => {
+  if (!birthDate) return ''
+  const dob = new Date(birthDate)
+  const now = new Date()
+  let age = now.getUTCFullYear() - dob.getUTCFullYear()
+  if (now.getUTCMonth() < dob.getUTCMonth() || (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate())) age -= 1
+  return String(age)
+}
+const formatUTCDate = (iso) => { if (!iso) return null; const d = new Date(iso); return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}` }
 
 const MEAL_TYPES = [
   { key: 'breakfast', label: 'Desayuno' },
@@ -39,6 +51,22 @@ export default function PlanStudioPage({ setActive, patientId }) {
   const [pickerSearch, setPickerSearch] = useState('')
   const [adequacy, setAdequacy] = useState(null)
   const [adequacyState, setAdequacyState] = useState('idle')
+  const [form, setForm] = useState({ sex: 'female', age: '28', weightKg: '72.4', heightCm: '165', formula: 'mifflin', activityFactor: '1.375', goal: '' })
+  const [calcResult, setCalcResult] = useState(null)
+  const [calcState, setCalcState] = useState('idle')
+  const [calcError, setCalcError] = useState('')
+  const [evalSaveState, setEvalSaveState] = useState('idle')
+  const [evalSaveError, setEvalSaveError] = useState('')
+
+  useEffect(() => {
+    if (!patient) return
+    setForm((prev) => ({ ...prev, sex: sexToFormValue(patient.sex), age: computeAge(patient.birthDate) || prev.age }))
+  }, [patient])
+
+  useEffect(() => {
+    if (!plan) return
+    setForm((prev) => ({ ...prev, goal: plan.goal || prev.goal }))
+  }, [plan?.id])
 
   useEffect(() => {
     let cancelled = false
@@ -62,6 +90,37 @@ export default function PlanStudioPage({ setActive, patientId }) {
   }, [patientId])
 
   const recipeById = (id) => recipes.find((recipe) => recipe.id === id)
+
+  const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
+
+  const calculate = async (event) => {
+    event.preventDefault()
+    setCalcState('loading')
+    setCalcError('')
+    setEvalSaveState('idle')
+    try {
+      const response = await nutritionApi.calculate(form)
+      setCalcResult(response)
+      setCalcState('success')
+    } catch (error) {
+      setCalcState('error')
+      setCalcError(error.message || 'No se pudo calcular. Verifica que el API esté activo.')
+    }
+  }
+
+  const saveToPlan = async () => {
+    if (!plan) return
+    setEvalSaveState('saving')
+    setEvalSaveError('')
+    try {
+      const updated = await plansApi.evaluate(plan.id, { ...form, ...DEFAULT_MACROS })
+      setPlan(updated)
+      setEvalSaveState('saved')
+    } catch (error) {
+      setEvalSaveState('error')
+      setEvalSaveError(error.message || 'No se pudo guardar el plan.')
+    }
+  }
 
   const persistSlots = async (nextSlots) => {
     if (!plan) return
@@ -123,11 +182,11 @@ export default function PlanStudioPage({ setActive, patientId }) {
 
   const meals = MEAL_TYPES.map((m) => m.label)
 
-  return <AppChrome active="Plan nutricional" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← {patientName}</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>Plan nutricional</h2><span>Borrador · Se guarda automáticamente</span></div></div><button className="primary">Guardar borrador</button></div><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => setStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
+  return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← {patientName}</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>Plan nutricional</h2><span>Borrador · Se guarda automáticamente</span></div></div><button className="primary">Guardar borrador</button></div><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => setStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
 
-    {step === 0 && <><ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="La información del expediente se utiliza para iniciar este plan." action={<button className="secondary">Usar plantilla</button>} /><div className="plan-grid"><div className="plan-card panel"><h3>Datos antropométricos</h3><div className="form-grid three"><label>Sexo<input value="Femenino" readOnly /></label><label>Fecha nacimiento<input value="14/02/1998" readOnly /></label><label>Edad<input value="28 años" readOnly /></label><label>Peso actual<input value="72.4 kg" readOnly /></label><label>Talla<input value="165 cm" readOnly /></label><label>IMC calculado<input value="26.6" readOnly /></label></div></div><div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3><div className="ideal-number">62.5 <small>– 67.8 kg</small></div><p className="muted">Rango estimado para su estatura</p><div className="range"><i /></div><div className="range-labels"><span>Mínimo</span><span>Ideal</span><span>Máximo</span></div></div><div className="plan-card panel full"><h3>Objetivo terapéutico</h3><div className="tag-row"><span>Reducir peso</span><span>Mejorar energía</span><span>Cambio de hábitos</span></div><textarea className="wide-textarea" placeholder="Resultado clínico y conductual esperado..." defaultValue="Reducir 4 kg en 12 semanas, priorizando energía y adherencia sostenible." /></div></div></>}
+    {step === 0 && <><ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="Resumen del expediente y del último cálculo guardado en el paso Plan alimentario." action={<button className="secondary" onClick={() => setStep(1)}>Ir al cálculo →</button>} /><div className="plan-grid"><div className="plan-card panel"><h3>Datos antropométricos</h3><div className="form-grid three"><label>Sexo<input value={patient?.sex || '—'} readOnly /></label><label>Fecha nacimiento<input value={formatUTCDate(patient?.birthDate) || '—'} readOnly /></label><label>Edad<input value={computeAge(patient?.birthDate) ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label><label>Peso actual<input value={plan?.evaluation?.inputs?.weightKg ? `${plan.evaluation.inputs.weightKg} kg` : '—'} readOnly /></label><label>Talla<input value={plan?.evaluation?.inputs?.heightCm ? `${plan.evaluation.inputs.heightCm} cm` : '—'} readOnly /></label><label>IMC calculado<input value={plan?.evaluation?.bmi ?? '—'} readOnly /></label></div></div><div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3>{plan?.evaluation?.idealWeightRange ? <div className="ideal-number">{plan.evaluation.idealWeightRange.minKg} <small>– {plan.evaluation.idealWeightRange.maxKg} kg</small></div> : <p className="muted">Calcula el requerimiento en el paso "Plan alimentario" para ver el rango.</p>}<p className="muted">Rango estimado para su estatura</p></div><div className="plan-card panel full"><h3>Objetivo terapéutico</h3>{plan?.goal ? <p>{plan.goal}</p> : <p className="muted">Sin definir todavía — se guarda junto con el cálculo en el paso "Plan alimentario".</p>}</div></div></>}
 
-    {step === 1 && <><ModuleHeader eyebrow="PLAN ALIMENTARIO" title="Define los requerimientos" subtitle="Compara fórmulas y ajusta el objetivo antes de distribuir alimentos." action={<button className="secondary">Copiar plan anterior</button>} /><div className="requirement-grid"><div className="panel requirement-card"><h3>Requerimiento energético</h3><label>Fórmula<select><option>Mifflin-St Jeor</option><option>Harris-Benedict</option><option>FAO/OMS</option><option>Cunningham</option><option>Katch-McArdle</option></select></label><div className="energy-result"><small>GET · Gasto energético total</small><strong>1,842 <em>kcal</em></strong><span>✓ Calculado automáticamente</span></div><label>Actividad física<select><option>Ligera · 1.375</option><option>Moderada · 1.55</option><option>Intensa · 1.725</option></select></label><button className="text-button">+ Calcular actividad por METS</button></div><div className="panel macro-card"><h3>Distribución de macronutrientes</h3><div className="macro-bars"><div><span className="carb" style={{ width: '50%' }} /><b>50%</b><small>Carbohidratos · 230 g</small></div><div><span className="protein" style={{ width: '25%' }} /><b>25%</b><small>Proteína · 115 g</small></div><div><span className="fat" style={{ width: '25%' }} /><b>25%</b><small>Grasas · 51 g</small></div></div><div className="macro-total">Total <b>100%</b><span>1,842 kcal</span></div></div></div></>}
+    {step === 1 && <><ModuleHeader eyebrow="PLAN ALIMENTARIO · REQUERIMIENTO" title="Calcula el punto de partida" subtitle="Cada resultado queda asociado a la fórmula y a los datos utilizados." /><form className="calculator-layout" onSubmit={calculate}><section className="panel calculator-form"><div className="section-heading"><div><h2>Datos de la paciente</h2><p className="subtitle">Puedes ajustar estos valores para simular el plan.</p></div></div><div className="form-grid three"><label>Sexo<select value={form.sex} onChange={(e) => updateForm('sex', e.target.value)}><option value="female">Femenino</option><option value="male">Masculino</option></select></label><label>Edad (años)<input type="number" min="1" max="120" value={form.age} onChange={(e) => updateForm('age', e.target.value)} /></label><label>Peso (kg)<input type="number" step="0.1" min="1" value={form.weightKg} onChange={(e) => updateForm('weightKg', e.target.value)} /></label><label>Talla (cm)<input type="number" step="0.1" min="30" value={form.heightCm} onChange={(e) => updateForm('heightCm', e.target.value)} /></label><label>Fórmula energética<select value={form.formula} onChange={(e) => updateForm('formula', e.target.value)}><option value="mifflin">Mifflin-St Jeor</option><option value="harris">Harris-Benedict</option><option value="schofield">FAO/OMS/ONU (Schofield)</option><option value="valencia">Valencia (población mexicana)</option><option value="cunningham">Cunningham</option><option value="katch-mcardle">Katch-McArdle</option></select></label><label>Actividad física<select value={form.activityFactor} onChange={(e) => updateForm('activityFactor', e.target.value)}><option value="1.2">Sedentaria · 1.2</option><option value="1.375">Ligera · 1.375</option><option value="1.55">Moderada · 1.55</option><option value="1.725">Intensa · 1.725</option></select></label></div><label>Objetivo terapéutico<textarea className="wide-textarea" placeholder="Resultado clínico y conductual esperado..." value={form.goal} onChange={(e) => updateForm('goal', e.target.value)} /></label><button className="primary calculate-button" disabled={calcState === 'loading'}>{calcState === 'loading' ? 'Calculando...' : 'Calcular requerimiento'} <span>→</span></button>{calcState === 'error' && <div className="form-error">⚠ {calcError}</div>}</section><aside className="panel calculation-result">{!calcResult && calcState !== 'loading' ? <div className="result-empty"><span>◌</span><h3>Tu resultado aparecerá aquí</h3><p>Completa o confirma los datos y calcula el requerimiento energético.</p></div> : calcState === 'loading' ? <div className="result-empty"><span className="loading-dot">●</span><h3>Calculando requerimiento...</h3><p>Estamos aplicando la fórmula seleccionada.</p></div> : <><div className="result-header"><div><p className="eyebrow">RESULTADO CALCULADO</p><h2>Requerimiento energético</h2></div><span className="result-check">✓</span></div><div className="get-number"><small>GET · Gasto energético total</small><b>{calcResult.get.toLocaleString()} <em>kcal/día</em></b><span>Basado en {calcResult.formulaLabel || calcResult.formula} · factor {form.activityFactor}</span></div><div className="result-details"><div><small>Metabolismo basal</small><b>{calcResult.bmr.toLocaleString()} kcal</b></div><div><small>Actividad estimada</small><b>+{calcResult.activityKcal.toLocaleString()} kcal</b></div></div>{calcResult.bmi && <div className="result-details"><div><small>IMC</small><b>{calcResult.bmi}</b></div><div><small>Peso saludable estimado</small><b>{calcResult.idealWeightRange.minKg}–{calcResult.idealWeightRange.maxKg} kg</b></div></div>}{calcResult.flags?.length > 0 && <div className="form-error">⚠ {calcResult.flags.map((f) => f.message).join(' ')}</div>}<button type="button" className="primary full-button" disabled={evalSaveState === 'saving' || !plan} onClick={saveToPlan}>{evalSaveState === 'saving' ? 'Guardando...' : evalSaveState === 'saved' ? 'Guardado en el plan ✓' : 'Guardar en el plan'} <span>→</span></button>{!plan && <p className="muted">Crea una consulta y un plan en borrador para poder guardar.</p>}{evalSaveState === 'error' && <div className="form-error">⚠ {evalSaveError}</div>}</>}</aside></form></>}
 
     {step === 2 && <>
       <ModuleHeader eyebrow="PLAN ALIMENTARIO · DISTRIBUCIÓN" title="Distribuye por tiempos" subtitle="Elige la receta base de cada tiempo de comida para toda la semana; luego ajusta día por día en el paso Semana." action={<span className={'sync-label ' + (saveState === 'saving' ? 'loading' : saveState === 'error' ? 'demo' : 'online')}>{saveState === 'saving' ? '● Guardando…' : saveState === 'error' ? '● Error al guardar' : plan ? '● Sincronizado' : '● Sin plan en borrador'}</span>} />
@@ -154,7 +213,7 @@ export default function PlanStudioPage({ setActive, patientId }) {
         <h3>% Adecuación de micronutrientes</h3>
         {adequacyState === 'loading' && <p className="muted">Calculando…</p>}
         {adequacyState === 'error' && <div className="form-error">⚠ No se pudo calcular la adecuación de micronutrientes.</div>}
-        {adequacyState === 'ready' && !adequacy?.bracket && <p className="muted">Completa edad y sexo en la Evaluación del paciente para calcular la adecuación.</p>}
+        {adequacyState === 'ready' && !adequacy?.bracket && <p className="muted">Calcula y guarda el requerimiento en el paso "Plan alimentario" para poder calcular la adecuación.</p>}
         {adequacyState === 'ready' && adequacy?.bracket && !adequacy.nutrients.length && <p className="muted">Asigna al menos una receta a la semana para calcular la adecuación.</p>}
         {adequacyState === 'ready' && adequacy?.nutrients.length > 0 && <>
           <p className="muted">Referencia: {adequacy.bracketLabel}. Promedio diario de los días con al menos una receta asignada.</p>

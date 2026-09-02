@@ -101,7 +101,7 @@ export default function DocumentPage({ setActive, patientId }) {
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content document-content">
     <div className="document-top">
       <div>
-        <button className="back-button" onClick={() => setActive('Plan nutricional')}>← Regresar al plan</button>
+        <button className="back-button" onClick={() => setActive('Constructor de plan')}>← Regresar al plan</button>
         <p className="eyebrow">ENTREGA · PLAN DE ALIMENTACIÓN</p>
         <h1>Publicar y entregar</h1>
         <p className="subtitle">{plan ? `Paciente: ${patientName}` : 'No hay un plan para esta paciente todavía.'}</p>

@@ -45,7 +45,7 @@ export default function IngredientsPage({ setActive }) {
   const source = selected?.equivalence?.source === 'SMAE' ? 'Sistema Mexicano de Equivalentes' : 'Fuente local revisada'
 
   return <AppChrome active="Ingredientes" setActive={setActive}><div className="content ingredient-workspace">
-    <ModuleHeader eyebrow="BIBLIOTECA · INGREDIENTES LOCALES" title="Ingredientes" subtitle="Datos nutricionales revisados y equivalencias de tu práctica." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizados' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span></div>} />
+    <ModuleHeader eyebrow="BIBLIOTECA · INGREDIENTES LOCALES" title="Ingredientes" subtitle="Datos nutricionales revisados y equivalencias de tu práctica." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizados' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span><button className="primary" onClick={() => setActive('Importar alimentos')}><span>+</span> Importar alimento</button></div>} />
 
     <div className="group-pills">{GROUPS.map((g) => <button className={group === g ? 'selected' : ''} onClick={() => setGroup(g)} key={g}>{g}</button>)}</div>
 
