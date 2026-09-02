@@ -6,7 +6,10 @@ import { usePatient } from '../../lib/usePatient.js'
 const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', lunch: 'Comida', snack: 'Colación', dinner: 'Cena' }
 const DAY_LABELS = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 7: 'Domingo' }
 
-export default function DocumentPage({ setActive, patientId }) {
+const DAYS_ORDER = [1, 2, 3, 4, 5, 6, 7]
+const MEAL_TYPES_ORDER = ['breakfast', 'lunch', 'snack', 'dinner']
+
+export default function DocumentPage({ setActive, patientId, embedded = false }) {
   const { patient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const [preview, setPreview] = useState(false)
@@ -94,20 +97,28 @@ export default function DocumentPage({ setActive, patientId }) {
     }
   }
 
-  const menu = plan?.menuSnapshot || []
-  const byDay = new Map()
-  for (const entry of menu) { if (!byDay.has(entry.dayOfWeek)) byDay.set(entry.dayOfWeek, []); byDay.get(entry.dayOfWeek).push(entry) }
+  // A DRAFT plan has no menuSnapshot yet (that only gets frozen at publish time) — fall back to
+  // building the same shape live from mealSlots so the preview/print isn't blocked on publishing.
+  const draftMenu = (plan?.mealSlots || []).filter((slot) => slot.recipeId).map((slot) => ({
+    dayOfWeek: slot.dayOfWeek,
+    mealType: slot.mealType,
+    recipeName: slot.recipe?.name || 'Receta',
+    kcal: Math.round((slot.recipe?.nutrition?.kcal || 0) * Number(slot.servings || 1)),
+  }))
+  const menu = plan?.menuSnapshot?.length ? plan.menuSnapshot : draftMenu
+  const entryFor = (day, mealType) => menu.find((entry) => entry.dayOfWeek === day && entry.mealType === mealType)
 
-  return <AppChrome active="Pacientes" setActive={setActive}><div className="content document-content">
+  const body = <div className="content document-content">
     <div className="document-top">
       <div>
-        <button className="back-button" onClick={() => setActive('Constructor de plan')}>← Regresar al plan</button>
+        {!embedded && <button className="back-button" onClick={() => setActive('Constructor de plan')}>← Regresar al plan</button>}
         <p className="eyebrow">ENTREGA · PLAN DE ALIMENTACIÓN</p>
         <h1>Publicar y entregar</h1>
         <p className="subtitle">{plan ? `Paciente: ${patientName}` : 'No hay un plan para esta paciente todavía.'}</p>
       </div>
       <div>
         <button className="secondary" onClick={() => setPreview(!preview)}>{preview ? 'Editar' : 'Vista previa'}</button>
+        <button className="secondary" disabled={!menu.length} onClick={() => window.print()}>⎙ Imprimir</button>
         {document?.storageKey
           ? <button className="primary" onClick={downloadPdf}>⇩ Descargar PDF</button>
           : plan?.status === 'PUBLISHED'
@@ -127,8 +138,14 @@ export default function DocumentPage({ setActive, patientId }) {
           <div className="paper-brand"><div className="brand-mark">N</div><div><b>nutri·studio</b><small>PLAN DE ALIMENTACIÓN</small></div></div>
           <div className="paper-meta"><b>Menú semanal</b><span>Paciente: {patientName}</span><span>Nutrióloga: Gabriela Alonso</span></div>
           {plan.targetKcal && <div className="paper-highlight"><b>Objetivo: {plan.goal || 'Sin objetivo registrado'}</b><p>{plan.targetKcal} kcal/día · {plan.carbsPercent}% carbohidratos · {plan.proteinPercent}% proteína · {plan.fatPercent}% grasas</p></div>}
-          {byDay.size === 0 && <p className="muted">Este plan todavía no tiene recetas asignadas en la distribución semanal.</p>}
-          {[...byDay.entries()].sort((a, b) => a[0] - b[0]).map(([dayOfWeek, entries]) => <div className="paper-section" key={dayOfWeek}><b>{DAY_LABELS[dayOfWeek] || `Día ${dayOfWeek}`}</b><p>{entries.map((entry) => `${MEAL_TYPE_LABELS[entry.mealType] || entry.mealType}: ${entry.recipeName} (${entry.kcal} kcal)`).join(' · ')}</p></div>)}
+          {!menu.length && <p className="muted">Este plan todavía no tiene recetas asignadas en la distribución semanal.</p>}
+          {menu.length > 0 && <div className="paper-week">
+            <div className="paper-week-head"><span>Tiempo</span>{DAYS_ORDER.map((d) => <b key={d}>{DAY_LABELS[d]}</b>)}</div>
+            {MEAL_TYPES_ORDER.map((mealType) => <div className="paper-week-row" key={mealType}>
+              <span>{MEAL_TYPE_LABELS[mealType]}</span>
+              {DAYS_ORDER.map((d) => { const entry = entryFor(d, mealType); return <div className="paper-week-cell" key={d}>{entry ? <><b>{entry.recipeName}</b><small>{entry.kcal} kcal</small></> : <small className="muted">—</small>}</div> })}
+            </div>)}
+          </div>}
           <div className="paper-signature">Gabriela Alonso · Nutrióloga</div>
         </div>
       </section>
@@ -145,5 +162,7 @@ export default function DocumentPage({ setActive, patientId }) {
           : <button className="secondary full-button" disabled={deliverState === 'delivering'} onClick={markDelivered}>{deliverState === 'delivering' ? 'Registrando…' : 'Marcar como entregado'}</button>)}
       </aside>
     </div>}
-  </div></AppChrome>
+  </div>
+
+  return embedded ? body : <AppChrome active="Documentos" setActive={setActive}>{body}</AppChrome>
 }

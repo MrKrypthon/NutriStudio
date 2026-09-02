@@ -171,7 +171,7 @@ app.get('/api/v1/patients/:patientId/consultations', async (request, reply) => {
 app.get('/api/v1/patients/:patientId/plans', async (request, reply) => {
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
-  const plans = await prisma.nutritionPlan.findMany({ where: { patientId: request.params.patientId }, include: { mealSlots: true, documents: true }, orderBy: [{ createdAt: 'desc' }, { version: 'desc' }] })
+  const plans = await prisma.nutritionPlan.findMany({ where: { patientId: request.params.patientId }, include: { mealSlots: { include: { recipe: true } }, documents: true }, orderBy: [{ createdAt: 'desc' }, { version: 'desc' }] })
   return { items: plans }
 })
 
