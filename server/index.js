@@ -576,6 +576,21 @@ app.get('/api/v1/plans/:planId', async (request, reply) => {
   return plan
 })
 
+app.patch('/api/v1/plans/:planId', async (request, reply) => {
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
+  if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
+  if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados no pueden modificarse.', fields: {} })
+  const { hydrationNote, recommendations } = request.body || {}
+  const updated = await prisma.nutritionPlan.update({
+    where: { id: plan.id },
+    data: {
+      ...(hydrationNote !== undefined ? { hydrationNote } : {}),
+      ...(recommendations !== undefined ? { recommendations } : {}),
+    },
+  })
+  return updated
+})
+
 app.get('/api/v1/plans/:planId/adequacy', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } }, include: { mealSlots: { include: { recipe: true } } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
