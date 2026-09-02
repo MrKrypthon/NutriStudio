@@ -113,7 +113,7 @@ function TranscriptionTab({ values, updateField, updateFields, patientName }) {
   </div>
 }
 
-export default function ClinicalRecordPage({ setActive, patientId }) {
+export default function ClinicalRecordPage({ setActive, patientId, appointmentId, onConsumeAppointment }) {
   const { patient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
@@ -135,7 +135,10 @@ export default function ClinicalRecordPage({ setActive, patientId }) {
       try {
         const list = await patientsApi.consultations(patientId)
         let active = (list.items || []).find((item) => item.status === 'IN_PROGRESS')
-        if (!active) active = await clinicalApi.create(patientId, {})
+        if (!active) {
+          active = await clinicalApi.create(patientId, appointmentId ? { appointmentId } : {})
+          onConsumeAppointment?.()
+        }
         const full = await clinicalApi.get(active.id)
         if (cancelled) return
         setConsultation(full)

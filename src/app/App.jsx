@@ -31,6 +31,7 @@ export default function App() {
   const [selectedPatientId, setSelectedPatientId] = useState(DEMO_PATIENT_ID)
   const [selectedMaterialId, setSelectedMaterialId] = useState(null)
   const [selectedRecipeId, setSelectedRecipeId] = useState(null)
+  const [startAppointmentId, setStartAppointmentId] = useState(null)
   const setActive = (next) => {
     setActiveState(next)
     const slug = moduleToSlug[next]
@@ -43,18 +44,27 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
 
+  // From an Agenda/Hoy appointment straight into its consultation: selects the patient, remembers
+  // which appointment triggered it (so ClinicalRecordPage can mark it COMPLETED when it creates
+  // the consultation), and jumps to the expediente.
+  const startConsultation = (patientId, appointmentId) => {
+    setSelectedPatientId(patientId)
+    setStartAppointmentId(appointmentId || null)
+    setActive('Expediente')
+  }
+
   if (status === 'checking') return null
   if (status === 'anonymous') return <LoginPage />
 
-  if (active === 'Hoy') return <DashboardPage setActive={setActive} />
-  if (active === 'Agenda') return <AgendaPage setActive={setActive} />
+  if (active === 'Hoy') return <DashboardPage setActive={setActive} onStartConsultation={startConsultation} />
+  if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} />
   if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nueva receta') return <NewRecipePage setActive={setActive} />
   if (active === 'Editar receta') return <NewRecipePage setActive={setActive} recipeId={selectedRecipeId} />
   if (active === 'Configuración') return <SettingsPage setActive={setActive} />
   if (active === 'Importar alimentos') return <ImportFoodsPage setActive={setActive} />
-  if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} />
+  if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} appointmentId={startAppointmentId} onConsumeAppointment={() => setStartAppointmentId(null)} />
   if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} />
   if (active === 'Documento') return <DocumentPage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
