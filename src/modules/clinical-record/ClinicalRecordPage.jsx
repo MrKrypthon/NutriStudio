@@ -138,6 +138,10 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
   const [report, setReport] = useState(null)
   const [reportState, setReportState] = useState('idle')
   const saveTimer = useRef(null)
+  // Holds everything needed to replay the in-flight debounced save if the component unmounts
+  // before the 800ms timer fires (see the cleanup below) — captured fresh on every call to
+  // updateFields, so it never reads stale `consultation`/`sections` from an old closure.
+  const pendingSaveRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -163,7 +167,17 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
       }
     }
     load()
-    return () => { cancelled = true; clearTimeout(saveTimer.current) }
+    return () => {
+      cancelled = true
+      clearTimeout(saveTimer.current)
+      // The debounce below trades "save on every keystroke" for "save 800ms after the user
+      // stops typing" — but if they navigate away inside that window, cancelling the timer
+      // alone would drop the edit on the floor with no error. Replay it as a best-effort
+      // fire-and-forget request instead: the component is gone, so there's no state left to
+      // update and no UI left to report a failure to.
+      const pending = pendingSaveRef.current
+      if (pending) clinicalApi.saveSection(pending.consultationId, pending.key, pending.payload, pending.lastSavedAt).catch(() => {})
+    }
   }, [patientId])
 
   useEffect(() => {
@@ -187,6 +201,8 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
       setSaveState('saved')
     } catch (error) {
       setSaveState(error.code === 'CONCURRENT_EDIT' ? 'conflict' : 'error')
+    } finally {
+      pendingSaveRef.current = null
     }
   }
 
@@ -197,6 +213,7 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
     const nextValues = { ...currentValues, ...updates }
     setSections((prev) => ({ ...prev, [sectionKey]: { ...prev[sectionKey], payload: nextValues } }))
     setSaveState('editing')
+    pendingSaveRef.current = { consultationId: consultation.id, key: sectionKey, payload: nextValues, lastSavedAt: sections[sectionKey]?.lastSavedAt }
     clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => saveSection(sectionKey, nextValues), 800)
   }
