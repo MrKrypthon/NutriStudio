@@ -19,8 +19,10 @@ export default function AppChrome({ active, setActive, children }) {
   const [searchResults, setSearchResults] = useState([])
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifData, setNotifData] = useState(null)
+  const [profileOpen, setProfileOpen] = useState(false)
   const searchRef = useRef(null)
   const notifRef = useRef(null)
+  const profileRef = useRef(null)
 
   useEffect(() => { dashboardApi.today(todayIso()).then(setNotifData).catch(() => {}) }, [])
 
@@ -39,6 +41,7 @@ export default function AppChrome({ active, setActive, children }) {
     const onClickOutside = (event) => {
       if (searchRef.current && !searchRef.current.contains(event.target)) setSearchOpen(false)
       if (notifRef.current && !notifRef.current.contains(event.target)) setNotifOpen(false)
+      if (profileRef.current && !profileRef.current.contains(event.target)) setProfileOpen(false)
     }
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
@@ -68,5 +71,13 @@ export default function AppChrome({ active, setActive, children }) {
         {pendingTasks > 0 && <button className="dropdown-item" onClick={() => { setActive('Seguimientos'); setNotifOpen(false) }}><span className="stat-icon purple">◒</span><div><b>{pendingTasks} seguimiento{pendingTasks === 1 ? '' : 's'} pendiente{pendingTasks === 1 ? '' : 's'}</b><small>Ir a Seguimientos →</small></div></button>}
       </div>}
     </div>
-    <span className="divider" /><button className="icon-button" title="Cerrar sesión" onClick={logout} style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="avatar">{initials}</span><div className="user-name"><b>{user?.name || 'Cargando…'}</b><small>{roleLabel}</small></div><span className="chevron">⌄</span></button></div></header>{children}</main></div>
+    <span className="divider" />
+    <div className="header-pop" ref={profileRef}>
+      <button className="icon-button profile-button" onClick={() => setProfileOpen((v) => !v)} title="Tu cuenta" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="avatar">{initials}</span><div className="user-name"><b>{user?.name || 'Cargando…'}</b><small>{roleLabel}</small></div><span className="chevron">⌄</span></button>
+      {profileOpen && <div className="dropdown-panel profile-dropdown">
+        <button className="dropdown-item" onClick={() => { setActive('Configuración'); setProfileOpen(false) }}><span className="stat-icon purple">⚙</span><div><b>Configuración</b><small>Perfil, logo, horarios</small></div></button>
+        <button className="dropdown-item" onClick={logout}><span className="stat-icon orange">⏻</span><div><b>Cerrar sesión</b></div></button>
+      </div>}
+    </div>
+  </div></header>{children}</main></div>
 }
