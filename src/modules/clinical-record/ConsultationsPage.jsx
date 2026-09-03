@@ -9,13 +9,16 @@ const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 's
 const formatUTCDate = (iso) => { const d = new Date(iso); return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
 const summarize = (consultation) => consultation.plans?.some((p) => p.status === 'PUBLISHED') ? 'Plan publicado' : consultation.sections?.length ? `${consultation.sections.length} sección(es) registradas` : 'Sin registros aún'
 
-export default function ConsultationsPage({ setActive, patientId }) {
+export default function ConsultationsPage({ setActive, patientId, onSelectPatient }) {
   const { patient: patientRecord } = usePatient(patientId)
   const patient = patientRecord ? `${patientRecord.firstName} ${patientRecord.lastName}` : 'Cargando…'
   const patientInitials = patientRecord ? `${patientRecord.firstName[0] || ''}${patientRecord.lastName[0] || ''}` : '··'
 
   const [sessions, setSessions] = useState([])
   const [loadState, setLoadState] = useState('loading')
+  const [patients, setPatients] = useState([])
+
+  useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -29,7 +32,7 @@ export default function ConsultationsPage({ setActive, patientId }) {
 
   return <AppChrome active="Consultas" setActive={setActive}><div className="content consultation-content">
     <ModuleHeader eyebrow="CONSULTAS · SESIÓN DE HOY" title="Nueva sesión" subtitle="Registra la consulta y crea el siguiente paso para tu paciente." action={<button className="secondary">Historial de sesiones</button>} />
-    <div className="session-selector panel"><span className="person-avatar coral">{patientInitials}</span><div><p className="eyebrow">PACIENTE</p><b>{patient}</b><small>{patientRecord?.sex || 'Paciente'}{lastSession ? ` · Última consulta: ${formatUTCDate(lastSession.startedAt || lastSession.createdAt)}` : ' · Sin consultas previas'}</small></div></div>
+    <div className="session-selector panel"><span className="person-avatar coral">{patientInitials}</span><div><p className="eyebrow">PACIENTE</p><b>{patient}</b><small>{patientRecord?.sex || 'Paciente'}{lastSession ? ` · Última consulta: ${formatUTCDate(lastSession.startedAt || lastSession.createdAt)}` : ' · Sin consultas previas'}</small></div><label className="patient-switch">Paciente<select value={patientId || ''} onChange={(e) => onSelectPatient?.(e.target.value)}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>
     <div className="session-question">
       <p className="eyebrow">¿POR DÓNDE QUIERES COMENZAR HOY?</p>
       <div className="session-options">
