@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { practiceApi } from '../../lib/api.js'
@@ -10,24 +10,52 @@ const TIME_ZONE_OPTIONS = [
   ['America/Hermosillo', 'Hermosillo (GMT-7)'],
 ]
 
+const DEFAULT_HOURS = { label: 'Lunes a viernes', ranges: [{ start: '09:00', end: '13:00' }, { start: '15:00', end: '19:00' }] }
+
+const readAsDataUrl = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(reader.result)
+  reader.onerror = reject
+  reader.readAsDataURL(file)
+})
+
 export default function SettingsPage({ setActive }) {
   const [loadState, setLoadState] = useState('loading')
   const [practiceName, setPracticeName] = useState('')
-  const [form, setForm] = useState({ timeZone: 'America/Mexico_City', userName: '', userEmail: '' })
+  const [practiceId, setPracticeId] = useState('')
+  const [form, setForm] = useState({ timeZone: 'America/Mexico_City', userName: '', userEmail: '', businessHours: DEFAULT_HOURS })
   const [saveState, setSaveState] = useState('idle')
   const [error, setError] = useState('')
+  const [logoState, setLogoState] = useState('idle')
+  const [logoError, setLogoError] = useState('')
+  const [logoVersion, setLogoVersion] = useState(0)
+  const [hasLogo, setHasLogo] = useState(false)
+  const [editingHours, setEditingHours] = useState(false)
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     practiceApi.get()
       .then((practice) => {
         setPracticeName(practice.name || '')
-        setForm({ timeZone: practice.timeZone || 'America/Mexico_City', userName: practice.user?.name || '', userEmail: practice.user?.email || '' })
+        setPracticeId(practice.id || '')
+        setHasLogo(Boolean(practice.logoUrl))
+        setForm({
+          timeZone: practice.timeZone || 'America/Mexico_City',
+          userName: practice.user?.name || '',
+          userEmail: practice.user?.email || '',
+          businessHours: practice.businessHours || DEFAULT_HOURS,
+        })
         setLoadState('ready')
       })
       .catch(() => setLoadState('error'))
   }, [])
 
   const update = (key, value) => { setForm((prev) => ({ ...prev, [key]: value })); setSaveState('idle') }
+  const updateHours = (patch) => update('businessHours', { ...form.businessHours, ...patch })
+  const updateRange = (index, patch) => {
+    const ranges = form.businessHours.ranges.map((range, i) => (i === index ? { ...range, ...patch } : range))
+    updateHours({ ranges })
+  }
 
   const save = async () => {
     setSaveState('saving')
@@ -35,9 +63,33 @@ export default function SettingsPage({ setActive }) {
     try {
       await practiceApi.update({ name: practiceName, ...form })
       setSaveState('saved')
+      setEditingHours(false)
     } catch (err) {
       setSaveState('error')
       setError(err.message || 'No se pudo guardar la configuración.')
+    }
+  }
+
+  const pickLogo = () => fileInputRef.current?.click()
+
+  const onLogoSelected = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) { setLogoState('error'); setLogoError('Sube una imagen PNG, JPG o WEBP.'); return }
+    if (file.size > 2 * 1024 * 1024) { setLogoState('error'); setLogoError('El logo no puede pesar más de 2 MB.'); return }
+    setLogoState('uploading')
+    setLogoError('')
+    try {
+      const dataUrl = await readAsDataUrl(file)
+      const updated = await practiceApi.uploadLogo(dataUrl)
+      setPracticeId(updated.id)
+      setHasLogo(true)
+      setLogoVersion((v) => v + 1)
+      setLogoState('done')
+    } catch (err) {
+      setLogoState('error')
+      setLogoError(err.message || 'No se pudo subir el logo.')
     }
   }
 
@@ -60,12 +112,28 @@ export default function SettingsPage({ setActive }) {
         </div>
         <div className="panel settings-card">
           <div><h2>Identidad visual</h2><p>El logo se incluirá en informes y planes nutricionales.</p></div>
-          <div className="logo-row"><div className="brand-mark">N</div><div><b>Logo de la práctica</b><small>Se incluirá en informes y planes nutricionales.</small></div><button className="secondary">Cambiar logo</button></div>
+          <div className="logo-row">
+            {hasLogo ? <img src={`${practiceApi.logoUrl(practiceId)}?v=${logoVersion}`} alt="Logo de la práctica" className="brand-mark logo-preview" /> : <div className="brand-mark">N</div>}
+            <div><b>Logo de la práctica</b><small>{logoState === 'uploading' ? 'Subiendo…' : logoState === 'error' ? logoError : 'Se incluirá en informes y planes nutricionales.'}</small></div>
+            <button className="secondary" onClick={pickLogo} disabled={logoState === 'uploading'}>{logoState === 'uploading' ? 'Subiendo…' : 'Cambiar logo'}</button>
+            <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} onChange={onLogoSelected} />
+          </div>
         </div>
         <div className="panel settings-card">
           <h2>Horarios de atención</h2>
           <p>Configura la disponibilidad que se mostrará al agendar citas.</p>
-          <div className="schedule-row"><b>Lunes a viernes</b><span>09:00 – 13:00</span><span>15:00 – 19:00</span><button className="link-button">Editar</button></div>
+          {editingHours ? (
+            <div className="schedule-row schedule-edit">
+              <input value={form.businessHours.label} onChange={(e) => updateHours({ label: e.target.value })} placeholder="Ej. Lunes a viernes" />
+              {form.businessHours.ranges.map((range, i) => <span className="schedule-range" key={i}>
+                <input type="time" value={range.start} onChange={(e) => updateRange(i, { start: e.target.value })} />
+                <input type="time" value={range.end} onChange={(e) => updateRange(i, { end: e.target.value })} />
+              </span>)}
+              <button className="link-button" onClick={() => setEditingHours(false)}>Listo</button>
+            </div>
+          ) : (
+            <div className="schedule-row"><b>{form.businessHours.label}</b>{form.businessHours.ranges.map((range, i) => <span key={i}>{range.start} – {range.end}</span>)}<button className="link-button" onClick={() => setEditingHours(true)}>Editar</button></div>
+          )}
           <div className="schedule-row"><b>Zona horaria</b><select value={form.timeZone} onChange={(e) => update('timeZone', e.target.value)}>{TIME_ZONE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>
         </div>
       </section>

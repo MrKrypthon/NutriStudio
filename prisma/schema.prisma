@@ -54,6 +54,8 @@ model Practice {
   timeZone       String        @default("America/Mexico_City")
   locale         String        @default("es-MX")
   defaultPalette String        @default("minimal")
+  logoUrl        String?
+  businessHours  Json?
   users          User[]
   patients       Patient[]
   appointments   Appointment[]

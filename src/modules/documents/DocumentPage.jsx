@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
-import { documentsApi, patientsApi, plansApi } from '../../lib/api.js'
+import { documentsApi, patientsApi, plansApi, practiceApi } from '../../lib/api.js'
 import { usePatient } from '../../lib/usePatient.js'
 
 const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', lunch: 'Comida', snack: 'Colación', dinner: 'Cena' }
@@ -20,6 +20,9 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
   const [genState, setGenState] = useState('idle')
   const [deliverState, setDeliverState] = useState('idle')
   const [error, setError] = useState('')
+  const [practice, setPractice] = useState(null)
+
+  useEffect(() => { practiceApi.get().then(setPractice).catch(() => {}) }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -142,8 +145,8 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
       <section className={'document-preview ' + (preview ? 'preview-focus' : '')}>
         <div className="paper-toolbar"><span>Vista previa del plan</span><small>{plan.status === 'PUBLISHED' ? 'Publicado · no se modificará' : 'Borrador · aún puede cambiar'}</small></div>
         <div className="paper">
-          <div className="paper-brand"><div className="brand-mark">N</div><div><b>nutri·studio</b><small>PLAN DE ALIMENTACIÓN</small></div></div>
-          <div className="paper-meta"><b>Menú semanal</b><span>Paciente: {patientName}</span><span>Nutrióloga: Gabriela Alonso</span></div>
+          <div className="paper-brand">{practice?.logoUrl ? <img src={`${practiceApi.logoUrl(practice.id)}?v=${practice.updatedAt}`} alt="" className="brand-mark logo-preview" /> : <div className="brand-mark">N</div>}<div><b>{practice?.name || 'nutri·studio'}</b><small>PLAN DE ALIMENTACIÓN</small></div></div>
+          <div className="paper-meta"><b>Menú semanal</b><span>Paciente: {patientName}</span><span>Nutrióloga: {practice?.user?.name || 'Gabriela Alonso'}</span></div>
           {plan.targetKcal && <div className="paper-highlight"><b>Objetivo: {plan.goal || 'Sin objetivo registrado'}</b><p>{plan.targetKcal} kcal/día · {plan.carbsPercent}% carbohidratos · {plan.proteinPercent}% proteína · {plan.fatPercent}% grasas</p></div>}
           {!menu.length && <p className="muted">Este plan todavía no tiene recetas asignadas en la distribución semanal.</p>}
           {menu.length > 0 && <div className="paper-week">
