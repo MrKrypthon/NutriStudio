@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import FormCard from '../../components/FormCard.jsx'
 import { usePatient } from '../../lib/usePatient.js'
-import { clinicalApi, documentsApi, patientsApi } from '../../lib/api.js'
+import { appointmentsApi, clinicalApi, documentsApi, patientsApi } from '../../lib/api.js'
 
 const TABS = ['Resumen', 'General', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
 const SECTION_KEYS = { Resumen: 'summary', General: 'general', Antropométrico: 'anthropometric', Bioquímico: 'biochemical', Clínico: 'clinical', Dietético: 'dietary', 'Estilo de vida': 'lifestyle', Sociocultural: 'sociocultural', Diagnóstico: 'diagnosis', Tratamiento: 'treatment', Monitoreo: 'monitoring', Notas: 'notes', Transcripción: 'transcription' }
@@ -152,6 +152,13 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
         let active = (list.items || []).find((item) => item.status === 'IN_PROGRESS')
         if (!active) {
           active = await clinicalApi.create(patientId, appointmentId ? { appointmentId } : {})
+          onConsumeAppointment?.()
+        } else if (appointmentId) {
+          // Creating a consultation marks the appointment that started it COMPLETED as a side
+          // effect (see clinicalApi.create above) -- but here we're reusing an already
+          // IN_PROGRESS consultation instead, so that side effect never ran. Without this, the
+          // appointment that was actually clicked stays CONFIRMED forever.
+          await appointmentsApi.complete(appointmentId).catch(() => {})
           onConsumeAppointment?.()
         }
         const full = await clinicalApi.get(active.id)

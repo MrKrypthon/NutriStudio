@@ -67,6 +67,7 @@ export const appointmentsApi = {
   list: (from, to) => apiRequest(`/appointments?from=${from}&to=${to}`),
   create: (payload) => apiRequest('/appointments', { method: 'POST', body: JSON.stringify(payload) }),
   confirm: (id) => apiRequest(`/appointments/${id}/confirm`, { method: 'POST' }),
+  complete: (id) => apiRequest(`/appointments/${id}/complete`, { method: 'POST' }),
 }
 
 export const nutritionApi = {

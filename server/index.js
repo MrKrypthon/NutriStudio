@@ -346,6 +346,17 @@ app.post('/api/v1/appointments/:appointmentId/confirm', async (request, reply) =
   return prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'CONFIRMED' }, include: { patient: true } })
 })
 
+// Normally an appointment is marked completed as a side effect of creating the consultation
+// it started (see POST /patients/:patientId/consultations) -- but if the patient already had
+// an IN_PROGRESS consultation open (e.g. two same-day appointments), ClinicalRecordPage reuses
+// it instead of creating a new one, and the appointmentId never reaches that route. This gives
+// it a way to mark the originating appointment completed on its own in that case.
+app.post('/api/v1/appointments/:appointmentId/complete', async (request, reply) => {
+  const appointment = await prisma.appointment.findFirst({ where: { id: request.params.appointmentId, practiceId: request.practiceId } })
+  if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
+  return prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'COMPLETED' }, include: { patient: true } })
+})
+
 app.get('/api/v1/tasks', async (request) => {
   const { status, type } = request.query
   const tasks = await prisma.task.findMany({
