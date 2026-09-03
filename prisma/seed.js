@@ -69,9 +69,9 @@ async function main() {
   await prisma.recipe.deleteMany({ where: { practiceId: practice.id } })
   await prisma.recipe.createMany({ data: [
     { practiceId: practice.id, name: 'Avena cocida con manzana', mealTypes: ['breakfast'], portions: 1, nutrition: { kcal: 204, carbs: 29.1, protein: 7.4, fat: 7.2, fiber: 6.3 }, restrictions: [], instructions: 'Cocinar la avena y servir con manzana.' },
-    { practiceId: practice.id, name: 'Bowl de bistec con champiñones', mealTypes: ['lunch'], portions: 1, nutrition: { kcal: 520, carbs: 42, protein: 38, fat: 20 }, restrictions: [], instructions: 'Saltear el bistec y acompañar con vegetales.' },
-    { practiceId: practice.id, name: 'Yogur griego con fruta', mealTypes: ['snack'], portions: 1, nutrition: { kcal: 180, carbs: 22, protein: 14, fat: 4 }, restrictions: [], instructions: 'Servir el yogur y agregar fruta picada.' },
-    { practiceId: practice.id, name: 'Ensalada tibia de espinacas', mealTypes: ['dinner'], portions: 1, nutrition: { kcal: 285, carbs: 24, protein: 19, fat: 12 }, restrictions: ['sin gluten'], instructions: 'Cocinar los vegetales y servir sobre espinacas.' },
+    { practiceId: practice.id, name: 'Bowl de bistec con champiñones', mealTypes: ['lunch'], portions: 1, nutrition: { kcal: 464.1, carbs: 33.5, protein: 42, fat: 19.6, fiber: 3.6 }, restrictions: [], instructions: 'Saltear el bistec y acompañar con vegetales.' },
+    { practiceId: practice.id, name: 'Yogur griego con fruta', mealTypes: ['snack'], portions: 1, nutrition: { kcal: 200.2, carbs: 21.9, protein: 21.7, fat: 2.9, fiber: 2.3 }, restrictions: [], instructions: 'Servir el yogur y agregar fruta picada.' },
+    { practiceId: practice.id, name: 'Ensalada tibia de espinacas', mealTypes: ['dinner'], portions: 1, nutrition: { kcal: 307.3, carbs: 20.3, protein: 23.5, fat: 16.5, fiber: 5.2 }, restrictions: ['sin gluten'], instructions: 'Cocinar los vegetales y servir sobre espinacas.' },
   ] })
   await prisma.ingredient.deleteMany({ where: { practiceId: practice.id } })
   await prisma.ingredient.createMany({ data: [
@@ -79,6 +79,20 @@ async function main() {
     { practiceId: practice.id, name: 'Avena en hojuelas', group: 'Cereales', unit: 'taza', nutrition: { kcal: 389, carbs: 66.3, protein: 16.9, fat: 6.9, fiber: 10.6 }, equivalence: { group: 'Cereales sin grasa', serving: '1/2 taza', grams: 40 } },
     { practiceId: practice.id, name: 'Pechuga de pollo', group: 'Proteínas', unit: 'gramos', nutrition: { kcal: 165, carbs: 0, protein: 31, fat: 3.6 }, equivalence: { group: 'AOA bajo en grasa', serving: '30 g', grams: 30 } },
     { practiceId: practice.id, name: 'Queso panela', group: 'Lácteos', unit: 'gramos', nutrition: { kcal: 220, carbs: 3.5, protein: 22, fat: 13.5 }, equivalence: { group: 'Leche con grasa', serving: '40 g', grams: 40 } },
+    // El resto de estos ocho existen ya en el catálogo SMAE real (prisma/import-smae.js), pero
+    // ese import es un script aparte que no corre como parte de este seed -- se repiten aquí a
+    // mano (mismos valores nutrimentales, tomados del catálogo real) para que
+    // "Bowl de bistec con champiñones"/"Yogur griego con fruta"/"Ensalada tibia de espinacas"
+    // tengan ingredientes reales incluso en una base recién sembrada sin el import de SMAE.
+    { practiceId: practice.id, name: 'Bistec de res', group: 'AOA MBAG', unit: 'gramos', nutrition: { kcal: 120, carbs: 0, protein: 24, fat: 2.67 }, equivalence: { group: 'AOA muy bajo en grasa', serving: '30 g', grams: 30 } },
+    { practiceId: practice.id, name: 'Papa cocida', group: 'Cereales S/G', unit: 'gramos', nutrition: { kcal: 86.76, carbs: 20.15, protein: 1.91, fat: 0.15 }, equivalence: { group: 'Cereales sin grasa', serving: '1 pieza chica', grams: 90 } },
+    { practiceId: practice.id, name: 'Champiñón blanco crudo', group: 'Verduras', unit: 'gramos', nutrition: { kcal: 22, carbs: 3.26, protein: 3.09, fat: 0.34 }, equivalence: { group: 'Verdura', serving: '1 taza', grams: 100 } },
+    { practiceId: practice.id, name: 'Aceite de oliva', group: 'Grasas sin proteínas', unit: 'gramos', nutrition: { kcal: 880, carbs: 0, protein: 0, fat: 100 }, equivalence: { group: 'Grasa', serving: '1 cdita', grams: 5 } },
+    { practiceId: practice.id, name: 'Yogur griego sin azúcar', group: 'Leche descremada', unit: 'gramos', nutrition: { kcal: 59, carbs: 3.6, protein: 10, fat: 0.4 }, equivalence: { group: 'Leche descremada', serving: '1 taza', grams: 200 } },
+    { practiceId: practice.id, name: 'Fresa cruda', group: 'Frutas', unit: 'gramos', nutrition: { kcal: 36, carbs: 7.96, protein: 0.64, fat: 0.22 }, equivalence: { group: 'Fruta', serving: '1 taza', grams: 150 } },
+    { practiceId: practice.id, name: 'Granola estándar', group: 'Cereales C/G', unit: 'gramos', nutrition: { kcal: 461.9, carbs: 67.14, protein: 10.95, fat: 19.05 }, equivalence: { group: 'Cereal con grasa', serving: '1 cda', grams: 15 } },
+    { practiceId: practice.id, name: 'Espinaca cruda', group: 'Verduras', unit: 'gramos', nutrition: { kcal: 23.33, carbs: 3.67, protein: 2.83, fat: 0.33 }, equivalence: { group: 'Verdura', serving: '1 taza', grams: 100 } },
+    { practiceId: practice.id, name: 'Jitomate bola', group: 'Verduras', unit: 'gramos', nutrition: { kcal: 17.59, carbs: 3.89, protein: 0.93, fat: 0.19 }, equivalence: { group: 'Verdura', serving: '1 pieza', grams: 120 } },
   ] })
   const oatmeal = await prisma.ingredient.findFirst({ where: { practiceId: practice.id, name: 'Avena en hojuelas' } })
   const avocado = await prisma.ingredient.findFirst({ where: { practiceId: practice.id, name: 'Aguacate Hass' } })
@@ -87,6 +101,21 @@ async function main() {
   const yogurtRecipe = await prisma.recipe.findFirst({ where: { practiceId: practice.id, name: 'Yogur griego con fruta' } })
   const saladRecipe = await prisma.recipe.findFirst({ where: { practiceId: practice.id, name: 'Ensalada tibia de espinacas' } })
   if (oatmealRecipe && oatmeal && avocado) await prisma.recipe.update({ where: { id: oatmealRecipe.id }, data: { ingredients: { create: [{ ingredientId: oatmeal.id, quantity: 40, unit: 'g', equivalence: 1 }, { ingredientId: avocado.id, quantity: 30, unit: 'g', equivalence: 0.5 }] } } })
+
+  // Estas tres, a diferencia de la avena, se habían creado solo con nutrition fija a mano, sin
+  // ingredientes -- cualquier recalculo futuro (ej. al editarlas y guardarlas desde
+  // NewRecipePage, que recalcula automáticamente) las dejaba en 0 kcal porque no tenían nada
+  // que sumar. Ver ESTADO_Y_PENDIENTES.md, deuda técnica de fase 30.
+  const findIngredient = (name) => prisma.ingredient.findFirst({ where: { practiceId: practice.id, name } })
+  const [steak, potato, mushroom, oliveOil, greekYogurt, strawberry, granola, spinach, tomato] = await Promise.all([
+    findIngredient('Bistec de res'), findIngredient('Papa cocida'), findIngredient('Champiñón blanco crudo'), findIngredient('Aceite de oliva'),
+    findIngredient('Yogur griego sin azúcar'), findIngredient('Fresa cruda'), findIngredient('Granola estándar'),
+    findIngredient('Espinaca cruda'), findIngredient('Jitomate bola'),
+  ])
+  const queso = await prisma.ingredient.findFirst({ where: { practiceId: practice.id, name: 'Queso panela' } })
+  if (steakBowlRecipe && steak && potato && mushroom && oliveOil) await prisma.recipe.update({ where: { id: steakBowlRecipe.id }, data: { ingredients: { create: [{ ingredientId: steak.id, quantity: 150, unit: 'g', equivalence: 5 }, { ingredientId: potato.id, quantity: 150, unit: 'g', equivalence: 1 }, { ingredientId: mushroom.id, quantity: 100, unit: 'g', equivalence: 1 }, { ingredientId: oliveOil.id, quantity: 15, unit: 'g', equivalence: 3 }] } } })
+  if (yogurtRecipe && greekYogurt && strawberry && granola) await prisma.recipe.update({ where: { id: yogurtRecipe.id }, data: { ingredients: { create: [{ ingredientId: greekYogurt.id, quantity: 200, unit: 'g', equivalence: 2 }, { ingredientId: strawberry.id, quantity: 100, unit: 'g', equivalence: 1 }, { ingredientId: granola.id, quantity: 10, unit: 'g', equivalence: 0.5 }] } } })
+  if (saladRecipe && spinach && queso && tomato && potato && oliveOil) await prisma.recipe.update({ where: { id: saladRecipe.id }, data: { ingredients: { create: [{ ingredientId: spinach.id, quantity: 150, unit: 'g', equivalence: 1.5 }, { ingredientId: queso.id, quantity: 80, unit: 'g', equivalence: 1 }, { ingredientId: tomato.id, quantity: 100, unit: 'g', equivalence: 1 }, { ingredientId: potato.id, quantity: 40, unit: 'g', equivalence: 0.5 }, { ingredientId: oliveOil.id, quantity: 5, unit: 'g', equivalence: 1 }] } } })
 
   const plan = await prisma.nutritionPlan.create({ data: { patientId: patients[0].id, consultationId: consultation.id, status: 'DRAFT', goal: 'Reducir peso y mejorar energía', formula: 'mifflin', activityMethod: 'factor', activityFactor: 1.375, targetKcal: 1700, carbsPercent: 50, proteinPercent: 25, fatPercent: 25, evaluation: { formulaVersion: 'mifflin_v1', formulaLabel: 'Mifflin-St Jeor', bmr: 1454, bmi: 26.6, bmiCategory: 'sobrepeso', idealWeightRange: { minKg: 50.4, maxKg: 67.8 }, flags: [], inputs: { age: 28, weightKg: 72.4, heightCm: 165, sex: 'female', bodyFatPercent: 31.2 } } } })
   await prisma.mealSlot.createMany({ data: [
