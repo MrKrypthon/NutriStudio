@@ -55,6 +55,18 @@ app.addHook('onRequest', async (request, reply) => {
   }
 })
 
+// Best-effort audit trail: never let a logging failure break the write it's describing.
+// `patientId` always goes in `metadata` (not just `entityId`) because not every audited
+// entity IS a patient — a Diagnosis or Document's entityId is its own id — but every one of
+// them belongs to exactly one patient, and that's what the patient timeline queries by.
+async function logAudit(request, { action, entity, entityId, patientId, metadata }) {
+  try {
+    await prisma.auditEvent.create({ data: { practiceId: request.practiceId, userId: request.userId, action, entity, entityId, metadata: { patientId, ...metadata } } })
+  } catch (err) {
+    app.log.warn({ err }, 'No se pudo registrar el evento de auditoría')
+  }
+}
+
 app.get('/health', async () => ({ status: 'ok', service: 'nutri-studio-api' }))
 
 app.post('/api/v1/auth/login', async (request, reply) => {
@@ -172,6 +184,11 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
       ...(status !== undefined ? { status, archivedAt: status === 'ARCHIVED' ? new Date() : null } : {}),
     },
   })
+  if (status !== undefined && status !== patient.status) {
+    await logAudit(request, { action: status === 'ARCHIVED' ? 'archived' : 'reactivated', entity: 'Patient', entityId: patient.id, patientId: patient.id })
+  } else {
+    await logAudit(request, { action: 'updated', entity: 'Patient', entityId: patient.id, patientId: patient.id })
+  }
   return updated
 })
 
@@ -180,17 +197,19 @@ app.get('/api/v1/patients/:patientId/timeline', async (request, reply) => {
   const patientId = request.params.patientId
   const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
-  const [appointments, consultations, plans, documents] = await prisma.$transaction([
+  const [appointments, consultations, plans, documents, auditEvents] = await prisma.$transaction([
     prisma.appointment.findMany({ where: { patientId }, orderBy: { startAt: 'desc' }, take: 20 }),
     prisma.consultation.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.nutritionPlan.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.document.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
+    prisma.auditEvent.findMany({ where: { practiceId, metadata: { path: ['patientId'], equals: patientId } }, include: { user: true }, orderBy: { createdAt: 'desc' }, take: 20 }),
   ])
   const events = [
     ...appointments.map((a) => ({ kind: 'appointment', date: a.startAt, status: a.status, subtype: a.type, id: a.id })),
     ...consultations.map((c) => ({ kind: 'consultation', date: c.startedAt || c.createdAt, status: c.status, id: c.id })),
     ...plans.map((p) => ({ kind: 'plan', date: p.publishedAt || p.createdAt, status: p.status, id: p.id })),
     ...documents.map((d) => ({ kind: 'document', date: d.generatedAt || d.createdAt, status: d.deliveredAt ? 'DELIVERED' : d.generatedAt ? 'GENERATED' : 'PENDING', subtype: d.type, id: d.id })),
+    ...auditEvents.map((e) => ({ kind: 'audit', date: e.createdAt, status: 'DONE', action: e.action, entity: e.entity, id: e.id, userName: e.user?.name })),
   ].sort((a, b) => new Date(b.date) - new Date(a.date))
   return { items: events }
 })
@@ -270,6 +289,7 @@ app.post('/api/v1/consultations/:consultationId/diagnoses', async (request, repl
   const { domain, code, problem, etiology, evidence } = request.body || {}
   if (!domain || !problem) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Dominio y problema son obligatorios.', fields: { domain: !domain, problem: !problem } })
   const diagnosis = await prisma.diagnosis.create({ data: { consultationId: consultation.id, domain, code: code || null, problem, etiology: etiology || null, evidence: evidence || null } })
+  await logAudit(request, { action: 'created', entity: 'Diagnosis', entityId: diagnosis.id, patientId: consultation.patientId, metadata: { domain, problem } })
   return reply.code(201).send(diagnosis)
 })
 
@@ -288,6 +308,7 @@ app.patch('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async 
       ...(evidence !== undefined ? { evidence } : {}),
     },
   })
+  await logAudit(request, { action: 'updated', entity: 'Diagnosis', entityId: diagnosis.id, patientId: consultation.patientId, metadata: { domain: diagnosis.domain, problem: updated.problem } })
   return updated
 })
 
@@ -297,6 +318,7 @@ app.delete('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async
   const diagnosis = await prisma.diagnosis.findFirst({ where: { id: request.params.diagnosisId, consultationId: consultation.id } })
   if (!diagnosis) return reply.code(404).send({ code: 'DIAGNOSIS_NOT_FOUND', message: 'Diagnóstico no encontrado.', fields: {} })
   await prisma.diagnosis.delete({ where: { id: diagnosis.id } })
+  await logAudit(request, { action: 'deleted', entity: 'Diagnosis', entityId: diagnosis.id, patientId: consultation.patientId, metadata: { domain: diagnosis.domain, problem: diagnosis.problem } })
   return reply.code(204).send()
 })
 
@@ -724,6 +746,7 @@ app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
   if (!plan.mealSlots.length) return reply.code(400).send({ code: 'EMPTY_PLAN', message: 'Agrega al menos un tiempo de comida antes de publicar.', fields: {} })
   const menuSnapshot = buildMenuSnapshot(plan.mealSlots)
   const published = await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'PUBLISHED', publishedAt: new Date(), menuSnapshot } })
+  await logAudit(request, { action: 'published', entity: 'NutritionPlan', entityId: plan.id, patientId: plan.patientId })
   return published
 })
 
@@ -876,7 +899,9 @@ app.post('/api/v1/documents/:documentId/deliver', async (request, reply) => {
   const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } })
   if (!document) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
   if (!document.generatedAt) return reply.code(409).send({ code: 'DOCUMENT_NOT_GENERATED', message: 'Genera el documento antes de entregarlo.', fields: {} })
-  return prisma.document.update({ where: { id: document.id }, data: { deliveredAt: new Date() } })
+  const delivered = await prisma.document.update({ where: { id: document.id }, data: { deliveredAt: new Date() } })
+  await logAudit(request, { action: 'delivered', entity: 'Document', entityId: document.id, patientId: document.patientId, metadata: { type: document.type } })
+  return delivered
 })
 
 app.setErrorHandler((error, request, reply) => {
