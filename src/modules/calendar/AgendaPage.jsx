@@ -38,7 +38,7 @@ function formatRangeLabel(days) {
   return sameMonth ? `${first.getUTCDate()} – ${last.getUTCDate()} ${MONTHS[first.getUTCMonth()]} ${first.getUTCFullYear()}` : `${first.getUTCDate()} ${MONTHS[first.getUTCMonth()]} – ${last.getUTCDate()} ${MONTHS[last.getUTCMonth()]} ${first.getUTCFullYear()}`
 }
 
-export default function AgendaPage({ setActive, onStartConsultation }) {
+export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew, onConsumeAutoOpen }) {
   const [view, setView] = useState('Semana')
   const [anchor, setAnchor] = useState(TODAY)
   const [appointments, setAppointments] = useState([])
@@ -93,6 +93,12 @@ export default function AgendaPage({ setActive, onStartConsultation }) {
   }
 
   const openModal = () => { setForm(emptyForm(anchor)); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+
+  // "Nueva cita" from Hoy sets this before navigating here instead of just landing on the page
+  // and making the professional click "Nueva cita" a second time.
+  useEffect(() => {
+    if (autoOpenNew) { openModal(); onConsumeAutoOpen?.() }
+  }, [autoOpenNew])
   const closeModal = () => { setOpen(false); setSubmitError('') }
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
 

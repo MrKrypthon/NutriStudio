@@ -32,6 +32,7 @@ export default function App() {
   const [selectedMaterialId, setSelectedMaterialId] = useState(null)
   const [selectedRecipeId, setSelectedRecipeId] = useState(null)
   const [startAppointmentId, setStartAppointmentId] = useState(null)
+  const [autoOpenNewAppointment, setAutoOpenNewAppointment] = useState(false)
   const setActive = (next) => {
     setActiveState(next)
     const slug = moduleToSlug[next]
@@ -53,11 +54,18 @@ export default function App() {
     setActive('Expediente')
   }
 
+  // "Nueva cita" from Hoy used to just land on Agenda, where you then had to click its own
+  // "Nueva cita" button again to actually open the form -- this skips straight to the form.
+  const goToNewAppointment = () => {
+    setAutoOpenNewAppointment(true)
+    setActive('Agenda')
+  }
+
   if (status === 'checking') return null
   if (status === 'anonymous') return <LoginPage />
 
-  if (active === 'Hoy') return <DashboardPage setActive={setActive} onStartConsultation={startConsultation} />
-  if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} />
+  if (active === 'Hoy') return <DashboardPage setActive={setActive} onStartConsultation={startConsultation} onNewAppointment={goToNewAppointment} />
+  if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} autoOpenNew={autoOpenNewAppointment} onConsumeAutoOpen={() => setAutoOpenNewAppointment(false)} />
   if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nueva receta') return <NewRecipePage setActive={setActive} />
