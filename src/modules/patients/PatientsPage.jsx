@@ -16,7 +16,17 @@ const CONSULTATION_STATUS_LABELS = { DRAFT: 'Borrador', IN_PROGRESS: 'En progres
 const PLAN_STATUS_LABELS = { DRAFT: 'Borrador', READY: 'Lista', PUBLISHED: 'Publicado', SUPERSEDED: 'Reemplazado' }
 const DOCUMENT_TYPE_LABELS = { nutrition_plan: 'Plan de alimentación', consultation_report: 'Informe de consulta' }
 const DOCUMENT_STATUS_LABELS = { DELIVERED: 'Entregado', GENERATED: 'Generado', PENDING: 'Pendiente' }
-const DONE_STATUSES = new Set(['CONFIRMED', 'COMPLETED', 'PUBLISHED', 'DELIVERED'])
+const AUDIT_LABELS = {
+  'Patient:archived': 'Paciente archivado',
+  'Patient:reactivated': 'Paciente reactivado',
+  'Patient:updated': 'Datos del paciente editados',
+  'Diagnosis:created': 'Diagnóstico agregado',
+  'Diagnosis:updated': 'Diagnóstico editado',
+  'Diagnosis:deleted': 'Diagnóstico eliminado',
+  'NutritionPlan:published': 'Plan publicado',
+  'Document:delivered': 'Documento entregado',
+}
+const DONE_STATUSES = new Set(['CONFIRMED', 'COMPLETED', 'PUBLISHED', 'DELIVERED', 'DONE'])
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const formatUTCDate = (iso) => { const d = new Date(iso); return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
 
@@ -24,6 +34,7 @@ function describeEvent(event) {
   if (event.kind === 'appointment') return { icon: '◷', label: `Cita · ${APPOINTMENT_TYPE_LABELS[event.subtype] || event.subtype}` }
   if (event.kind === 'consultation') return { icon: '▤', label: `Consulta · ${CONSULTATION_STATUS_LABELS[event.status] || event.status}` }
   if (event.kind === 'plan') return { icon: '▦', label: `Plan · ${PLAN_STATUS_LABELS[event.status] || event.status}` }
+  if (event.kind === 'audit') { const base = AUDIT_LABELS[`${event.entity}:${event.action}`] || `${event.entity} · ${event.action}`; return { icon: '◈', label: event.userName ? `${base} · ${event.userName}` : base } }
   return { icon: '▧', label: `${DOCUMENT_TYPE_LABELS[event.subtype] || 'Documento'} · ${DOCUMENT_STATUS_LABELS[event.status] || event.status}` }
 }
 
