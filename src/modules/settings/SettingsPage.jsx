@@ -113,7 +113,7 @@ export default function SettingsPage({ setActive }) {
         <div className="panel settings-card">
           <div><h2>Identidad visual</h2><p>El logo se incluirá en informes y planes nutricionales.</p></div>
           <div className="logo-row">
-            {hasLogo ? <img src={`${practiceApi.logoUrl(practiceId)}?v=${logoVersion}`} alt="Logo de la práctica" className="brand-mark logo-preview" /> : <div className="brand-mark">N</div>}
+            {hasLogo ? <img src={`${practiceApi.logoUrl(practiceId)}?v=${logoVersion}`} alt="Logo de la práctica" className="brand-mark logo-preview" /> : <div className="brand-mark placeholder">N</div>}
             <div><b>Logo de la práctica</b><small>{logoState === 'uploading' ? 'Subiendo…' : logoState === 'error' ? logoError : 'Se incluirá en informes y planes nutricionales.'}</small></div>
             <button className="secondary" onClick={pickLogo} disabled={logoState === 'uploading'}>{logoState === 'uploading' ? 'Subiendo…' : 'Cambiar logo'}</button>
             <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} onChange={onLogoSelected} />
