@@ -76,6 +76,8 @@ model User {
   name           String
   email          String
   passwordHash   String
+  specialty      String?
+  phone          String?
   role           UserRole       @default(NUTRITIONIST)
   status         RecordStatus   @default(ACTIVE)
   consultations  Consultation[]

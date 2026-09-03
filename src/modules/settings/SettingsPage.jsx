@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
-import { practiceApi } from '../../lib/api.js'
+import { authApi, practiceApi } from '../../lib/api.js'
 
 const TIME_ZONE_OPTIONS = [
   ['America/Mexico_City', 'Ciudad de México (GMT-6)'],
@@ -11,6 +11,13 @@ const TIME_ZONE_OPTIONS = [
 ]
 
 const DEFAULT_HOURS = { label: 'Lunes a viernes', ranges: [{ start: '09:00', end: '13:00' }, { start: '15:00', end: '19:00' }] }
+
+const NAV_SECTIONS = [
+  ['profile', '◉ Perfil profesional'],
+  ['identity', '◆ Identidad visual'],
+  ['hours', '◷ Horarios y disponibilidad'],
+  ['security', '▣ Privacidad y seguridad'],
+]
 
 const readAsDataUrl = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader()
@@ -23,7 +30,7 @@ export default function SettingsPage({ setActive }) {
   const [loadState, setLoadState] = useState('loading')
   const [practiceName, setPracticeName] = useState('')
   const [practiceId, setPracticeId] = useState('')
-  const [form, setForm] = useState({ timeZone: 'America/Mexico_City', userName: '', userEmail: '', businessHours: DEFAULT_HOURS })
+  const [form, setForm] = useState({ timeZone: 'America/Mexico_City', userName: '', userEmail: '', userSpecialty: '', userPhone: '', businessHours: DEFAULT_HOURS })
   const [saveState, setSaveState] = useState('idle')
   const [error, setError] = useState('')
   const [logoState, setLogoState] = useState('idle')
@@ -31,7 +38,12 @@ export default function SettingsPage({ setActive }) {
   const [logoVersion, setLogoVersion] = useState(0)
   const [hasLogo, setHasLogo] = useState(false)
   const [editingHours, setEditingHours] = useState(false)
+  const [activeSection, setActiveSection] = useState('profile')
+  const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  const [pwState, setPwState] = useState('idle')
+  const [pwError, setPwError] = useState('')
   const fileInputRef = useRef(null)
+  const sectionRefs = { profile: useRef(null), identity: useRef(null), hours: useRef(null), security: useRef(null) }
 
   useEffect(() => {
     practiceApi.get()
@@ -43,6 +55,8 @@ export default function SettingsPage({ setActive }) {
           timeZone: practice.timeZone || 'America/Mexico_City',
           userName: practice.user?.name || '',
           userEmail: practice.user?.email || '',
+          userSpecialty: practice.user?.specialty || '',
+          userPhone: practice.user?.phone || '',
           businessHours: practice.businessHours || DEFAULT_HOURS,
         })
         setLoadState('ready')
@@ -70,6 +84,8 @@ export default function SettingsPage({ setActive }) {
     }
   }
 
+  const goToSection = (key) => { setActiveSection(key); sectionRefs[key].current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+
   const pickLogo = () => fileInputRef.current?.click()
 
   const onLogoSelected = async (event) => {
@@ -93,24 +109,42 @@ export default function SettingsPage({ setActive }) {
     }
   }
 
+  const updatePw = (key, value) => { setPwForm((prev) => ({ ...prev, [key]: value })); setPwState('idle'); setPwError('') }
+
+  const changePassword = async () => {
+    if (!pwForm.currentPassword || !pwForm.newPassword) { setPwState('error'); setPwError('Completa ambos campos de contraseña.'); return }
+    if (pwForm.newPassword.length < 8) { setPwState('error'); setPwError('La nueva contraseña debe tener al menos 8 caracteres.'); return }
+    if (pwForm.newPassword !== pwForm.confirmPassword) { setPwState('error'); setPwError('La confirmación no coincide con la nueva contraseña.'); return }
+    setPwState('saving')
+    setPwError('')
+    try {
+      await authApi.changePassword(pwForm.currentPassword, pwForm.newPassword)
+      setPwState('saved')
+      setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+    } catch (err) {
+      setPwState('error')
+      setPwError(err.message || 'No se pudo cambiar la contraseña.')
+    }
+  }
+
   const initials = form.userName ? form.userName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase() : 'GA'
 
   return <AppChrome active="Configuración" setActive={setActive}><div className="content settings-content">
     <ModuleHeader eyebrow="TU PRÁCTICA" title="Configuración" subtitle="Personaliza tu espacio de trabajo y la experiencia de tus pacientes." action={saveState === 'saved' ? <span className="saved">● Cambios guardados</span> : <button className="primary" disabled={loadState !== 'ready' || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : 'Guardar cambios'}</button>} />
     {saveState === 'error' && <div className="form-error">⚠ {error}</div>}
     <div className="settings-layout">
-      <aside className="settings-nav panel"><button className="active">◉ Perfil profesional</button><button>◆ Identidad visual</button><button>◷ Horarios y disponibilidad</button><button>♧ Notificaciones</button><button>▣ Privacidad y seguridad</button></aside>
+      <aside className="settings-nav panel">{NAV_SECTIONS.map(([key, label]) => <button key={key} className={activeSection === key ? 'active' : ''} onClick={() => goToSection(key)}>{label}</button>)}</aside>
       <section className="settings-main">
-        <div className="panel settings-card">
+        <div className="panel settings-card" ref={sectionRefs.profile}>
           <div className="settings-card-head"><div><h2>Perfil profesional</h2><p>Esta información aparece en tus informes y comunicaciones.</p></div><span className="avatar settings-avatar">{initials}</span></div>
           <div className="form-grid">
             <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label>
-            <label>Especialidad<input value="Nutrióloga clínica" readOnly /></label>
+            <label>Especialidad<input value={form.userSpecialty} onChange={(e) => update('userSpecialty', e.target.value)} placeholder="Ej. Nutrióloga clínica" /></label>
             <label>Email de trabajo<input value={form.userEmail} onChange={(e) => update('userEmail', e.target.value)} /></label>
-            <label>Teléfono<input value="+52 55 1234 5678" readOnly /></label>
+            <label>Teléfono<input value={form.userPhone} onChange={(e) => update('userPhone', e.target.value)} placeholder="Ej. +52 55 1234 5678" /></label>
           </div>
         </div>
-        <div className="panel settings-card">
+        <div className="panel settings-card" ref={sectionRefs.identity}>
           <div><h2>Identidad visual</h2><p>El logo se incluirá en informes y planes nutricionales.</p></div>
           <div className="logo-row">
             {hasLogo ? <img src={`${practiceApi.logoUrl(practiceId)}?v=${logoVersion}`} alt="Logo de la práctica" className="brand-mark logo-preview" /> : <div className="brand-mark placeholder">N</div>}
@@ -119,7 +153,7 @@ export default function SettingsPage({ setActive }) {
             <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} onChange={onLogoSelected} />
           </div>
         </div>
-        <div className="panel settings-card">
+        <div className="panel settings-card" ref={sectionRefs.hours}>
           <h2>Horarios de atención</h2>
           <p>Configura la disponibilidad que se mostrará al agendar citas.</p>
           {editingHours ? (
@@ -135,6 +169,18 @@ export default function SettingsPage({ setActive }) {
             <div className="schedule-row"><b>{form.businessHours.label}</b>{form.businessHours.ranges.map((range, i) => <span key={i}>{range.start} – {range.end}</span>)}<button className="link-button" onClick={() => setEditingHours(true)}>Editar</button></div>
           )}
           <div className="schedule-row"><b>Zona horaria</b><select value={form.timeZone} onChange={(e) => update('timeZone', e.target.value)}>{TIME_ZONE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>
+        </div>
+        <div className="panel settings-card" ref={sectionRefs.security}>
+          <h2>Privacidad y seguridad</h2>
+          <p>Cambia tu contraseña de acceso.</p>
+          {pwState === 'error' && <div className="form-error">⚠ {pwError}</div>}
+          {pwState === 'saved' && <span className="saved">● Contraseña actualizada</span>}
+          <div className="form-grid">
+            <label>Contraseña actual<input type="password" value={pwForm.currentPassword} onChange={(e) => updatePw('currentPassword', e.target.value)} /></label>
+            <label>Nueva contraseña<input type="password" value={pwForm.newPassword} onChange={(e) => updatePw('newPassword', e.target.value)} /></label>
+            <label>Confirmar nueva contraseña<input type="password" value={pwForm.confirmPassword} onChange={(e) => updatePw('confirmPassword', e.target.value)} /></label>
+          </div>
+          <button className="secondary" disabled={pwState === 'saving'} onClick={changePassword} style={{ marginTop: 16 }}>{pwState === 'saving' ? 'Guardando…' : 'Cambiar contraseña'}</button>
         </div>
       </section>
     </div>

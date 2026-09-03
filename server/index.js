@@ -100,12 +100,36 @@ app.get('/api/v1/practice', async (request, reply) => {
 })
 
 app.put('/api/v1/practice', async (request, reply) => {
-  const { name, timeZone, userName, userEmail, businessHours } = request.body || {}
+  const { name, timeZone, userName, userEmail, userSpecialty, userPhone, businessHours } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
   const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(businessHours !== undefined ? { businessHours } : {}) } })
   let user = await prisma.user.findUnique({ where: { id: request.userId } })
-  if (user && (userName || userEmail)) user = await prisma.user.update({ where: { id: user.id }, data: { name: userName || user.name, email: userEmail || user.email } })
+  if (user) {
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        name: userName || user.name,
+        email: userEmail || user.email,
+        ...(userSpecialty !== undefined ? { specialty: userSpecialty } : {}),
+        ...(userPhone !== undefined ? { phone: userPhone } : {}),
+      },
+    })
+  }
   return { ...practice, user }
+})
+
+app.post('/api/v1/auth/change-password', async (request, reply) => {
+  const { currentPassword, newPassword } = request.body || {}
+  if (!currentPassword || !newPassword) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Contraseña actual y nueva son obligatorias.', fields: { currentPassword: !currentPassword, newPassword: !newPassword } })
+  if (newPassword.length < 8) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La nueva contraseña debe tener al menos 8 caracteres.', fields: { newPassword: true } })
+  const user = await prisma.user.findUnique({ where: { id: request.userId } })
+  if (!user) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Sesión inválida.', fields: {} })
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash)
+  if (!valid) return reply.code(400).send({ code: 'INVALID_PASSWORD', message: 'La contraseña actual no es correcta.', fields: { currentPassword: true } })
+  const passwordHash = await bcrypt.hash(newPassword, 10)
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } })
+  await logAudit(request, { action: 'password_changed', entity: 'User', entityId: user.id })
+  return reply.code(204).send()
 })
 
 const LOGO_MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
