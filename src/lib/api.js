@@ -47,6 +47,10 @@ export const dashboardApi = {
 export const practiceApi = {
   get: () => apiRequest('/practice'),
   update: (payload) => apiRequest('/practice', { method: 'PUT', body: JSON.stringify(payload) }),
+  uploadLogo: (dataUrl) => apiRequest('/practice/logo', { method: 'POST', body: JSON.stringify({ dataUrl }) }),
+  // Public route (no Authorization header needed) so it can be used directly as an <img src> —
+  // in the app, inside generated PDFs would need the file on disk instead, see server/index.js.
+  logoUrl: (practiceId) => `${API_BASE}/practice/${practiceId}/logo`,
 }
 
 export const patientsApi = {

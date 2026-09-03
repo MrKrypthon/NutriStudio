@@ -13,7 +13,9 @@ import { NutritionEngineError, computeEnergyRequirement, computeMacros } from '.
 import { DAY_LABELS, MEAL_TYPE_LABELS, buildMenuSnapshot } from './domain/documents.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
-const app = Fastify({ logger: true })
+// Default is 1 MiB, too small for a base64-encoded logo upload (see POST /practice/logo) --
+// a 2 MB image becomes ~2.7 MB as base64 JSON text.
+const app = Fastify({ logger: true, bodyLimit: 5 * 1024 * 1024 })
 const prisma = new PrismaClient()
 
 if (!process.env.DATABASE_URL) app.log.warn('DATABASE_URL no está configurada. Copia .env.example a .env antes de usar persistencia.')
@@ -26,6 +28,10 @@ const SESSION_TTL = '7d'
 // preflight (@fastify/cors replies to OPTIONS before this hook runs, but excluded here too
 // in case that ever changes) and health check.
 const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login'])
+// Practice logos are branding, not patient data, and need to load in a plain <img src>
+// (which can't send an Authorization header) both in-app and inside generated PDFs/emails —
+// so this one route is public by design, scoped by the practice's own unguessable uuid.
+const PUBLIC_ROUTE_PATTERNS = [/^\/api\/v1\/practice\/[^/]+\/logo$/]
 
 // @fastify/cors defaults `methods` to 'GET,HEAD,POST' only (the CORS-spec "simple methods"),
 // so without this every PUT here has silently failed preflight for any cross-origin caller
@@ -34,7 +40,8 @@ const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login'])
 await app.register(cors, { origin: true, methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] })
 
 app.addHook('onRequest', async (request, reply) => {
-  if (request.method === 'OPTIONS' || PUBLIC_ROUTES.has(request.url.split('?')[0])) return
+  const pathname = request.url.split('?')[0]
+  if (request.method === 'OPTIONS' || PUBLIC_ROUTES.has(pathname) || PUBLIC_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname))) return
   if (!request.url.startsWith('/api/v1/')) return
   const header = request.headers.authorization
   if (!header?.startsWith('Bearer ')) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Inicia sesión para continuar.', fields: {} })
@@ -81,12 +88,39 @@ app.get('/api/v1/practice', async (request, reply) => {
 })
 
 app.put('/api/v1/practice', async (request, reply) => {
-  const { name, timeZone, userName, userEmail } = request.body || {}
+  const { name, timeZone, userName, userEmail, businessHours } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
-  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone } })
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(businessHours !== undefined ? { businessHours } : {}) } })
   let user = await prisma.user.findUnique({ where: { id: request.userId } })
   if (user && (userName || userEmail)) user = await prisma.user.update({ where: { id: user.id }, data: { name: userName || user.name, email: userEmail || user.email } })
   return { ...practice, user }
+})
+
+const LOGO_MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
+
+app.post('/api/v1/practice/logo', async (request, reply) => {
+  const { dataUrl } = request.body || {}
+  const match = typeof dataUrl === 'string' && dataUrl.match(/^data:(image\/(?:png|jpeg|webp));base64,(.+)$/)
+  if (!match) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen PNG, JPG o WEBP.', fields: { dataUrl: true } })
+  const buffer = Buffer.from(match[2], 'base64')
+  if (buffer.byteLength > 2 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El logo no puede pesar más de 2 MB.', fields: { dataUrl: true } })
+  const ext = LOGO_MIME_EXT[match[1]]
+  const directory = path.resolve(process.env.LOGO_STORAGE_PATH || './storage/logos')
+  await mkdir(directory, { recursive: true })
+  const fileName = `${request.practiceId}.${ext}`
+  await writeFile(path.join(directory, fileName), buffer)
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { logoUrl: fileName } })
+  return { ...practice, logoDownloadUrl: `/api/v1/practice/${request.practiceId}/logo` }
+})
+
+app.get('/api/v1/practice/:practiceId/logo', async (request, reply) => {
+  const practice = await prisma.practice.findUnique({ where: { id: request.params.practiceId } })
+  if (!practice?.logoUrl) return reply.code(404).send({ code: 'LOGO_NOT_FOUND', message: 'Esta práctica no tiene logo configurado.', fields: {} })
+  const directory = path.resolve(process.env.LOGO_STORAGE_PATH || './storage/logos')
+  const ext = practice.logoUrl.split('.').pop()
+  const mime = Object.entries(LOGO_MIME_EXT).find(([, e]) => e === ext)?.[0] || 'application/octet-stream'
+  const file = await readFile(path.join(directory, practice.logoUrl))
+  return reply.type(mime).header('Cache-Control', 'public, max-age=300').send(file)
 })
 
 app.get('/api/v1/patients', async (request) => {
@@ -719,21 +753,27 @@ app.get('/api/v1/documents', async (request) => {
   return { items: documents }
 })
 
-function drawDocumentBrand(file, subtitle) {
-  file.fontSize(20).fillColor('#34745f').text('nutri·studio')
-  file.fontSize(9).fillColor('#7b8780').text(subtitle)
-  file.moveDown(2)
+function drawDocumentBrand(file, subtitle, practice, logoBuffer) {
+  if (logoBuffer) {
+    file.image(logoBuffer, 48, file.y, { height: 30 })
+    file.fontSize(9).fillColor('#7b7d87').text(subtitle, 48, file.y + 34)
+    file.y += 44
+  } else {
+    file.fontSize(20).fillColor('#7267ef').text(practice?.name || 'nutri·studio')
+    file.fontSize(9).fillColor('#7b7d87').text(subtitle)
+    file.moveDown(2)
+  }
 }
 
-function drawConsultationReport(file, document) {
-  drawDocumentBrand(file, 'EXPEDIENTE DE CONSULTA NUTRICIONAL')
-  file.fontSize(18).fillColor('#202124').text('Informe de consulta')
+function drawConsultationReport(file, document, practice, user, logoBuffer) {
+  drawDocumentBrand(file, 'EXPEDIENTE DE CONSULTA NUTRICIONAL', practice, logoBuffer)
+  file.fontSize(18).fillColor('#1c232f').text('Informe de consulta')
   file.fontSize(10).fillColor('#6e6e73').text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
   file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`)
   file.moveDown()
-  file.roundedRect(48, file.y, 516, 70, 6).fill('#eef8f2')
-  file.fillColor('#34745f').fontSize(11).text('Resumen de la consulta', 62, file.y + 14)
-  file.fillColor('#4c5b53').fontSize(9).text('Documento generado desde la valoración clínica de Nutri Studio.', 62, file.y + 33, { width: 480 })
+  file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
+  file.fillColor('#7267ef').fontSize(11).text('Resumen de la consulta', 62, file.y + 14)
+  file.fillColor('#4c4e5b').fontSize(9).text('Documento generado desde la valoración clínica de Nutri Studio.', 62, file.y + 33, { width: 480 })
   file.y += 95
 
   const consultation = document.consultation
@@ -742,8 +782,8 @@ function drawConsultationReport(file, document) {
   const measurement = (consultation?.measurements || [])[0]
   const diagnoses = consultation?.diagnoses || []
 
-  const drawTitle = (title) => { file.fillColor('#34745f').fontSize(13).text(title); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#dce8df').stroke(); file.moveDown() }
-  const drawLine = (text) => file.fillColor('#4c5b53').fontSize(9).text(text, { width: 480 })
+  const drawTitle = (title) => { file.fillColor('#7267ef').fontSize(13).text(title); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#dce0e8').stroke(); file.moveDown() }
+  const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, { width: 480 })
   const drawEntries = (payload) => { const entries = Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== '') ; if (!entries.length) return false; for (const [key, value] of entries) drawLine(`${key}: ${Array.isArray(value) ? value.join(', ') : value}`); return true }
 
   drawTitle('Datos generales')
@@ -769,13 +809,13 @@ function drawConsultationReport(file, document) {
   if (!drawEntries(payloadOf('treatment'))) drawLine('Sin recomendaciones registradas.')
   file.moveDown(1.5)
 
-  file.fillColor('#8e9a94').fontSize(9).text('Gabriela Alonso · Nutrióloga', { align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
 }
 
-function drawNutritionPlanMenu(file, document) {
+function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   const plan = document.plan
-  drawDocumentBrand(file, 'PLAN DE ALIMENTACIÓN')
-  file.fontSize(18).fillColor('#202124').text('Menú semanal')
+  drawDocumentBrand(file, 'PLAN DE ALIMENTACIÓN', practice, logoBuffer)
+  file.fontSize(18).fillColor('#1c232f').text('Menú semanal')
   file.fontSize(10).fillColor('#6e6e73').text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
   file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`)
   if (plan?.goal) file.text(`Objetivo: ${plan.goal}`)
@@ -783,9 +823,9 @@ function drawNutritionPlanMenu(file, document) {
 
   if (plan?.targetKcal) {
     const macros = computeMacros({ kcal: plan.targetKcal, carbsPercent: plan.carbsPercent, proteinPercent: plan.proteinPercent, fatPercent: plan.fatPercent })
-    file.roundedRect(48, file.y, 516, 70, 6).fill('#eef8f2')
-    file.fillColor('#34745f').fontSize(11).text(`Requerimiento: ${plan.targetKcal} kcal/día`, 62, file.y + 14)
-    file.fillColor('#4c5b53').fontSize(9).text(`Carbohidratos ${macros.macros.carbs.grams} g · Proteína ${macros.macros.protein.grams} g · Grasas ${macros.macros.fat.grams} g`, 62, file.y + 33, { width: 480 })
+    file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
+    file.fillColor('#7267ef').fontSize(11).text(`Requerimiento: ${plan.targetKcal} kcal/día`, 62, file.y + 14)
+    file.fillColor('#4c4e5b').fontSize(9).text(`Carbohidratos ${macros.macros.carbs.grams} g · Proteína ${macros.macros.protein.grams} g · Grasas ${macros.macros.fat.grams} g`, 62, file.y + 33, { width: 480 })
     file.y += 95
   }
 
@@ -794,27 +834,36 @@ function drawNutritionPlanMenu(file, document) {
   for (const entry of menu) { if (!byDay.has(entry.dayOfWeek)) byDay.set(entry.dayOfWeek, []); byDay.get(entry.dayOfWeek).push(entry) }
   if (!menu.length) { file.fillColor('#6e6e73').fontSize(10).text('Este plan no tiene recetas asignadas.'); return }
   for (const [dayOfWeek, entries] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
-    file.fillColor('#34745f').fontSize(13).text(DAY_LABELS[dayOfWeek] || `Día ${dayOfWeek}`)
-    file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#dce8df').stroke()
+    file.fillColor('#7267ef').fontSize(13).text(DAY_LABELS[dayOfWeek] || `Día ${dayOfWeek}`)
+    file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#dce0e8').stroke()
     file.moveDown(0.5)
-    for (const entry of entries) file.fillColor('#4c5b53').fontSize(9).text(`${MEAL_TYPE_LABELS[entry.mealType] || entry.mealType}: ${entry.recipeName} (${entry.kcal} kcal)`)
+    for (const entry of entries) file.fillColor('#4c4e5b').fontSize(9).text(`${MEAL_TYPE_LABELS[entry.mealType] || entry.mealType}: ${entry.recipeName} (${entry.kcal} kcal)`)
     file.moveDown()
   }
-  file.fillColor('#8e9a94').fontSize(9).text('Gabriela Alonso · Nutrióloga', { align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
 }
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
   const practiceId = request.practiceId
   const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } }, include: { patient: true, consultation: { include: { measurements: true, diagnoses: true, sections: true } }, plan: true } })
   if (!document) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
+  const [practice, user] = await Promise.all([
+    prisma.practice.findUnique({ where: { id: practiceId } }),
+    prisma.user.findUnique({ where: { id: request.userId } }),
+  ])
+  let logoBuffer = null
+  if (practice?.logoUrl) {
+    try { logoBuffer = await readFile(path.join(path.resolve(process.env.LOGO_STORAGE_PATH || './storage/logos'), practice.logoUrl)) }
+    catch { logoBuffer = null }
+  }
   const pdf = await new Promise((resolve, reject) => {
     const chunks = []
     const file = new PDFDocument({ size: 'LETTER', margin: 48 })
     file.on('data', (chunk) => chunks.push(chunk))
     file.on('end', () => resolve(Buffer.concat(chunks)))
     file.on('error', reject)
-    if (document.type === 'nutrition_plan') drawNutritionPlanMenu(file, document)
-    else drawConsultationReport(file, document)
+    if (document.type === 'nutrition_plan') drawNutritionPlanMenu(file, document, practice, user, logoBuffer)
+    else drawConsultationReport(file, document, practice, user, logoBuffer)
     file.end()
   })
   const directory = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents'); await mkdir(directory, { recursive: true }); const fileName = `${document.id}-v${document.version + 1}.pdf`; const filePath = path.join(directory, fileName); await writeFile(filePath, pdf); const checksum = createHash('sha256').update(pdf).digest('hex'); const generated = await prisma.document.update({ where: { id: document.id }, data: { generatedAt: new Date(), version: { increment: 1 }, checksum, storageKey: fileName } }); return { ...generated, downloadUrl: `/api/v1/documents/${document.id}/download` }

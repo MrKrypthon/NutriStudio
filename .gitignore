@@ -1,6 +1,7 @@
 node_modules/
 dist/
 storage/documents/*.pdf
+storage/logos/*
 .env
 *.local
 DIETOCALCULO.xlsx
