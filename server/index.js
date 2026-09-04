@@ -1161,7 +1161,7 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   const menu = plan?.menuSnapshot || []
   if (!menu.length) {
     file.fillColor('#6e6e73').fontSize(10).text('Este plan no tiene recetas asignadas.')
-    file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
+    file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, 48, file.y, { width: 516, align: 'center' })
     return
   }
 
@@ -1235,7 +1235,7 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   // the footer onto a second, almost-empty page. Also pass an explicit width: pdfkit persists the
   // last text() width/x, so a bare { align: 'center' } after the cell loop inherited the last
   // cell's narrow box and pinned the footer to the far right.
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, x0, file.y, { width: contentW, align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, x0, file.y, { width: contentW, align: 'center' })
 }
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
