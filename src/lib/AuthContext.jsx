@@ -36,7 +36,17 @@ export function AuthProvider({ children }) {
     setStatus('authenticated')
   }, [])
 
-  return <AuthContext.Provider value={{ user, practice, status, login, logout }}>{children}</AuthContext.Provider>
+  // Re-sync user/practice after profile/logo edits in Configuración so the sidebar (which reads
+  // them from here) updates without a full reload.
+  const refreshPractice = useCallback(async () => {
+    try {
+      const response = await authApi.me()
+      setUser(response.user)
+      setPractice(response.practice)
+    } catch { /* keep the current state; a reload will retry */ }
+  }, [])
+
+  return <AuthContext.Provider value={{ user, practice, status, login, logout, refreshPractice }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

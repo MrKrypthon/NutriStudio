@@ -9,6 +9,7 @@ const SECTION_KEYS = { Resumen: 'summary', General: 'general', Antropométrico: 
 const TRANSCRIPT_FIELD = 'Transcripción de la consulta'
 const SAVE_LABELS = { idle: '● Guardado', editing: '● Editando…', saving: '● Guardando…', saved: '● Guardado', error: '⚠ Error al guardar', conflict: '⚠ Se editó en otra sesión, recarga para ver el cambio' }
 const CONSULTATION_STATUS_LABELS = { DRAFT: 'Borrador', IN_PROGRESS: 'En curso', COMPLETED: 'Completada' }
+const APPOINTMENT_TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia', BLOCK: 'Bloqueo' }
 
 const SEX_LABELS = { female: 'Femenino', male: 'Masculino', F: 'Femenino', M: 'Masculino' }
 function computeAge(birthDate) {
@@ -20,6 +21,7 @@ function computeAge(birthDate) {
   return age
 }
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—')
+const formatAppointmentTime = (iso) => { const d = new Date(iso); return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` }
 
 const DIAGNOSIS_DOMAINS = [
   ['INGESTIÓN', 'Problemas relacionados con ingesta, nutrientes y sustancias bioactivas.', 'mint'],
@@ -263,6 +265,16 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }
   const updateField = (label, value) => updateFields({ [label]: value })
 
+  // For Antropométrico: as soon as weight and height are both present, derive the IMC instead of
+  // making the nutritionist type it by hand.
+  const updateAnthropometric = (label, value) => {
+    const next = { ...currentValues, [label]: value }
+    const weight = Number(next['Peso (kg)'])
+    const height = Number(next['Talla (cm)'])
+    if (weight > 0 && height > 0) next['IMC calculado'] = (weight / ((height / 100) ** 2)).toFixed(1)
+    updateFields(next)
+  }
+
   const saveLabel = SAVE_LABELS[saveState]
   const anthro = sections.anthropometric?.payload || {}
   const numOrUndefined = (value) => value !== undefined && value !== '' ? Number(value) : undefined
@@ -291,25 +303,33 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const closeDiagnosisForm = () => setDiagnosisForm(null)
   const updateDiagnosisForm = (key, value) => setDiagnosisForm((prev) => ({ ...prev, [key]: value }))
 
-  const saveDiagnosis = async () => {
-    if (!consultation || !diagnosisForm?.problem) return
-    setDiagnosisSaveState('saving')
-    try {
-      const created = await clinicalApi.addDiagnosis(consultation.id, diagnosisForm)
-      setDiagnoses((prev) => [...prev, created])
-      setDiagnosisForm(null)
-      setDiagnosisSaveState('idle')
-    } catch {
-      setDiagnosisSaveState('error')
-    }
-  }
-
   const removeDiagnosis = async (id) => {
     if (!consultation) return
     try {
       await clinicalApi.removeDiagnosis(consultation.id, id)
       setDiagnoses((prev) => prev.filter((d) => d.id !== id))
     } catch { /* leave it in the list; the professional can retry */ }
+  }
+
+  // Diagnoses were create/delete only; the PATCH endpoint existed but was never wired.
+  const editDiagnosis = (d) => setDiagnosisForm({ ...d, _editingId: d.id })
+  const saveDiagnosis = async () => {
+    if (!consultation || !diagnosisForm?.problem) return
+    setDiagnosisSaveState('saving')
+    try {
+      const { _editingId, id: _diagnosisId, ...payload } = diagnosisForm
+      if (_editingId) {
+        const updated = await clinicalApi.updateDiagnosis(consultation.id, _editingId, payload)
+        setDiagnoses((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))
+      } else {
+        const created = await clinicalApi.addDiagnosis(consultation.id, payload)
+        setDiagnoses((prev) => [...prev, created])
+      }
+      setDiagnosisForm(null)
+      setDiagnosisSaveState('idle')
+    } catch {
+      setDiagnosisSaveState('error')
+    }
   }
 
   const labs = currentValues['Estudios'] || []
@@ -322,6 +342,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     setLabForm(null)
   }
   const removeLab = (id) => updateField('Estudios', labs.filter((lab) => lab.id !== id))
+  const updateLabValue = (id, value) => updateField('Estudios', labs.map((lab) => (lab.id === id ? { ...lab, value } : lab)))
 
   const uploadLabAttachment = async (file) => {
     if (!consultation || !file) return
@@ -467,7 +488,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               ? <div className="chart-lines"><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points={chartPointLine} fill="none" stroke="var(--green)" strokeWidth="3" />{chartPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" fill="var(--green)" />)}</svg><div className="chart-labels">{chartPoints.map((p, i) => <span key={i}><b>{p.value}</b><br />{`${new Date(p.date).getUTCDate()}/${String(new Date(p.date).getUTCMonth() + 1).padStart(2, '0')}`}</span>)}</div></div>
               : <p className="muted" style={{ padding: '42px 0', textAlign: 'center' }}>Registra al menos dos mediciones para ver la evolución.</p>}
           </div>
-          <FormCard title="Peso y talla" fields={['Peso (kg)|', 'Talla (cm)|', 'IMC calculado|', 'Análisis de peso y talla|']} values={currentValues} onFieldChange={updateField} />
+          <FormCard title="Peso y talla" fields={['Peso (kg)|', 'Talla (cm)|', 'IMC calculado|', 'Análisis de peso y talla|']} values={currentValues} onFieldChange={updateAnthropometric} />
           <FormCard title="Circunferencias" fields={['Cintura (cm)|', 'Cadera (cm)|', 'Abdomen (cm)|', 'Brazo (cm)|', 'ICC calculado|']} values={currentValues} onFieldChange={updateField} />
           <FormCard title="Composición corporal" fields={['% Grasa corporal|', 'Kg de grasa|', 'Kg de músculo|', '% Músculo|']} values={currentValues} onFieldChange={updateField} />
           <FormCard title="Pliegues cutáneos" fields={['Tricipital (mm)|', 'Bicipital (mm)|', 'Subescapular (mm)|', 'Suprailiaco (mm)|']} values={currentValues} onFieldChange={updateField} />
@@ -490,7 +511,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             </div>
             <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name || !labForm.value} onClick={saveLab}>Guardar estudio</button></div>
           </div>}
-          {labs.length > 0 && <div className="lab-list">{labs.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : lab.status === 'Pendiente' ? 'pending' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} readOnly /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
+          {labs.length > 0 && <div className="lab-list">{labs.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
 
           <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName} y captura sus valores arriba a mano; todavía no hay lectura automática.</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
           {uploadState === 'error' && <div className="form-error">⚠ {uploadError}</div>}
@@ -505,12 +526,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <div className="diagnosis-domains">{DIAGNOSIS_DOMAINS.map(([title, desc, color]) => <div className={'domain-card ' + color} key={title} onClick={() => openDiagnosisForm(title)} style={{ cursor: 'pointer' }}><span>◉</span><b>{title}</b><small>{desc}</small><strong>{diagnoses.filter((d) => d.domain === title).length} seleccionados</strong></div>)}</div>
 
         {diagnosisForm && <div className="diagnosis-form panel">
-          <p className="eyebrow">NUEVO DIAGNÓSTICO · {diagnosisForm.domain}</p>
+          <p className="eyebrow">{diagnosisForm._editingId ? 'EDITAR DIAGNÓSTICO' : 'NUEVO DIAGNÓSTICO'} · {diagnosisForm.domain}</p>
           <label>Problema<input value={diagnosisForm.problem} onChange={(e) => updateDiagnosisForm('problem', e.target.value)} placeholder="Ej. Ingesta excesiva de energía" /></label>
           <label>Etiología (relacionado con…)<textarea value={diagnosisForm.etiology} onChange={(e) => updateDiagnosisForm('etiology', e.target.value)} placeholder="Causa o factores contribuyentes..." /></label>
           <label>Evidencia (evidenciado por…)<textarea value={diagnosisForm.evidence} onChange={(e) => updateDiagnosisForm('evidence', e.target.value)} placeholder="Signos, síntomas o datos que lo sustentan..." /></label>
           {diagnosisSaveState === 'error' && <div className="form-error">⚠ No se pudo guardar el diagnóstico.</div>}
-          <div className="modal-actions"><button type="button" className="secondary" onClick={closeDiagnosisForm}>Cancelar</button><button className="primary" disabled={!diagnosisForm.problem || diagnosisSaveState === 'saving'} onClick={saveDiagnosis}>{diagnosisSaveState === 'saving' ? 'Guardando…' : 'Guardar diagnóstico'}</button></div>
+          <div className="modal-actions"><button type="button" className="secondary" onClick={closeDiagnosisForm}>Cancelar</button><button className="primary" disabled={!diagnosisForm.problem || diagnosisSaveState === 'saving'} onClick={saveDiagnosis}>{diagnosisSaveState === 'saving' ? 'Guardando…' : diagnosisForm._editingId ? 'Guardar cambios' : 'Guardar diagnóstico'}</button></div>
         </div>}
 
         <div className="diagnosis-selected">
@@ -518,7 +539,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           {!diagnoses.length && <p className="muted">Todavía no hay diagnósticos registrados para esta consulta.</p>}
           {diagnoses.map((d) => <div className="diagnosis-entry" key={d.id}>
             <div><b>{d.domain}</b><span>{d.problem}</span>{d.etiology && <small>Relacionado con: {d.etiology}</small>}{d.evidence && <small>Evidenciado por: {d.evidence}</small>}</div>
-            <button type="button" className="link-button" onClick={() => removeDiagnosis(d.id)}>Quitar</button>
+            <div className="diagnosis-actions"><button type="button" className="link-button" onClick={() => editDiagnosis(d)}>Editar</button><button type="button" className="link-button" onClick={() => removeDiagnosis(d.id)}>Quitar</button></div>
           </div>)}
         </div>
       </div>
@@ -587,9 +608,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           <label>Ocupación<input value={patient?.occupation || '—'} readOnly /></label>
           <label>Contacto<input value={[patient?.phone, patient?.email].filter(Boolean).join(' · ') || '—'} readOnly /></label>
         </div></div>
-        <div className="summary-card form-card"><h3>Historial de consultas</h3><div className="form-grid">
+        <div className="summary-card form-card"><h3>Historial y agenda</h3><div className="form-grid">
           <label>Consultas registradas<input value={`${historyCount}`} readOnly /></label>
           <label>Consulta actual<input value={consultation ? (consultation.status === 'IN_PROGRESS' ? 'En curso' : consultation.status) : '—'} readOnly /></label>
+          <label>Próxima cita<input value={patient?.nextAppointmentAt ? `${formatDate(patient.nextAppointmentAt)} · ${formatAppointmentTime(patient.nextAppointmentAt)} · ${APPOINTMENT_TYPE_LABELS[patient.nextAppointmentType] || 'Cita'}` : 'Sin cita próxima'} readOnly /></label>
         </div></div>
       </div>
 

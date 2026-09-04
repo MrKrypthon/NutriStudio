@@ -3,14 +3,15 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { foodApi, ingredientsApi } from '../../lib/api.js'
 
-const GROUPS = ['Verduras', 'Frutas', 'Cereales', 'Proteínas', 'Lácteos', 'Grasas']
+const GROUPS = ['Verduras', 'Frutas', 'Cereales S/G', 'Cereales C/G', 'AOA MBAG', 'AOA BAG', 'AOA MAG', 'AOA AAG', 'Leguminosas', 'Leche entera', 'Leche semidescremada', 'Leche descremada', 'Leche con azúcar', 'Grasas sin proteínas', 'Grasas con proteínas', 'Azucares sin grasa', 'Azucares con grasa', 'Libres en energía', 'Alcohol']
+const SOURCE_LABELS = { usda: 'USDA', openfoodfacts: 'Open Food Facts' }
 
 export default function ImportFoodsPage({ setActive }) {
   const [query, setQuery] = useState('')
   const [source, setSource] = useState('all')
   const [items, setItems] = useState([])
   const [selected, setSelected] = useState(null)
-  const [group, setGroup] = useState('Cereales')
+  const [group, setGroup] = useState('Verduras')
   const [portion, setPortion] = useState('100 g')
   const [saved, setSaved] = useState(false)
   const [translatedFrom, setTranslatedFrom] = useState(null)
@@ -53,7 +54,7 @@ export default function ImportFoodsPage({ setActive }) {
         <div className="import-results-head"><b>{items.length || 0} resultados</b><span>Selecciona un alimento para revisar</span></div>
         {items.map((item) => <button className={'review-result panel ' + (selected?.externalId === item.externalId ? 'selected' : '')} onClick={() => setSelected(item)} key={item.source + item.externalId}>
           <span className="import-result-icon">{item.imageUrl ? <img src={item.imageUrl} alt="" /> : '◉'}</span>
-          <span><b>{item.name}</b><small>{item.source} · {item.serving.quantity}{item.serving.unit}</small></span>
+          <span><b>{item.name}</b><small>{SOURCE_LABELS[item.source] || item.source} · {item.serving.quantity}{item.serving.unit}</small></span>
           <span className="muted">{Math.round(item.nutrition.kcal || 0)} kcal</span>
         </button>)}
         {!items.length && <div className="import-empty panel"><span>⌕</span><h2>Busca para ver resultados</h2><p>El alimento aún no se agregará hasta que lo revises.</p></div>}
@@ -64,7 +65,7 @@ export default function ImportFoodsPage({ setActive }) {
           ? <>
               <p className="eyebrow">REVISIÓN PROFESIONAL</p>
               <h2>{selected.name}</h2>
-              <span className="source-badge">Fuente: {selected.source}</span>
+              <span className="source-badge">Fuente: {SOURCE_LABELS[selected.source] || selected.source}</span>
               <div className="review-nutrients">
                 <div><small>Energía</small><b>{Math.round(selected.nutrition.kcal || 0)} kcal</b></div>
                 <div><small>Proteína</small><b>{Number(selected.nutrition.protein || 0).toFixed(1)} g</b></div>

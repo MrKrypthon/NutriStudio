@@ -166,7 +166,7 @@ app.get('/api/v1/patients', async (request) => {
   const where = {
     practiceId: request.practiceId,
     status,
-    ...(search ? { OR: [{ firstName: { contains: search, mode: 'insensitive' } }, { lastName: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }] } : {}),
+    ...(search ? { OR: [{ firstName: { contains: search, mode: 'insensitive' } }, { lastName: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }, { phone: { contains: search, mode: 'insensitive' } }] } : {}),
     // "Sin cita próxima" (RF-04): ACTIVE patients with no upcoming, non-cancelled appointment.
     ...(noNext === '1' ? { appointments: { none: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } } } : {}),
   }
@@ -198,9 +198,13 @@ app.post('/api/v1/patients', async (request, reply) => {
 })
 
 app.get('/api/v1/patients/:patientId', async (request, reply) => {
-  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
+  const patient = await prisma.patient.findFirst({
+    where: { id: request.params.patientId, practiceId: request.practiceId },
+    include: { appointments: { where: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, orderBy: { startAt: 'asc' }, take: 1, select: { startAt: true, type: true } } },
+  })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
-  return patient
+  const { appointments, ...rest } = patient
+  return { ...rest, nextAppointmentAt: appointments[0]?.startAt || null, nextAppointmentType: appointments[0]?.type || null }
 })
 
 app.patch('/api/v1/patients/:patientId', async (request, reply) => {
@@ -403,7 +407,7 @@ app.delete('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async
 
 app.get('/api/v1/appointments', async (request) => {
   const { from, to } = request.query
-  const appointments = await prisma.appointment.findMany({ where: { practiceId: request.practiceId, startAt: { gte: new Date(from), lte: new Date(to) } }, include: { patient: true }, orderBy: { startAt: 'asc' } })
+  const appointments = await prisma.appointment.findMany({ where: { practiceId: request.practiceId, startAt: { gte: new Date(from), lte: new Date(to) }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, include: { patient: true }, orderBy: { startAt: 'asc' } })
   return { items: appointments }
 })
 
@@ -815,7 +819,7 @@ app.get('/api/v1/dashboard/today', async (request) => {
   const end = new Date(`${date}T23:59:59.999Z`)
   const practiceId = request.practiceId
   const [appointments, pendingConfirmations, followUps, activePatients, tasks] = await prisma.$transaction([
-    prisma.appointment.findMany({ where: { practiceId, startAt: { gte: start, lte: end } }, include: { patient: true }, orderBy: { startAt: 'asc' } }),
+    prisma.appointment.findMany({ where: { practiceId, startAt: { gte: start, lte: end }, status: { notIn: ['CANCELLED', 'NO_SHOW'] }, type: { not: 'BLOCK' } }, include: { patient: true }, orderBy: { startAt: 'asc' } }),
     prisma.appointment.count({ where: { practiceId, startAt: { gte: start, lte: end }, status: 'PENDING_CONFIRMATION' } }),
     prisma.task.count({ where: { practiceId, status: 'pending', type: { in: ['nutrition_plan', 'consultation_report'] } } }),
     prisma.patient.count({ where: { practiceId, status: 'ACTIVE' } }),
@@ -1161,7 +1165,7 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   const menu = plan?.menuSnapshot || []
   if (!menu.length) {
     file.fillColor('#6e6e73').fontSize(10).text('Este plan no tiene recetas asignadas.')
-    file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
+    file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, 48, file.y, { width: 516, align: 'center' })
     return
   }
 
@@ -1235,7 +1239,7 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   // the footer onto a second, almost-empty page. Also pass an explicit width: pdfkit persists the
   // last text() width/x, so a bare { align: 'center' } after the cell loop inherited the last
   // cell's narrow box and pinned the footer to the far right.
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, x0, file.y, { width: contentW, align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, x0, file.y, { width: contentW, align: 'center' })
 }
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {

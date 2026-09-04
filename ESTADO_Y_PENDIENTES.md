@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, zona horaria/estado de sesión, estados vacíos/badges honestos, cajón del paciente, preparación/micros en detalle, gráfico de evolución real, y — después del merge de la fase 60 — la cuarta auditoría: firma real en documentos, bloqueos no-confirmables, consentimiento persistido y avisos honestos; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (fases 47-61 + rama `mejoras-detalles` con 18 mejoras acumuladas — búsqueda por teléfono, macros configurables, IMC auto-calculado, diagnósticos editables, próxima cita en Resumen, etc.; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -501,3 +501,29 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 49. ~~Detalles: preparación en recetas y tabla de micronutrientes completa en Ingredientes~~ — hecho (fase 59, ver sección al final de este archivo): el detalle de receta muestra la preparación guardada, y la tabla del ingrediente cubre los 26 nutrientes del catálogo en 2 columnas.
 50. ~~Gráfico de evolución de Antropométrico con mediciones reales~~ — hecho (fase 60, ver sección al final de este archivo): el gráfico "Evolución de métricas" dejó de ser un SVG hardcodeado con fechas falsas; ahora traza Peso/IMC/% grasa reales del paciente (últimas 8 mediciones), con selector funcional y mensaje honesto si hay menos de 2.
 51. ~~Cuarta auditoría: firma real, bloqueos no-confirmables, consentimiento persistido y avisos honestos~~ — hecho (fase 61, ver sección al final de este archivo): firma del preview con nombre real, bloqueos `SCHEDULED` sin paciente (y fix del 500 por `patientId: ''`), checkbox de consentimiento persistido (`consentDataAt`), aviso en vez de cierre silencioso en demo, y "Listo" que sí guarda horarios.
+
+
+## Rama `mejoras-detalles` — 18 mejoras acumuladas (sin merge, pendientes de revisión en PR)
+
+Batch de mejoras reales (bugs, datos falsos, huecos de funcionalidad) acumuladas en una sola rama para revisar en un PR:
+
+1. **Pacientes**: la búsqueda encuentra por teléfono y email (frontend + backend; antes solo nombre).
+2. **Importar alimentos**: etiquetas humanas de fuente (USDA / Open Food Facts).
+3. **PDF**: pie del menú semanal consistente con los demás documentos ("· Nutrióloga" + nombre real, y ancho explícito en la rama sin menú).
+4. **Agenda/Hoy**: excluye citas `CANCELLED`/`NO_SHOW` de la grilla y de "Agenda de hoy".
+5. **Pacientes**: estado vacío en la tabla (sin resultados / sin archivados / sin cita próxima / sin pacientes).
+6. **Importar alimentos**: los 19 grupos SMAE completos (antes 6 genéricos) para clasificar bien lo importado; **Dashboard**: la "Próxima acción" marca "Vencido" cuando la tarea ya venció.
+7. **Configuración**: el nombre de la práctica ahora es editable (se cargaba/enviaba pero no había campo) y el sidebar se actualiza al guardar (`refreshPractice` en AuthContext; también tras subir logo).
+8. **"Asignar al plan"** desde una receta precarga la búsqueda del picker con esa receta en el Constructor.
+9. **Recetas**: quita el corazón decorativo que implicaba favoritos inexistentes.
+10. **Hoy**: las citas por confirmar se confirman con un clic desde "Agenda de hoy" (consistente con Agenda) y el contador "Por confirmar" se actualiza al instante.
+11. **Constructor de plan**: distribución de macros **configurable** (RF-07) — %, validación de que sumen 100% (deshabilita guardar si no), gramos según el requerimiento, y precarga de macros guardados.
+12. **Antropométrico**: el IMC se calcula solo al capturar peso y talla.
+13. **Expediente**: el valor de un estudio de laboratorio es editable y los diagnósticos se pueden editar (el endpoint PATCH existía sin conectar).
+14. **Constructor de plan**: el panel de % adecuación sin evaluación ofrece "Ir al cálculo →".
+15. **Resumen del expediente**: muestra la próxima cita del paciente (`GET /patients/:id` ahora la incluye).
+16. **Hoy**: los bloques de disponibilidad ya no aparecen como citas en "Agenda de hoy" (siguen en la grilla de Agenda).
+17. **Constructor de plan**: el total de la Distribución aclara que es "Promedio por tiempo de comida (kcal)".
+18. **Verificación**: barrido con Chromium de los 12 módulos del sidebar sin errores de consola; el motor de micronutrientes no divide entre cero (ninguna meta IDR es 0).
+
+Verificado commit a commit (build OK, 47/47 tests, casos probados contra API/Chromium). Todos los datos modificados durante las pruebas se revirtieron (macros del borrador de Mariana, sección antropométrica, nombre de la práctica).

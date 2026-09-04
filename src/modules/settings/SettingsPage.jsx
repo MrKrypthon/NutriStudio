@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { authApi, practiceApi } from '../../lib/api.js'
+import { useAuth } from '../../lib/AuthContext.jsx'
 
 const TIME_ZONE_OPTIONS = [
   ['America/Mexico_City', 'Ciudad de México (GMT-6)'],
@@ -27,6 +28,7 @@ const readAsDataUrl = (file) => new Promise((resolve, reject) => {
 })
 
 export default function SettingsPage({ setActive }) {
+  const { refreshPractice } = useAuth()
   const [loadState, setLoadState] = useState('loading')
   const [practiceName, setPracticeName] = useState('')
   const [practiceId, setPracticeId] = useState('')
@@ -76,6 +78,7 @@ export default function SettingsPage({ setActive }) {
     setError('')
     try {
       await practiceApi.update({ name: practiceName, ...form })
+      refreshPractice()
       setSaveState('saved')
       setEditingHours(false)
     } catch (err) {
@@ -102,6 +105,7 @@ export default function SettingsPage({ setActive }) {
       setPracticeId(updated.id)
       setHasLogo(true)
       setLogoVersion((v) => v + 1)
+      refreshPractice()
       setLogoState('done')
     } catch (err) {
       setLogoState('error')
@@ -140,7 +144,7 @@ export default function SettingsPage({ setActive }) {
         <div className="panel settings-card" ref={sectionRefs.profile}>
           <div className="settings-card-head"><div><h2>Perfil profesional</h2><p>Esta información aparece en tus informes y comunicaciones.</p></div><span className="avatar settings-avatar">{initials}</span></div>
           <div className="form-grid">
-            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label>
+            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => setPracticeName(e.target.value)} /></label>
             <label>Especialidad<input value={form.userSpecialty} onChange={(e) => update('userSpecialty', e.target.value)} placeholder="Ej. Nutrióloga clínica" /></label>
             <label>Email de trabajo<input value={form.userEmail} onChange={(e) => update('userEmail', e.target.value)} /></label>
             <label>Teléfono<input value={form.userPhone} onChange={(e) => update('userPhone', e.target.value)} placeholder="Ej. +52 55 1234 5678" /></label>

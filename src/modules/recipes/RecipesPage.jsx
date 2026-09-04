@@ -13,7 +13,7 @@ const FALLBACK = [
   { id: 'demo-3', name: 'Ensalada tibia de espinacas', mealTypes: ['dinner'], restrictions: ['sin gluten'], nutrition: { kcal: 285, carbs: 24, protein: 19, fat: 12 }, ingredients: [] },
 ]
 
-export default function RecipesPage({ setActive, onSelectRecipe }) {
+export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe }) {
   const [items, setItems] = useState(FALLBACK)
   const [selected, setSelected] = useState(FALLBACK[0])
   const [status, setStatus] = useState('loading')
@@ -71,7 +71,7 @@ export default function RecipesPage({ setActive, onSelectRecipe }) {
       <section className="recipe-catalog">
         <div className="catalog-meta">{items.length} receta{items.length === 1 ? '' : 's'} <span>Fuente: catálogo Nutri Studio</span></div>
         {status !== 'loading' && items.length === 0 && <div className="result-empty panel"><span>◌</span><h3>No hay recetas con esos filtros</h3><p>Ajusta la búsqueda o crea una receta nueva.</p></div>}
-        <div className="recipe-grid">{items.map((recipe, i) => <button className={'recipe-card panel ' + (selected?.id === recipe.id ? 'recipe-selected' : '')} onClick={() => setSelected(recipe)} key={recipe.id}><div className={'recipe-image ' + CARD_COLORS[i % 4]}><span>✦</span><small>♡</small></div><div className="recipe-body"><span className="recipe-meal">{MEAL_TYPE_LABELS[recipe.mealTypes?.[0]] || recipe.mealTypes?.[0] || 'Receta'}</span><h3>{recipe.name}</h3><p>{Math.round(recipe.nutrition?.kcal || 0)} kcal · Ingredientes revisados</p></div></button>)}</div>
+        <div className="recipe-grid">{items.map((recipe, i) => <button className={'recipe-card panel ' + (selected?.id === recipe.id ? 'recipe-selected' : '')} onClick={() => setSelected(recipe)} key={recipe.id}><div className={'recipe-image ' + CARD_COLORS[i % 4]}><span>✦</span></div><div className="recipe-body"><span className="recipe-meal">{MEAL_TYPE_LABELS[recipe.mealTypes?.[0]] || recipe.mealTypes?.[0] || 'Receta'}</span><h3>{recipe.name}</h3><p>{Math.round(recipe.nutrition?.kcal || 0)} kcal · Ingredientes revisados</p></div></button>)}</div>
       </section>
 
       {selected && <aside className="recipe-detail panel">
@@ -88,7 +88,7 @@ export default function RecipesPage({ setActive, onSelectRecipe }) {
             <div className="detail-section-head"><h3>Preparación</h3></div>
             <p className="muted" style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{selected.instructions}</p>
           </div>}
-          <button className="primary detail-assign" onClick={() => setActive('Constructor de plan')}>Asignar al plan <span>→</span></button>
+          <button className="primary detail-assign" onClick={() => onAssignRecipe ? onAssignRecipe(selected.name) : setActive('Constructor de plan')}>Asignar al plan <span>→</span></button>
           {isReal && <button className="link-button" disabled={archiveState === 'archiving'} onClick={archive}>{archiveState === 'archiving' ? 'Archivando…' : 'Archivar receta'}</button>}
         </div>
       </aside>}
