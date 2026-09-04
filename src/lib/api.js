@@ -69,6 +69,7 @@ export const appointmentsApi = {
   create: (payload) => apiRequest('/appointments', { method: 'POST', body: JSON.stringify(payload) }),
   confirm: (id) => apiRequest(`/appointments/${id}/confirm`, { method: 'POST' }),
   complete: (id) => apiRequest(`/appointments/${id}/complete`, { method: 'POST' }),
+  move: (id, startAt, durationMinutes) => apiRequest(`/appointments/${id}`, { method: 'PATCH', body: JSON.stringify({ startAt, durationMinutes }) }),
 }
 
 export const nutritionApi = {
