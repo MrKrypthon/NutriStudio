@@ -22,6 +22,7 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
   const [applyTarget, setApplyTarget] = useState(null)
   const [applyPatientId, setApplyPatientId] = useState('')
   const [applyState, setApplyState] = useState('idle')
+  const [applyError, setApplyError] = useState('')
 
   const loadTemplates = () => {
     setStatus('loading')
@@ -67,7 +68,7 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
     }
   }
 
-  const openApply = (template) => { setApplyTarget(template); setApplyPatientId(''); setApplyState('idle') }
+  const openApply = (template) => { setApplyTarget(template); setApplyPatientId(''); setApplyState('idle'); setApplyError('') }
   const closeApply = () => setApplyTarget(null)
 
   const applyTemplate = async () => {
@@ -79,8 +80,9 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
       closeApply()
       loadTemplates()
       setActive(applyTarget.type === 'clinical' ? 'Expediente' : 'Constructor de plan')
-    } catch {
+    } catch (error) {
       setApplyState('error')
+      setApplyError(error.message || 'No se pudo aplicar la plantilla.')
     }
   }
 
@@ -96,6 +98,7 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
         <div className={'template-icon ' + (template.type === 'clinical' ? 'mint' : 'coral')}>✦</div>
         <div className="template-type">{TYPE_LABELS[template.type] || template.type}</div>
         <h3>{template.name}</h3>
+        {template.description && <p className="template-description">{template.description}</p>}
         <p>{detailFor(template)}</p>
         <div className="template-footer"><span>Usada {template.usageCount} vez(es) · {formatUTCDate(template.updatedAt)}</span><button onClick={() => openApply(template)}>Usar plantilla →</button></div>
       </div>)}
@@ -117,9 +120,10 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
 
   {applyTarget && <div className="modal-backdrop" onClick={closeApply}><div className="modal" onClick={(e) => e.stopPropagation()}>
     <div className="modal-head"><h2>Usar "{applyTarget.name}"</h2><button onClick={closeApply}>×</button></div>
+    {applyTarget.description && <p className="muted" style={{ marginTop: -10, marginBottom: 16 }}>{applyTarget.description}</p>}
     <label>Paciente<select value={applyPatientId} onChange={(e) => setApplyPatientId(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label>
     <p className="muted">{applyTarget.type === 'clinical' ? 'Se precargará la consulta en curso de este paciente (o se creará una) con estas secciones.' : 'Se reemplazará la distribución del plan en borrador de este paciente (o se creará uno) con estos tiempos de comida.'}</p>
-    {applyState === 'error' && <div className="form-error">⚠ No se pudo aplicar la plantilla.</div>}
+    {applyState === 'error' && <div className="form-error">⚠ {applyError}</div>}
     <div className="modal-actions"><button type="button" className="secondary" onClick={closeApply}>Cancelar</button><button className="primary" disabled={!applyPatientId || applyState === 'applying'} onClick={applyTemplate}>{applyState === 'applying' ? 'Aplicando…' : 'Usar plantilla'}</button></div>
   </div></div>}
   </AppChrome>
