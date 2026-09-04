@@ -71,7 +71,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
       <section className="recipe-catalog">
         <div className="catalog-meta">{items.length} receta{items.length === 1 ? '' : 's'} <span>Fuente: catálogo Nutri Studio</span></div>
         {status !== 'loading' && items.length === 0 && <div className="result-empty panel"><span>◌</span><h3>No hay recetas con esos filtros</h3><p>Ajusta la búsqueda o crea una receta nueva.</p></div>}
-        <div className="recipe-grid">{items.map((recipe, i) => <button className={'recipe-card panel ' + (selected?.id === recipe.id ? 'recipe-selected' : '')} onClick={() => setSelected(recipe)} key={recipe.id}><div className={'recipe-image ' + CARD_COLORS[i % 4]}><span>✦</span><small>♡</small></div><div className="recipe-body"><span className="recipe-meal">{MEAL_TYPE_LABELS[recipe.mealTypes?.[0]] || recipe.mealTypes?.[0] || 'Receta'}</span><h3>{recipe.name}</h3><p>{Math.round(recipe.nutrition?.kcal || 0)} kcal · Ingredientes revisados</p></div></button>)}</div>
+        <div className="recipe-grid">{items.map((recipe, i) => <button className={'recipe-card panel ' + (selected?.id === recipe.id ? 'recipe-selected' : '')} onClick={() => setSelected(recipe)} key={recipe.id}><div className={'recipe-image ' + CARD_COLORS[i % 4]}><span>✦</span></div><div className="recipe-body"><span className="recipe-meal">{MEAL_TYPE_LABELS[recipe.mealTypes?.[0]] || recipe.mealTypes?.[0] || 'Receta'}</span><h3>{recipe.name}</h3><p>{Math.round(recipe.nutrition?.kcal || 0)} kcal · Ingredientes revisados</p></div></button>)}</div>
       </section>
 
       {selected && <aside className="recipe-detail panel">
