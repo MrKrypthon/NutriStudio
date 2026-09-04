@@ -26,7 +26,7 @@ export default function LoginPage() {
         <div style={{ height: 34, width: 34, background: 'var(--green)', color: '#fff', borderRadius: 11, display: 'grid', placeItems: 'center', fontFamily: 'Manrope', fontWeight: 800, fontSize: 18, transform: 'rotate(-7deg)' }}>N</div>
         <strong style={{ font: '800 17px Manrope', letterSpacing: '-.6px', color: 'var(--ink)' }}>nutri·studio</strong>
       </div>
-      <form className="panel" onSubmit={submit} style={{ padding: 28 }}>
+      <form className="panel login-card" onSubmit={submit} style={{ padding: 28 }}>
         <p className="eyebrow">TU ESPACIO</p>
         <h1 style={{ font: '800 22px Manrope', margin: '0 0 4px' }}>Inicia sesión</h1>
         <p className="subtitle" style={{ margin: '0 0 22px' }}>Entra con tu cuenta de la consulta.</p>
