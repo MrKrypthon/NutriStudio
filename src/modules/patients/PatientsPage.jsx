@@ -30,6 +30,9 @@ const AUDIT_LABELS = {
 const DONE_STATUSES = new Set(['CONFIRMED', 'COMPLETED', 'PUBLISHED', 'DELIVERED', 'DONE'])
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const formatUTCDate = (iso) => { const d = new Date(iso); return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
+// "Próxima cita" shows the upcoming appointment's date + time (UTC wall-clock convention, same
+// as Agenda) -- before fase 50 this cell was a hardcoded "Sin cita" for every patient.
+const formatNextAppointment = (iso) => { const d = new Date(iso); return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} · ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` }
 
 function describeEvent(event) {
   if (event.kind === 'appointment') return { icon: '◷', label: `Cita · ${APPOINTMENT_TYPE_LABELS[event.subtype] || event.subtype}` }
@@ -58,9 +61,10 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
 
   useEffect(() => {
     setStatus('loading')
-    patientsApi.list(`?status=${statusFilter}`)
+    const isNoNext = statusFilter === 'NO_NEXT'
+    patientsApi.list(`?status=${isNoNext ? 'ACTIVE' : statusFilter}${isNoNext ? '&noNext=1' : ''}`)
       .then((payload) => {
-        setRows(payload?.items?.length ? payload.items.map((p, i) => [p.firstName.slice(0, 1) + p.lastName.slice(0, 1), `${p.firstName} ${p.lastName}`, `${p.sex || 'Paciente'}`, 'Sin cita', p.status === 'ARCHIVED' ? 'Archivado' : 'Paciente activo', ['coral', 'blue', 'purple', 'yellow'][i % 4], p.id, p]) : [])
+        setRows(payload?.items?.length ? payload.items.map((p, i) => [p.firstName.slice(0, 1) + p.lastName.slice(0, 1), `${p.firstName} ${p.lastName}`, `${p.sex || 'Paciente'}`, p.nextAppointmentAt ? formatNextAppointment(p.nextAppointmentAt) : '—', p.nextAppointmentAt ? (APPOINTMENT_TYPE_LABELS[p.nextAppointmentType] || p.nextAppointmentType) : 'Sin cita próxima', ['coral', 'blue', 'purple', 'yellow'][i % 4], p.id, p]) : [])
         setStatus('online')
       })
       .catch(() => setStatus('demo'))
@@ -115,8 +119,8 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
   }
 
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content">
-    <ModuleHeader eyebrow={`TU ESPACIO · ${rows.length} ${statusFilter === 'ACTIVE' ? 'ACTIVOS' : 'ARCHIVADOS'}`} title="Pacientes" subtitle="Conoce el progreso y el contexto de cada persona." action={<div className="module-actions"><span className={'sync-label ' + status}>● {status === 'online' ? 'Sincronizados' : 'Datos de demostración'}</span><button className="primary" onClick={() => setActive('Nuevo paciente')}><span>+</span> Nuevo paciente</button></div>} />
-    <div className="filter-bar panel"><div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o email..." /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="ACTIVE">Activos</option><option value="ARCHIVED">Archivados</option></select></div>
+    <ModuleHeader eyebrow={`TU ESPACIO · ${rows.length} ${statusFilter === 'ACTIVE' ? 'ACTIVOS' : statusFilter === 'ARCHIVED' ? 'ARCHIVADOS' : 'SIN CITA PRÓXIMA'}`} title="Pacientes" subtitle="Conoce el progreso y el contexto de cada persona." action={<div className="module-actions"><span className={'sync-label ' + status}>● {status === 'online' ? 'Sincronizados' : 'Datos de demostración'}</span><button className="primary" onClick={() => setActive('Nuevo paciente')}><span>+</span> Nuevo paciente</button></div>} />
+    <div className="filter-bar panel"><div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o email..." /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="ACTIVE">Activos</option><option value="ARCHIVED">Archivados</option><option value="NO_NEXT">Sin cita próxima</option></select></div>
     <div className="table-panel panel">
       <div className="table-meta">Mostrando <b>{visible.length} pacientes</b><label className="sort-select">Ordenar por: <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}><option value="recent">Más recientes</option><option value="name">Nombre A-Z</option></select></label></div>
       <div className="patient-table">

@@ -160,13 +160,15 @@ app.get('/api/v1/practice/:practiceId/logo', async (request, reply) => {
 })
 
 app.get('/api/v1/patients', async (request) => {
-  const { search = '', status = 'ACTIVE', page = 1, pageSize = 25 } = request.query
+  const { search = '', status = 'ACTIVE', page = 1, pageSize = 25, noNext } = request.query
   const currentPage = Math.max(Number(page), 1)
   const take = Math.min(Math.max(Number(pageSize), 1), 100)
   const where = {
     practiceId: request.practiceId,
     status,
     ...(search ? { OR: [{ firstName: { contains: search, mode: 'insensitive' } }, { lastName: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }] } : {}),
+    // "Sin cita próxima" (RF-04): ACTIVE patients with no upcoming, non-cancelled appointment.
+    ...(noNext === '1' ? { appointments: { none: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } } } : {}),
   }
   const [rawItems, total] = await prisma.$transaction([
     prisma.patient.findMany({
@@ -174,13 +176,17 @@ app.get('/api/v1/patients', async (request) => {
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       skip: (currentPage - 1) * take,
       take,
-      include: { consultations: { orderBy: { startedAt: 'desc' }, take: 1, select: { startedAt: true } } },
+      include: {
+        consultations: { orderBy: { startedAt: 'desc' }, take: 1, select: { startedAt: true } },
+        appointments: { where: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, orderBy: { startAt: 'asc' }, take: 1, select: { startAt: true, type: true } },
+      },
     }),
     prisma.patient.count({ where }),
   ])
-  // The list only ever needs "when did I last see this patient", not the full history --
-  // flatten the one-row relation into a plain field instead of shipping consultations[].
-  const items = rawItems.map(({ consultations, ...patient }) => ({ ...patient, lastConsultationAt: consultations[0]?.startedAt || null }))
+  // The list only ever needs "when did I last see this patient" and "what's their next
+  // appointment" -- flatten both one-row relations into plain fields instead of shipping the
+  // full arrays. Before this, "Próxima cita" was a hardcoded "Sin cita" placeholder.
+  const items = rawItems.map(({ consultations, appointments, ...patient }) => ({ ...patient, lastConsultationAt: consultations[0]?.startedAt || null, nextAppointmentAt: appointments[0]?.startAt || null, nextAppointmentType: appointments[0]?.type || null }))
   return { items, page: currentPage, pageSize: take, total }
 })
 
