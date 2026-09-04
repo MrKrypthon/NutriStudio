@@ -33,6 +33,7 @@ export default function App() {
   const [selectedRecipeId, setSelectedRecipeId] = useState(null)
   const [startAppointmentId, setStartAppointmentId] = useState(null)
   const [selectedConsultationId, setSelectedConsultationId] = useState(null)
+  const [pendingRecipeName, setPendingRecipeName] = useState(null)
   const [autoOpenNewAppointment, setAutoOpenNewAppointment] = useState(false)
   const [newAppointmentPatientId, setNewAppointmentPatientId] = useState('')
   const [autoAgendaFilter, setAutoAgendaFilter] = useState(null)
@@ -83,6 +84,13 @@ export default function App() {
     setActive('Agenda')
   }
 
+  // "Asignar al plan" from a recipe's detail: jump to the plan studio and prefill the next
+  // recipe picker's search with that recipe's name, so the professional doesn't have to retype it.
+  const assignRecipe = (recipeName) => {
+    setPendingRecipeName(recipeName)
+    setActive('Constructor de plan')
+  }
+
   if (status === 'checking') return null
   if (status === 'anonymous') return <LoginPage />
 
@@ -95,13 +103,13 @@ export default function App() {
   if (active === 'Configuración') return <SettingsPage setActive={setActive} />
   if (active === 'Importar alimentos') return <ImportFoodsPage setActive={setActive} />
   if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} consultationId={selectedConsultationId} onConsumeConsultation={() => setSelectedConsultationId(null)} appointmentId={startAppointmentId} onConsumeAppointment={() => setStartAppointmentId(null)} onScheduleAppointment={() => goToNewAppointment(selectedPatientId)} />
-  if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} />
+  if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} pendingRecipeName={pendingRecipeName} onConsumeRecipeName={() => setPendingRecipeName(null)} />
   if (active === 'Documento') return <DocumentPage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
   if (active === 'Seguimientos') return <FollowupsPage setActive={setActive} />
   if (active === 'Consultas') return <ConsultationsPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} onOpenSession={openSession} />
   if (active === 'Plantillas') return <TemplatesPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
-  if (active === 'Recetas') return <RecipesPage setActive={setActive} onSelectRecipe={setSelectedRecipeId} />
+  if (active === 'Recetas') return <RecipesPage setActive={setActive} onSelectRecipe={setSelectedRecipeId} onAssignRecipe={assignRecipe} />
   if (active === 'Ingredientes') return <IngredientsPage setActive={setActive} />
   if (active === 'Educación') return <EducationPage setActive={setActive} onSelectMaterial={setSelectedMaterialId} />
   if (active === 'Nuevo material') return <NewMaterialPage setActive={setActive} />

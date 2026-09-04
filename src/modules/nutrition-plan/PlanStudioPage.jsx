@@ -35,7 +35,7 @@ const DAYS = [
 const RECIPE_COLORS = ['coral', 'blue', 'yellow', 'purple']
 const slotKey = (day, mealType) => `${day}:${mealType}`
 
-export default function PlanStudioPage({ setActive, patientId, onSelectPatient }) {
+export default function PlanStudioPage({ setActive, patientId, onSelectPatient, pendingRecipeName, onConsumeRecipeName }) {
   const { patient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
@@ -195,7 +195,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient }
     }
   }
 
-  const openPicker = (mealType, day = null) => { setPickerSearch(''); setPickerTarget({ mealType, day }) }
+  const openPicker = (mealType, day = null) => { setPickerSearch(pendingRecipeName || ''); if (pendingRecipeName) onConsumeRecipeName?.(); setPickerTarget({ mealType, day }) }
 
   const chooseRecipe = (recipe) => {
     if (!pickerTarget) return

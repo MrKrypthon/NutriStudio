@@ -13,7 +13,7 @@ const FALLBACK = [
   { id: 'demo-3', name: 'Ensalada tibia de espinacas', mealTypes: ['dinner'], restrictions: ['sin gluten'], nutrition: { kcal: 285, carbs: 24, protein: 19, fat: 12 }, ingredients: [] },
 ]
 
-export default function RecipesPage({ setActive, onSelectRecipe }) {
+export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe }) {
   const [items, setItems] = useState(FALLBACK)
   const [selected, setSelected] = useState(FALLBACK[0])
   const [status, setStatus] = useState('loading')
@@ -88,7 +88,7 @@ export default function RecipesPage({ setActive, onSelectRecipe }) {
             <div className="detail-section-head"><h3>Preparación</h3></div>
             <p className="muted" style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{selected.instructions}</p>
           </div>}
-          <button className="primary detail-assign" onClick={() => setActive('Constructor de plan')}>Asignar al plan <span>→</span></button>
+          <button className="primary detail-assign" onClick={() => onAssignRecipe ? onAssignRecipe(selected.name) : setActive('Constructor de plan')}>Asignar al plan <span>→</span></button>
           {isReal && <button className="link-button" disabled={archiveState === 'archiving'} onClick={archive}>{archiveState === 'archiving' ? 'Archivando…' : 'Archivar receta'}</button>}
         </div>
       </aside>}
