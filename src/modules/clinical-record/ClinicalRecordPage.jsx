@@ -263,6 +263,16 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }
   const updateField = (label, value) => updateFields({ [label]: value })
 
+  // For Antropométrico: as soon as weight and height are both present, derive the IMC instead of
+  // making the nutritionist type it by hand.
+  const updateAnthropometric = (label, value) => {
+    const next = { ...currentValues, [label]: value }
+    const weight = Number(next['Peso (kg)'])
+    const height = Number(next['Talla (cm)'])
+    if (weight > 0 && height > 0) next['IMC calculado'] = (weight / ((height / 100) ** 2)).toFixed(1)
+    updateFields(next)
+  }
+
   const saveLabel = SAVE_LABELS[saveState]
   const anthro = sections.anthropometric?.payload || {}
   const numOrUndefined = (value) => value !== undefined && value !== '' ? Number(value) : undefined
@@ -467,7 +477,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               ? <div className="chart-lines"><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points={chartPointLine} fill="none" stroke="var(--green)" strokeWidth="3" />{chartPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" fill="var(--green)" />)}</svg><div className="chart-labels">{chartPoints.map((p, i) => <span key={i}><b>{p.value}</b><br />{`${new Date(p.date).getUTCDate()}/${String(new Date(p.date).getUTCMonth() + 1).padStart(2, '0')}`}</span>)}</div></div>
               : <p className="muted" style={{ padding: '42px 0', textAlign: 'center' }}>Registra al menos dos mediciones para ver la evolución.</p>}
           </div>
-          <FormCard title="Peso y talla" fields={['Peso (kg)|', 'Talla (cm)|', 'IMC calculado|', 'Análisis de peso y talla|']} values={currentValues} onFieldChange={updateField} />
+          <FormCard title="Peso y talla" fields={['Peso (kg)|', 'Talla (cm)|', 'IMC calculado|', 'Análisis de peso y talla|']} values={currentValues} onFieldChange={updateAnthropometric} />
           <FormCard title="Circunferencias" fields={['Cintura (cm)|', 'Cadera (cm)|', 'Abdomen (cm)|', 'Brazo (cm)|', 'ICC calculado|']} values={currentValues} onFieldChange={updateField} />
           <FormCard title="Composición corporal" fields={['% Grasa corporal|', 'Kg de grasa|', 'Kg de músculo|', '% Músculo|']} values={currentValues} onFieldChange={updateField} />
           <FormCard title="Pliegues cutáneos" fields={['Tricipital (mm)|', 'Bicipital (mm)|', 'Subescapular (mm)|', 'Suprailiaco (mm)|']} values={currentValues} onFieldChange={updateField} />
