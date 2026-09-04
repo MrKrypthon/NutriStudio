@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import FormCard from '../../components/FormCard.jsx'
 import { usePatient } from '../../lib/usePatient.js'
-import { appointmentsApi, clinicalApi, documentsApi, patientsApi } from '../../lib/api.js'
+import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi } from '../../lib/api.js'
 
 const TABS = ['Resumen', 'General', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
 const SECTION_KEYS = { Resumen: 'summary', General: 'general', Antropométrico: 'anthropometric', Bioquímico: 'biochemical', Clínico: 'clinical', Dietético: 'dietary', 'Estilo de vida': 'lifestyle', Sociocultural: 'sociocultural', Diagnóstico: 'diagnosis', Tratamiento: 'treatment', Monitoreo: 'monitoring', Notas: 'notes', Transcripción: 'transcription' }
@@ -137,6 +137,9 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
   const [labForm, setLabForm] = useState(null)
   const [report, setReport] = useState(null)
   const [reportState, setReportState] = useState('idle')
+  const [attachments, setAttachments] = useState([])
+  const [uploadState, setUploadState] = useState('idle')
+  const [uploadError, setUploadError] = useState('')
   const saveTimer = useRef(null)
   // Holds everything needed to replay the in-flight debounced save if the component unmounts
   // before the 800ms timer fires (see the cleanup below) — captured fresh on every call to
@@ -164,6 +167,7 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
         const full = await clinicalApi.get(active.id)
         if (cancelled) return
         setConsultation(full)
+        setAttachments(full.labAttachments || [])
         const bySectionKey = {}
         for (const section of full.sections || []) bySectionKey[section.sectionKey] = section
         setSections(bySectionKey)
@@ -285,6 +289,43 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
   }
   const removeLab = (id) => updateField('Estudios', labs.filter((lab) => lab.id !== id))
 
+  const uploadLabAttachment = async (file) => {
+    if (!consultation || !file) return
+    if (file.type !== 'application/pdf') { setUploadState('error'); setUploadError('Solo se aceptan archivos PDF.'); return }
+    setUploadState('uploading')
+    setUploadError('')
+    try {
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result)
+        reader.onerror = () => reject(new Error('No se pudo leer el archivo.'))
+        reader.readAsDataURL(file)
+      })
+      const created = await labAttachmentsApi.upload(consultation.id, file.name, dataUrl)
+      setAttachments((prev) => [created, ...prev])
+      setUploadState('idle')
+    } catch (error) {
+      setUploadState('error')
+      setUploadError(error.message || 'No se pudo subir el archivo.')
+    }
+  }
+
+  const downloadLabAttachment = async (attachment) => {
+    try {
+      const blob = await labAttachmentsApi.downloadBlob(attachment.id)
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+    } catch { /* the button stays clickable so the professional can retry */ }
+  }
+
+  const removeLabAttachment = async (id) => {
+    try {
+      await labAttachmentsApi.remove(id)
+      setAttachments((prev) => prev.filter((a) => a.id !== id))
+    } catch { /* leave it in the list; the professional can retry */ }
+  }
+
   const generateReport = async () => {
     if (!consultation) return
     if (report?.storageKey) {
@@ -360,6 +401,11 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
             <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name || !labForm.value} onClick={saveLab}>Guardar estudio</button></div>
           </div>}
           {labs.length > 0 && <div className="lab-list">{labs.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : lab.status === 'Pendiente' ? 'pending' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} readOnly /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
+
+          <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName} y captura sus valores arriba a mano; todavía no hay lectura automática.</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
+          {uploadState === 'error' && <div className="form-error">⚠ {uploadError}</div>}
+          {!attachments.length && <div className="lab-empty"><span>▤</span><b>Sin PDF adjuntos</b><small>Sube el estudio en PDF que te compartió el paciente.</small></div>}
+          {attachments.length > 0 && <div className="lab-list">{attachments.map((attachment) => <div className="lab-row attachment-row" key={attachment.id}><div><b>{attachment.fileName}</b><small>{(attachment.fileSize / 1024).toFixed(0)} KB · subido por {attachment.uploadedBy?.name || '—'}</small></div><button type="button" className="link-button" onClick={() => downloadLabAttachment(attachment)}>Ver</button><button type="button" className="link-button" onClick={() => removeLabAttachment(attachment.id)}>Quitar</button></div>)}</div>}
         </section>
         <aside className="record-aside panel"><p className="eyebrow">LECTURA RÁPIDA</p><div className="lab-score">{labs.filter((l) => l.status === 'Normal').length}<span>/{labs.length}</span></div><b>Resultados normales</b>{labs.some((l) => l.status === 'Elevado' || l.status === 'Bajo') ? <p className="muted">Hay hallazgos fuera de rango que requieren seguimiento en el tratamiento.</p> : <p className="muted">{labs.length ? 'Todos los estudios registrados están en rango normal.' : 'Todavía no hay estudios registrados.'}</p>}<div className="tag-row">{labs.filter((l) => l.status === 'Elevado' || l.status === 'Bajo').map((l) => <span key={l.id}>{l.name} {l.status.toLowerCase()}</span>)}</div></aside>
       </div>

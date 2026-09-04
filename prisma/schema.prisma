@@ -82,6 +82,7 @@ model User {
   status         RecordStatus   @default(ACTIVE)
   consultations  Consultation[]
   auditEvents    AuditEvent[]
+  labAttachments LabAttachment[]
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
@@ -158,10 +159,29 @@ model Consultation {
   diagnoses      Diagnosis[]
   plans          NutritionPlan[]
   documents      Document[]
+  labAttachments LabAttachment[]
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
   @@index([patientId, createdAt])
+}
+
+// A lab-results PDF the professional attaches for reference while filling "Estudios" in
+// Bioquímico by hand -- there's no automated extraction yet (that needs an ANTHROPIC_API_KEY
+// the practice doesn't have, see ESTADO_Y_PENDIENTES.md), so this is deliberately just storage
+// + manual transcription, not analysis.
+model LabAttachment {
+  id             String       @id @default(uuid())
+  consultationId String
+  consultation   Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  fileName       String
+  storageKey     String
+  fileSize       Int
+  uploadedById   String
+  uploadedBy     User         @relation(fields: [uploadedById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([consultationId])
 }
 
 model ClinicalSection {

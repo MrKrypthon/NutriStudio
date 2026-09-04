@@ -4,7 +4,7 @@ import { PrismaClient } from '@prisma/client'
 import 'dotenv/config'
 import PDFDocument from 'pdfkit'
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
@@ -13,9 +13,9 @@ import { NutritionEngineError, computeEnergyRequirement, computeMacros } from '.
 import { DAY_LABELS, MEAL_TYPE_LABELS, buildMenuSnapshot } from './domain/documents.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
-// Default is 1 MiB, too small for a base64-encoded logo upload (see POST /practice/logo) --
-// a 2 MB image becomes ~2.7 MB as base64 JSON text.
-const app = Fastify({ logger: true, bodyLimit: 5 * 1024 * 1024 })
+// Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
+// 10 MB PDF becomes ~13.3 MB as base64 JSON text, see POST /consultations/:id/lab-attachments.
+const app = Fastify({ logger: true, bodyLimit: 15 * 1024 * 1024 })
 const prisma = new PrismaClient()
 
 if (!process.env.DATABASE_URL) app.log.warn('DATABASE_URL no está configurada. Copia .env.example a .env antes de usar persistencia.')
@@ -282,9 +282,49 @@ app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => 
 })
 
 app.get('/api/v1/consultations/:consultationId', async (request, reply) => {
-  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } }, include: { patient: true, sections: true, measurements: true, diagnoses: true, plans: true } })
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } }, include: { patient: true, sections: true, measurements: true, diagnoses: true, plans: true, labAttachments: { orderBy: { createdAt: 'desc' }, include: { uploadedBy: { select: { name: true } } } } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   return consultation
+})
+
+const LAB_ATTACHMENT_MIME_EXT = { 'application/pdf': 'pdf' }
+const labAttachmentDir = () => path.resolve(process.env.LAB_ATTACHMENT_STORAGE_PATH || './storage/lab-attachments')
+
+// Deliberately no automated extraction here -- reading an arbitrary lab PDF (any lab's format,
+// possibly scanned) reliably needs a model that can see the document, which needs an
+// ANTHROPIC_API_KEY the practice doesn't have yet. This is storage + manual transcription into
+// "Estudios" (Bioquímico), not analysis -- see the note on the LabAttachment model.
+app.post('/api/v1/consultations/:consultationId/lab-attachments', async (request, reply) => {
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const { fileName, dataUrl } = request.body || {}
+  const match = typeof dataUrl === 'string' && dataUrl.match(/^data:(application\/pdf);base64,(.+)$/)
+  if (!match || !fileName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube un archivo PDF.', fields: { dataUrl: true } })
+  const buffer = Buffer.from(match[2], 'base64')
+  if (buffer.byteLength > 10 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El PDF no puede pesar más de 10 MB.', fields: { dataUrl: true } })
+  const attachment = await prisma.labAttachment.create({ data: { consultationId: consultation.id, fileName, storageKey: '', fileSize: buffer.byteLength, uploadedById: request.userId } })
+  const ext = LAB_ATTACHMENT_MIME_EXT[match[1]]
+  const storageKey = `${attachment.id}.${ext}`
+  await mkdir(labAttachmentDir(), { recursive: true })
+  await writeFile(path.join(labAttachmentDir(), storageKey), buffer)
+  const updated = await prisma.labAttachment.update({ where: { id: attachment.id }, data: { storageKey }, include: { uploadedBy: { select: { name: true } } } })
+  await logAudit(request, { action: 'uploaded', entity: 'LabAttachment', entityId: attachment.id, patientId: consultation.patientId, metadata: { fileName } })
+  return reply.code(201).send(updated)
+})
+
+app.get('/api/v1/lab-attachments/:attachmentId/download', async (request, reply) => {
+  const attachment = await prisma.labAttachment.findFirst({ where: { id: request.params.attachmentId, consultation: { patient: { practiceId: request.practiceId } } } })
+  if (!attachment) return reply.code(404).send({ code: 'ATTACHMENT_NOT_FOUND', message: 'Adjunto no encontrado.', fields: {} })
+  const file = await readFile(path.join(labAttachmentDir(), attachment.storageKey))
+  return reply.type('application/pdf').header('Content-Disposition', `inline; filename="${attachment.fileName}"`).send(file)
+})
+
+app.delete('/api/v1/lab-attachments/:attachmentId', async (request, reply) => {
+  const attachment = await prisma.labAttachment.findFirst({ where: { id: request.params.attachmentId, consultation: { patient: { practiceId: request.practiceId } } } })
+  if (!attachment) return reply.code(404).send({ code: 'ATTACHMENT_NOT_FOUND', message: 'Adjunto no encontrado.', fields: {} })
+  await prisma.labAttachment.delete({ where: { id: attachment.id } })
+  await unlink(path.join(labAttachmentDir(), attachment.storageKey)).catch(() => {})
+  return reply.code(204).send()
 })
 
 app.post('/api/v1/consultations/:consultationId/complete', async (request, reply) => {
