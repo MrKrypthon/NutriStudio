@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, y — después del merge de la fase 52 — el expediente clínico completo descargable en PDF; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, y — después del merge de la fase 53 — el PDF del menú semanal rediseñado como tabla semanal; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -117,6 +117,16 @@ RF-05 pide "descargar el expediente completo o una selección de secciones". El 
 - **Frontend**: botón "Expediente completo" en el encabezado del expediente (junto a "Agendar" y "Generar/Descargar informe"); crea, genera y descarga en un clic, reutilizando el documento existente de la consulta si ya hay uno (mismo patrón que el informe). Documentos: nuevo filtro "Expedientes" y etiquetas `Expediente completo`/`Expediente clínico`; timeline de Pacientes y labels de Seguimientos/Hoy también reconocen el tipo.
 
 **Verificado por API real**: se creó y generó el export de la consulta en curso de Mariana Torres y se extrajo el texto del PDF con `pdftotext` — aparecen las 12 secciones, mediciones reales y `key: value` de cada payload. Documento y archivo de prueba eliminados al terminar. `npm run build` OK, `npm test` (47/47).
+
+## Fase 54 — PDF del menú semanal rediseñado como tabla (después del merge de fase 53)
+
+Reporte de la usuaria: "mejora la impresión del PDF, que salga bien el plan, como en la vista que tenemos de receta". El PDF del plan de alimentación (`drawNutritionPlanMenu`) era una lista de texto por día ("Desayuno: receta (kcal)" agrupado por día); la vista en pantalla (DocumentPage → "Vista previa del plan") es una tabla **tiempos de comida × días**. Se rediseñó el PDF para que se imprima igual:
+
+- **Tabla semanal** con encabezado morado (Tiempo + Lun/Mar/Mié/Jue/Vie/Sáb/Dom), una fila por tiempo de comida (Desayuno/Comida/Colación/Cena) con fondo alternado y celdas con el nombre de la receta + kcal, y "—" para los días sin asignación. Mismo patrón que el `paper-week` de la vista previa.
+- El nombre de la receta se **ajusta al ancho de celda** (envuelve a 2 líneas y recorta con "…" si excede, midiendo con `widthOfString` del propio PDF) — se evitó a propósito `height`/`ellipsis` de pdfkit, que con nombres largos (ej. "Ensalada tibia de espinacas") mandaba **cada celda a su propia página** (el PDF salió de 9 páginas en la primera iteración; la verificación por páginas lo detectó y se reescribió con ajuste manual).
+- Se mantienen la portada (logo/práctica), el requerimiento (kcal + macros) y el objetivo. Ahora cabe en **1 página** para una semana completa de 7 días × 4 tiempos.
+
+Verificado por API real: PDF generado de un plan publicado (Valeria Mendoza Ruiz, 2114 kcal/día), `pdfinfo` confirma 1 página y `pdftotext` muestra la tabla completa con las 4 filas alineadas y las kcal por celda. Documento y archivo de prueba eliminados. `npm run build` OK, `npm test` (47/47). El PDF de muestra quedó en `/tmp/opencode/plan-menu.pdf` por si la usuaria quiere verlo antes del merge.
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -413,3 +423,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 41. ~~Documentos: abrir el documento específico~~ — hecho (fase 51, ver sección al final de este archivo): clic en una fila abre un modal de detalle de ESE documento (tipo, versión, estado, entrega) con "Descargar PDF" y "Marcar como entregado" reales; antes cada fila caía en el formulario genérico de planes sin apuntar a nada. Verificado con Chromium headless sobre datos reales.
 42. ~~Tercera auditoría (Hoy, Consultas, Configuración, Nueva receta, Nuevo material)~~ — hecho (fase 52, ver sección al final de este archivo): abrir una sesión histórica concreta desde Consultas (RF-05), indicador demo honesto en Hoy con saludo y duración reales, avisos de error visibles en Configuración y Nuevo material, y búsqueda/porciones reales en Nueva receta.
 43. ~~Expediente clínico completo descargable~~ — hecho (fase 53, ver sección al final de este archivo): `consultation_export` con las 12 secciones clínicas en PDF (RF-05), botón "Expediente completo" en el expediente, filtro/etiquetas en Documentos, timeline y Seguimientos. Verificado por API real (texto del PDF inspeccionado con pdftotext).
+44. ~~PDF del menú semanal rediseñado como tabla~~ — hecho (fase 54, ver sección al final de este archivo): el PDF del plan pasa de lista de texto por día a tabla tiempos × días (encabezado morado, fondo alternado, receta + kcal por celda, ajuste de nombre al ancho con "…"), en 1 página. Reporte directo de la usuaria.
