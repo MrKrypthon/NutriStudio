@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, y — después del merge de la fase 53 — el PDF del menú semanal rediseñado como tabla semanal; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal en tabla apaisada con sus fixes de impresión, y — después del merge de la fase 54 — el pulido de los PDF clínicos (informe y expediente completo); ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -137,6 +137,16 @@ Verificado por API real: PDF generado de un plan publicado (Valeria Mendoza Ruiz
 Verificado con `pdfinfo` (1 página, 792×612) y `pdftotext -tsv`: encabezados alineados en un solo `top` (353, x 144–698), extremo derecho 745 < 752, pie centrado, sin recortes.
 
 **Fix posterior 3 (misma rama): los documentos del plan ya existentes seguían mostrando el PDF viejo.** Reporte de la usuaria: "me sigue saliendo igual, revisa". Causa real (no era el código de generación, que ya estaba correcto y el servidor reiniciado lo tenía): **cada documento guarda su PDF en disco y el botón pasaba a "Descargar PDF" sin ninguna forma de regenerarlo** — los planes publicados de sesiones anteriores conservaban el archivo retrato/recortado para siempre. Acciones: (1) se **regeneraron los 4 documentos reales** de planes publicados (Valeria, Mariana ×2, Jorge) con el formato nuevo (verificado: 1 página, 792×612, nombres completos); (2) **botón "Regenerar PDF"** agregado en DocumentPage (encabezado y panel lateral) — vuelve a generar el PDF del plan (incrementa versión y reescribe el archivo) cuando ya existe uno, para que un cambio de formato no vuelva a quedar atrapado en un archivo viejo. De paso se limpiaron 5 documentos de prueba que habían quedado de la verificación del formato (d35bc86e, 84b3f609, c913cf20, 66de7d58, 9c102ea2 — filas y archivos).
+
+## Fase 55 — Pulido de los PDF clínicos: informe de consulta y expediente completo (después del merge del fix del menú)
+
+Continuando el detalle: los PDF clínicos (informe y expediente completo) eran funcionales pero básicos — texto plano con títulos grises y un cuadro de "Resumen" con texto genérico. Se pulieron al mismo nivel profesional del menú:
+- **Caja de resumen real**: ahora muestra el **motivo** y **objetivo** reales de la consulta (leídos del payload de la sección Resumen: `reason`/`goal` o `Motivo de consulta`/`Objetivo`), no el texto genérico de siempre. Si la consulta no tiene esos datos, cae a la nota general.
+- **Secciones numeradas** con subrayado de acento morado suave (`#ddd6fa`): "1. Datos generales", "2. Antropometría", etc. (el expediente numera las 12 secciones; el informe sus 4).
+- **Footer con ancho explícito** (`width: 516`) — se aplicó el mismo fix del pie del menú: pdfkit persiste el último ancho/x de `text()`, así que un `{ align: 'center' }` a secas podía centrar el pie dentro de la caja de la línea anterior.
+- Pie dice "· Nutrióloga" en lugar del genérico "· Nutrición".
+
+Verificado por API real contra la consulta de Yolanda Cimé: el informe muestra "Motivo: Mejorar composición corporal…" en la caja y "1. Datos generales"; el expediente numera las 12 secciones con sus datos. Documentos de prueba eliminados. `npm run build` OK, `npm test` (47/47).
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -434,3 +444,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 42. ~~Tercera auditoría (Hoy, Consultas, Configuración, Nueva receta, Nuevo material)~~ — hecho (fase 52, ver sección al final de este archivo): abrir una sesión histórica concreta desde Consultas (RF-05), indicador demo honesto en Hoy con saludo y duración reales, avisos de error visibles en Configuración y Nuevo material, y búsqueda/porciones reales en Nueva receta.
 43. ~~Expediente clínico completo descargable~~ — hecho (fase 53, ver sección al final de este archivo): `consultation_export` con las 12 secciones clínicas en PDF (RF-05), botón "Expediente completo" en el expediente, filtro/etiquetas en Documentos, timeline y Seguimientos. Verificado por API real (texto del PDF inspeccionado con pdftotext).
 44. ~~PDF del menú semanal rediseñado como tabla~~ — hecho (fase 54, ver sección al final de este archivo): el PDF del plan pasa de lista de texto por día a tabla tiempos × días (encabezado morado, fondo alternado, receta + kcal por celda, ajuste de nombre al ancho con "…"), en 1 página. Reporte directo de la usuaria.
+45. ~~Pulido de los PDF clínicos (informe y expediente completo)~~ — hecho (fase 55, ver sección al final de este archivo): caja de resumen con motivo/objetivo reales, secciones numeradas con acento, y footer con ancho explícito (fix del bug de pdfkit de ancho heredado).
