@@ -9,6 +9,17 @@ const SECTION_KEYS = { Resumen: 'summary', General: 'general', Antropométrico: 
 const TRANSCRIPT_FIELD = 'Transcripción de la consulta'
 const SAVE_LABELS = { idle: '● Guardado', editing: '● Editando…', saving: '● Guardando…', saved: '● Guardado', error: '⚠ Error al guardar', conflict: '⚠ Se editó en otra sesión, recarga para ver el cambio' }
 
+const SEX_LABELS = { female: 'Femenino', male: 'Masculino', F: 'Femenino', M: 'Masculino' }
+function computeAge(birthDate) {
+  if (!birthDate) return null
+  const dob = new Date(birthDate)
+  const now = new Date()
+  let age = now.getUTCFullYear() - dob.getUTCFullYear()
+  if (now.getUTCMonth() < dob.getUTCMonth() || (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate())) age -= 1
+  return age
+}
+const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—')
+
 const DIAGNOSIS_DOMAINS = [
   ['INGESTIÓN', 'Problemas relacionados con ingesta, nutrientes y sustancias bioactivas.', 'mint'],
   ['CLÍNICOS', 'Hallazgos relacionados con condiciones físicas o médicas.', 'yellow'],
@@ -128,6 +139,7 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
   const [tab, setTab] = useState('Antropométrico')
   const [loadState, setLoadState] = useState('loading')
   const [consultation, setConsultation] = useState(null)
+  const [historyCount, setHistoryCount] = useState(0)
   const [sections, setSections] = useState({})
   const [saveState, setSaveState] = useState('idle')
   const [measurementState, setMeasurementState] = useState('idle')
@@ -152,6 +164,7 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
       setLoadState('loading')
       try {
         const list = await patientsApi.consultations(patientId)
+        setHistoryCount((list.items || []).length)
         let active = (list.items || []).find((item) => item.status === 'IN_PROGRESS')
         if (!active) {
           active = await clinicalApi.create(patientId, appointmentId ? { appointmentId } : {})
@@ -485,6 +498,36 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Sociocultural</h1><p className="subtitle">Contexto socioeconómico y cultural de {patientName}.</p>
         <FormCard title="Contexto socioeconómico" fields={['Ocupación|', 'Quién prepara los alimentos|', 'Acceso a alimentos|']} values={currentValues} onFieldChange={updateField} />
         <FormCard title="Cultura y creencias" fields={['Restricciones religiosas o culturales|', 'Creencias sobre alimentación|', 'Notas socioculturales|']} values={currentValues} onFieldChange={updateField} />
+      </div>
+
+      : tab === 'Resumen' ? <div className="panel generic-section">
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Resumen</h1><p className="subtitle">Datos generales y contexto de {patientName}.</p>
+        <div className="summary-card form-card"><h3>Datos del paciente</h3><div className="form-grid three">
+          <label>Nombre<input value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} readOnly /></label>
+          <label>Sexo<input value={patient?.sex ? (SEX_LABELS[patient.sex] || patient.sex) : '—'} readOnly /></label>
+          <label>Fecha de nacimiento<input value={patient?.birthDate ? formatDate(patient.birthDate) : '—'} readOnly /></label>
+          <label>Edad<input value={computeAge(patient?.birthDate) != null ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label>
+          <label>Ocupación<input value={patient?.occupation || '—'} readOnly /></label>
+          <label>Contacto<input value={[patient?.phone, patient?.email].filter(Boolean).join(' · ') || '—'} readOnly /></label>
+        </div></div>
+        <div className="summary-card form-card"><h3>Historial de consultas</h3><div className="form-grid">
+          <label>Consultas registradas<input value={`${historyCount}`} readOnly /></label>
+          <label>Consulta actual<input value={consultation ? (consultation.status === 'IN_PROGRESS' ? 'En curso' : consultation.status) : '—'} readOnly /></label>
+        </div></div>
+      </div>
+
+      : tab === 'Tratamiento' ? <div className="panel generic-section">
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Tratamiento</h1><p className="subtitle">Plan de intervención acordado con {patientName}: objetivos, educación y seguimiento.</p>
+        <FormCard title="Objetivos terapéuticos" fields={['Objetivo general|', 'Objetivos a corto plazo|', 'Objetivos a largo plazo|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Recomendaciones" fields={['Recomendaciones generales|', 'Recomendaciones de alimentación|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Educación nutricional" fields={['Temas de educación para el paciente|', 'Material educativo entregado|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Metas y acuerdos" fields={['Metas SMART|', 'Acuerdos con el paciente|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Seguimiento" fields={['Próximos pasos|', 'Notas de tratamiento|']} values={currentValues} onFieldChange={updateField} />
+      </div>
+
+      : tab === 'Notas' ? <div className="panel generic-section">
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Notas</h1><p className="subtitle">Información adicional de {patientName} no clasificada en las demás secciones.</p>
+        <FormCard title="Notas de consulta" fields={['Notas de consulta|']} values={currentValues} onFieldChange={updateField} />
       </div>
 
       : <div className="panel generic-section">
