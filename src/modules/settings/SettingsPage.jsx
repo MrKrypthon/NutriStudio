@@ -132,6 +132,8 @@ export default function SettingsPage({ setActive }) {
   return <AppChrome active="Configuración" setActive={setActive}><div className="content settings-content">
     <ModuleHeader eyebrow="TU PRÁCTICA" title="Configuración" subtitle="Personaliza tu espacio de trabajo y la experiencia de tus pacientes." action={saveState === 'saved' ? <span className="saved">● Cambios guardados</span> : <button className="primary" disabled={loadState !== 'ready' || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : 'Guardar cambios'}</button>} />
     {saveState === 'error' && <div className="form-error">⚠ {error}</div>}
+    {loadState === 'loading' && <p className="muted">Cargando configuración…</p>}
+    {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar la configuración — el API no responde. Verifica que el servidor esté activo para poder editar y guardar.</div>}
     <div className="settings-layout">
       <aside className="settings-nav panel">{NAV_SECTIONS.map(([key, label]) => <button key={key} className={activeSection === key ? 'active' : ''} onClick={() => goToSection(key)}>{label}</button>)}</aside>
       <section className="settings-main">

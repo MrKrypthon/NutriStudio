@@ -131,7 +131,7 @@ function TranscriptionTab({ values, updateField, updateFields, patientName }) {
   </div>
 }
 
-export default function ClinicalRecordPage({ setActive, patientId, appointmentId, onConsumeAppointment, onScheduleAppointment }) {
+export default function ClinicalRecordPage({ setActive, patientId, consultationId, onConsumeConsultation, appointmentId, onConsumeAppointment, onScheduleAppointment }) {
   const { patient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
@@ -165,19 +165,28 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
       try {
         const list = await patientsApi.consultations(patientId)
         setHistoryCount((list.items || []).length)
-        let active = (list.items || []).find((item) => item.status === 'IN_PROGRESS')
-        if (!active) {
-          active = await clinicalApi.create(patientId, appointmentId ? { appointmentId } : {})
-          onConsumeAppointment?.()
-        } else if (appointmentId) {
-          // Creating a consultation marks the appointment that started it COMPLETED as a side
-          // effect (see clinicalApi.create above) -- but here we're reusing an already
-          // IN_PROGRESS consultation instead, so that side effect never ran. Without this, the
-          // appointment that was actually clicked stays CONFIRMED forever.
-          await appointmentsApi.complete(appointmentId).catch(() => {})
-          onConsumeAppointment?.()
+        let full
+        if (consultationId) {
+          // A specific historical session requested from Consultas → load it as-is (a completed
+          // one included) instead of the current in-progress consultation. Consuming the id after
+          // the fetch means a later plain "Abrir expediente" falls back to the current session.
+          full = await clinicalApi.get(consultationId)
+          onConsumeConsultation?.()
+        } else {
+          let active = (list.items || []).find((item) => item.status === 'IN_PROGRESS')
+          if (!active) {
+            active = await clinicalApi.create(patientId, appointmentId ? { appointmentId } : {})
+            onConsumeAppointment?.()
+          } else if (appointmentId) {
+            // Creating a consultation marks the appointment that started it COMPLETED as a side
+            // effect (see clinicalApi.create above) -- but here we're reusing an already
+            // IN_PROGRESS consultation instead, so that side effect never ran. Without this, the
+            // appointment that was actually clicked stays CONFIRMED forever.
+            await appointmentsApi.complete(appointmentId).catch(() => {})
+            onConsumeAppointment?.()
+          }
+          full = await clinicalApi.get(active.id)
         }
-        const full = await clinicalApi.get(active.id)
         if (cancelled) return
         setConsultation(full)
         setAttachments(full.labAttachments || [])

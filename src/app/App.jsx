@@ -32,6 +32,7 @@ export default function App() {
   const [selectedMaterialId, setSelectedMaterialId] = useState(null)
   const [selectedRecipeId, setSelectedRecipeId] = useState(null)
   const [startAppointmentId, setStartAppointmentId] = useState(null)
+  const [selectedConsultationId, setSelectedConsultationId] = useState(null)
   const [autoOpenNewAppointment, setAutoOpenNewAppointment] = useState(false)
   const [newAppointmentPatientId, setNewAppointmentPatientId] = useState('')
   const [autoAgendaFilter, setAutoAgendaFilter] = useState(null)
@@ -52,7 +53,17 @@ export default function App() {
   // the consultation), and jumps to the expediente.
   const startConsultation = (patientId, appointmentId) => {
     setSelectedPatientId(patientId)
+    setSelectedConsultationId(null)
     setStartAppointmentId(appointmentId || null)
+    setActive('Expediente')
+  }
+
+  // "Historial de sesiones" in Consultas opens THAT specific session in the expediente (a
+  // completed one included), instead of always jumping to the current in-progress consultation.
+  const openSession = (patientId, consultationId) => {
+    setSelectedPatientId(patientId)
+    setSelectedConsultationId(consultationId)
+    setStartAppointmentId(null)
     setActive('Expediente')
   }
 
@@ -83,12 +94,12 @@ export default function App() {
   if (active === 'Editar receta') return <NewRecipePage setActive={setActive} recipeId={selectedRecipeId} />
   if (active === 'Configuración') return <SettingsPage setActive={setActive} />
   if (active === 'Importar alimentos') return <ImportFoodsPage setActive={setActive} />
-  if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} appointmentId={startAppointmentId} onConsumeAppointment={() => setStartAppointmentId(null)} onScheduleAppointment={() => goToNewAppointment(selectedPatientId)} />
+  if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} consultationId={selectedConsultationId} onConsumeConsultation={() => setSelectedConsultationId(null)} appointmentId={startAppointmentId} onConsumeAppointment={() => setStartAppointmentId(null)} onScheduleAppointment={() => goToNewAppointment(selectedPatientId)} />
   if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} />
   if (active === 'Documento') return <DocumentPage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
   if (active === 'Seguimientos') return <FollowupsPage setActive={setActive} />
-  if (active === 'Consultas') return <ConsultationsPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} />
+  if (active === 'Consultas') return <ConsultationsPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} onOpenSession={openSession} />
   if (active === 'Plantillas') return <TemplatesPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Recetas') return <RecipesPage setActive={setActive} onSelectRecipe={setSelectedRecipeId} />
   if (active === 'Ingredientes') return <IngredientsPage setActive={setActive} />

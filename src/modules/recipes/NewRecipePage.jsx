@@ -8,6 +8,7 @@ const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', lunch: 'Comida', snack: 'Colac
 
 export default function NewRecipePage({ setActive, recipeId }) {
   const [catalog, setCatalog] = useState([])
+  const [searchState, setSearchState] = useState('idle')
   const [ingredientSearch, setIngredientSearch] = useState('')
   const [chosen, setChosen] = useState([])
   const [name, setName] = useState('')
@@ -21,11 +22,13 @@ export default function NewRecipePage({ setActive, recipeId }) {
 
   useEffect(() => {
     const query = ingredientSearch.trim()
-    if (query.length < 2) { setCatalog([]); return }
+    if (query.length < 2) { setCatalog([]); setSearchState('idle'); return }
+    let cancelled = false
+    setSearchState('loading')
     const timer = setTimeout(() => {
-      ingredientsApi.list(`?search=${encodeURIComponent(query)}`).then((response) => setCatalog(response.items || [])).catch(() => {})
+      ingredientsApi.list(`?search=${encodeURIComponent(query)}`).then((response) => { if (!cancelled) { setCatalog(response.items || []); setSearchState('online') } }).catch(() => { if (!cancelled) setSearchState('error') })
     }, 300)
-    return () => clearTimeout(timer)
+    return () => { cancelled = true; clearTimeout(timer) }
   }, [ingredientSearch])
 
   useEffect(() => {
@@ -38,14 +41,14 @@ export default function NewRecipePage({ setActive, recipeId }) {
         setMeal(MEAL_TYPE_LABELS[recipe.mealTypes?.[0]] || 'Desayuno')
         setPortions(Number(recipe.portions) || 1)
         setInstructions(recipe.instructions || '')
-        setChosen((recipe.ingredients || []).map((item) => ({ id: item.ingredientId, name: item.ingredient.name, group: item.ingredient.group, unit: item.unit, quantity: Number(item.quantity), equivalence: Number(item.equivalence) || 1 })))
+        setChosen((recipe.ingredients || []).map((item) => ({ id: item.ingredientId, name: item.ingredient.name, group: item.ingredient.group, unit: item.unit, quantity: Number(item.quantity), equivalence: Number(item.equivalence) || 1, serving: item.ingredient?.equivalence?.serving })))
         setLoadState('ready')
       })
       .catch(() => setLoadState('error'))
     return () => { cancelled = true }
   }, [recipeId])
 
-  const add = (item) => { if (!chosen.some((x) => x.id === item.id)) setChosen([...chosen, { ...item, quantity: 100, equivalence: 1 }]) }
+  const add = (item) => { if (!chosen.some((x) => x.id === item.id)) setChosen([...chosen, { ...item, quantity: 100, equivalence: 1, serving: item.equivalence?.serving }]) }
   const update = (id, key, value) => setChosen(chosen.map((item) => item.id === id ? { ...item, [key]: Number(value) } : item))
 
   const save = async () => {
@@ -83,9 +86,10 @@ export default function NewRecipePage({ setActive, recipeId }) {
         <div className="form-grid"><label>Tiempo de comida<select value={meal} onChange={(e) => setMeal(e.target.value)}><option>Desayuno</option><option>Comida</option><option>Colación</option><option>Cena</option></select></label><label>Porciones<input type="number" value={portions} min="1" onChange={(e) => setPortions(Number(e.target.value))} /></label></div>
         <div className="form-section-title second"><span>02</span><div><h2>Ingredientes locales</h2><p>Busca en tu catálogo (Sistema Mexicano de Equivalentes) y ajusta sus cantidades.</p></div></div>
         <div className="search-field">⌕ <input value={ingredientSearch} onChange={(e) => setIngredientSearch(e.target.value)} placeholder="Buscar ingrediente (mín. 2 letras)..." /></div>
-        {ingredientSearch.trim().length >= 2 && catalog.length === 0 && <p className="muted" style={{ margin: '10px 0' }}>Sin resultados para "{ingredientSearch.trim()}".</p>}
+        {ingredientSearch.trim().length >= 2 && searchState === 'error' && <p className="muted" style={{ margin: '10px 0' }}>No se pudo buscar — el API no responde.</p>}
+        {ingredientSearch.trim().length >= 2 && searchState === 'online' && catalog.length === 0 && <p className="muted" style={{ margin: '10px 0' }}>Sin resultados para "{ingredientSearch.trim()}".</p>}
         <div className="ingredient-suggestions">{catalog.map((item) => <button type="button" onClick={() => add(item)} className={chosen.some((x) => x.id === item.id) ? 'added' : ''} key={item.id}><span>+</span>{item.name}<small>{item.group}</small></button>)}</div>
-        <div className="recipe-form-ingredients">{chosen.map((item) => <div key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.name}</b><small>{item.group} · {item.equivalence?.serving || 'Equivalencia local'}</small></div><input type="number" value={item.quantity} onChange={(e) => update(item.id, 'quantity', e.target.value)} /><span className="unit-label">g</span><button type="button" onClick={() => setChosen(chosen.filter((x) => x.id !== item.id))}>×</button></div>)}</div>
+        <div className="recipe-form-ingredients">{chosen.map((item) => <div key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.name}</b><small>{item.group} · {item.serving || 'Equivalencia local'}</small></div><input type="number" value={item.quantity} onChange={(e) => update(item.id, 'quantity', e.target.value)} /><span className="unit-label">g</span><button type="button" onClick={() => setChosen(chosen.filter((x) => x.id !== item.id))}>×</button></div>)}</div>
         <div className="form-section-title second"><span>03</span><div><h2>Preparación</h2><p>Estos pasos se mostrarán al paciente.</p></div></div>
         <textarea className="wide-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Escribe los pasos de preparación..." />
         {saveState === 'error' && <div className="form-error">⚠ {saveError}</div>}

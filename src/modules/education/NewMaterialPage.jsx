@@ -15,6 +15,7 @@ export default function NewMaterialPage({ setActive, materialId }) {
   const [readMinutes, setReadMinutes] = useState(5)
   const [saved, setSaved] = useState(false)
   const [saveState, setSaveState] = useState(materialId ? 'loading' : 'idle')
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     if (!materialId) return
@@ -26,19 +27,20 @@ export default function NewMaterialPage({ setActive, materialId }) {
       setColor(material.color || 'mint')
       setReadMinutes(material.readMinutes || 5)
       setSaveState('idle')
-    }).catch(() => setSaveState('error'))
+    }).catch(() => { setSaveState('error'); setSaveError('No se pudo cargar el material — el API no responde.') })
   }, [materialId])
 
   const save = async () => {
     if (!title || !category) return
     setSaveState('saving')
+    setSaveError('')
     try {
       const payload = { title, category, description, body, color, readMinutes }
       if (materialId) await educationApi.update(materialId, payload)
       else await educationApi.create(payload)
       setSaveState('idle')
       setSaved(true)
-    } catch { setSaveState('error') }
+    } catch { setSaveState('error'); setSaveError('No se pudo guardar el material — verifica que el API esté activo.') }
   }
 
   return <AppChrome active="Educación" setActive={setActive}><div className="content new-recipe">
@@ -64,6 +66,7 @@ export default function NewMaterialPage({ setActive, materialId }) {
             <div className="form-section-title second"><span>02</span><div><h2>Contenido</h2><p>Lo que verá y podrá compartir la paciente.</p></div></div>
             <label>Descripción breve<input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Una línea que resuma el material" /></label>
             <textarea className="wide-textarea" value={body} onChange={(e) => setBody(e.target.value)} placeholder="Escribe el contenido completo..." />
+            {saveState === 'error' && <div className="form-error">⚠ {saveError}</div>}
             <div className="form-actions">
               <button type="button" className="secondary" onClick={() => setActive('Educación')}>Cancelar</button>
               <button type="button" className="primary" disabled={!title || !category || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : 'Guardar material'} <span>→</span></button>
