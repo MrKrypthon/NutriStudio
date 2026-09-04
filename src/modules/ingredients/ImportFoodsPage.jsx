@@ -3,7 +3,7 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { foodApi, ingredientsApi } from '../../lib/api.js'
 
-const GROUPS = ['Verduras', 'Frutas', 'Cereales', 'Proteínas', 'Lácteos', 'Grasas']
+const GROUPS = ['Verduras', 'Frutas', 'Cereales S/G', 'Cereales C/G', 'AOA MBAG', 'AOA BAG', 'AOA MAG', 'AOA AAG', 'Leguminosas', 'Leche entera', 'Leche semidescremada', 'Leche descremada', 'Leche con azúcar', 'Grasas sin proteínas', 'Grasas con proteínas', 'Azucares sin grasa', 'Azucares con grasa', 'Libres en energía', 'Alcohol']
 const SOURCE_LABELS = { usda: 'USDA', openfoodfacts: 'Open Food Facts' }
 
 export default function ImportFoodsPage({ setActive }) {
@@ -11,7 +11,7 @@ export default function ImportFoodsPage({ setActive }) {
   const [source, setSource] = useState('all')
   const [items, setItems] = useState([])
   const [selected, setSelected] = useState(null)
-  const [group, setGroup] = useState('Cereales')
+  const [group, setGroup] = useState('Verduras')
   const [portion, setPortion] = useState('100 g')
   const [saved, setSaved] = useState(false)
   const [translatedFrom, setTranslatedFrom] = useState(null)
