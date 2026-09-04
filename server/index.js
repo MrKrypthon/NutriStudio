@@ -1154,12 +1154,15 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   const rowH = 46
 
   const x0 = 48
-  file.fillColor('#7267ef').rect(x0, file.y, 516, headerH).fill()
-  file.fillColor('#ffffff').fontSize(8).text('Tiempo', x0 + 8, file.y + 7, { width: colTime - 16 })
+  const headerY = file.y
+  file.fillColor('#7267ef').rect(x0, headerY, 516, headerH).fill()
+  file.fillColor('#ffffff').fontSize(8).text('Tiempo', x0 + 8, headerY + 7, { width: colTime - 16 })
   DAYS.forEach((day, i) => {
-    file.fontSize(8).text(DAY_SHORT[day], x0 + colTime + i * colW + 4, file.y + 7, { width: colW - 8, align: 'center' })
+    // Use headerY (snapshot), not file.y: pdfkit advances the cursor on every text() call, so
+    // reading file.y again would stack the day labels vertically instead of one header row.
+    file.fontSize(8).text(DAY_SHORT[day], x0 + colTime + i * colW + 4, headerY + 7, { width: colW - 8, align: 'center' })
   })
-  file.y += headerH
+  file.y = headerY + headerH
 
   // Wrap a recipe name to at most `maxLines` lines within the cell width, measuring with the real
   // font instead of relying on pdfkit's height/ellipsis (which pushed every long cell onto its own
