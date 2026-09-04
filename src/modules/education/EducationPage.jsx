@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { educationApi } from '../../lib/api.js'
@@ -20,6 +20,10 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
   const [detail, setDetail] = useState(null)
   const [archiveState, setArchiveState] = useState('idle')
   const [shareState, setShareState] = useState('idle')
+  const [attachState, setAttachState] = useState('idle')
+  const [removeState, setRemoveState] = useState('idle')
+  const [attachError, setAttachError] = useState('')
+  const fileInputRef = useRef(null)
 
   const load = () => {
     setStatus('loading')
@@ -60,6 +64,52 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
     catch { setArchiveState('error') }
   }
 
+  const onPickFile = (e) => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
+    if (!allowed.includes(file.type)) { setAttachError('Solo se admiten archivos PDF, PNG, JPG y WebP.'); return }
+    const reader = new FileReader()
+    reader.onload = async () => {
+      setAttachState('uploading')
+      setAttachError('')
+      try {
+        const updated = await educationApi.attach(detail.id, file.name, reader.result)
+        setDetail(updated)
+        setAttachState('idle')
+        load()
+      } catch (error) { setAttachState('idle'); setAttachError(error.message || 'No se pudo subir el archivo.') }
+    }
+    reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  const downloadAttachment = async () => {
+    if (!detail?.attachmentStorageKey) return
+    setAttachState('downloading')
+    try {
+      const blob = await educationApi.downloadAttachmentBlob(detail.id)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = detail.attachmentFileName || 'material'
+      a.click()
+      URL.revokeObjectURL(url)
+      setAttachState('idle')
+    } catch { setAttachState('idle') }
+  }
+
+  const removeAttachment = async () => {
+    if (!detail?.attachmentStorageKey) return
+    setRemoveState('removing')
+    try {
+      const updated = await educationApi.removeAttachment(detail.id)
+      setDetail(updated)
+      setRemoveState('idle')
+      load()
+    } catch { setRemoveState('idle') }
+  }
+
   return <AppChrome active="Educación" setActive={setActive}><div className="content education-content">
     <ModuleHeader eyebrow={`BIBLIOTECA · ${items.length} MATERIALES`} title="Educación nutricional" subtitle="Materiales que puedes compartir para acompañar el cambio de hábitos." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizado' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span><button className="primary" onClick={startCreate}><span>+</span> Nuevo material</button></div>} />
 
@@ -78,7 +128,7 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
         <span className="recipe-meal">{material.category}</span>
         <h3>{material.title}</h3>
         <p>{material.description}</p>
-        <div><small>Lectura · {material.readMinutes} min</small><button onClick={() => share(material)}>Compartir ↗</button></div>
+        <div><small>Lectura · {material.readMinutes} min{material.attachmentStorageKey ? ' · 📎 con adjunto' : ''}</small><button onClick={() => share(material)}>Compartir ↗</button></div>
       </div>
     </article>)}</div>
 
@@ -88,6 +138,18 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
         <span className="recipe-meal">{detail.category} · {detail.readMinutes} min</span>
         <p className="muted" style={{ margin: '14px 0' }}>{detail.description}</p>
         <p style={{ fontSize: 12, lineHeight: 1.6, color: '#45564d', whiteSpace: 'pre-wrap' }}>{detail.body}</p>
+        {isReal && <div className="material-attachment">
+          <b>Archivo adjunto</b>
+          {detail.attachmentStorageKey
+            ? <div className="attachment-control">
+                <span>{detail.attachmentFileName} · {(detail.attachmentFileSize / 1024).toFixed(0)} KB</span>
+                <button className="link-button" onClick={downloadAttachment} disabled={attachState === 'downloading'}>{attachState === 'downloading' ? '…' : 'Descargar'}</button>
+                <button className="link-button" onClick={removeAttachment} disabled={removeState === 'removing'}>{removeState === 'removing' ? '…' : 'Quitar'}</button>
+              </div>
+            : <button className="secondary" onClick={() => fileInputRef.current?.click()} disabled={attachState === 'uploading'}>{attachState === 'uploading' ? 'Subiendo…' : 'Adjuntar archivo'}</button>}
+          <input ref={fileInputRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp" hidden onChange={onPickFile} />
+          {attachError && <span className="form-error" style={{ display: 'block' }}>⚠ {attachError}</span>}
+        </div>}
         <div className="modal-actions">
           {isReal && <button className="secondary" disabled={archiveState === 'archiving'} onClick={() => archive(detail)}>{archiveState === 'archiving' ? 'Archivando…' : 'Archivar'}</button>}
           {isReal && <button className="secondary" onClick={() => startEdit(detail)}>Editar</button>}

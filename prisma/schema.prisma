@@ -307,6 +307,11 @@ model EducationMaterial {
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
+  attachmentFileName    String?
+  attachmentStorageKey  String?
+  attachmentFileSize    Int?
+  attachmentMime        String?
+
   @@index([practiceId, status])
 }
 

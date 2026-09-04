@@ -34,6 +34,7 @@ export default function App() {
   const [startAppointmentId, setStartAppointmentId] = useState(null)
   const [autoOpenNewAppointment, setAutoOpenNewAppointment] = useState(false)
   const [newAppointmentPatientId, setNewAppointmentPatientId] = useState('')
+  const [autoAgendaFilter, setAutoAgendaFilter] = useState(null)
   const setActive = (next) => {
     setActiveState(next)
     const slug = moduleToSlug[next]
@@ -64,11 +65,18 @@ export default function App() {
     setActive('Agenda')
   }
 
+  // "Por confirmar" on Hoy jumps straight into an Agenda already filtered to those
+  // appointments, instead of landing on the unfiltered week (see autoFilter in AgendaPage).
+  const goToAgendaFiltered = (filter) => {
+    setAutoAgendaFilter(filter)
+    setActive('Agenda')
+  }
+
   if (status === 'checking') return null
   if (status === 'anonymous') return <LoginPage />
 
-  if (active === 'Hoy') return <DashboardPage setActive={setActive} onStartConsultation={startConsultation} onNewAppointment={goToNewAppointment} />
-  if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} autoOpenNew={autoOpenNewAppointment} autoOpenPatientId={newAppointmentPatientId} onConsumeAutoOpen={() => { setAutoOpenNewAppointment(false); setNewAppointmentPatientId('') }} />
+  if (active === 'Hoy') return <DashboardPage setActive={setActive} onStartConsultation={startConsultation} onNewAppointment={goToNewAppointment} onOpenAgendaFiltered={goToAgendaFiltered} />
+  if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} autoOpenNew={autoOpenNewAppointment} autoOpenPatientId={newAppointmentPatientId} onConsumeAutoOpen={() => { setAutoOpenNewAppointment(false); setNewAppointmentPatientId('') }} autoFilter={autoAgendaFilter} onConsumeAutoFilter={() => setAutoAgendaFilter(null)} />
   if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nueva receta') return <NewRecipePage setActive={setActive} />

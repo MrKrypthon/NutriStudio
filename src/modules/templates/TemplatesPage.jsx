@@ -23,6 +23,12 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
   const [applyPatientId, setApplyPatientId] = useState('')
   const [applyState, setApplyState] = useState('idle')
   const [applyError, setApplyError] = useState('')
+  const [editTarget, setEditTarget] = useState(null)
+  const [editForm, setEditForm] = useState({ name: '', description: '' })
+  const [editState, setEditState] = useState('idle')
+  const [editError, setEditError] = useState('')
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [deleteState, setDeleteState] = useState('idle')
 
   const loadTemplates = () => {
     setStatus('loading')
@@ -71,6 +77,36 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
   const openApply = (template) => { setApplyTarget(template); setApplyPatientId(''); setApplyState('idle'); setApplyError('') }
   const closeApply = () => setApplyTarget(null)
 
+  const openEdit = (template) => { setEditTarget(template); setEditForm({ name: template.name, description: template.description || '' }); setEditState('idle'); setEditError(''); setOpen(false) }
+  const closeEdit = () => setEditTarget(null)
+  const updateEdit = (key, value) => setEditForm((prev) => ({ ...prev, [key]: value }))
+  const saveEdit = async (event) => {
+    event.preventDefault()
+    if (!editForm.name.trim()) { setEditError('El nombre no puede quedar vacío.'); return }
+    setEditState('saving')
+    setEditError('')
+    try {
+      await templatesApi.update(editTarget.id, { name: editForm.name, description: editForm.description })
+      setEditState('idle')
+      closeEdit()
+      loadTemplates()
+    } catch (error) {
+      setEditState('error')
+      setEditError(error.message || 'No se pudo guardar la plantilla.')
+    }
+  }
+
+  const deleteTemplate = async (template) => {
+    if (confirmDeleteId !== template.id) { setConfirmDeleteId(template.id); return }
+    setDeleteState('saving')
+    try {
+      await templatesApi.remove(template.id)
+      setConfirmDeleteId(null)
+      setDeleteState('idle')
+      loadTemplates()
+    } catch { setDeleteState('idle'); setConfirmDeleteId(null) }
+  }
+
   const applyTemplate = async () => {
     if (!applyPatientId) return
     setApplyState('applying')
@@ -101,6 +137,7 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
         {template.description && <p className="template-description">{template.description}</p>}
         <p>{detailFor(template)}</p>
         <div className="template-footer"><span>Usada {template.usageCount} vez(es) · {formatUTCDate(template.updatedAt)}</span><button onClick={() => openApply(template)}>Usar plantilla →</button></div>
+        <div className="template-card-actions"><button className="link-button" onClick={() => openEdit(template)}>Editar</button><button className={'link-button ' + (confirmDeleteId === template.id ? 'danger' : '')} onClick={() => deleteTemplate(template)} disabled={deleteState === 'saving'}>{confirmDeleteId === template.id ? '¿Confirmar borrado?' : 'Eliminar'}</button></div>
       </div>)}
     </div>
   </div>
@@ -115,6 +152,16 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
       <p className="muted">Se copiará {form.type === 'clinical' ? 'la consulta más reciente de este paciente' : 'el plan más reciente de este paciente'} como punto de partida. Cambiar la plantilla después no afecta lo ya creado a partir de ella.</p>
       {saveState === 'error' && <div className="form-error">⚠ {saveError}</div>}
       <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal}>Cancelar</button><button className="primary" disabled={saveState === 'saving'}>{saveState === 'saving' ? 'Creando…' : 'Crear plantilla'}</button></div>
+    </form>
+  </div></div>}
+
+  {editTarget && <div className="modal-backdrop" onClick={closeEdit}><div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-head"><h2>Editar plantilla</h2><button onClick={closeEdit}>×</button></div>
+    <form onSubmit={saveEdit}>
+      <label>Nombre<input value={editForm.name} onChange={(e) => updateEdit('name', e.target.value)} required /></label>
+      <label>Descripción<textarea value={editForm.description} onChange={(e) => updateEdit('description', e.target.value)} placeholder="Para qué tipo de consulta sirve..." /></label>
+      {editState === 'error' && <div className="form-error">⚠ {editError}</div>}
+      <div className="modal-actions"><button type="button" className="secondary" onClick={closeEdit}>Cancelar</button><button className="primary" disabled={editState === 'saving'}>{editState === 'saving' ? 'Guardando…' : 'Guardar cambios'}</button></div>
     </form>
   </div></div>}
 

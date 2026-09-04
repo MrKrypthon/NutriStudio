@@ -119,6 +119,8 @@ export const templatesApi = {
   list: (query = '') => apiRequest(`/templates${query}`),
   create: (payload) => apiRequest('/templates', { method: 'POST', body: JSON.stringify(payload) }),
   apply: (id, patientId) => apiRequest(`/templates/${id}/apply`, { method: 'POST', body: JSON.stringify({ patientId }) }),
+  update: (id, payload) => apiRequest(`/templates/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  remove: (id) => apiRequest(`/templates/${id}`, { method: 'DELETE' }),
 }
 
 export const documentsApi = {
@@ -172,6 +174,14 @@ export const educationApi = {
   create: (payload) => apiRequest('/education-materials', { method: 'POST', body: JSON.stringify(payload) }),
   update: (id, payload) => apiRequest(`/education-materials/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   archive: (id) => apiRequest(`/education-materials/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ARCHIVED' }) }),
+  attach: (id, fileName, dataUrl) => apiRequest(`/education-materials/${id}/attachment`, { method: 'POST', body: JSON.stringify({ fileName, dataUrl }) }),
+  removeAttachment: (id) => apiRequest(`/education-materials/${id}/attachment`, { method: 'DELETE' }),
+  downloadAttachmentBlob: async (id) => {
+    const token = getToken()
+    const response = await fetch(`${API_BASE}/education-materials/${id}/attachment`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!response.ok) throw Object.assign(new Error('No se pudo descargar el archivo.'), { code: 'DOWNLOAD_FAILED' })
+    return response.blob()
+  },
 }
 
 export const ingredientsApi = {

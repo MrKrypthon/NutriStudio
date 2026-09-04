@@ -29,7 +29,15 @@ const DEMO_APPOINTMENTS = [
 const startOfWeek = (date) => { const d = new Date(date); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d }
 const addDays = (date, amount) => { const d = new Date(date); d.setUTCDate(d.getUTCDate() + amount); return d }
 const toISODate = (date) => date.toISOString().slice(0, 10)
-const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'FOLLOW_UP', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '' })
+const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'FOLLOW_UP', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '', recurrence: 'none', recurCount: 10 })
+
+const STATUS_FILTERS = [['all', 'Todas'], ['pending', 'Por confirmar'], ['confirmed', 'Confirmadas'], ['blocks', 'Bloques']]
+const matchesStatusFilter = (appointment, filter) => {
+  if (filter === 'all') return true
+  if (filter === 'blocks') return appointment.type === 'BLOCK'
+  if (filter === 'pending') return appointment.status === 'PENDING_CONFIRMATION'
+  return appointment.status === 'CONFIRMED'
+}
 
 function formatRangeLabel(days) {
   const first = days[0], last = days[days.length - 1]
@@ -38,16 +46,18 @@ function formatRangeLabel(days) {
   return sameMonth ? `${first.getUTCDate()} – ${last.getUTCDate()} ${MONTHS[first.getUTCMonth()]} ${first.getUTCFullYear()}` : `${first.getUTCDate()} ${MONTHS[first.getUTCMonth()]} – ${last.getUTCDate()} ${MONTHS[last.getUTCMonth()]} ${first.getUTCFullYear()}`
 }
 
-export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew, autoOpenPatientId, onConsumeAutoOpen }) {
+export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew, autoOpenPatientId, onConsumeAutoOpen, autoFilter, onConsumeAutoFilter }) {
   const [view, setView] = useState('Semana')
   const [anchor, setAnchor] = useState(TODAY)
   const [appointments, setAppointments] = useState([])
   const [status, setStatus] = useState('loading')
   const [patients, setPatients] = useState([])
   const [open, setOpen] = useState(false)
+  const [isBlock, setIsBlock] = useState(false)
   const [form, setForm] = useState(() => emptyForm(TODAY))
   const [submitState, setSubmitState] = useState('idle')
   const [submitError, setSubmitError] = useState('')
+  const [statusFilter, setStatusFilter] = useState(() => (autoFilter && ['pending', 'confirmed', 'blocks'].includes(autoFilter) ? autoFilter : 'all'))
 
   const days = useMemo(() => { const start = startOfWeek(anchor); return view === 'Día' ? [anchor] : Array.from({ length: 7 }, (_, i) => addDays(start, i)) }, [anchor, view])
 
@@ -92,7 +102,8 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     } catch { /* The list keeps its previous state; the professional can retry. */ }
   }
 
-  const openModal = (defaultPatientId) => { setForm(emptyForm(anchor, defaultPatientId)); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const openModal = (defaultPatientId) => { setIsBlock(false); setForm(emptyForm(anchor, defaultPatientId)); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const openBlockModal = () => { setIsBlock(true); setForm({ ...emptyForm(anchor), type: 'BLOCK' }); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
 
   // "Nueva cita" from Hoy (or "Agendar" from a patient's expediente, which also passes a
   // patientId to preselect) sets this before navigating here instead of just landing on the
@@ -100,18 +111,25 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   useEffect(() => {
     if (autoOpenNew) { openModal(autoOpenPatientId); onConsumeAutoOpen?.() }
   }, [autoOpenNew])
+  // Same one-shot pattern for the status filter: "Por confirmar" on Hoy lands here already
+  // filtered instead of landing on the unfiltered week.
+  useEffect(() => {
+    if (autoFilter && ['pending', 'confirmed', 'blocks'].includes(autoFilter)) onConsumeAutoFilter?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoFilter])
   const closeModal = () => { setOpen(false); setSubmitError('') }
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
 
   const submit = async (event) => {
     event.preventDefault()
     if (status !== 'online') { closeModal(); return }
-    if (!form.patientId) { setSubmitError('Selecciona un paciente.'); return }
+    if (!isBlock && !form.patientId) { setSubmitError('Selecciona un paciente.'); return }
     setSubmitState('saving')
     setSubmitError('')
     const notifyVia = form.notify === 'both' ? ['whatsapp', 'email'] : form.notify === 'none' ? [] : [form.notify]
+    const recurrence = form.recurrence === 'none' ? undefined : { frequency: form.recurrence === 'daily' ? 'DAILY' : 'WEEKLY', count: Number(form.recurCount) || 10 }
     try {
-      await appointmentsApi.create({ patientId: form.patientId, startAt: `${form.date}T${form.time}:00.000Z`, durationMinutes: form.duration, type: form.type, notifyVia, internalNote: form.internalNote, patientNote: form.patientNote })
+      await appointmentsApi.create({ patientId: form.patientId, startAt: `${form.date}T${form.time}:00.000Z`, durationMinutes: form.duration, type: form.type, notifyVia, internalNote: form.internalNote, patientNote: form.patientNote, recurrence })
       setSubmitState('saved')
       closeModal()
       loadAppointments()
@@ -121,12 +139,15 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     }
   }
 
+  const visibleAppointments = appointments.filter((a) => matchesStatusFilter(a, statusFilter))
+
   return <AppChrome active="Agenda" setActive={setActive}><div className="content">
-    <ModuleHeader eyebrow={`AGENDA · ${MONTHS[anchor.getUTCMonth()].toUpperCase()} ${anchor.getUTCFullYear()}`} title="Tu agenda" subtitle="Organiza tu tiempo y llega preparado a cada consulta." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizada' : status === 'loading' ? 'Cargando…' : status === 'error' ? 'Sin conexión' : 'Datos de demostración'}</span><button className="primary" onClick={() => openModal()}><span>+</span> Nueva cita</button></div>} />
+    <ModuleHeader eyebrow={`AGENDA · ${MONTHS[anchor.getUTCMonth()].toUpperCase()} ${anchor.getUTCFullYear()}`} title="Tu agenda" subtitle="Organiza tu tiempo y llega preparado a cada consulta." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizada' : status === 'loading' ? 'Cargando…' : status === 'error' ? 'Sin conexión' : 'Datos de demostración'}</span><button className="primary" onClick={() => openModal()}><span>+</span> Nueva cita</button><button className="secondary" onClick={openBlockModal}><span>+</span> Bloqueo</button></div>} />
 
     <div className="toolbar">
       <div className="date-nav"><button onClick={goPrev}>‹</button><b>{formatRangeLabel(days)}</b><button onClick={goNext}>›</button></div>
       <div className="view-switch">{['Día', 'Semana'].map((x) => <button className={view === x ? 'selected' : ''} onClick={() => setView(x)} key={x}>{x}</button>)}</div>
+      <div className="view-switch agenda-status-filter">{STATUS_FILTERS.map(([key, label]) => <button className={statusFilter === key ? 'selected' : ''} onClick={() => setStatusFilter(key)} key={key}>{label}</button>)}</div>
       <button className="secondary" onClick={goToday}>Hoy</button>
     </div>
 
@@ -139,7 +160,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
         {hours.map((time) => <div className="calendar-row" style={{ gridTemplateColumns: `68px repeat(${days.length},1fr)` }} key={time}>
           <span className="hour">{time}</span>
           {days.map((day) => {
-            const dayEvents = appointments.filter((a) => { const start = new Date(a.startAt); return toISODate(start) === toISODate(day) && `${String(start.getUTCHours()).padStart(2, '0')}:00` === time })
+            const dayEvents = visibleAppointments.filter((a) => { const start = new Date(a.startAt); return toISODate(start) === toISODate(day) && `${String(start.getUTCHours()).padStart(2, '0')}:00` === time })
             return <div className="slot" key={day.toISOString()}>
               {dayEvents.map((appointment) => {
                 const start = new Date(appointment.startAt)
@@ -149,11 +170,12 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
                 const color = TYPE_COLORS[appointment.type] || 'coral'
                 const pending = appointment.status === 'PENDING_CONFIRMATION'
                 const confirmed = appointment.status === 'CONFIRMED'
-                const name = appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Paciente'
+                const isBlockEvent = appointment.type === 'BLOCK'
+                const name = isBlockEvent ? 'Bloqueo' : appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Paciente'
                 const onClick = () => { if (pending) confirmAppointment(appointment.id); else if (confirmed) onStartConsultation?.(appointment.patientId, appointment.id) }
                 return <div className={`event ${color}-event`} style={{ top, height, cursor: pending || confirmed ? 'pointer' : 'default' }} onClick={onClick} key={appointment.id} title={pending ? 'Clic para confirmar la cita' : confirmed ? 'Clic para iniciar la consulta' : undefined}>
                   <b>{name}</b>
-                  <small>{TYPE_LABELS[appointment.type] || appointment.type}{pending ? ' · Por confirmar' : ` · ${durationMinutes} min`}</small>
+                  <small>{TYPE_LABELS[appointment.type] || appointment.type}{isBlockEvent ? '' : pending ? ' · Por confirmar' : ` · ${durationMinutes} min`}</small>
                 </div>
               })}
             </div>
@@ -164,18 +186,20 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   </div>
 
   {open && <div className="modal-backdrop" onClick={closeModal}><div className="modal appointment-modal" onClick={(e) => e.stopPropagation()}>
-    <div className="modal-head"><div><p className="eyebrow">NUEVA CITA</p><h2>Programa una consulta</h2><span className="modal-subtitle">La cita quedará visible en tu agenda.</span></div><button onClick={closeModal}>×</button></div>
+    <div className="modal-head"><div><p className="eyebrow">{isBlock ? 'NUEVO BLOQUEO' : 'NUEVA CITA'}</p><h2>{isBlock ? 'Bloquea tu disponibilidad' : 'Programa una consulta'}</h2><span className="modal-subtitle">{isBlock ? 'Ocupa un horario en tu agenda sin asignarlo a un paciente.' : 'La cita quedará visible en tu agenda.'}</span></div><button onClick={closeModal}>×</button></div>
     <form onSubmit={submit}>
-      <div className="form-step active-step"><span>1</span><b>Selecciona el paciente</b></div>
-      <label>Paciente<select value={form.patientId} onChange={(e) => update('patientId', e.target.value)} required><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label>
-      <div className="notify-box"><b>Notificar al paciente</b><div className="notify-options">{[['whatsapp', 'WhatsApp'], ['email', 'Email'], ['both', 'Ambos'], ['none', 'No notificar']].map(([value, label]) => <label key={value}><input type="radio" name="notify" checked={form.notify === value} onChange={() => update('notify', value)} /> {label}</label>)}</div></div>
-      <div className="form-step"><span>2</span><b>Confirma los datos de la consulta</b></div>
+      {!isBlock && <div className="form-step active-step"><span>1</span><b>Selecciona el paciente</b></div>}
+      {!isBlock && <label>Paciente<select value={form.patientId} onChange={(e) => update('patientId', e.target.value)} required><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label>}
+      {!isBlock && <div className="notify-box"><b>Notificar al paciente</b><div className="notify-options">{[['whatsapp', 'WhatsApp'], ['email', 'Email'], ['both', 'Ambos'], ['none', 'No notificar']].map(([value, label]) => <label key={value}><input type="radio" name="notify" checked={form.notify === value} onChange={() => update('notify', value)} /> {label}</label>)}</div></div>}
+      <div className="form-step"><span>{isBlock ? '1' : '2'}</span><b>Confirma los datos{isBlock ? ' del bloqueo' : ' de la consulta'}</b></div>
       <div className="form-row"><label>Fecha<input type="date" value={form.date} onChange={(e) => update('date', e.target.value)} required /></label><label>Hora<select value={form.time} onChange={(e) => update('time', e.target.value)}>{TIME_OPTIONS.map((t) => <option key={t}>{t}</option>)}</select></label></div>
-      <div className="form-row"><label>Tipo de cita<select value={form.type} onChange={(e) => update('type', e.target.value)}>{TYPE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Duración<select value={form.duration} onChange={(e) => update('duration', Number(e.target.value))}>{DURATION_OPTIONS.map((d) => <option value={d} key={d}>{d} minutos</option>)}</select></label></div>
-      <label>Notas internas<textarea placeholder="Notas que sólo verá tu equipo..." value={form.internalNote} onChange={(e) => update('internalNote', e.target.value)} /></label>
-      <label>Nota para el paciente<textarea placeholder="Ej. Recuerda traer tus análisis recientes" value={form.patientNote} onChange={(e) => update('patientNote', e.target.value)} /></label>
+      {!isBlock && <div className="form-row"><label>Tipo de cita<select value={form.type} onChange={(e) => update('type', e.target.value)}>{TYPE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Duración<select value={form.duration} onChange={(e) => update('duration', Number(e.target.value))}>{DURATION_OPTIONS.map((d) => <option value={d} key={d}>{d} minutos</option>)}</select></label></div>}
+      {isBlock && <div className="form-row"><label>Duración<select value={form.duration} onChange={(e) => update('duration', Number(e.target.value))}>{DURATION_OPTIONS.map((d) => <option value={d} key={d}>{d} minutos</option>)}</select></label></div>}
+      <div className="form-row"><label>Repetir<select value={form.recurrence} onChange={(e) => update('recurrence', e.target.value)}><option value="none">No repetir</option><option value="daily">Diaria</option><option value="weekly">Semanal</option></select></label>{form.recurrence !== 'none' && <label>Número de veces<input type="number" min="2" max="30" value={form.recurCount} onChange={(e) => update('recurCount', Number(e.target.value))} /></label>}</div>
+      <label>Notas internas<textarea placeholder={isBlock ? 'Ej. Bloqueado para junta de equipo' : "Notas que sólo verá tu equipo..."} value={form.internalNote} onChange={(e) => update('internalNote', e.target.value)} /></label>
+      {!isBlock && <label>Nota para el paciente<textarea placeholder="Ej. Recuerda traer tus análisis recientes" value={form.patientNote} onChange={(e) => update('patientNote', e.target.value)} /></label>}
       {submitError && <div className="form-error">⚠ {submitError}</div>}
-      <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal}>Cancelar</button><button className="primary" disabled={submitState === 'saving'}>{submitState === 'saving' ? 'Guardando…' : 'Crear cita'} <span>→</span></button></div>
+      <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal}>Cancelar</button><button className="primary" disabled={submitState === 'saving'}>{submitState === 'saving' ? 'Guardando…' : isBlock ? 'Crear bloqueo' : 'Crear cita'} <span>→</span></button></div>
     </form>
   </div></div>}
   </AppChrome>
