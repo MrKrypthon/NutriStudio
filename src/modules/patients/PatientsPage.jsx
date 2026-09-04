@@ -79,7 +79,7 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
   }, [selected?.[6]])
 
   const visible = rows
-    .filter((p) => p[1].toLowerCase().includes(search.toLowerCase()))
+    .filter((p) => [p[1], p[7]?.email, p[7]?.phone].filter(Boolean).join(' ').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (sortBy === 'name' ? a[1].localeCompare(b[1]) : new Date(b[7]?.createdAt || 0) - new Date(a[7]?.createdAt || 0)))
   const goTo = (module) => { if (selected?.[6]) onSelectPatient?.(selected[6]); setActive(module) }
 
