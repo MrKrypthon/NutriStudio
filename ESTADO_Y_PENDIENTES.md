@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, y — después del merge de la fase 55 — detalles de zona horaria y estado de sesión; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, zona horaria/estado de sesión, y — después del merge de la fase 56 — estados vacíos y badges honestos; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -156,6 +156,13 @@ Detalles pequeños pero reales, encontrados por revisión:
 - **Al abrir una sesión histórica completada desde Consultas, el expediente seguía diciendo "Consulta en curso".** Ahora el subtítulo del encabezado y el banner usan el estado real de la consulta: una sesión `COMPLETED` muestra "Consulta completada" y "Sesión cerrada · {fecha}" (con la fecha de cierre real); las demás siguen "en curso".
 
 Verificado con Chromium headless contra instancias aisladas: Agenda muestra la zona derivada (GMT-6) y una sesión `COMPLETED` temporal abre con banner "Consulta completada · Sesión cerrada · 15 jul 2026" (la consulta temporal se borró al terminar). `npm run build` OK, `npm test` (47/47).
+
+## Fase 57 — Detalles UI: estados vacíos y badges honestos (después del merge de fase 56)
+
+- **"Agenda de hoy" en Hoy quedaba en blanco cuando no había citas** — ahora muestra "No tienes citas programadas para hoy." (o "Sin citas de demostración." en demo), en lugar de un panel vacío.
+- **La portada de los materiales de Educación mostraba siempre el badge "PDF"** aunque el material no tuviera adjunto (era contenido de texto para copiar). Ahora el badge refleja lo real: `PDF`/`IMG` si hay adjunto, `TEXTO` si no.
+
+Verificado con Chromium headless: Hoy con cero citas muestra el estado vacío, y los materiales reales de la base (sin adjunto) muestran `TEXTO`. `npm run build` OK, `npm test` (47/47).
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -455,3 +462,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 44. ~~PDF del menú semanal rediseñado como tabla~~ — hecho (fase 54, ver sección al final de este archivo): el PDF del plan pasa de lista de texto por día a tabla tiempos × días (encabezado morado, fondo alternado, receta + kcal por celda, ajuste de nombre al ancho con "…"), en 1 página. Reporte directo de la usuaria.
 45. ~~Pulido de los PDF clínicos (informe y expediente completo)~~ — hecho (fase 55, ver sección al final de este archivo): caja de resumen con motivo/objetivo reales, secciones numeradas con acento, y footer con ancho explícito (fix del bug de pdfkit de ancho heredado).
 46. ~~Detalles: zona horaria real en Agenda y estado real de sesión en el expediente~~ — hecho (fase 56, ver sección al final de este archivo): el "GMT-6" del encabezado de Agenda se deriva ahora de `Practice.timeZone` (Intl), el subtítulo raro de "Agenda de hoy" se corrigió, y abrir una sesión completada muestra "Consulta completada · Sesión cerrada" en lugar de "en curso".
+47. ~~Detalles UI: estados vacíos y badges honestos~~ — hecho (fase 57, ver sección al final de este archivo): "Agenda de hoy" muestra un estado vacío cuando no hay citas, y la portada de Educación deja de mostrar "PDF" falso (ahora PDF/IMG/TEXTO según el adjunto real).

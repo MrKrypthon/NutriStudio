@@ -122,7 +122,7 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
 
     <div className="education-grid">{items.map((material) => <article className="education-card panel" key={material.id}>
       <button type="button" className="education-cover-button" onClick={() => setDetail(material)}>
-        <div className={'education-cover ' + (material.color || CATEGORY_COLORS[material.category] || 'mint')}><span>✦</span><small>PDF</small></div>
+        <div className={'education-cover ' + (material.color || CATEGORY_COLORS[material.category] || 'mint')}><span>✦</span><small>{material.attachmentStorageKey ? (material.attachmentMime === 'application/pdf' ? 'PDF' : 'IMG') : 'TEXTO'}</small></div>
       </button>
       <div className="education-body">
         <span className="recipe-meal">{material.category}</span>
