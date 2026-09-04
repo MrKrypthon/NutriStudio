@@ -59,7 +59,11 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
   const confirmAppointment = async (id) => {
     try {
       const updated = await appointmentsApi.confirm(id)
-      setData((prev) => ({ ...prev, appointments: (prev.appointments || []).map((a) => (a.id === id ? updated : a)) }))
+      setData((prev) => ({
+        ...prev,
+        stats: { ...prev.stats, pendingConfirmations: Math.max(0, (prev.stats?.pendingConfirmations || 0) - 1) },
+        appointments: (prev.appointments || []).map((a) => (a.id === id ? updated : a)),
+      }))
     } catch { /* keep the list as-is; retry in Agenda */ }
   }
 
