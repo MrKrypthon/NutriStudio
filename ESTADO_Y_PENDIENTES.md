@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, zona horaria/estado de sesión, estados vacíos/badges honestos, y — después del merge de la fase 57 — el cajón del paciente con contacto y próxima cita; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, zona horaria/estado de sesión, estados vacíos/badges honestos, cajón del paciente, y — después del merge de la fase 58 — preparación en el detalle de receta y tabla de micronutrientes completa en Ingredientes; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -167,6 +167,13 @@ Verificado con Chromium headless: Hoy con cero citas muestra el estado vacío, y
 ## Fase 58 — Detalles UI: cajón del paciente con contacto y próxima cita (después del merge de fase 57)
 
 El cajón de detalle de Pacientes mostraba nombre, acciones y línea de tiempo, pero **no el contacto del paciente ni su próxima cita** — datos que ya son reales desde fase 50 (`phone`/`email`/`nextAppointmentAt`/`nextAppointmentType` viajan en cada fila). Nueva sección "Contacto y próxima cita": teléfono · email, y "Próxima cita: {fecha · hora} · {tipo}" cuando hay (o "Sin contacto registrado."/"Sin cita próxima programada." si no). Verificado con Chromium headless: el cajón de Jorge muestra "+52 55 1234 5682 · jorge.castillo@email.com" y "Próxima cita: 5 nov · 12:00 · Control rápido" (cita temporal creada y borrada al terminar). `npm run build` OK, `npm test` (47/47).
+
+## Fase 59 — Detalles: preparación visible en recetas y tabla de micronutrientes completa en Ingredientes (después del merge de fase 58)
+
+- **El detalle de receta no mostraba la preparación.** La nutrióloga escribe las instrucciones al crear/editar la receta, pero el panel de detalle (Recetas) solo mostraba macros e ingredientes. Ahora muestra una sección "Preparación" con el texto tal como se guardó (ya viajaba en `GET /recipes`; solo faltaba renderizarla).
+- **La tabla de nutrientes del detalle de Ingrediente estaba incompleta** (12 filas: macros + 4 micros) pese a que el catálogo SMAE/BASE_ALIMENTOS tiene el perfil completo. Se amplió a **26 nutrientes** (macros + vitaminas A/C/D/E/K/B1/B2/B3/B6/B12, ácido fólico, calcio, hierro, magnesio, potasio, zinc, yodo, selenio) con los mismos labels/unidades del motor de micronutrientes, y la tabla pasó a **2 columnas** para que no se vuelva una lista interminable (el CSS es específico de esta pantalla).
+
+Verificado con Chromium headless: el detalle de "Avena cocida con manzana" muestra "Preparación: Cocinar la avena y servir con manzana."; el detalle de ingrediente muestra 26 celdas con Vitamina A y Zinc. Sin datos de prueba creados (solo lecturas). `npm run build` OK, `npm test` (47/47).
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -468,3 +475,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 46. ~~Detalles: zona horaria real en Agenda y estado real de sesión en el expediente~~ — hecho (fase 56, ver sección al final de este archivo): el "GMT-6" del encabezado de Agenda se deriva ahora de `Practice.timeZone` (Intl), el subtítulo raro de "Agenda de hoy" se corrigió, y abrir una sesión completada muestra "Consulta completada · Sesión cerrada" en lugar de "en curso".
 47. ~~Detalles UI: estados vacíos y badges honestos~~ — hecho (fase 57, ver sección al final de este archivo): "Agenda de hoy" muestra un estado vacío cuando no hay citas, y la portada de Educación deja de mostrar "PDF" falso (ahora PDF/IMG/TEXTO según el adjunto real).
 48. ~~Detalles UI: cajón del paciente con contacto y próxima cita~~ — hecho (fase 58, ver sección al final de este archivo): el cajón de Pacientes ahora muestra teléfono/email y la próxima cita real (fecha · hora · tipo), datos que ya existían desde fase 50 pero no se exponían.
+49. ~~Detalles: preparación en recetas y tabla de micronutrientes completa en Ingredientes~~ — hecho (fase 59, ver sección al final de este archivo): el detalle de receta muestra la preparación guardada, y la tabla del ingrediente cubre los 26 nutrientes del catálogo en 2 columnas.

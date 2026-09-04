@@ -84,6 +84,10 @@ export default function RecipesPage({ setActive, onSelectRecipe }) {
             {(selected.ingredients || []).map((item) => <div className="recipe-ingredient" key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.ingredient.name}</b><small>{item.quantity} {item.unit} · {item.equivalence || 0} eq.</small></div></div>)}
             {!selected.ingredients?.length && <p className="muted">Sin ingredientes registrados.</p>}
           </div>
+          {selected.instructions && <div className="detail-section">
+            <div className="detail-section-head"><h3>Preparación</h3></div>
+            <p className="muted" style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{selected.instructions}</p>
+          </div>}
           <button className="primary detail-assign" onClick={() => setActive('Constructor de plan')}>Asignar al plan <span>→</span></button>
           {isReal && <button className="link-button" disabled={archiveState === 'archiving'} onClick={archive}>{archiveState === 'archiving' ? 'Archivando…' : 'Archivar receta'}</button>}
         </div>
