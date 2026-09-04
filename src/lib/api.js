@@ -138,6 +138,17 @@ export const documentsApi = {
   },
 }
 
+export const labAttachmentsApi = {
+  upload: (consultationId, fileName, dataUrl) => apiRequest(`/consultations/${consultationId}/lab-attachments`, { method: 'POST', body: JSON.stringify({ fileName, dataUrl }) }),
+  remove: (id) => apiRequest(`/lab-attachments/${id}`, { method: 'DELETE' }),
+  downloadBlob: async (id) => {
+    const token = getToken()
+    const response = await fetch(`${API_BASE}/lab-attachments/${id}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+    if (!response.ok) throw Object.assign(new Error('No se pudo descargar el archivo.'), { code: 'DOWNLOAD_FAILED' })
+    return response.blob()
+  },
+}
+
 export const tasksApi = {
   list: (query = '') => apiRequest(`/tasks${query}`),
   create: (payload) => apiRequest('/tasks', { method: 'POST', body: JSON.stringify(payload) }),

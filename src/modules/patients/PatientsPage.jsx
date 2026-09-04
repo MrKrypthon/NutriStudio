@@ -25,6 +25,7 @@ const AUDIT_LABELS = {
   'Diagnosis:deleted': 'Diagnóstico eliminado',
   'NutritionPlan:published': 'Plan publicado',
   'Document:delivered': 'Documento entregado',
+  'LabAttachment:uploaded': 'PDF de análisis clínicos adjuntado',
 }
 const DONE_STATUSES = new Set(['CONFIRMED', 'COMPLETED', 'PUBLISHED', 'DELIVERED', 'DONE'])
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
