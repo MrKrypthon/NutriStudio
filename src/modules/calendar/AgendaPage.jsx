@@ -29,7 +29,7 @@ const DEMO_APPOINTMENTS = [
 const startOfWeek = (date) => { const d = new Date(date); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d }
 const addDays = (date, amount) => { const d = new Date(date); d.setUTCDate(d.getUTCDate() + amount); return d }
 const toISODate = (date) => date.toISOString().slice(0, 10)
-const emptyForm = (defaultDate) => ({ patientId: '', date: toISODate(defaultDate), time: '09:00', type: 'FOLLOW_UP', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '' })
+const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'FOLLOW_UP', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '' })
 
 function formatRangeLabel(days) {
   const first = days[0], last = days[days.length - 1]
@@ -38,7 +38,7 @@ function formatRangeLabel(days) {
   return sameMonth ? `${first.getUTCDate()} – ${last.getUTCDate()} ${MONTHS[first.getUTCMonth()]} ${first.getUTCFullYear()}` : `${first.getUTCDate()} ${MONTHS[first.getUTCMonth()]} – ${last.getUTCDate()} ${MONTHS[last.getUTCMonth()]} ${first.getUTCFullYear()}`
 }
 
-export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew, onConsumeAutoOpen }) {
+export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew, autoOpenPatientId, onConsumeAutoOpen }) {
   const [view, setView] = useState('Semana')
   const [anchor, setAnchor] = useState(TODAY)
   const [appointments, setAppointments] = useState([])
@@ -92,12 +92,13 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     } catch { /* The list keeps its previous state; the professional can retry. */ }
   }
 
-  const openModal = () => { setForm(emptyForm(anchor)); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const openModal = (defaultPatientId) => { setForm(emptyForm(anchor, defaultPatientId)); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
 
-  // "Nueva cita" from Hoy sets this before navigating here instead of just landing on the page
-  // and making the professional click "Nueva cita" a second time.
+  // "Nueva cita" from Hoy (or "Agendar" from a patient's expediente, which also passes a
+  // patientId to preselect) sets this before navigating here instead of just landing on the
+  // page and making the professional click "Nueva cita" a second time.
   useEffect(() => {
-    if (autoOpenNew) { openModal(); onConsumeAutoOpen?.() }
+    if (autoOpenNew) { openModal(autoOpenPatientId); onConsumeAutoOpen?.() }
   }, [autoOpenNew])
   const closeModal = () => { setOpen(false); setSubmitError('') }
   const update = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
@@ -121,7 +122,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   }
 
   return <AppChrome active="Agenda" setActive={setActive}><div className="content">
-    <ModuleHeader eyebrow={`AGENDA · ${MONTHS[anchor.getUTCMonth()].toUpperCase()} ${anchor.getUTCFullYear()}`} title="Tu agenda" subtitle="Organiza tu tiempo y llega preparado a cada consulta." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizada' : status === 'loading' ? 'Cargando…' : status === 'error' ? 'Sin conexión' : 'Datos de demostración'}</span><button className="primary" onClick={openModal}><span>+</span> Nueva cita</button></div>} />
+    <ModuleHeader eyebrow={`AGENDA · ${MONTHS[anchor.getUTCMonth()].toUpperCase()} ${anchor.getUTCFullYear()}`} title="Tu agenda" subtitle="Organiza tu tiempo y llega preparado a cada consulta." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizada' : status === 'loading' ? 'Cargando…' : status === 'error' ? 'Sin conexión' : 'Datos de demostración'}</span><button className="primary" onClick={() => openModal()}><span>+</span> Nueva cita</button></div>} />
 
     <div className="toolbar">
       <div className="date-nav"><button onClick={goPrev}>‹</button><b>{formatRangeLabel(days)}</b><button onClick={goNext}>›</button></div>

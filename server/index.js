@@ -168,10 +168,19 @@ app.get('/api/v1/patients', async (request) => {
     status,
     ...(search ? { OR: [{ firstName: { contains: search, mode: 'insensitive' } }, { lastName: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }] } : {}),
   }
-  const [items, total] = await prisma.$transaction([
-    prisma.patient.findMany({ where, orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }], skip: (currentPage - 1) * take, take }),
+  const [rawItems, total] = await prisma.$transaction([
+    prisma.patient.findMany({
+      where,
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      skip: (currentPage - 1) * take,
+      take,
+      include: { consultations: { orderBy: { startedAt: 'desc' }, take: 1, select: { startedAt: true } } },
+    }),
     prisma.patient.count({ where }),
   ])
+  // The list only ever needs "when did I last see this patient", not the full history --
+  // flatten the one-row relation into a plain field instead of shipping consultations[].
+  const items = rawItems.map(({ consultations, ...patient }) => ({ ...patient, lastConsultationAt: consultations[0]?.startedAt || null }))
   return { items, page: currentPage, pageSize: take, total }
 })
 

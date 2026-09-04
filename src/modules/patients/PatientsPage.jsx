@@ -52,6 +52,7 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
   const [timeline, setTimeline] = useState([])
   const [timelineState, setTimelineState] = useState('idle')
   const [statusFilter, setStatusFilter] = useState('ACTIVE')
+  const [sortBy, setSortBy] = useState('recent')
   const [archiveState, setArchiveState] = useState('idle')
 
   useEffect(() => {
@@ -72,7 +73,9 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
       .catch(() => setTimelineState('error'))
   }, [selected?.[6]])
 
-  const visible = rows.filter((p) => p[1].toLowerCase().includes(search.toLowerCase()))
+  const visible = rows
+    .filter((p) => p[1].toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (sortBy === 'name' ? a[1].localeCompare(b[1]) : new Date(b[7]?.createdAt || 0) - new Date(a[7]?.createdAt || 0)))
   const goTo = (module) => { if (selected?.[6]) onSelectPatient?.(selected[6]); setActive(module) }
 
   const openPatient = (row) => { setSelected(row); setEditing(false); setEditState('idle'); setEditError('') }
@@ -111,13 +114,13 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
   }
 
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content">
-    <ModuleHeader eyebrow="TU ESPACIO · 24 ACTIVOS" title="Pacientes" subtitle="Conoce el progreso y el contexto de cada persona." action={<div className="module-actions"><span className={'sync-label ' + status}>● {status === 'online' ? 'Sincronizados' : 'Datos de demostración'}</span><button className="primary" onClick={() => setActive('Nuevo paciente')}><span>+</span> Nuevo paciente</button></div>} />
+    <ModuleHeader eyebrow={`TU ESPACIO · ${rows.length} ${statusFilter === 'ACTIVE' ? 'ACTIVOS' : 'ARCHIVADOS'}`} title="Pacientes" subtitle="Conoce el progreso y el contexto de cada persona." action={<div className="module-actions"><span className={'sync-label ' + status}>● {status === 'online' ? 'Sincronizados' : 'Datos de demostración'}</span><button className="primary" onClick={() => setActive('Nuevo paciente')}><span>+</span> Nuevo paciente</button></div>} />
     <div className="filter-bar panel"><div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o email..." /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="ACTIVE">Activos</option><option value="ARCHIVED">Archivados</option></select></div>
     <div className="table-panel panel">
-      <div className="table-meta">Mostrando <b>{visible.length} pacientes</b><button>Ordenar por: <b>Más recientes⌄</b></button></div>
+      <div className="table-meta">Mostrando <b>{visible.length} pacientes</b><label className="sort-select">Ordenar por: <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}><option value="recent">Más recientes</option><option value="name">Nombre A-Z</option></select></label></div>
       <div className="patient-table">
         <div className="table-head"><span>Paciente</span><span>Última consulta</span><span>Próxima cita</span><span>Estado</span><span /></div>
-        {visible.map((p, i) => <div className="patient-row" key={p[1]} onClick={() => openPatient(p)}><div className="patient-name"><span className={'person-avatar ' + p[5]}>{p[0]}</span><div><b>{p[1]}</b><small>{p[2]}</small></div></div><span className="muted">{i < 2 ? '18 ago, 2026' : '—'}</span><span><b className="appointment-date">{p[3]}</b><small className="muted">{p[4]}</small></span><span className={p[7]?.status === 'ARCHIVED' ? 'status pending' : 'status confirmed'}>{p[7]?.status === 'ARCHIVED' ? 'Archivado' : 'Activo'}</span><span className="row-arrow">→</span></div>)}
+        {visible.map((p, i) => <div className="patient-row" key={p[1]} onClick={() => openPatient(p)}><div className="patient-name"><span className={'person-avatar ' + p[5]}>{p[0]}</span><div><b>{p[1]}</b><small>{p[2]}</small></div></div><span className="muted">{p[7]?.lastConsultationAt ? formatUTCDate(p[7].lastConsultationAt) : '—'}</span><span><b className="appointment-date">{p[3]}</b><small className="muted">{p[4]}</small></span><span className={p[7]?.status === 'ARCHIVED' ? 'status pending' : 'status confirmed'}>{p[7]?.status === 'ARCHIVED' ? 'Archivado' : 'Activo'}</span><span className="row-arrow">→</span></div>)}
       </div>
     </div>
   </div>

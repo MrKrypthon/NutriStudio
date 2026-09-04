@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { patientsApi } from '../../lib/api.js'
@@ -17,6 +17,7 @@ export default function ConsultationsPage({ setActive, patientId, onSelectPatien
   const [sessions, setSessions] = useState([])
   const [loadState, setLoadState] = useState('loading')
   const [patients, setPatients] = useState([])
+  const historyRef = useRef(null)
 
   useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
@@ -31,7 +32,7 @@ export default function ConsultationsPage({ setActive, patientId, onSelectPatien
   const lastSession = sessions[0]
 
   return <AppChrome active="Consultas" setActive={setActive}><div className="content consultation-content">
-    <ModuleHeader eyebrow="CONSULTAS · SESIÓN DE HOY" title="Nueva sesión" subtitle="Registra la consulta y crea el siguiente paso para tu paciente." action={<button className="secondary">Historial de sesiones</button>} />
+    <ModuleHeader eyebrow="CONSULTAS · SESIÓN DE HOY" title="Nueva sesión" subtitle="Registra la consulta y crea el siguiente paso para tu paciente." action={<button className="secondary" onClick={() => historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Historial de sesiones</button>} />
     <div className="session-selector panel"><span className="person-avatar coral">{patientInitials}</span><div><p className="eyebrow">PACIENTE</p><b>{patient}</b><small>{patientRecord?.sex || 'Paciente'}{lastSession ? ` · Última consulta: ${formatUTCDate(lastSession.startedAt || lastSession.createdAt)}` : ' · Sin consultas previas'}</small></div><label className="patient-switch">Paciente<select value={patientId || ''} onChange={(e) => onSelectPatient?.(e.target.value)}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>
     <div className="session-question">
       <p className="eyebrow">¿POR DÓNDE QUIERES COMENZAR HOY?</p>
@@ -41,7 +42,7 @@ export default function ConsultationsPage({ setActive, patientId, onSelectPatien
       </div>
       <div className="session-note">↗ Podrás cambiar entre Consulta y Plan en cualquier momento.</div>
     </div>
-    <div className="recent-sessions panel">
+    <div className="recent-sessions panel" ref={historyRef}>
       <div className="panel-title"><div><h2>Sesiones recientes</h2><p>El historial de {patient}</p></div></div>
       {loadState === 'loading' && <p className="muted">Cargando historial…</p>}
       {loadState === 'error' && <p className="muted">No se pudo cargar el historial de consultas.</p>}

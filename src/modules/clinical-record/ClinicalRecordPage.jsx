@@ -120,7 +120,7 @@ function TranscriptionTab({ values, updateField, updateFields, patientName }) {
   </div>
 }
 
-export default function ClinicalRecordPage({ setActive, patientId, appointmentId, onConsumeAppointment }) {
+export default function ClinicalRecordPage({ setActive, patientId, appointmentId, onConsumeAppointment, onScheduleAppointment }) {
   const { patient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
@@ -318,7 +318,7 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
       <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Consulta nutricional · en curso</span></div></div>
-      <div className="clinical-actions"><button className="secondary">▱ Agendar</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Descargar informe' : 'Generar informe'}</button></div>
+      <div className="clinical-actions"><button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Descargar informe' : 'Generar informe'}</button></div>
     </div>
     {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
     {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
@@ -446,7 +446,7 @@ export default function ClinicalRecordPage({ setActive, patientId, appointmentId
         <FormCard title={tab} fields={['Registro clínico|', 'Notas adicionales|']} values={currentValues} onFieldChange={updateField} />
       </div>}
 
-      <div className="wizard-footer"><button className="secondary">← Sección anterior</button><span>{saveLabel}</span><button className="primary">Siguiente sección <span>→</span></button></div>
+      <div className="wizard-footer"><button className="secondary" disabled={TABS.indexOf(tab) === 0} onClick={() => setTab(TABS[TABS.indexOf(tab) - 1])}>← Sección anterior</button><span>{saveLabel}</span><button className="primary" disabled={TABS.indexOf(tab) === TABS.length - 1} onClick={() => setTab(TABS[TABS.indexOf(tab) + 1])}>Siguiente sección <span>→</span></button></div>
     </>}
   </div></AppChrome>
 }
