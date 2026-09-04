@@ -301,25 +301,33 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const closeDiagnosisForm = () => setDiagnosisForm(null)
   const updateDiagnosisForm = (key, value) => setDiagnosisForm((prev) => ({ ...prev, [key]: value }))
 
-  const saveDiagnosis = async () => {
-    if (!consultation || !diagnosisForm?.problem) return
-    setDiagnosisSaveState('saving')
-    try {
-      const created = await clinicalApi.addDiagnosis(consultation.id, diagnosisForm)
-      setDiagnoses((prev) => [...prev, created])
-      setDiagnosisForm(null)
-      setDiagnosisSaveState('idle')
-    } catch {
-      setDiagnosisSaveState('error')
-    }
-  }
-
   const removeDiagnosis = async (id) => {
     if (!consultation) return
     try {
       await clinicalApi.removeDiagnosis(consultation.id, id)
       setDiagnoses((prev) => prev.filter((d) => d.id !== id))
     } catch { /* leave it in the list; the professional can retry */ }
+  }
+
+  // Diagnoses were create/delete only; the PATCH endpoint existed but was never wired.
+  const editDiagnosis = (d) => setDiagnosisForm({ ...d, _editingId: d.id })
+  const saveDiagnosis = async () => {
+    if (!consultation || !diagnosisForm?.problem) return
+    setDiagnosisSaveState('saving')
+    try {
+      const { _editingId, id: _diagnosisId, ...payload } = diagnosisForm
+      if (_editingId) {
+        const updated = await clinicalApi.updateDiagnosis(consultation.id, _editingId, payload)
+        setDiagnoses((prev) => prev.map((d) => (d.id === updated.id ? updated : d)))
+      } else {
+        const created = await clinicalApi.addDiagnosis(consultation.id, payload)
+        setDiagnoses((prev) => [...prev, created])
+      }
+      setDiagnosisForm(null)
+      setDiagnosisSaveState('idle')
+    } catch {
+      setDiagnosisSaveState('error')
+    }
   }
 
   const labs = currentValues['Estudios'] || []
@@ -332,6 +340,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     setLabForm(null)
   }
   const removeLab = (id) => updateField('Estudios', labs.filter((lab) => lab.id !== id))
+  const updateLabValue = (id, value) => updateField('Estudios', labs.map((lab) => (lab.id === id ? { ...lab, value } : lab)))
 
   const uploadLabAttachment = async (file) => {
     if (!consultation || !file) return
@@ -500,7 +509,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             </div>
             <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name || !labForm.value} onClick={saveLab}>Guardar estudio</button></div>
           </div>}
-          {labs.length > 0 && <div className="lab-list">{labs.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : lab.status === 'Pendiente' ? 'pending' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} readOnly /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
+          {labs.length > 0 && <div className="lab-list">{labs.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
 
           <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName} y captura sus valores arriba a mano; todavía no hay lectura automática.</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
           {uploadState === 'error' && <div className="form-error">⚠ {uploadError}</div>}
@@ -515,12 +524,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <div className="diagnosis-domains">{DIAGNOSIS_DOMAINS.map(([title, desc, color]) => <div className={'domain-card ' + color} key={title} onClick={() => openDiagnosisForm(title)} style={{ cursor: 'pointer' }}><span>◉</span><b>{title}</b><small>{desc}</small><strong>{diagnoses.filter((d) => d.domain === title).length} seleccionados</strong></div>)}</div>
 
         {diagnosisForm && <div className="diagnosis-form panel">
-          <p className="eyebrow">NUEVO DIAGNÓSTICO · {diagnosisForm.domain}</p>
+          <p className="eyebrow">{diagnosisForm._editingId ? 'EDITAR DIAGNÓSTICO' : 'NUEVO DIAGNÓSTICO'} · {diagnosisForm.domain}</p>
           <label>Problema<input value={diagnosisForm.problem} onChange={(e) => updateDiagnosisForm('problem', e.target.value)} placeholder="Ej. Ingesta excesiva de energía" /></label>
           <label>Etiología (relacionado con…)<textarea value={diagnosisForm.etiology} onChange={(e) => updateDiagnosisForm('etiology', e.target.value)} placeholder="Causa o factores contribuyentes..." /></label>
           <label>Evidencia (evidenciado por…)<textarea value={diagnosisForm.evidence} onChange={(e) => updateDiagnosisForm('evidence', e.target.value)} placeholder="Signos, síntomas o datos que lo sustentan..." /></label>
           {diagnosisSaveState === 'error' && <div className="form-error">⚠ No se pudo guardar el diagnóstico.</div>}
-          <div className="modal-actions"><button type="button" className="secondary" onClick={closeDiagnosisForm}>Cancelar</button><button className="primary" disabled={!diagnosisForm.problem || diagnosisSaveState === 'saving'} onClick={saveDiagnosis}>{diagnosisSaveState === 'saving' ? 'Guardando…' : 'Guardar diagnóstico'}</button></div>
+          <div className="modal-actions"><button type="button" className="secondary" onClick={closeDiagnosisForm}>Cancelar</button><button className="primary" disabled={!diagnosisForm.problem || diagnosisSaveState === 'saving'} onClick={saveDiagnosis}>{diagnosisSaveState === 'saving' ? 'Guardando…' : diagnosisForm._editingId ? 'Guardar cambios' : 'Guardar diagnóstico'}</button></div>
         </div>}
 
         <div className="diagnosis-selected">
@@ -528,7 +537,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           {!diagnoses.length && <p className="muted">Todavía no hay diagnósticos registrados para esta consulta.</p>}
           {diagnoses.map((d) => <div className="diagnosis-entry" key={d.id}>
             <div><b>{d.domain}</b><span>{d.problem}</span>{d.etiology && <small>Relacionado con: {d.etiology}</small>}{d.evidence && <small>Evidenciado por: {d.evidence}</small>}</div>
-            <button type="button" className="link-button" onClick={() => removeDiagnosis(d.id)}>Quitar</button>
+            <div className="diagnosis-actions"><button type="button" className="link-button" onClick={() => editDiagnosis(d)}>Editar</button><button type="button" className="link-button" onClick={() => removeDiagnosis(d.id)}>Quitar</button></div>
           </div>)}
         </div>
       </div>
