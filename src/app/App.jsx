@@ -33,6 +33,7 @@ export default function App() {
   const [selectedRecipeId, setSelectedRecipeId] = useState(null)
   const [startAppointmentId, setStartAppointmentId] = useState(null)
   const [autoOpenNewAppointment, setAutoOpenNewAppointment] = useState(false)
+  const [newAppointmentPatientId, setNewAppointmentPatientId] = useState('')
   const setActive = (next) => {
     setActiveState(next)
     const slug = moduleToSlug[next]
@@ -56,7 +57,9 @@ export default function App() {
 
   // "Nueva cita" from Hoy used to just land on Agenda, where you then had to click its own
   // "Nueva cita" button again to actually open the form -- this skips straight to the form.
-  const goToNewAppointment = () => {
+  // "Agendar" from a patient's expediente reuses the same mechanism, pre-selecting that patient.
+  const goToNewAppointment = (patientId = '') => {
+    setNewAppointmentPatientId(patientId)
     setAutoOpenNewAppointment(true)
     setActive('Agenda')
   }
@@ -65,14 +68,14 @@ export default function App() {
   if (status === 'anonymous') return <LoginPage />
 
   if (active === 'Hoy') return <DashboardPage setActive={setActive} onStartConsultation={startConsultation} onNewAppointment={goToNewAppointment} />
-  if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} autoOpenNew={autoOpenNewAppointment} onConsumeAutoOpen={() => setAutoOpenNewAppointment(false)} />
+  if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} autoOpenNew={autoOpenNewAppointment} autoOpenPatientId={newAppointmentPatientId} onConsumeAutoOpen={() => { setAutoOpenNewAppointment(false); setNewAppointmentPatientId('') }} />
   if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nueva receta') return <NewRecipePage setActive={setActive} />
   if (active === 'Editar receta') return <NewRecipePage setActive={setActive} recipeId={selectedRecipeId} />
   if (active === 'Configuración') return <SettingsPage setActive={setActive} />
   if (active === 'Importar alimentos') return <ImportFoodsPage setActive={setActive} />
-  if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} appointmentId={startAppointmentId} onConsumeAppointment={() => setStartAppointmentId(null)} />
+  if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} appointmentId={startAppointmentId} onConsumeAppointment={() => setStartAppointmentId(null)} onScheduleAppointment={() => goToNewAppointment(selectedPatientId)} />
   if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} />
   if (active === 'Documento') return <DocumentPage setActive={setActive} patientId={selectedPatientId} />
   if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
