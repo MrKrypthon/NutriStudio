@@ -403,7 +403,7 @@ app.delete('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async
 
 app.get('/api/v1/appointments', async (request) => {
   const { from, to } = request.query
-  const appointments = await prisma.appointment.findMany({ where: { practiceId: request.practiceId, startAt: { gte: new Date(from), lte: new Date(to) } }, include: { patient: true }, orderBy: { startAt: 'asc' } })
+  const appointments = await prisma.appointment.findMany({ where: { practiceId: request.practiceId, startAt: { gte: new Date(from), lte: new Date(to) }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, include: { patient: true }, orderBy: { startAt: 'asc' } })
   return { items: appointments }
 })
 
@@ -815,7 +815,7 @@ app.get('/api/v1/dashboard/today', async (request) => {
   const end = new Date(`${date}T23:59:59.999Z`)
   const practiceId = request.practiceId
   const [appointments, pendingConfirmations, followUps, activePatients, tasks] = await prisma.$transaction([
-    prisma.appointment.findMany({ where: { practiceId, startAt: { gte: start, lte: end } }, include: { patient: true }, orderBy: { startAt: 'asc' } }),
+    prisma.appointment.findMany({ where: { practiceId, startAt: { gte: start, lte: end }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, include: { patient: true }, orderBy: { startAt: 'asc' } }),
     prisma.appointment.count({ where: { practiceId, startAt: { gte: start, lte: end }, status: 'PENDING_CONFIRMATION' } }),
     prisma.task.count({ where: { practiceId, status: 'pending', type: { in: ['nutrition_plan', 'consultation_report'] } } }),
     prisma.patient.count({ where: { practiceId, status: 'ACTIVE' } }),
