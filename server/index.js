@@ -191,9 +191,9 @@ app.get('/api/v1/patients', async (request) => {
 })
 
 app.post('/api/v1/patients', async (request, reply) => {
-  const { firstName, lastName, email, phone, birthDate, sex, occupation } = request.body || {}
+  const { firstName, lastName, email, phone, birthDate, sex, occupation, consentDataAt } = request.body || {}
   if (!firstName || !lastName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido son obligatorios.', fields: { firstName: !firstName, lastName: !lastName } })
-  const patient = await prisma.patient.create({ data: { practiceId: request.practiceId, firstName, lastName, email, phone, sex, occupation, birthDate: birthDate ? new Date(birthDate) : undefined } })
+  const patient = await prisma.patient.create({ data: { practiceId: request.practiceId, firstName, lastName, email, phone, sex, occupation, birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: consentDataAt ? new Date(consentDataAt) : undefined } })
   return reply.code(201).send(patient)
 })
 
@@ -449,8 +449,11 @@ app.post('/api/v1/appointments', async (request, reply) => {
   if (overlaps.length) return reply.code(409).send({ code: 'APPOINTMENT_OVERLAP', message: 'Alguno de los horarios ya está ocupado.', fields: {} })
 
   const created = []
+  // A BLOCK never carries a patient; the frontend sends an empty string for the hidden patient
+  // field, which Prisma would try to insert as a UUID and blow up the FK constraint.
+  const blockPatientId = isBlock ? null : (patientId || null)
   for (const o of occurrences) {
-    const appointment = await prisma.appointment.create({ data: { practiceId, patientId, startAt: o.start, endAt: o.end, type, status: notifyVia.length ? 'PENDING_CONFIRMATION' : 'SCHEDULED', notifyVia, internalNote, patientNote, timeZone, recurrenceRule: ruleString }, include: { patient: true } })
+    const appointment = await prisma.appointment.create({ data: { practiceId, patientId: blockPatientId, startAt: o.start, endAt: o.end, type, status: notifyVia.length ? 'PENDING_CONFIRMATION' : 'SCHEDULED', notifyVia, internalNote, patientNote, timeZone, recurrenceRule: ruleString }, include: { patient: true } })
     created.push(appointment)
   }
   return reply.code(201).send(occurrences.length === 1 ? created[0] : { items: created, recurrence: ruleString })

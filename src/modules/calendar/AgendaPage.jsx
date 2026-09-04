@@ -117,7 +117,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   }
 
   const openModal = (defaultPatientId) => { setIsBlock(false); setForm(emptyForm(anchor, defaultPatientId)); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
-  const openBlockModal = () => { setIsBlock(true); setForm({ ...emptyForm(anchor), type: 'BLOCK' }); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const openBlockModal = () => { setIsBlock(true); setForm({ ...emptyForm(anchor), type: 'BLOCK', notify: 'none' }); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
 
   // "Nueva cita" from Hoy (or "Agendar" from a patient's expediente, which also passes a
   // patientId to preselect) sets this before navigating here instead of just landing on the
@@ -136,7 +136,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
 
   const submit = async (event) => {
     event.preventDefault()
-    if (status !== 'online') { closeModal(); return }
+    if (status !== 'online') { setSubmitError('Modo demostración: no se guardará. Conecta el API para poder agendar.'); return }
     if (!isBlock && !form.patientId) { setSubmitError('Selecciona un paciente.'); return }
     setSubmitState('saving')
     setSubmitError('')

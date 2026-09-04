@@ -159,7 +159,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
               {DAYS_ORDER.map((d) => { const entry = entryFor(d, mealType); return <div className="paper-week-cell" key={d}>{entry ? <><b>{entry.recipeName}</b><small>{entry.kcal} kcal</small></> : <small className="muted">—</small>}</div> })}
             </div>)}
           </div>}
-          <div className="paper-signature">Gabriela Alonso · Nutrióloga</div>
+          <div className="paper-signature">{practice?.user?.name || 'Nutrióloga'}</div>
         </div>
       </section>
       <aside className="document-options panel">

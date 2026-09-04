@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, zona horaria/estado de sesión, estados vacíos/badges honestos, cajón del paciente, preparación/micros en detalle, y — después del merge de la fase 59 — el gráfico de evolución de Antropométrico con mediciones reales; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, zona horaria/estado de sesión, estados vacíos/badges honestos, cajón del paciente, preparación/micros en detalle, gráfico de evolución real, y — después del merge de la fase 60 — la cuarta auditoría: firma real en documentos, bloqueos no-confirmables, consentimiento persistido y avisos honestos; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -185,6 +185,18 @@ El gráfico "Evolución de métricas" de la pestaña Antropométrico era **falso
 - Al usar "Registrar medición de hoy", la medición devuelta se agrega al historial local, así el gráfico se actualiza al instante sin recargar.
 
 Verificado con Chromium headless: registrando una medición de prueba para Mariana (2 en total), el gráfico muestra el SVG con 2 puntos y las etiquetas reales "71.5 · 15/08" y "72.4 · 26/08"; con menos de 2 mediciones aparece el mensaje honesto. Medición de prueba borrada. `npm run build` OK, `npm test` (47/47).
+
+## Fase 61 — Cuarta auditoría: firma real, bloqueos no-confirmables, consentimiento persistido y avisos honestos (después del merge de fase 60)
+
+Nuevo barrido de sub-agente (solo lectura) sobre las zonas no auditadas a fondo: pasos Distribución/Semana/Entrega del Constructor de plan, Nuevo paciente, Consultas, Configuración (horarios/logo) y Agenda (modal). Pasos 2/3 del plan y Consultas salieron limpios. Corregido:
+
+- **MEDIO — La firma del preview/Entrega del plan decía "Gabriela Alonso · Nutrióloga" hardcodeada** (`DocumentPage`), aunque la profesional cambie su nombre en Configuración (que sí se persiste y el PDF real usa). Ahora la firma usa `practice?.user?.name` — el preview queda sincronizado con el PDF.
+- **MEDIO — Los bloqueos de disponibilidad se creaban como "por confirmar".** El modal de bloqueo oculta el selector de notificación pero el formulario seguía con `notify: 'whatsapp'` → `notifyVia: ['whatsapp']` → el backend los creaba `PENDING_CONFIRMATION`, así aparecían bajo el filtro "Por confirmar" y al hacer clic ofrecían "confirmar la cita". Ahora el modal de bloqueo fuerza `notify: 'none'` → `notifyVia: []` → `SCHEDULED`. **De paso se encontró y corrigió un bug real**: el bloqueo mandaba `patientId: ''` (campo oculto del formulario) y Prisma intentaba insertar esa cadena vacía como UUID → 500 (FK violation). El backend ahora fuerza `patientId: null` para bloques.
+- **BAJO — El checkbox "Consentimiento de comunicación" de Nuevo paciente era decorativo** (sin estado y sin persistir). Ahora es real: controlado por estado y se guarda `Patient.consentDataAt` en el alta (`POST /patients` acepta el campo, el modelo ya lo tenía).
+- **BAJO — "Crear cita/bloqueo" en modo demo cerraba el modal en silencio** (sin crear nada y sin avisar). Ahora muestra un aviso dentro del modal ("Modo demostración: no se guardará…").
+- **BAJO — El botón "Listo" de la edición de horarios en Configuración no guardaba** (solo cerraba el modo edición; si navegabas sin pulsar "Guardar cambios" perdías todo sin aviso). Ahora llama a `save()` igual que el botón principal.
+
+Verificado contra API real e instancias aisladas: un bloqueo creado desde la UI queda `SCHEDULED`, `patientId: null`, `notifyVia: []`; un paciente de prueba con `consentDataAt` lo persiste (dato de prueba borrado). `npm run build` OK, `npm test` (47/47).
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -488,3 +500,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 48. ~~Detalles UI: cajón del paciente con contacto y próxima cita~~ — hecho (fase 58, ver sección al final de este archivo): el cajón de Pacientes ahora muestra teléfono/email y la próxima cita real (fecha · hora · tipo), datos que ya existían desde fase 50 pero no se exponían.
 49. ~~Detalles: preparación en recetas y tabla de micronutrientes completa en Ingredientes~~ — hecho (fase 59, ver sección al final de este archivo): el detalle de receta muestra la preparación guardada, y la tabla del ingrediente cubre los 26 nutrientes del catálogo en 2 columnas.
 50. ~~Gráfico de evolución de Antropométrico con mediciones reales~~ — hecho (fase 60, ver sección al final de este archivo): el gráfico "Evolución de métricas" dejó de ser un SVG hardcodeado con fechas falsas; ahora traza Peso/IMC/% grasa reales del paciente (últimas 8 mediciones), con selector funcional y mensaje honesto si hay menos de 2.
+51. ~~Cuarta auditoría: firma real, bloqueos no-confirmables, consentimiento persistido y avisos honestos~~ — hecho (fase 61, ver sección al final de este archivo): firma del preview con nombre real, bloqueos `SCHEDULED` sin paciente (y fix del 500 por `patientId: ''`), checkbox de consentimiento persistido (`consentDataAt`), aviso en vez de cierre silencioso en demo, y "Listo" que sí guarda horarios.
