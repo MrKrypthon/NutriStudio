@@ -402,15 +402,52 @@ app.get('/api/v1/appointments', async (request) => {
 })
 
 app.post('/api/v1/appointments', async (request, reply) => {
-  const { patientId, startAt, endAt, type = 'FOLLOW_UP', durationMinutes, notifyVia = [], internalNote, patientNote, timeZone = 'America/Mexico_City' } = request.body || {}
+  const { patientId, startAt, endAt, type = 'FOLLOW_UP', durationMinutes, notifyVia = [], internalNote, patientNote, timeZone = 'America/Mexico_City', recurrence } = request.body || {}
   const start = new Date(startAt)
-  const end = endAt ? new Date(endAt) : new Date(start.getTime() + Number(durationMinutes || 60) * 60000)
-  if (!patientId || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Paciente, fecha y duración válida son obligatorios.', fields: {} })
+  const baseEnd = endAt ? new Date(endAt) : new Date(start.getTime() + Number(durationMinutes || 60) * 60000)
+  const isBlock = type === 'BLOCK'
+  // A BLOCK (availability event) needs no patient; every other appointment type does.
+  if ((!isBlock && !patientId) || Number.isNaN(start.getTime()) || Number.isNaN(baseEnd.getTime()) || baseEnd <= start) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: isBlock ? 'Fecha y duración válida son obligatorias.' : 'Paciente, fecha y duración válida son obligatorios.', fields: {} })
   const practiceId = request.practiceId
-  const overlap = await prisma.appointment.findFirst({ where: { practiceId, status: { notIn: ['CANCELLED', 'NO_SHOW'] }, startAt: { lt: end }, endAt: { gt: start } } })
-  if (overlap) return reply.code(409).send({ code: 'APPOINTMENT_OVERLAP', message: 'Ese horario ya está ocupado.', fields: { startAt: 'overlap', endAt: 'overlap' } })
-  const appointment = await prisma.appointment.create({ data: { practiceId, patientId, startAt: start, endAt: end, type, status: notifyVia.length ? 'PENDING_CONFIRMATION' : 'SCHEDULED', notifyVia, internalNote, patientNote, timeZone }, include: { patient: true } })
-  return reply.code(201).send(appointment)
+
+  // Optional recurrence (RF-03: "Permitir repetir una cita"): the whole series is created up
+  // front, one appointment per occurrence, each carrying a readable recurrenceRule that
+  // describes the series it belongs to. Without a recurrence, behaves exactly as before.
+  let occurrences = [{ start, end: baseEnd }]
+  let ruleString = null
+  if (recurrence && recurrence.frequency) {
+    const freq = recurrence.frequency
+    if (!['DAILY', 'WEEKLY'].includes(freq)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Frecuencia no soportada.', fields: { recurrence: 'invalid' } })
+    const every = Math.max(1, Number(recurrence.every) || 1)
+    const stepMs = (freq === 'DAILY' ? 1 : 7) * every * 86400000
+    const until = recurrence.until ? new Date(`${recurrence.until}T23:59:59.999Z`) : null
+    if (until && Number.isNaN(until.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha de fin inválida.', fields: { recurrence: 'invalid' } })
+    const count = until ? null : Math.min(30, Math.max(1, Number(recurrence.count) || 10))
+    const durationMs = baseEnd.getTime() - start.getTime()
+    occurrences = []
+    for (let i = 0; ; i++) {
+      if (i > 100) break // hard safety cap on a runaway series
+      const s = new Date(start.getTime() + i * stepMs)
+      if (until ? s > until : i >= (count || 0)) break
+      occurrences.push({ start: s, end: new Date(s.getTime() + durationMs) })
+    }
+    const ruleParts = [`FREQ=${freq}`, `INTERVAL=${every}`]
+    ruleParts.push(until ? `UNTIL=${recurrence.until}` : `COUNT=${occurrences.length}`)
+    ruleString = ruleParts.join(';')
+  }
+
+  // Overlap check across the whole series first, all-or-nothing: if any repeated slot collides
+  // with an existing appointment, the entire creation is rejected instead of leaving a partial
+  // series the professional has to hunt down slot by slot.
+  const overlaps = await prisma.appointment.findMany({ where: { practiceId, status: { notIn: ['CANCELLED', 'NO_SHOW'] }, OR: occurrences.map((o) => ({ startAt: { lt: o.end }, endAt: { gt: o.start } })) } })
+  if (overlaps.length) return reply.code(409).send({ code: 'APPOINTMENT_OVERLAP', message: 'Alguno de los horarios ya está ocupado.', fields: {} })
+
+  const created = []
+  for (const o of occurrences) {
+    const appointment = await prisma.appointment.create({ data: { practiceId, patientId, startAt: o.start, endAt: o.end, type, status: notifyVia.length ? 'PENDING_CONFIRMATION' : 'SCHEDULED', notifyVia, internalNote, patientNote, timeZone, recurrenceRule: ruleString }, include: { patient: true } })
+    created.push(appointment)
+  }
+  return reply.code(201).send(occurrences.length === 1 ? created[0] : { items: created, recurrence: ruleString })
 })
 
 app.post('/api/v1/appointments/:appointmentId/confirm', async (request, reply) => {
@@ -492,6 +529,28 @@ app.post('/api/v1/templates', async (request, reply) => {
 
   const template = await prisma.template.create({ data: { practiceId: request.practiceId, type, name, description, sections, mealSlots } })
   return reply.code(201).send(template)
+})
+
+// Editing a template only touches its name/description metadata. The sections/mealSlots it holds
+// are snapshots taken at creation time (see POST above) -- they're intentionally not editable
+// in place; a professional who wants a different clinical/plan shape creates a new template.
+app.patch('/api/v1/templates/:templateId', async (request, reply) => {
+  const { name, description } = request.body || {}
+  const template = await prisma.template.findFirst({ where: { id: request.params.templateId, practiceId: request.practiceId } })
+  if (!template) return reply.code(404).send({ code: 'TEMPLATE_NOT_FOUND', message: 'Plantilla no encontrada.', fields: {} })
+  if (name !== undefined && !String(name).trim()) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El nombre no puede quedar vacío.', fields: { name: 'invalid' } })
+  const updated = await prisma.template.update({
+    where: { id: template.id },
+    data: { ...(name !== undefined ? { name: String(name).trim() } : {}), ...(description !== undefined ? { description: String(description).trim() || null } : {}) },
+  })
+  return updated
+})
+
+app.delete('/api/v1/templates/:templateId', async (request, reply) => {
+  const template = await prisma.template.findFirst({ where: { id: request.params.templateId, practiceId: request.practiceId } })
+  if (!template) return reply.code(404).send({ code: 'TEMPLATE_NOT_FOUND', message: 'Plantilla no encontrada.', fields: {} })
+  await prisma.template.delete({ where: { id: template.id } })
+  return reply.code(204).send()
 })
 
 // Applying a template is a one-time copy, not a live link: a 'clinical' template seeds a new
@@ -670,6 +729,49 @@ app.patch('/api/v1/education-materials/:materialId', async (request, reply) => {
       ...(readMinutes !== undefined ? { readMinutes: Number(readMinutes) } : {}),
       ...(status !== undefined ? { status } : {}),
     },
+  })
+  return updated
+})
+
+const EDUCATION_MIME_EXT = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
+const educationAttachmentDir = () => path.resolve(process.env.EDUCATION_ATTACHMENT_STORAGE_PATH || './storage/education-materials')
+
+// A shareable file (PDF guide, infographic image...) attached to an education material. Same
+// data-URL pattern used for practice logos (fase 42) and lab PDFs (fase 46) -- no multipart.
+app.post('/api/v1/education-materials/:materialId/attachment', async (request, reply) => {
+  const material = await prisma.educationMaterial.findFirst({ where: { id: request.params.materialId, practiceId: request.practiceId } })
+  if (!material) return reply.code(404).send({ code: 'MATERIAL_NOT_FOUND', message: 'Material no encontrado.', fields: {} })
+  const { fileName, dataUrl } = request.body || {}
+  const match = typeof dataUrl === 'string' && dataUrl.match(/^data:([a-z/]+);base64,(.+)$/)
+  const ext = match && EDUCATION_MIME_EXT[match[1]]
+  if (!match || !ext || !fileName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube un archivo PDF o imagen (PNG/JPG/WebP).', fields: { dataUrl: true } })
+  const buffer = Buffer.from(match[2], 'base64')
+  if (buffer.byteLength > 10 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El archivo no puede pesar más de 10 MB.', fields: { dataUrl: true } })
+  const storageKey = `${material.id}.${ext}`
+  await mkdir(educationAttachmentDir(), { recursive: true })
+  await writeFile(path.join(educationAttachmentDir(), storageKey), buffer)
+  const updated = await prisma.educationMaterial.update({
+    where: { id: material.id },
+    data: { attachmentFileName: String(fileName).slice(0, 180), attachmentStorageKey: storageKey, attachmentFileSize: buffer.byteLength, attachmentMime: match[1] },
+  })
+  return updated
+})
+
+app.get('/api/v1/education-materials/:materialId/attachment', async (request, reply) => {
+  const material = await prisma.educationMaterial.findFirst({ where: { id: request.params.materialId, practiceId: request.practiceId } })
+  if (!material?.attachmentStorageKey) return reply.code(404).send({ code: 'MATERIAL_ATTACHMENT_NOT_FOUND', message: 'Este material no tiene archivo adjunto.', fields: {} })
+  const file = await readFile(path.join(educationAttachmentDir(), material.attachmentStorageKey))
+  const disposition = material.attachmentMime?.startsWith('image/') ? 'inline' : 'attachment'
+  return reply.type(material.attachmentMime || 'application/octet-stream').header('Content-Disposition', `${disposition}; filename="${material.attachmentFileName || material.attachmentStorageKey}"`).send(file)
+})
+
+app.delete('/api/v1/education-materials/:materialId/attachment', async (request, reply) => {
+  const material = await prisma.educationMaterial.findFirst({ where: { id: request.params.materialId, practiceId: request.practiceId } })
+  if (!material) return reply.code(404).send({ code: 'MATERIAL_NOT_FOUND', message: 'Material no encontrado.', fields: {} })
+  if (material.attachmentStorageKey) await unlink(path.join(educationAttachmentDir(), material.attachmentStorageKey)).catch(() => {})
+  const updated = await prisma.educationMaterial.update({
+    where: { id: material.id },
+    data: { attachmentFileName: null, attachmentStorageKey: null, attachmentFileSize: null, attachmentMime: null },
   })
   return updated
 })
