@@ -9,7 +9,7 @@ const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 's
 const formatUTCDate = (iso) => { const d = new Date(iso); return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
 const summarize = (consultation) => consultation.plans?.some((p) => p.status === 'PUBLISHED') ? 'Plan publicado' : consultation.sections?.length ? `${consultation.sections.length} sección(es) registradas` : 'Sin registros aún'
 
-export default function ConsultationsPage({ setActive, patientId, onSelectPatient }) {
+export default function ConsultationsPage({ setActive, patientId, onSelectPatient, onOpenSession }) {
   const { patient: patientRecord } = usePatient(patientId)
   const patient = patientRecord ? `${patientRecord.firstName} ${patientRecord.lastName}` : 'Cargando…'
   const patientInitials = patientRecord ? `${patientRecord.firstName[0] || ''}${patientRecord.lastName[0] || ''}` : '··'
@@ -47,7 +47,7 @@ export default function ConsultationsPage({ setActive, patientId, onSelectPatien
       {loadState === 'loading' && <p className="muted">Cargando historial…</p>}
       {loadState === 'error' && <p className="muted">No se pudo cargar el historial de consultas.</p>}
       {loadState === 'ready' && sessions.length === 0 && <p className="muted">Todavía no hay consultas registradas para {patient}.</p>}
-      {sessions.map((session) => <div className="recent-row" key={session.id}><span className="recent-date">{formatUTCDate(session.startedAt || session.createdAt)}</span><b>{STATUS_LABELS[session.status] || session.status}</b><span className="muted">{summarize(session)}</span><span className={'status ' + (session.status === 'COMPLETED' ? 'confirmed' : 'pending')}>{STATUS_LABELS[session.status] || session.status}</span><button className="row-arrow" onClick={() => setActive('Expediente')}>→</button></div>)}
+      {sessions.map((session) => <div className="recent-row" key={session.id}><span className="recent-date">{formatUTCDate(session.startedAt || session.createdAt)}</span><b>{STATUS_LABELS[session.status] || session.status}</b><span className="muted">{summarize(session)}</span><span className={'status ' + (session.status === 'COMPLETED' ? 'confirmed' : 'pending')}>{STATUS_LABELS[session.status] || session.status}</span><button className="row-arrow" title="Abrir esta sesión en el expediente" onClick={() => onOpenSession?.(patientId, session.id)}>→</button></div>)}
     </div>
   </div></AppChrome>
 }
