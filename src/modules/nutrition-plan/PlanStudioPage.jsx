@@ -280,7 +280,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         <h3>% Adecuación de micronutrientes</h3>
         {adequacyState === 'loading' && <p className="muted">Calculando…</p>}
         {adequacyState === 'error' && <div className="form-error">⚠ No se pudo calcular la adecuación de micronutrientes.</div>}
-        {adequacyState === 'ready' && !adequacy?.bracket && <p className="muted">Calcula y guarda el requerimiento en el paso "Plan alimentario" para poder calcular la adecuación.</p>}
+        {adequacyState === 'ready' && !adequacy?.bracket && <p className="muted">Calcula y guarda el requerimiento en el paso "Plan alimentario" para poder calcular la adecuación. <button type="button" className="link-button" onClick={() => setStep(1)}>Ir al cálculo →</button></p>}
         {adequacyState === 'ready' && adequacy?.bracket && !adequacy.nutrients.length && <p className="muted">Asigna al menos una receta a la semana para calcular la adecuación.</p>}
         {adequacyState === 'ready' && adequacy?.nutrients.length > 0 && <>
           <p className="muted">Referencia: {adequacy.bracketLabel}. Promedio diario de los días con al menos una receta asignada.</p>
