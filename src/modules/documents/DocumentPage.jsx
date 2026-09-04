@@ -130,7 +130,10 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
         <button className="secondary" onClick={() => setPreview(!preview)}>{preview ? 'Editar' : 'Vista previa'}</button>
         <button className="secondary" disabled={!menu.length} onClick={() => window.print()}>⎙ Imprimir</button>
         {document?.storageKey
-          ? <button className="primary" onClick={downloadPdf}>⇩ Descargar PDF</button>
+          ? <>
+              <button className="secondary" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Regenerando…' : 'Regenerar'}</button>
+              <button className="primary" onClick={downloadPdf}>⇩ Descargar PDF</button>
+            </>
           : plan?.status === 'PUBLISHED'
             ? <button className="primary" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Generando…' : 'Generar PDF'}</button>
             : <button className="primary" disabled={!plan || publishState === 'publishing'} onClick={publishPlan}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar plan'}</button>}
@@ -167,6 +170,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
         {plan.status !== 'PUBLISHED' && <button className="primary full-button" disabled={publishState === 'publishing' || !menu.length} onClick={publishPlan}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar plan'} <span>→</span></button>}
         {plan.status === 'PUBLISHED' && !document?.storageKey && <button className="primary full-button" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Generando…' : 'Generar PDF'} <span>→</span></button>}
         {plan.status === 'PUBLISHED' && document?.storageKey && <button className="primary full-button" onClick={downloadPdf}>Descargar PDF <span>→</span></button>}
+        {plan.status === 'PUBLISHED' && document?.storageKey && <button className="secondary full-button" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Regenerando…' : 'Regenerar PDF (actualizar formato)'}</button>}
         {plan.status === 'PUBLISHED' && document?.storageKey && (document.deliveredAt
           ? <p className="muted">✓ Marcado como entregado el {new Date(document.deliveredAt).toLocaleDateString('es-MX')}. El envío por WhatsApp/email todavía se hace fuera de la app.</p>
           : <button className="secondary full-button" disabled={deliverState === 'delivering'} onClick={markDelivered}>{deliverState === 'delivering' ? 'Registrando…' : 'Marcar como entregado'}</button>)}
