@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
-import { appointmentsApi, patientsApi } from '../../lib/api.js'
+import { appointmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 
 // All date math here runs in UTC: appointment.startAt is stored and seeded as the practice's
 // wall-clock time tagged with a "Z" suffix (see prisma/seed.js), so reading it back with the
@@ -84,6 +84,20 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   useEffect(() => { loadAppointments() }, [loadAppointments])
   useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
+  // The grid header used to say a hardcoded "GMT-6" — the practice's real time zone is what the
+  // appointments are stored against, so show its actual UTC offset instead.
+  const [tzLabel, setTzLabel] = useState('GMT-6')
+  useEffect(() => {
+    practiceApi.get().then((practice) => {
+      const tz = practice?.timeZone
+      if (!tz) return
+      try {
+        const part = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')
+        setTzLabel(part?.value || tz)
+      } catch { setTzLabel(tz) }
+    }).catch(() => {})
+  }, [])
+
   const hours = useMemo(() => {
     const set = new Set(DEFAULT_HOURS)
     for (const appointment of appointments) set.add(`${String(new Date(appointment.startAt).getUTCHours()).padStart(2, '0')}:00`)
@@ -153,7 +167,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
 
     <div className="calendar panel">
       <div className="calendar-head" style={{ gridTemplateColumns: `68px repeat(${days.length},1fr)` }}>
-        <span>GMT-6</span>
+        <span>{tzLabel}</span>
         {days.map((day) => <div className={toISODate(day) === toISODate(TODAY) ? 'calendar-day current' : 'calendar-day'} key={day.toISOString()}><small>{DAY_SHORT[(day.getUTCDay() + 6) % 7]}</small><b>{day.getUTCDate()}</b></div>)}
       </div>
       <div className="calendar-body">
