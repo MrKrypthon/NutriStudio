@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, zona horaria/estado de sesión, estados vacíos/badges honestos, cajón del paciente, y — después del merge de la fase 58 — preparación en el detalle de receta y tabla de micronutrientes completa en Ingredientes; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, zona horaria/estado de sesión, estados vacíos/badges honestos, cajón del paciente, preparación/micros en detalle, y — después del merge de la fase 59 — el gráfico de evolución de Antropométrico con mediciones reales; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -174,6 +174,17 @@ El cajón de detalle de Pacientes mostraba nombre, acciones y línea de tiempo, 
 - **La tabla de nutrientes del detalle de Ingrediente estaba incompleta** (12 filas: macros + 4 micros) pese a que el catálogo SMAE/BASE_ALIMENTOS tiene el perfil completo. Se amplió a **26 nutrientes** (macros + vitaminas A/C/D/E/K/B1/B2/B3/B6/B12, ácido fólico, calcio, hierro, magnesio, potasio, zinc, yodo, selenio) con los mismos labels/unidades del motor de micronutrientes, y la tabla pasó a **2 columnas** para que no se vuelva una lista interminable (el CSS es específico de esta pantalla).
 
 Verificado con Chromium headless: el detalle de "Avena cocida con manzana" muestra "Preparación: Cocinar la avena y servir con manzana."; el detalle de ingrediente muestra 26 celdas con Vitamina A y Zinc. Sin datos de prueba creados (solo lecturas). `npm run build` OK, `npm test` (47/47).
+
+## Fase 60 — Gráfico "Evolución de métricas" real en Antropométrico (después del merge de fase 59)
+
+El gráfico "Evolución de métricas" de la pestaña Antropométrico era **falso de punta a punta**: una línea SVG hardcodeada (`polyline points="10,25 190,65 …"`), cuatro puntos decorativos y etiquetas "18 jun/18 jul/18 ago · pendiente" — no usaba ningún dato real, y el `<select>` de métrica ni siquiera tenía `onChange`. Corregido para que trace la evolución real:
+- El historial se arma con **todas las mediciones del paciente** a través de sus consultas (`GET /patients/:id/consultations` ya las trae), ordenadas por fecha y tomando las últimas 8.
+- El selector de métrica funciona: **Peso**, **IMC** (calculado de peso/talla) o **% grasa corporal**, con la escala del eje Y derivada del mínimo/máximo reales.
+- Etiquetas por punto: valor + fecha (dd/mm), en el formato UTC de la app.
+- Con menos de 2 mediciones muestra un mensaje honesto ("Registra al menos dos mediciones para ver la evolución") en lugar de dibujar una línea inventada.
+- Al usar "Registrar medición de hoy", la medición devuelta se agrega al historial local, así el gráfico se actualiza al instante sin recargar.
+
+Verificado con Chromium headless: registrando una medición de prueba para Mariana (2 en total), el gráfico muestra el SVG con 2 puntos y las etiquetas reales "71.5 · 15/08" y "72.4 · 26/08"; con menos de 2 mediciones aparece el mensaje honesto. Medición de prueba borrada. `npm run build` OK, `npm test` (47/47).
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -476,3 +487,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 47. ~~Detalles UI: estados vacíos y badges honestos~~ — hecho (fase 57, ver sección al final de este archivo): "Agenda de hoy" muestra un estado vacío cuando no hay citas, y la portada de Educación deja de mostrar "PDF" falso (ahora PDF/IMG/TEXTO según el adjunto real).
 48. ~~Detalles UI: cajón del paciente con contacto y próxima cita~~ — hecho (fase 58, ver sección al final de este archivo): el cajón de Pacientes ahora muestra teléfono/email y la próxima cita real (fecha · hora · tipo), datos que ya existían desde fase 50 pero no se exponían.
 49. ~~Detalles: preparación en recetas y tabla de micronutrientes completa en Ingredientes~~ — hecho (fase 59, ver sección al final de este archivo): el detalle de receta muestra la preparación guardada, y la tabla del ingrediente cubre los 26 nutrientes del catálogo en 2 columnas.
+50. ~~Gráfico de evolución de Antropométrico con mediciones reales~~ — hecho (fase 60, ver sección al final de este archivo): el gráfico "Evolución de métricas" dejó de ser un SVG hardcodeado con fechas falsas; ahora traza Peso/IMC/% grasa reales del paciente (últimas 8 mediciones), con selector funcional y mensaje honesto si hay menos de 2.

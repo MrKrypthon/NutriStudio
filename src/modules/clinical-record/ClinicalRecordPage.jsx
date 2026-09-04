@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import FormCard from '../../components/FormCard.jsx'
 import { usePatient } from '../../lib/usePatient.js'
@@ -144,6 +144,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [sections, setSections] = useState({})
   const [saveState, setSaveState] = useState('idle')
   const [measurementState, setMeasurementState] = useState('idle')
+  const [measurements, setMeasurements] = useState([])
+  const [chartMetric, setChartMetric] = useState('Peso')
   const [diagnoses, setDiagnoses] = useState([])
   const [diagnosisForm, setDiagnosisForm] = useState(null)
   const [diagnosisSaveState, setDiagnosisSaveState] = useState('idle')
@@ -168,6 +170,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       try {
         const list = await patientsApi.consultations(patientId)
         setHistoryCount((list.items || []).length)
+        // Real evolution data for the Antropométrico chart: every measurement across the
+        // patient's consultations, oldest first.
+        setMeasurements((list.items || []).flatMap((c) => c.measurements || []).sort((a, b) => new Date(a.measuredAt) - new Date(b.measuredAt)))
         let full
         if (consultationId) {
           // A specific historical session requested from Consultas → load it as-is (a completed
@@ -266,7 +271,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     if (!consultation) return
     setMeasurementState('saving')
     try {
-      await clinicalApi.registerMeasurement(consultation.id, {
+      const created = await clinicalApi.registerMeasurement(consultation.id, {
         weightKg: numOrUndefined(anthro['Peso (kg)']),
         heightCm: numOrUndefined(anthro['Talla (cm)']),
         waistCm: numOrUndefined(anthro['Cintura (cm)']),
@@ -275,6 +280,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         bodyFatPercent: numOrUndefined(anthro['% Grasa corporal']),
         muscleMassKg: numOrUndefined(anthro['Kg de músculo']),
       })
+      setMeasurements((prev) => [...prev, created].sort((a, b) => new Date(a.measuredAt) - new Date(b.measuredAt)))
       setMeasurementState('saved')
     } catch {
       setMeasurementState('error')
@@ -414,6 +420,28 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     }
   }
 
+  // Real evolution chart for Antropométrico: plots the patient's actual measurements (last 8),
+  // for the selected metric. Before this, the chart was a hardcoded SVG line with fake dates.
+  const chartPoints = useMemo(() => {
+    const pts = measurements
+      .map((m) => {
+        let value = null
+        if (chartMetric === 'Peso') value = m.weightKg != null ? Number(m.weightKg) : null
+        else if (chartMetric === 'IMC') value = m.weightKg != null && m.heightCm != null ? Number(m.weightKg) / ((Number(m.heightCm) / 100) ** 2) : null
+        else value = m.bodyFatPercent != null ? Number(m.bodyFatPercent) : null
+        return { date: m.measuredAt, value }
+      })
+      .filter((p) => p.value != null)
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .slice(-8)
+    if (pts.length < 2) return []
+    const min = Math.min(...pts.map((p) => p.value))
+    const max = Math.max(...pts.map((p) => p.value))
+    const range = max - min || 1
+    return pts.map((p, i) => ({ ...p, x: 10 + (i / (pts.length - 1)) * 580, y: 118 - ((p.value - min) / range) * 96, value: Math.round(p.value * 10) / 10 }))
+  }, [measurements, chartMetric])
+  const chartPointLine = chartPoints.map((p) => `${p.x},${p.y}`).join(' ')
+
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
@@ -434,8 +462,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <section className="record-main panel">
           <div className="section-heading"><div><p className="eyebrow">SECCIÓN 3 DE 13</p><h1>Antropométrico</h1><p className="subtitle">Registra medidas y observa la evolución de {patientName}.</p></div><span className="saved">{saveLabel}</span></div>
           <div className="progress-chart">
-            <div className="chart-title"><b>Evolución de métricas</b><select><option>Peso</option><option>IMC</option><option>% grasa corporal</option></select></div>
-            <div className="chart-lines"><i /><i /><i /><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points="10,25 190,65 380,48 590,85" fill="none" stroke="var(--green)" strokeWidth="3" /><circle cx="10" cy="25" r="5" fill="var(--green)" /><circle cx="190" cy="65" r="5" fill="var(--green)" /><circle cx="380" cy="48" r="5" fill="var(--green)" /><circle cx="590" cy="85" r="5" fill="var(--green)" /></svg><div className="chart-labels"><span>18 jun<br />pendiente</span><span>18 jul<br />pendiente</span><span>18 ago<br />pendiente</span></div></div>
+            <div className="chart-title"><b>Evolución de métricas</b><select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}><option>Peso</option><option>IMC</option><option>% grasa corporal</option></select></div>
+            {chartPoints.length >= 2
+              ? <div className="chart-lines"><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points={chartPointLine} fill="none" stroke="var(--green)" strokeWidth="3" />{chartPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" fill="var(--green)" />)}</svg><div className="chart-labels">{chartPoints.map((p, i) => <span key={i}><b>{p.value}</b><br />{`${new Date(p.date).getUTCDate()}/${String(new Date(p.date).getUTCMonth() + 1).padStart(2, '0')}`}</span>)}</div></div>
+              : <p className="muted" style={{ padding: '42px 0', textAlign: 'center' }}>Registra al menos dos mediciones para ver la evolución.</p>}
           </div>
           <FormCard title="Peso y talla" fields={['Peso (kg)|', 'Talla (cm)|', 'IMC calculado|', 'Análisis de peso y talla|']} values={currentValues} onFieldChange={updateField} />
           <FormCard title="Circunferencias" fields={['Cintura (cm)|', 'Cadera (cm)|', 'Abdomen (cm)|', 'Brazo (cm)|', 'ICC calculado|']} values={currentValues} onFieldChange={updateField} />
