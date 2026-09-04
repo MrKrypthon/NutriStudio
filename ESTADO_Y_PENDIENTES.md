@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, zona horaria/estado de sesión, y — después del merge de la fase 56 — estados vacíos y badges honestos; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, zona horaria/estado de sesión, estados vacíos/badges honestos, y — después del merge de la fase 57 — el cajón del paciente con contacto y próxima cita; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -163,6 +163,10 @@ Verificado con Chromium headless contra instancias aisladas: Agenda muestra la z
 - **La portada de los materiales de Educación mostraba siempre el badge "PDF"** aunque el material no tuviera adjunto (era contenido de texto para copiar). Ahora el badge refleja lo real: `PDF`/`IMG` si hay adjunto, `TEXTO` si no.
 
 Verificado con Chromium headless: Hoy con cero citas muestra el estado vacío, y los materiales reales de la base (sin adjunto) muestran `TEXTO`. `npm run build` OK, `npm test` (47/47).
+
+## Fase 58 — Detalles UI: cajón del paciente con contacto y próxima cita (después del merge de fase 57)
+
+El cajón de detalle de Pacientes mostraba nombre, acciones y línea de tiempo, pero **no el contacto del paciente ni su próxima cita** — datos que ya son reales desde fase 50 (`phone`/`email`/`nextAppointmentAt`/`nextAppointmentType` viajan en cada fila). Nueva sección "Contacto y próxima cita": teléfono · email, y "Próxima cita: {fecha · hora} · {tipo}" cuando hay (o "Sin contacto registrado."/"Sin cita próxima programada." si no). Verificado con Chromium headless: el cajón de Jorge muestra "+52 55 1234 5682 · jorge.castillo@email.com" y "Próxima cita: 5 nov · 12:00 · Control rápido" (cita temporal creada y borrada al terminar). `npm run build` OK, `npm test` (47/47).
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -463,3 +467,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 45. ~~Pulido de los PDF clínicos (informe y expediente completo)~~ — hecho (fase 55, ver sección al final de este archivo): caja de resumen con motivo/objetivo reales, secciones numeradas con acento, y footer con ancho explícito (fix del bug de pdfkit de ancho heredado).
 46. ~~Detalles: zona horaria real en Agenda y estado real de sesión en el expediente~~ — hecho (fase 56, ver sección al final de este archivo): el "GMT-6" del encabezado de Agenda se deriva ahora de `Practice.timeZone` (Intl), el subtítulo raro de "Agenda de hoy" se corrigió, y abrir una sesión completada muestra "Consulta completada · Sesión cerrada" en lugar de "en curso".
 47. ~~Detalles UI: estados vacíos y badges honestos~~ — hecho (fase 57, ver sección al final de este archivo): "Agenda de hoy" muestra un estado vacío cuando no hay citas, y la portada de Educación deja de mostrar "PDF" falso (ahora PDF/IMG/TEXTO según el adjunto real).
+48. ~~Detalles UI: cajón del paciente con contacto y próxima cita~~ — hecho (fase 58, ver sección al final de este archivo): el cajón de Pacientes ahora muestra teléfono/email y la próxima cita real (fecha · hora · tipo), datos que ya existían desde fase 50 pero no se exponían.
