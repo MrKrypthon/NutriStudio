@@ -165,7 +165,7 @@ export default function SettingsPage({ setActive }) {
                 <input type="time" value={range.start} onChange={(e) => updateRange(i, { start: e.target.value })} />
                 <input type="time" value={range.end} onChange={(e) => updateRange(i, { end: e.target.value })} />
               </span>)}
-              <button className="link-button" onClick={() => setEditingHours(false)}>Listo</button>
+              <button className="link-button" onClick={save}>Listo</button>
             </div>
           ) : (
             <div className="schedule-row"><b>{form.businessHours.label}</b>{form.businessHours.ranges.map((range, i) => <span key={i}>{range.start} – {range.end}</span>)}<button className="link-button" onClick={() => setEditingHours(true)}>Editar</button></div>
