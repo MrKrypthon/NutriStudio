@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, y — después del merge de la fase 47 — las últimas 3 pestañas genéricas del expediente hechas reales; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, las últimas 3 pestañas genéricas del expediente hechas reales, y — después del merge de la fase 48 — diseño de menor scroll con chrome sticky; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -63,6 +63,20 @@ Corrección de una imprecisión del doc de fase 33, que afirmaba "las 13 pestañ
 Con esto las 13 pestañas del expediente dejan de tener cualquier stub: cada una tiene su contenido real. El fallback genérico quedó como red de seguridad muerta (ninguna de las 13 lo usa ya).
 
 Verificado con `npm run build` y `npm test` (47/47). Sin cambios de backend ni de esquema. Sin Playwright en este entorno, así que la verificación fue de compilación + lectura de código, no visual.
+
+## Fase 49 — Diseño: menos scroll y chrome fijo (después del merge de fase 48)
+
+Reporte directo de la usuaria: "no me gusta que tenga que bajar tanto" — el scroll de la pantalla y de la barra de iconos. Dos causas reales encontradas al revisar el layout: (1) **el sidebar y el header no eran sticky** — se iban con el scroll, así que en cualquier pantalla larga la navegación desaparecía y había que volver arriba para cambiar de módulo o usar la búsqueda; (2) los espaciados verticales del chrome y de las tarjetas eran generosos, alargando cada pantalla.
+
+**Chrome fijo (interacción):**
+- `.pc-sidebar` ahora es `position:sticky; top:0; height:100vh; overflow-y:auto` — la barra de iconos queda siempre visible, sin importar cuánto se baje. En móvil (≤600px) sigue el bottom bar fijo de siempre.
+- `.pc-header` ahora es `position:sticky; top:0; z-index:10` — la búsqueda/notificaciones/perfil del encabezado nunca se pierden. Altura reducida de 76px a `var(--header-h)=64px` (62px en móvil), con la variable compartida con las barras pegajosas de sección.
+- `.record-tabs` (las 13 pestañas del expediente) y `.plan-steps` (los 5 pasos del Constructor de plan) ahora son `position:sticky; top:var(--header-h)` — al llenar una sección larga del expediente, la barra de pestañas queda pegada bajo el header para cambiar de sección sin subir. El expediente mide ~1789px de alto y ya no exige volver arriba para navegar.
+- `html{scroll-behavior:smooth}` — el menú de Configuración y "Historial de sesiones" (scrollIntoView) se desplazan con animación suave.
+
+**Compactación vertical (menos alto por pantalla):** padding de `.content` 39/56 → 24/44px, header 76→64px, `.module-header` y `.welcome` márgenes 30/32 → 20/22px, `.stats-grid` gap 14→12 y margen 28→20px, `.stat-card` padding/min-height reducidos, `.panel` y `.form-card` paddings reducidos, `.form-card` margen 13→11px, sidebar compacto (brand/pc-link/pc-caption/nav-group/workspace).
+
+**Verificado con Chromium headless real** (puppeteer-core instalado en `/tmp/opencode`, fuera del repo, contra la app servida en 5173 con login real): sidebar y header reportan `position: sticky`, `top: 0`, y **se mantienen en top 0 tras hacer scroll** en Constructor de plan, Pacientes y Expediente (medido con `getBoundingClientRect` antes/después de `scrollTo`). El Constructor y Pacientes caben en 900px de alto (sin scroll); el Expediente (1789px) conserva la navegación pegada. Capturas en `/tmp/opencode/*-scroll.png` (este modelo no puede inspeccionar imágenes, así que la validación visual queda pendiente de ojo humano sobre esas capturas o en el navegador de la usuaria). Sin datos de prueba en la base (verificado). `npm run build` OK.
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -354,3 +368,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 36. ~~Bloques/eventos de disponibilidad en Agenda (RF-03) + plantillas editables/eliminables + adjuntos en materiales educativos + auditoría residual~~ — hecho (4 de septiembre, ver sección nueva "4 de septiembre de 2026" al inicio de este archivo). Se cerraron tres funcionalidades del roadmap que estaban documentadas como pendientes (eventos `BLOCK` en Agenda, editar/borrar plantillas, adjuntar archivos a materiales) y se corrigieron bugs residuales reales encontrados por sub-agente: fecha fija en Seguimientos que corrompía vencimientos, peso/talla arbitrarios que se persistían en el Constructor de plan, fallback de Documentos presentado como real, campo "Porción equivalente" sin efecto, y el chrome (contador falso de suscripción + botón de ayuda muerto).
 37. ~~Recurrencia de citas y filtro de Agenda por estado~~ — hecho (misma sesión del 4 de septiembre): `POST /appointments` crea series completas (`recurrence: { frequency, count }`, overlap all-or-nothing, `recurrenceRule` por ocurrencia) con UI de "Repetir" en el modal de cita y bloqueo; la grilla gana el filtro Todas/Por confirmar/Confirmadas/Bloques y la tarjeta "Por confirmar" de Hoy llega a Agenda ya filtrada.
 38. ~~Resumen, Tratamiento y Notas: últimas pestañas genéricas del expediente~~ — hecho (fase 48, ver sección al final de este archivo): las 13 pestañas del expediente ya tienen contenido real (Tratamiento con objetivos/recomendaciones/educación/metas SMART/acuerdos/seguimiento, Resumen con datos del paciente e historial real, Notas con campo libre). Corrige la imprecisión del doc de fase 33 que las daba por reales.
+39. ~~Diseño: menos scroll y chrome fijo~~ — hecho (fase 49, ver sección al final de este archivo): sidebar y header sticky (nunca se pierden al bajar), pestañas del expediente y pasos del plan pegajosos bajo el header, scroll suave, y compactación de espaciados verticales del chrome y tarjetas. Verificado con Chromium headless (sticky confirmado por DOM tras scroll).
