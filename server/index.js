@@ -1131,7 +1131,9 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
     file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
     file.fillColor('#7267ef').fontSize(11).text(`Requerimiento: ${plan.targetKcal} kcal/día`, 62, file.y + 14)
     file.fillColor('#4c4e5b').fontSize(9).text(`Carbohidratos ${macros.macros.carbs.grams} g · Proteína ${macros.macros.protein.grams} g · Grasas ${macros.macros.fat.grams} g`, 62, file.y + 33, { width: 480 })
-    file.y += 95
+    // Tight gap: landscape has less vertical room than portrait, and a larger advance pushed the
+    // footer onto a second page.
+    file.y += 80
   }
 
   const menu = plan?.menuSnapshot || []
@@ -1141,32 +1143,34 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
     return
   }
 
-  // Weekly table (tiempos de comida × días), mirroring the on-screen preview: each cell holds the
-  // recipe name + kcal. Before this, the PDF was a plain text list grouped by day.
+  // Weekly table (tiempos de comida × días) replicating the on-screen "Vista previa del plan"
+  // (`.paper-week`): clean white rows, thin separators, centered full recipe names + kcal per
+  // cell. Landscape page gives each day column enough width that names aren't truncated.
   const DAY_SHORT = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom' }
   const DAYS = [1, 2, 3, 4, 5, 6, 7]
   const byKey = new Map()
   for (const entry of menu) byKey.set(`${entry.dayOfWeek}|${entry.mealType}`, entry)
 
-  const colTime = 62
-  const colW = (516 - colTime) / DAYS.length
+  const pageW = 792
+  const x0 = 40
+  const contentW = pageW - 80
+  const colTime = 64
+  const colW = (contentW - colTime) / DAYS.length
   const headerH = 22
-  const rowH = 46
+  const rowH = 48
 
-  const x0 = 48
   const headerY = file.y
-  file.fillColor('#7267ef').rect(x0, headerY, 516, headerH).fill()
-  file.fillColor('#ffffff').fontSize(8).text('Tiempo', x0 + 8, headerY + 7, { width: colTime - 16 })
+  file.font('Helvetica').fontSize(7).fillColor('#8b8d9c')
+  file.text('Tiempo', x0 + 6, headerY + 7, { width: colTime - 12 })
   DAYS.forEach((day, i) => {
     // Use headerY (snapshot), not file.y: pdfkit advances the cursor on every text() call, so
     // reading file.y again would stack the day labels vertically instead of one header row.
-    file.fontSize(8).text(DAY_SHORT[day], x0 + colTime + i * colW + 4, headerY + 7, { width: colW - 8, align: 'center' })
+    file.text(DAY_SHORT[day], x0 + colTime + i * colW + 2, headerY + 7, { width: colW - 4, align: 'center' })
   })
+  file.moveTo(x0, headerY + headerH - 2).lineTo(x0 + contentW, headerY + headerH - 2).strokeColor('#dbe9df').stroke()
   file.y = headerY + headerH
 
-  // Wrap a recipe name to at most `maxLines` lines within the cell width, measuring with the real
-  // font instead of relying on pdfkit's height/ellipsis (which pushed every long cell onto its own
-  // page). Returns up to maxLines lines, with '…' appended to the last if more were cut off.
+  // Wrap a recipe name to at most `maxLines` lines within the cell, measuring with the real font.
   const wrapName = (name, maxLines) => {
     const maxW = colW - 8
     const words = String(name).split(' ')
@@ -1174,7 +1178,7 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
     let current = ''
     for (const word of words) {
       const candidate = current ? `${current} ${word}` : word
-      if (file.widthOfString(candidate, { fontSize: 7.5 }) <= maxW) current = candidate
+      if (file.widthOfString(candidate, { fontSize: 6 }) <= maxW) current = candidate
       else { if (current) lines.push(current); current = word }
     }
     if (current) lines.push(current)
@@ -1185,28 +1189,31 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
 
   MEAL_TYPE_ORDER.forEach((mealType, mi) => {
     const rowY = file.y
-    file.fillColor(mi % 2 === 0 ? '#f5f5f8' : '#ffffff').rect(x0, rowY, 516, rowH).fill()
-    file.rect(x0, rowY, 516, rowH).strokeColor('#dce0e8').stroke()
-    file.moveTo(x0 + colTime, rowY).lineTo(x0 + colTime, rowY + rowH).strokeColor('#dce0e8').stroke()
-    file.fillColor('#7267ef').fontSize(9).text(MEAL_TYPE_LABELS[mealType] || mealType, x0 + 8, rowY + 7, { width: colTime - 16 })
+    file.font('Helvetica-Bold').fontSize(6).fillColor('#202137')
+    file.text(MEAL_TYPE_LABELS[mealType] || mealType, x0 + 6, rowY + 7, { width: colTime - 12 })
     DAYS.forEach((day, i) => {
-      const cellX = x0 + colTime + i * colW
-      if (i > 0) file.moveTo(cellX, rowY).lineTo(cellX, rowY + rowH).strokeColor('#dce0e8').stroke()
+      const cx = x0 + colTime + i * colW
       const entry = byKey.get(`${day}|${mealType}`)
       if (entry) {
-        const lines = wrapName(entry.recipeName, 2)
-        file.fillColor('#4c4e5b').fontSize(7.5)
-        lines.forEach((ln, li) => file.text(ln, cellX + 4, rowY + 6 + li * 10, { width: colW - 8 }))
-        file.fillColor('#9a9ba4').fontSize(7).text(`${entry.kcal} kcal`, cellX + 4, rowY + rowH - 13, { width: colW - 8 })
+        const lines = wrapName(entry.recipeName, 3)
+        file.font('Helvetica-Bold').fontSize(6).fillColor('#202137')
+        lines.forEach((ln, li) => file.text(ln, cx + 4, rowY + 5 + li * 8.5, { width: colW - 8, align: 'center' }))
+        file.font('Helvetica').fontSize(5.5).fillColor('#8d8f9b')
+        file.text(`${entry.kcal} kcal`, cx + 4, rowY + rowH - 11, { width: colW - 8, align: 'center' })
       } else {
-        file.fillColor('#c3c4cb').fontSize(8).text('—', cellX + colW / 2 - 3, rowY + rowH / 2 - 5, { width: 6 })
+        file.font('Helvetica').fontSize(6).fillColor('#c3c4cb')
+        file.text('—', cx + colW / 2 - 2, rowY + rowH / 2 - 4, { width: 4 })
       }
     })
+    file.moveTo(x0, rowY + rowH).lineTo(x0 + contentW, rowY + rowH).strokeColor('#eef2ee').stroke()
     file.y = rowY + rowH
   })
 
-  file.moveDown(1)
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
+  // No moveDown here: in landscape the bottom margin is tight and even a small advance pushed
+  // the footer onto a second, almost-empty page. Also pass an explicit width: pdfkit persists the
+  // last text() width/x, so a bare { align: 'center' } after the cell loop inherited the last
+  // cell's narrow box and pinned the footer to the far right.
+  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, x0, file.y, { width: contentW, align: 'center' })
 }
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
@@ -1224,7 +1231,11 @@ app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
   }
   const pdf = await new Promise((resolve, reject) => {
     const chunks = []
-    const file = new PDFDocument({ size: 'LETTER', margin: 48 })
+    // The weekly menu needs horizontal room for 7 full recipe names (matching the on-screen
+    // preview), so it renders landscape; the clinical documents stay portrait.
+    const file = document.type === 'nutrition_plan'
+      ? new PDFDocument({ size: 'LETTER', layout: 'landscape', margin: 40 })
+      : new PDFDocument({ size: 'LETTER', margin: 48 })
     file.on('data', (chunk) => chunks.push(chunk))
     file.on('end', () => resolve(Buffer.concat(chunks)))
     file.on('error', reject)
