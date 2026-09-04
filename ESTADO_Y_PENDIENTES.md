@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, y — después del merge de la fase 51 — la tercera auditoría: abrir sesiones históricas, indicadores demo honestos y feedback de errores; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, y — después del merge de la fase 52 — el expediente clínico completo descargable en PDF; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -108,6 +108,15 @@ Nuevo barrido de sub-agente (solo lectura) sobre las pantallas no auditadas a fo
 - **BAJO — Nueva receta: búsqueda de ingredientes fallaba en silencio en demo** ("Sin resultados" engañoso cuando el API no responde) — ahora distingue "API no responde" de "sin resultados". Y al agregar un ingrediente se conserva su porción (serving) para mostrarla en la lista (el `equivalence` numérico del ingrediente de receta se mantiene como conteo, que es lo que espera el backend).
 
 Verificado con Chromium headless: Hoy muestra saludo con nombre real + "Sincronizado" + "Actualizado desde tu API"; Consultas lista 2 sesiones y el clic en la COMPLETED carga esa consulta (confirmado por red); la consulta temporal se borró. `npm run build` OK, `npm test` (47/47).
+
+## Fase 53 — Expediente clínico completo descargable (RF-05, después del merge de fase 52)
+
+RF-05 pide "descargar el expediente completo o una selección de secciones". El informe de consulta (`consultation_report`) solo cubría 4 secciones (general, antropometría, diagnóstico, tratamiento); las demás quedaban fuera. Se agregó un segundo documento: **`consultation_export` (Expediente completo)**.
+
+- **Backend**: `POST /documents/consultation-export` (nuevo) y función `drawConsultationExport` que imprime **las 12 secciones clínicas** (Resumen, General, Antropometría, Bioquímico, Clínico, Dietético, Estilo de vida, Sociocultural, Diagnóstico, Tratamiento, Monitoreo, Notas). Deliberadamente se **excluye Transcripción**: es un borrador interno de revisión manual, no dato clínico oficial (mismo criterio que fase 27). Maneja los toggles (`"Label": true` de heredofamiliares/síntomas/exploración física) como lista limpia de etiquetas activas en vez de `Label: true`, e incluye mediciones (peso/talla/cintura/cadera/abdomen/%grasa/masa muscular/método) y diagnósticos PES completos.
+- **Frontend**: botón "Expediente completo" en el encabezado del expediente (junto a "Agendar" y "Generar/Descargar informe"); crea, genera y descarga en un clic, reutilizando el documento existente de la consulta si ya hay uno (mismo patrón que el informe). Documentos: nuevo filtro "Expedientes" y etiquetas `Expediente completo`/`Expediente clínico`; timeline de Pacientes y labels de Seguimientos/Hoy también reconocen el tipo.
+
+**Verificado por API real**: se creó y generó el export de la consulta en curso de Mariana Torres y se extrajo el texto del PDF con `pdftotext` — aparecen las 12 secciones, mediciones reales y `key: value` de cada payload. Documento y archivo de prueba eliminados al terminar. `npm run build` OK, `npm test` (47/47).
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -403,3 +412,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 40. ~~Pacientes: "Próxima cita" real y filtro "sin cita próxima"~~ — hecho (fase 50, ver sección al final de este archivo): la columna "Próxima cita" dejó de mostrar "Sin cita" fijo para todos (ahora usa la próxima cita real vía `GET /patients`), y el filtro gana "Sin cita próxima" (`noNext=1` server-side). Verificado de extremo a extremo por API y por DOM con Chromium headless.
 41. ~~Documentos: abrir el documento específico~~ — hecho (fase 51, ver sección al final de este archivo): clic en una fila abre un modal de detalle de ESE documento (tipo, versión, estado, entrega) con "Descargar PDF" y "Marcar como entregado" reales; antes cada fila caía en el formulario genérico de planes sin apuntar a nada. Verificado con Chromium headless sobre datos reales.
 42. ~~Tercera auditoría (Hoy, Consultas, Configuración, Nueva receta, Nuevo material)~~ — hecho (fase 52, ver sección al final de este archivo): abrir una sesión histórica concreta desde Consultas (RF-05), indicador demo honesto en Hoy con saludo y duración reales, avisos de error visibles en Configuración y Nuevo material, y búsqueda/porciones reales en Nueva receta.
+43. ~~Expediente clínico completo descargable~~ — hecho (fase 53, ver sección al final de este archivo): `consultation_export` con las 12 secciones clínicas en PDF (RF-05), botón "Expediente completo" en el expediente, filtro/etiquetas en Documentos, timeline y Seguimientos. Verificado por API real (texto del PDF inspeccionado con pdftotext).

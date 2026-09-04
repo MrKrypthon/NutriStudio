@@ -6,7 +6,7 @@ import { patientsApi, tasksApi } from '../../lib/api.js'
 // Tasks only model the document-delivery queue for now (see prisma/seed.js): a plan or a
 // consultation report waiting to reach the patient. Broader clinical reminders (weight
 // checkins, lab confirmations…) would need a schema change and are out of scope here.
-const TYPE_LABELS = { nutrition_plan: 'Plan de alimentación', consultation_report: 'Informe de consulta' }
+const TYPE_LABELS = { nutrition_plan: 'Plan de alimentación', consultation_report: 'Informe de consulta', consultation_export: 'Expediente completo' }
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 // "Today" is the viewer's real local calendar date, repackaged as a UTC midnight so the dueAt
 // math (stored/seeded as UTC wall-clock) stays correct regardless of system timezone. This was
