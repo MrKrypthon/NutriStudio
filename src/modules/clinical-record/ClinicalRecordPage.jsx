@@ -149,6 +149,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [labForm, setLabForm] = useState(null)
   const [report, setReport] = useState(null)
   const [reportState, setReportState] = useState('idle')
+  const [exportDoc, setExportDoc] = useState(null)
+  const [exportState, setExportState] = useState('idle')
   const [attachments, setAttachments] = useState([])
   const [uploadState, setUploadState] = useState('idle')
   const [uploadError, setUploadError] = useState('')
@@ -218,6 +220,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     let cancelled = false
     documentsApi.list(`?patientId=${patientId}&type=consultation_report`)
       .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); if (existing) setReport(existing) } })
+      .catch(() => {})
+    documentsApi.list(`?patientId=${patientId}&type=consultation_export`)
+      .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); if (existing) setExportDoc(existing) } })
       .catch(() => {})
     return () => { cancelled = true }
   }, [consultation, patientId])
@@ -377,13 +382,45 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     }
   }
 
+  // RF-05: full expediente export — all sections in a single PDF, separate from the condensed
+  // patient-facing report above.
+  const generateExport = async () => {
+    if (!consultation) return
+    if (exportDoc?.storageKey) {
+      setExportState('working')
+      try {
+        const blob = await documentsApi.downloadBlob(exportDoc.id)
+        const url = URL.createObjectURL(blob)
+        const link = window.document.createElement('a')
+        link.href = url
+        link.download = exportDoc.storageKey
+        link.click()
+        URL.revokeObjectURL(url)
+        setExportState('idle')
+      } catch {
+        setExportState('error')
+      }
+      return
+    }
+    setExportState('working')
+    try {
+      const doc = exportDoc || await documentsApi.createForExport(consultation.id)
+      const generated = await documentsApi.generate(doc.id)
+      setExportDoc(generated)
+      setExportState('idle')
+    } catch {
+      setExportState('error')
+    }
+  }
+
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
       <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Consulta nutricional · en curso</span></div></div>
-      <div className="clinical-actions"><button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Descargar informe' : 'Generar informe'}</button></div>
+      <div className="clinical-actions"><button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button><button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : 'Expediente completo'}</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Descargar informe' : 'Generar informe'}</button></div>
     </div>
     {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
+    {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
     {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
     <div className="record-tabs">{TABS.map((x) => <button className={tab === x ? 'active' : ''} onClick={() => setTab(x)} key={x}>{x}</button>)}</div>
     <div className="record-banner"><span className="spark">✦</span><div><b>Consulta en curso</b><small>Los cambios se guardan automáticamente · {saveLabel}</small></div><button className="secondary" onClick={() => setTab('Transcripción')}>Grabar consulta</button></div>

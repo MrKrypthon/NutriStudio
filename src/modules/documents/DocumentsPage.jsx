@@ -3,9 +3,9 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { documentsApi } from '../../lib/api.js'
 
-const TYPE_FILTERS = [['all', 'Todos'], ['consultation_report', 'Informes'], ['nutrition_plan', 'Planes']]
-const DOC_TYPE_LABELS = { consultation_report: 'Informe de consulta', nutrition_plan: 'Plan de alimentación' }
-const DOC_SUBTYPE_LABELS = { consultation_report: 'Informe clínico', nutrition_plan: 'Menú semanal' }
+const TYPE_FILTERS = [['all', 'Todos'], ['consultation_report', 'Informes'], ['consultation_export', 'Expedientes'], ['nutrition_plan', 'Planes']]
+const DOC_TYPE_LABELS = { consultation_report: 'Informe de consulta', consultation_export: 'Expediente completo', nutrition_plan: 'Plan de alimentación' }
+const DOC_SUBTYPE_LABELS = { consultation_report: 'Informe clínico', consultation_export: 'Expediente clínico', nutrition_plan: 'Menú semanal' }
 
 const FALLBACK = [
   ['Informe de consulta', 'Mariana Torres', '26 ago 2026', 'Informe clínico', 'Generado', 'confirmed'],
@@ -113,7 +113,7 @@ export default function DocumentsPage({ setActive }) {
   </div>
 
   {detail && detailRow && <div className="modal-backdrop" onClick={() => setDetail(null)}><div className="modal" onClick={(e) => e.stopPropagation()}>
-    <div className="modal-head"><div><p className="eyebrow">DOCUMENTO · {detail.type === 'consultation_report' ? 'INFORME' : 'PLAN'}</p><h2>{detailRow[0]}</h2><span className="modal-subtitle">{detail.patient ? `Paciente: ${detail.patient.firstName} ${detail.patient.lastName}` : 'Documento'}</span></div><button onClick={() => setDetail(null)}>×</button></div>
+    <div className="modal-head"><div><p className="eyebrow">DOCUMENTO · {detail.type === 'nutrition_plan' ? 'PLAN' : detail.type === 'consultation_export' ? 'EXPEDIENTE' : 'INFORME'}</p><h2>{detailRow[0]}</h2><span className="modal-subtitle">{detail.patient ? `Paciente: ${detail.patient.firstName} ${detail.patient.lastName}` : 'Documento'}</span></div><button onClick={() => setDetail(null)}>×</button></div>
     <div className="document-detail">
       <div><span>Tipo</span><b>{detailRow[3]}</b></div>
       <div><span>Generado</span><b>{detailRow[2]}</b></div>

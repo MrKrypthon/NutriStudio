@@ -14,7 +14,7 @@ const patients = [
 const APPOINTMENT_TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia', BLOCK: 'Bloqueo' }
 const CONSULTATION_STATUS_LABELS = { DRAFT: 'Borrador', IN_PROGRESS: 'En progreso', COMPLETED: 'Completada' }
 const PLAN_STATUS_LABELS = { DRAFT: 'Borrador', READY: 'Lista', PUBLISHED: 'Publicado', SUPERSEDED: 'Reemplazado' }
-const DOCUMENT_TYPE_LABELS = { nutrition_plan: 'Plan de alimentación', consultation_report: 'Informe de consulta' }
+const DOCUMENT_TYPE_LABELS = { nutrition_plan: 'Plan de alimentación', consultation_report: 'Informe de consulta', consultation_export: 'Expediente completo' }
 const DOCUMENT_STATUS_LABELS = { DELIVERED: 'Entregado', GENERATED: 'Generado', PENDING: 'Pendiente' }
 const AUDIT_LABELS = {
   'Patient:archived': 'Paciente archivado',

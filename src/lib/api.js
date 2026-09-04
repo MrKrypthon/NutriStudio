@@ -127,6 +127,7 @@ export const documentsApi = {
   list: (query = '') => apiRequest(`/documents${query}`),
   createForPlan: (planId) => apiRequest('/documents/nutrition-plan', { method: 'POST', body: JSON.stringify({ planId }) }),
   createForReport: (consultationId) => apiRequest('/documents/consultation-report', { method: 'POST', body: JSON.stringify({ consultationId }) }),
+  createForExport: (consultationId) => apiRequest('/documents/consultation-export', { method: 'POST', body: JSON.stringify({ consultationId }) }),
   generate: (id) => apiRequest(`/documents/${id}/generate`, { method: 'POST' }),
   deliver: (id) => apiRequest(`/documents/${id}/deliver`, { method: 'POST' }),
   // A plain <a href> click can't carry the Authorization header the download route requires

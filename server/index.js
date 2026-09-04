@@ -962,6 +962,18 @@ app.post('/api/v1/documents/consultation-report', async (request, reply) => {
   return reply.code(201).send(document)
 })
 
+// RF-05: "Permitir descargar el expediente completo o una selección de secciones." The clinical
+// report above is a condensed patient-facing summary; this one is the full record — every section
+// of the expediente (minus Transcripción, which is an internal review draft, not clinical data).
+app.post('/api/v1/documents/consultation-export', async (request, reply) => {
+  const { consultationId } = request.body || {}
+  if (!consultationId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'consultationId es obligatorio.', fields: { consultationId: 'required' } })
+  const consultation = await prisma.consultation.findFirst({ where: { id: consultationId, patient: { practiceId: request.practiceId } } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const document = await prisma.document.create({ data: { patientId: consultation.patientId, consultationId: consultation.id, type: 'consultation_export', sections: { full: true }, version: 0 } })
+  return reply.code(201).send(document)
+})
+
 app.get('/api/v1/documents', async (request) => {
   const { patientId, type } = request.query
   const documents = await prisma.document.findMany({ where: { patientId: patientId || undefined, type: type || undefined, patient: { practiceId: request.practiceId } }, include: { patient: true, plan: true }, orderBy: { createdAt: 'desc' }, take: 100 })
@@ -1027,6 +1039,84 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
 }
 
+const EXPORT_SECTION_KEYS = [
+  ['summary', 'Resumen'],
+  ['general', 'General y antecedentes'],
+  ['anthropometric', 'Antropometría'],
+  ['biochemical', 'Bioquímico'],
+  ['clinical', 'Clínico'],
+  ['dietary', 'Dietético'],
+  ['lifestyle', 'Estilo de vida'],
+  ['sociocultural', 'Sociocultural'],
+  ['diagnosis', 'Diagnóstico nutricio'],
+  ['treatment', 'Tratamiento'],
+  ['monitoring', 'Monitoreo'],
+  ['notes', 'Notas'],
+]
+
+function drawConsultationExport(file, document, practice, user, logoBuffer) {
+  drawDocumentBrand(file, 'EXPEDIENTE CLÍNICO COMPLETO', practice, logoBuffer)
+  file.fontSize(18).fillColor('#1c232f').text('Expediente clínico nutricio')
+  file.fontSize(10).fillColor('#6e6e73').text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
+  file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`)
+  file.moveDown()
+  file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
+  file.fillColor('#7267ef').fontSize(11).text('Expediente completo', 62, file.y + 14)
+  file.fillColor('#4c4e5b').fontSize(9).text('Todas las secciones del expediente clínico de esta consulta, tal como quedaron registradas.', 62, file.y + 33, { width: 480 })
+  file.y += 95
+
+  const consultation = document.consultation
+  const sections = consultation?.sections || []
+  const payloadOf = (key) => sections.find((section) => section.sectionKey === key)?.payload || {}
+  const measurement = (consultation?.measurements || [])[0]
+  const diagnoses = consultation?.diagnoses || []
+
+  const drawTitle = (title) => { file.fillColor('#7267ef').fontSize(13).text(title); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#dce0e8').stroke(); file.moveDown() }
+  const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, { width: 480 })
+
+  // Toggle pills (heredofamiliares, síntomas, exploración física) are stored as `"Label": true`;
+  // draw those as a clean list of the active labels instead of `Label: true`, and skip the
+  // inactive ones. Everything else prints `Label: value`.
+  const drawEntries = (payload) => {
+    const entries = Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== '' && value !== false)
+    if (!entries.length) return false
+    for (const [key, value] of entries) {
+      if (value === true) drawLine(key.replace(/__/g, ' · '))
+      else if (Array.isArray(value)) drawLine(`${key}: ${value.join(', ')}`)
+      else drawLine(`${key}: ${value}`)
+    }
+    return true
+  }
+
+  for (const [key, label] of EXPORT_SECTION_KEYS) {
+    drawTitle(label)
+    if (key === 'anthropometric') {
+      const parts = [
+        measurement?.weightKg != null && `Peso: ${measurement.weightKg} kg`,
+        measurement?.heightCm != null && `Talla: ${measurement.heightCm} cm`,
+        measurement?.waistCm != null && `Cintura: ${measurement.waistCm} cm`,
+        measurement?.hipCm != null && `Cadera: ${measurement.hipCm} cm`,
+        measurement?.abdomenCm != null && `Abdomen: ${measurement.abdomenCm} cm`,
+        measurement?.bodyFatPercent != null && `% grasa corporal: ${measurement.bodyFatPercent}%`,
+        measurement?.muscleMassKg != null && `Masa muscular: ${measurement.muscleMassKg} kg`,
+        measurement?.method && `Método: ${measurement.method}`,
+      ].filter(Boolean)
+      if (parts.length) { for (const part of parts) drawLine(part) }
+      else drawLine('Sin mediciones registradas.')
+      drawEntries(payloadOf('anthropometric'))
+      file.moveDown(1)
+    } else if (key === 'diagnosis') {
+      if (diagnoses.length) for (const d of diagnoses) drawLine(`${d.code ? d.code + ' ' : ''}(${d.domain}) — ${d.problem}. Causa: ${d.etiology}. Evidencia: ${d.evidence}`)
+      else drawLine('Sin diagnóstico registrado.')
+      file.moveDown(1)
+    } else {
+      if (!drawEntries(payloadOf(key))) drawLine('Sin datos registrados.')
+      file.moveDown(1)
+    }
+  }
+  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
+}
+
 function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   const plan = document.plan
   drawDocumentBrand(file, 'PLAN DE ALIMENTACIÓN', practice, logoBuffer)
@@ -1078,6 +1168,7 @@ app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
     file.on('end', () => resolve(Buffer.concat(chunks)))
     file.on('error', reject)
     if (document.type === 'nutrition_plan') drawNutritionPlanMenu(file, document, practice, user, logoBuffer)
+    else if (document.type === 'consultation_export') drawConsultationExport(file, document, practice, user, logoBuffer)
     else drawConsultationReport(file, document, practice, user, logoBuffer)
     file.end()
   })
