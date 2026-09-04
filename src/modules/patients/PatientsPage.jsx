@@ -126,6 +126,7 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
       <div className="patient-table">
         <div className="table-head"><span>Paciente</span><span>Última consulta</span><span>Próxima cita</span><span>Estado</span><span /></div>
         {visible.map((p, i) => <div className="patient-row" key={p[1]} onClick={() => openPatient(p)}><div className="patient-name"><span className={'person-avatar ' + p[5]}>{p[0]}</span><div><b>{p[1]}</b><small>{p[2]}</small></div></div><span className="muted">{p[7]?.lastConsultationAt ? formatUTCDate(p[7].lastConsultationAt) : '—'}</span><span><b className="appointment-date">{p[3]}</b><small className="muted">{p[4]}</small></span><span className={p[7]?.status === 'ARCHIVED' ? 'status pending' : 'status confirmed'}>{p[7]?.status === 'ARCHIVED' ? 'Archivado' : 'Activo'}</span><span className="row-arrow">→</span></div>)}
+        {status !== 'loading' && visible.length === 0 && <div className="result-empty"><span>◌</span><h3>{search.trim() ? 'Sin pacientes con esos filtros' : statusFilter === 'NO_NEXT' ? 'No hay pacientes sin cita próxima' : statusFilter === 'ARCHIVED' ? 'No hay pacientes archivados' : 'No hay pacientes aún'}</h3><p>Ajusta la búsqueda o crea un paciente nuevo.</p></div>}
       </div>
     </div>
   </div>
