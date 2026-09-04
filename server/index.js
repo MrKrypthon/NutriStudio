@@ -198,9 +198,13 @@ app.post('/api/v1/patients', async (request, reply) => {
 })
 
 app.get('/api/v1/patients/:patientId', async (request, reply) => {
-  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
+  const patient = await prisma.patient.findFirst({
+    where: { id: request.params.patientId, practiceId: request.practiceId },
+    include: { appointments: { where: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, orderBy: { startAt: 'asc' }, take: 1, select: { startAt: true, type: true } } },
+  })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
-  return patient
+  const { appointments, ...rest } = patient
+  return { ...rest, nextAppointmentAt: appointments[0]?.startAt || null, nextAppointmentType: appointments[0]?.type || null }
 })
 
 app.patch('/api/v1/patients/:patientId', async (request, reply) => {
