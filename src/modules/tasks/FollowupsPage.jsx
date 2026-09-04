@@ -8,7 +8,12 @@ import { patientsApi, tasksApi } from '../../lib/api.js'
 // checkins, lab confirmations…) would need a schema change and are out of scope here.
 const TYPE_LABELS = { nutrition_plan: 'Plan de alimentación', consultation_report: 'Informe de consulta' }
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
-const TODAY = new Date('2026-08-26T00:00:00.000Z')
+// "Today" is the viewer's real local calendar date, repackaged as a UTC midnight so the dueAt
+// math (stored/seeded as UTC wall-clock) stays correct regardless of system timezone. This was
+// previously a fixed demo date (26 ago 2026) which corrupted overdue counts against real data.
+const now = new Date()
+const TODAY = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+const todayISODate = () => TODAY.toISOString().slice(0, 10)
 
 const DEMO_TASKS = [
   { id: 'demo-1', type: 'nutrition_plan', status: 'pending', dueAt: '2026-08-25T18:00:00.000Z', patient: { firstName: 'Mariana', lastName: 'Torres' } },
@@ -18,10 +23,11 @@ const DEMO_TASKS = [
 
 const formatUTCDate = (iso) => { const d = new Date(iso); return `${String(d.getUTCDate()).padStart(2, '0')} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
 const daysUntil = (iso) => Math.round((new Date(iso).setUTCHours(0, 0, 0, 0) - TODAY.getTime()) / 86400000)
-const emptyForm = () => ({ patientId: '', type: 'nutrition_plan', dueAt: '2026-09-02' })
+const emptyForm = () => ({ patientId: '', type: 'nutrition_plan', dueAt: todayISODate() })
 
 export default function FollowupsPage({ setActive }) {
   const [filter, setFilter] = useState('Todos')
+  const [search, setSearch] = useState('')
   const [tasks, setTasks] = useState([])
   const [status, setStatus] = useState('loading')
   const [patients, setPatients] = useState([])
@@ -48,7 +54,8 @@ export default function FollowupsPage({ setActive }) {
   const pending = tasks.filter((t) => t.status === 'pending')
   const overdue = pending.filter((t) => daysUntil(t.dueAt) < 0)
   const completed = tasks.filter((t) => t.status === 'completed')
-  const visible = tasks.filter((t) => filter === 'Todos' || (filter === 'Completados' ? t.status === 'completed' : t.status === 'pending'))
+  const q = search.trim().toLowerCase()
+  const visible = tasks.filter((t) => (filter === 'Todos' || (filter === 'Completados' ? t.status === 'completed' : t.status === 'pending')) && (!q || `${t.patient?.firstName || ''} ${t.patient?.lastName || ''}`.toLowerCase().includes(q)))
 
   const markDelivered = async (id) => {
     try {
@@ -88,7 +95,7 @@ export default function FollowupsPage({ setActive }) {
     </div>
 
     <div className="followup-toolbar panel">
-      <div className="search-field">⌕ <input placeholder="Buscar paciente..." disabled /></div>
+      <div className="search-field">⌕ <input placeholder="Buscar paciente..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
       <div className="view-switch">{['Todos', 'Pendientes', 'Completados'].map((x) => <button className={filter === x ? 'selected' : ''} onClick={() => setFilter(x)} key={x}>{x}</button>)}</div>
     </div>
 
@@ -109,7 +116,7 @@ export default function FollowupsPage({ setActive }) {
           <b className="appointment-date">{formatUTCDate(task.dueAt)}</b>
           <span className="muted">{dueLabel}</span>
           <span className={'status ' + (task.status === 'completed' ? 'confirmed' : 'pending')}>{task.status === 'completed' ? 'Entregado' : 'Pendiente'}</span>
-          {task.status === 'pending' ? <button className="row-arrow" title="Marcar como entregado" onClick={() => markDelivered(task.id)}>✓</button> : <span className="row-arrow">✓</span>}
+          {task.status === 'pending' ? <button className="row-arrow" title="Marcar como entregado" onClick={() => markDelivered(task.id)} disabled={status !== 'online'}>✓</button> : <span className="row-arrow">✓</span>}
         </div>
       })}
     </div>

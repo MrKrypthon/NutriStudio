@@ -52,7 +52,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient }
   const [pickerSearch, setPickerSearch] = useState('')
   const [adequacy, setAdequacy] = useState(null)
   const [adequacyState, setAdequacyState] = useState('idle')
-  const [form, setForm] = useState({ sex: 'female', age: '28', weightKg: '72.4', heightCm: '165', formula: 'mifflin', activityFactor: '1.375', goal: '' })
+  const [form, setForm] = useState({ sex: 'female', age: '28', weightKg: '', heightCm: '', formula: 'mifflin', activityFactor: '1.375', goal: '' })
   const [calcResult, setCalcResult] = useState(null)
   const [calcState, setCalcState] = useState('idle')
   const [calcError, setCalcError] = useState('')
@@ -80,11 +80,26 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient }
     let cancelled = false
     async function load() {
       try {
-        const [plansResponse, recipesResponse] = await Promise.all([patientsApi.plans(patientId), recipesApi.list()])
+        const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientId), recipesApi.list(), patientsApi.consultations(patientId)])
         if (cancelled) return
         const activePlan = (plansResponse.items || []).find((item) => item.status !== 'PUBLISHED') || null
         const initialSlots = {}
         for (const slot of activePlan?.mealSlots || []) initialSlots[slotKey(slot.dayOfWeek, slot.mealType)] = slot.recipeId
+        // Preload weight/height from real sources, never from arbitrary demo values: the last
+        // saved calculation wins, then the patient's latest clinical measurement, then empty
+        // fields the professional must fill. Before this fix, 72.4 kg / 165 cm were hardcoded
+        // defaults that got persisted as if they were the patient's real anthropometry.
+        const latestMeasurement = (consultationsResponse.items || [])
+          .flatMap((c) => c.measurements || [])
+          .sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
+        const savedInputs = activePlan?.evaluation?.inputs || {}
+        const weightKg = savedInputs.weightKg ?? latestMeasurement?.weightKg ?? ''
+        const heightCm = savedInputs.heightCm ?? latestMeasurement?.heightCm ?? ''
+        setForm((prev) => ({
+          ...prev,
+          weightKg: weightKg !== '' && weightKg != null ? String(weightKg) : '',
+          heightCm: heightCm !== '' && heightCm != null ? String(heightCm) : '',
+        }))
         setPlan(activePlan)
         setRecipes(recipesResponse.items || [])
         setSlots(initialSlots)
