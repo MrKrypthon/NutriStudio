@@ -998,10 +998,6 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   file.fontSize(10).fillColor('#6e6e73').text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
   file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`)
   file.moveDown()
-  file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
-  file.fillColor('#7267ef').fontSize(11).text('Resumen de la consulta', 62, file.y + 14)
-  file.fillColor('#4c4e5b').fontSize(9).text('Documento generado desde la valoración clínica de Nutri Studio.', 62, file.y + 33, { width: 480 })
-  file.y += 95
 
   const consultation = document.consultation
   const sections = consultation?.sections || []
@@ -1009,7 +1005,20 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   const measurement = (consultation?.measurements || [])[0]
   const diagnoses = consultation?.diagnoses || []
 
-  const drawTitle = (title) => { file.fillColor('#7267ef').fontSize(13).text(title); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#dce0e8').stroke(); file.moveDown() }
+  // Summary box showing the real reason/objective when the expediente has them, not generic text.
+  const summary = payloadOf('summary')
+  const reason = summary?.reason || summary?.['Motivo de consulta']
+  const goal = summary?.goal || summary?.Objetivo
+  file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
+  file.fillColor('#7267ef').fontSize(11).text('Resumen de la consulta', 62, file.y + 14)
+  const summaryLine = reason || goal
+    ? [reason && `Motivo: ${reason}`, goal && `Objetivo: ${goal}`].filter(Boolean).join('   ·   ')
+    : 'Documento generado desde la valoración clínica de Nutri Studio.'
+  file.fillColor('#4c4e5b').fontSize(9).text(summaryLine, 62, file.y + 33, { width: 480 })
+  file.y += 95
+
+  let sectionIndex = 0
+  const drawTitle = (title) => { sectionIndex += 1; file.fillColor('#7267ef').fontSize(13).text(`${sectionIndex}. ${title}`); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#ddd6fa').stroke(); file.moveDown() }
   const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, { width: 480 })
   const drawEntries = (payload) => { const entries = Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== '') ; if (!entries.length) return false; for (const [key, value] of entries) drawLine(`${key}: ${Array.isArray(value) ? value.join(', ') : value}`); return true }
 
@@ -1036,7 +1045,9 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   if (!drawEntries(payloadOf('treatment'))) drawLine('Sin recomendaciones registradas.')
   file.moveDown(1.5)
 
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
+  // Explicit width: pdfkit persists the last text() box, so a bare { align: 'center' } would pin
+  // the footer to whatever width/x the previous line used (see the menu footer fix).
+  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, 48, file.y, { width: 516, align: 'center' })
 }
 
 const EXPORT_SECTION_KEYS = [
@@ -1060,10 +1071,6 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
   file.fontSize(10).fillColor('#6e6e73').text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
   file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`)
   file.moveDown()
-  file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
-  file.fillColor('#7267ef').fontSize(11).text('Expediente completo', 62, file.y + 14)
-  file.fillColor('#4c4e5b').fontSize(9).text('Todas las secciones del expediente clínico de esta consulta, tal como quedaron registradas.', 62, file.y + 33, { width: 480 })
-  file.y += 95
 
   const consultation = document.consultation
   const sections = consultation?.sections || []
@@ -1071,7 +1078,19 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
   const measurement = (consultation?.measurements || [])[0]
   const diagnoses = consultation?.diagnoses || []
 
-  const drawTitle = (title) => { file.fillColor('#7267ef').fontSize(13).text(title); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#dce0e8').stroke(); file.moveDown() }
+  const summary = payloadOf('summary')
+  const reason = summary?.reason || summary?.['Motivo de consulta']
+  const goal = summary?.goal || summary?.Objetivo
+  file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
+  file.fillColor('#7267ef').fontSize(11).text('Expediente completo', 62, file.y + 14)
+  const summaryLine = reason || goal
+    ? [reason && `Motivo: ${reason}`, goal && `Objetivo: ${goal}`].filter(Boolean).join('   ·   ')
+    : 'Todas las secciones del expediente clínico de esta consulta, tal como quedaron registradas.'
+  file.fillColor('#4c4e5b').fontSize(9).text(summaryLine, 62, file.y + 33, { width: 480 })
+  file.y += 95
+
+  let sectionIndex = 0
+  const drawTitle = (title) => { sectionIndex += 1; file.fillColor('#7267ef').fontSize(13).text(`${sectionIndex}. ${title}`); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#ddd6fa').stroke(); file.moveDown() }
   const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, { width: 480 })
 
   // Toggle pills (heredofamiliares, síntomas, exploración física) are stored as `"Label": true`;
@@ -1114,7 +1133,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
       file.moveDown(1)
     }
   }
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, 48, file.y, { width: 516, align: 'center' })
 }
 
 function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
