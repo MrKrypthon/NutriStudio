@@ -142,6 +142,15 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
         <button className="primary" disabled={!selected[6]} onClick={() => goTo('Expediente')}>Abrir expediente</button>
         <button className="secondary" disabled={!selected[6]} onClick={() => goTo('Constructor de plan')}>Ir al plan</button>
       </div>
+      {selected[6] && <div className="drawer-section">
+        <p className="eyebrow">CONTACTO Y PRÓXIMA CITA</p>
+        {selected[7]?.phone || selected[7]?.email
+          ? <p className="muted">{[selected[7].phone, selected[7].email].filter(Boolean).join(' · ')}</p>
+          : <p className="muted">Sin contacto registrado.</p>}
+        {selected[7]?.nextAppointmentAt
+          ? <p className="muted">Próxima cita: <b>{formatNextAppointment(selected[7].nextAppointmentAt)}</b> · {APPOINTMENT_TYPE_LABELS[selected[7].nextAppointmentType] || selected[7].nextAppointmentType}</p>
+          : <p className="muted">Sin cita próxima programada.</p>}
+      </div>}
       {selected[6] && <button className="link-button" onClick={startEdit}>Editar datos del paciente →</button>}
       {selected[6] && <button className="link-button" disabled={archiveState === 'saving'} onClick={toggleArchive}>{archiveState === 'saving' ? 'Guardando…' : selected[7]?.status === 'ARCHIVED' ? 'Reactivar paciente →' : 'Archivar paciente →'}</button>}
       {archiveState === 'error' && <div className="form-error">⚠ No se pudo actualizar el estado del paciente.</div>}
