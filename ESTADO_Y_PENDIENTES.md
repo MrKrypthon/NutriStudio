@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal en tabla apaisada con sus fixes de impresión, y — después del merge de la fase 54 — el pulido de los PDF clínicos (informe y expediente completo); ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, últimas pestañas del expediente, chrome sticky, "Próxima cita" real, detalle del documento específico, tercera auditoría, expediente completo en PDF, menú semanal apaisado con sus fixes, pulido de los PDF clínicos, y — después del merge de la fase 55 — detalles de zona horaria y estado de sesión; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -147,6 +147,15 @@ Continuando el detalle: los PDF clínicos (informe y expediente completo) eran f
 - Pie dice "· Nutrióloga" en lugar del genérico "· Nutrición".
 
 Verificado por API real contra la consulta de Yolanda Cimé: el informe muestra "Motivo: Mejorar composición corporal…" en la caja y "1. Datos generales"; el expediente numera las 12 secciones con sus datos. Documentos de prueba eliminados. `npm run build` OK, `npm test` (47/47).
+
+## Fase 56 — Detalles: zona horaria real en Agenda y estado real de sesión en el expediente (después del merge de fase 55)
+
+Detalles pequeños pero reales, encontrados por revisión:
+- **El encabezado de la grilla de Agenda decía "GMT-6" hardcodeado.** La práctica tiene una zona horaria configurada (`Practice.timeZone`) y las citas se guardan contra ella; ahora `AgendaPage` la lee con `practiceApi.get()` y muestra el offset real calculado con `Intl.DateTimeFormat` (`timeZoneName: 'shortOffset'`). Para la práctica actual sigue saliendo "GMT-6" — pero ahora es derivado de la configuración real, no un literal: si la usuaria cambia la zona, el encabezado la refleja.
+- **El subtítulo "Consultas persistentes" de la tarjeta "Agenda de hoy" en Hoy** era un texto sin sentido — ahora dice "Tus citas programadas".
+- **Al abrir una sesión histórica completada desde Consultas, el expediente seguía diciendo "Consulta en curso".** Ahora el subtítulo del encabezado y el banner usan el estado real de la consulta: una sesión `COMPLETED` muestra "Consulta completada" y "Sesión cerrada · {fecha}" (con la fecha de cierre real); las demás siguen "en curso".
+
+Verificado con Chromium headless contra instancias aisladas: Agenda muestra la zona derivada (GMT-6) y una sesión `COMPLETED` temporal abre con banner "Consulta completada · Sesión cerrada · 15 jul 2026" (la consulta temporal se borró al terminar). `npm run build` OK, `npm test` (47/47).
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -445,3 +454,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 43. ~~Expediente clínico completo descargable~~ — hecho (fase 53, ver sección al final de este archivo): `consultation_export` con las 12 secciones clínicas en PDF (RF-05), botón "Expediente completo" en el expediente, filtro/etiquetas en Documentos, timeline y Seguimientos. Verificado por API real (texto del PDF inspeccionado con pdftotext).
 44. ~~PDF del menú semanal rediseñado como tabla~~ — hecho (fase 54, ver sección al final de este archivo): el PDF del plan pasa de lista de texto por día a tabla tiempos × días (encabezado morado, fondo alternado, receta + kcal por celda, ajuste de nombre al ancho con "…"), en 1 página. Reporte directo de la usuaria.
 45. ~~Pulido de los PDF clínicos (informe y expediente completo)~~ — hecho (fase 55, ver sección al final de este archivo): caja de resumen con motivo/objetivo reales, secciones numeradas con acento, y footer con ancho explícito (fix del bug de pdfkit de ancho heredado).
+46. ~~Detalles: zona horaria real en Agenda y estado real de sesión en el expediente~~ — hecho (fase 56, ver sección al final de este archivo): el "GMT-6" del encabezado de Agenda se deriva ahora de `Practice.timeZone` (Intl), el subtítulo raro de "Agenda de hoy" se corrigió, y abrir una sesión completada muestra "Consulta completada · Sesión cerrada" en lugar de "en curso".
