@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
-import { DAY_LABELS, MEAL_TYPE_LABELS, buildMenuSnapshot } from './domain/documents.js'
+import { MEAL_TYPE_LABELS, MEAL_TYPE_ORDER, buildMenuSnapshot } from './domain/documents.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
@@ -1135,16 +1135,74 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   }
 
   const menu = plan?.menuSnapshot || []
-  const byDay = new Map()
-  for (const entry of menu) { if (!byDay.has(entry.dayOfWeek)) byDay.set(entry.dayOfWeek, []); byDay.get(entry.dayOfWeek).push(entry) }
-  if (!menu.length) { file.fillColor('#6e6e73').fontSize(10).text('Este plan no tiene recetas asignadas.'); return }
-  for (const [dayOfWeek, entries] of [...byDay.entries()].sort((a, b) => a[0] - b[0])) {
-    file.fillColor('#7267ef').fontSize(13).text(DAY_LABELS[dayOfWeek] || `Día ${dayOfWeek}`)
-    file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#dce0e8').stroke()
-    file.moveDown(0.5)
-    for (const entry of entries) file.fillColor('#4c4e5b').fontSize(9).text(`${MEAL_TYPE_LABELS[entry.mealType] || entry.mealType}: ${entry.recipeName} (${entry.kcal} kcal)`)
-    file.moveDown()
+  if (!menu.length) {
+    file.fillColor('#6e6e73').fontSize(10).text('Este plan no tiene recetas asignadas.')
+    file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
+    return
   }
+
+  // Weekly table (tiempos de comida × días), mirroring the on-screen preview: each cell holds the
+  // recipe name + kcal. Before this, the PDF was a plain text list grouped by day.
+  const DAY_SHORT = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom' }
+  const DAYS = [1, 2, 3, 4, 5, 6, 7]
+  const byKey = new Map()
+  for (const entry of menu) byKey.set(`${entry.dayOfWeek}|${entry.mealType}`, entry)
+
+  const colTime = 62
+  const colW = (516 - colTime) / DAYS.length
+  const headerH = 22
+  const rowH = 46
+
+  const x0 = 48
+  file.fillColor('#7267ef').rect(x0, file.y, 516, headerH).fill()
+  file.fillColor('#ffffff').fontSize(8).text('Tiempo', x0 + 8, file.y + 7, { width: colTime - 16 })
+  DAYS.forEach((day, i) => {
+    file.fontSize(8).text(DAY_SHORT[day], x0 + colTime + i * colW + 4, file.y + 7, { width: colW - 8, align: 'center' })
+  })
+  file.y += headerH
+
+  // Wrap a recipe name to at most `maxLines` lines within the cell width, measuring with the real
+  // font instead of relying on pdfkit's height/ellipsis (which pushed every long cell onto its own
+  // page). Returns up to maxLines lines, with '…' appended to the last if more were cut off.
+  const wrapName = (name, maxLines) => {
+    const maxW = colW - 8
+    const words = String(name).split(' ')
+    const lines = []
+    let current = ''
+    for (const word of words) {
+      const candidate = current ? `${current} ${word}` : word
+      if (file.widthOfString(candidate, { fontSize: 7.5 }) <= maxW) current = candidate
+      else { if (current) lines.push(current); current = word }
+    }
+    if (current) lines.push(current)
+    const shown = lines.slice(0, maxLines)
+    if (lines.length > maxLines) shown[maxLines - 1] = `${shown[maxLines - 1]}…`
+    return shown
+  }
+
+  MEAL_TYPE_ORDER.forEach((mealType, mi) => {
+    const rowY = file.y
+    file.fillColor(mi % 2 === 0 ? '#f5f5f8' : '#ffffff').rect(x0, rowY, 516, rowH).fill()
+    file.rect(x0, rowY, 516, rowH).strokeColor('#dce0e8').stroke()
+    file.moveTo(x0 + colTime, rowY).lineTo(x0 + colTime, rowY + rowH).strokeColor('#dce0e8').stroke()
+    file.fillColor('#7267ef').fontSize(9).text(MEAL_TYPE_LABELS[mealType] || mealType, x0 + 8, rowY + 7, { width: colTime - 16 })
+    DAYS.forEach((day, i) => {
+      const cellX = x0 + colTime + i * colW
+      if (i > 0) file.moveTo(cellX, rowY).lineTo(cellX, rowY + rowH).strokeColor('#dce0e8').stroke()
+      const entry = byKey.get(`${day}|${mealType}`)
+      if (entry) {
+        const lines = wrapName(entry.recipeName, 2)
+        file.fillColor('#4c4e5b').fontSize(7.5)
+        lines.forEach((ln, li) => file.text(ln, cellX + 4, rowY + 6 + li * 10, { width: colW - 8 }))
+        file.fillColor('#9a9ba4').fontSize(7).text(`${entry.kcal} kcal`, cellX + 4, rowY + rowH - 13, { width: colW - 8 })
+      } else {
+        file.fillColor('#c3c4cb').fontSize(8).text('—', cellX + colW / 2 - 3, rowY + rowH / 2 - 5, { width: 6 })
+      }
+    })
+    file.y = rowY + rowH
+  })
+
+  file.moveDown(1)
   file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrición`, { align: 'center' })
 }
 
