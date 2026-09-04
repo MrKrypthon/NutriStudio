@@ -2,7 +2,7 @@
 
 Este documento es la fuente de verdad para retomar el proyecto, sesión tras sesión. Reemplaza al artifact "Ruta Nutri Studio" (28 de agosto), que quedó desactualizado apenas se avanzó la Fase 1 — vive fuera del repo y nadie lo actualizaba. Este archivo sí vive con el código: **actualízalo al cerrar cada fase**, es más barato que una sesión nueva tenga que reconstruir el estado leyendo git log y archivos uno por uno.
 
-Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, las últimas 3 pestañas genéricas del expediente hechas reales, diseño de menor scroll con chrome sticky, y — después del merge de la fase 49 — la columna "Próxima cita" de Pacientes real con filtro "sin cita próxima"; ver secciones al final de este archivo).
+Última verificación contra código real (no contra specs): 4 de septiembre de 2026 (bloques de agenda, plantillas editables, adjuntos en materiales educativos, auditoría residual, las últimas 3 pestañas genéricas del expediente hechas reales, diseño de menor scroll con chrome sticky, "Próxima cita" real en Pacientes, y — después del merge de la fase 50 — el detalle del documento específico en Documentos; ver secciones al final de este archivo).
 
 **Nota de sincronización:** las fases 13 a 47, más todos los fixes de deuda técnica y de diseño/iconos de esta sesión, ya están mergeados en `main`. Nada pendiente de mergear al cierre de este fix.
 
@@ -86,6 +86,16 @@ Reporte encontrado por revisión propia al buscar el siguiente gap: la columna "
 - **Frontend** (`PatientsPage`): la celda "Próxima cita" muestra fecha + hora reales (`formatNextAppointment`, UTC) con el tipo de cita debajo, o "— / Sin cita próxima" cuando no hay. El filtro de estado gana la opción **"Sin cita próxima"** (carga `?status=ACTIVE&noNext=1`); el eyebrow del encabezado cambia a "SIN CITA PRÓXIMA" en esa vista.
 
 **Verificado de extremo a extremo**: con una cita futura creada a propósito, `nextAppointmentAt`/`nextAppointmentType` aparecen para ese paciente y el filtro `noNext` lo excluye (5 pacientes sin cita de los 6 activos); con Vite aislado (5176 → API 3002) y Chromium headless se confirmó en el DOM que la columna muestra "9 oct · 11:30" para el paciente con cita y "—" para el resto, y que el filtro deja 5 filas con eyebrow "5 SIN CITA PRÓXIMA". Datos de prueba borrados al terminar. `npm run build` OK, `npm test` (47/47).
+
+## Fase 51 — Documentos: abrir el documento específico (después del merge de fase 50)
+
+Tarea de producto documentada desde fase 41: "la flecha de cada fila navega hoy a un formulario genérico de 'Generar documento' sin apuntar al documento específico de esa fila". Confirmado en el código: cada fila de `DocumentsPage` hacía `setActive('Documento')` sin id — caía en `DocumentPage`, que además es específica de planes (publica/genera/deliver el menú), así que abrir un informe de consulta no tenía ningún sentido ahí. Corregido con un **modal de detalle del documento** dentro de la propia lista:
+
+- Clic en una fila (o en su flecha) abre un modal con la info real de ESE documento: tipo, subtipo, fecha de generación, versión, estado, fecha de entrega.
+- Acciones reales: **"Descargar PDF"** (mismo `documentsApi.downloadBlob` autenticado de fase 30, para informes y planes por igual) y **"Marcar como entregado"** (POST `/documents/:id/deliver`, actualiza la fila y el modal al vuelo). Si el documento no tiene PDF generado, el modal lo dice ("Todavía no se genera el PDF") sin botón de descarga.
+- En modo demo las filas no son clicables (no hay documento real detrás).
+
+**Verificado con Chromium headless contra Vite aislado (5176 → API 3002)** con los 31 documentos reales de la base: el modal de un plan generado muestra tipo/versión/estado con ambos botones; "Marcar como entregado" pasa el estado a "Entregado" en vivo; un documento pendiente (sin `storageKey`) muestra "Pendiente" y no ofrece descarga. El marcado de prueba se revirtió en la base (`deliveredAt → null`) al terminar para no dejar un documento real mal marcado. `npm run build` OK, `npm test` (47/47).
 
 ## Flujo de trabajo (para perder menos tiempo)
 
@@ -379,3 +389,4 @@ Con "funcionalidad primero" como criterio (tu instrucción de esta sesión), en 
 38. ~~Resumen, Tratamiento y Notas: últimas pestañas genéricas del expediente~~ — hecho (fase 48, ver sección al final de este archivo): las 13 pestañas del expediente ya tienen contenido real (Tratamiento con objetivos/recomendaciones/educación/metas SMART/acuerdos/seguimiento, Resumen con datos del paciente e historial real, Notas con campo libre). Corrige la imprecisión del doc de fase 33 que las daba por reales.
 39. ~~Diseño: menos scroll y chrome fijo~~ — hecho (fase 49, ver sección al final de este archivo): sidebar y header sticky (nunca se pierden al bajar), pestañas del expediente y pasos del plan pegajosos bajo el header, scroll suave, y compactación de espaciados verticales del chrome y tarjetas. Verificado con Chromium headless (sticky confirmado por DOM tras scroll).
 40. ~~Pacientes: "Próxima cita" real y filtro "sin cita próxima"~~ — hecho (fase 50, ver sección al final de este archivo): la columna "Próxima cita" dejó de mostrar "Sin cita" fijo para todos (ahora usa la próxima cita real vía `GET /patients`), y el filtro gana "Sin cita próxima" (`noNext=1` server-side). Verificado de extremo a extremo por API y por DOM con Chromium headless.
+41. ~~Documentos: abrir el documento específico~~ — hecho (fase 51, ver sección al final de este archivo): clic en una fila abre un modal de detalle de ESE documento (tipo, versión, estado, entrega) con "Descargar PDF" y "Marcar como entregado" reales; antes cada fila caía en el formulario genérico de planes sin apuntar a nada. Verificado con Chromium headless sobre datos reales.
