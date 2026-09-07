@@ -74,9 +74,12 @@ export const appointmentsApi = {
 
 export const nutritionApi = {
   calculate: async (payload) => {
+    const carbsPercent = Number(payload.carbsPercent) || 50
+    const proteinPercent = Number(payload.proteinPercent) || 25
+    const fatPercent = Number(payload.fatPercent) || 25
     try {
       const result = await apiRequest('/nutrition-plans/calculate', { method: 'POST', body: JSON.stringify(payload) })
-      const macros = await apiRequest('/nutrition-plans/macros', { method: 'POST', body: JSON.stringify({ kcal: result.get, carbsPercent: 50, proteinPercent: 25, fatPercent: 25 }) })
+      const macros = await apiRequest('/nutrition-plans/macros', { method: 'POST', body: JSON.stringify({ kcal: result.get, carbsPercent, proteinPercent, fatPercent }) })
       return { ...result, macros: macros.macros }
     } catch (error) {
       if (error.code !== 'DEMO_MODE') throw error
@@ -89,7 +92,7 @@ export const nutritionApi = {
       const kcal = Math.round(bmr * factor)
       const heightM = height / 100
       const bmi = weight / (heightM * heightM)
-      return { formula: payload.formula || 'mifflin', formulaLabel: 'Mifflin-St Jeor', bmr: Math.round(bmr), activityKcal: Math.round(bmr * (factor - 1)), get: kcal, activityMethod: 'factor', bmi: Math.round(bmi * 10) / 10, idealWeightRange: { minKg: Math.round(18.5 * heightM * heightM * 10) / 10, maxKg: Math.round(24.9 * heightM * heightM * 10) / 10 }, flags: [], inputs: payload, reviewed: false, demo: true, macros: { carbs: { percent: 50, kcal: Math.round(kcal * .5), grams: Math.round(kcal * .5 / 4 * 10) / 10 }, protein: { percent: 25, kcal: Math.round(kcal * .25), grams: Math.round(kcal * .25 / 4 * 10) / 10 }, fat: { percent: 25, kcal: Math.round(kcal * .25), grams: Math.round(kcal * .25 / 9 * 10) / 10 } } }
+      return { formula: payload.formula || 'mifflin', formulaLabel: 'Mifflin-St Jeor', bmr: Math.round(bmr), activityKcal: Math.round(bmr * (factor - 1)), get: kcal, activityMethod: 'factor', bmi: Math.round(bmi * 10) / 10, idealWeightRange: { minKg: Math.round(18.5 * heightM * heightM * 10) / 10, maxKg: Math.round(24.9 * heightM * heightM * 10) / 10 }, flags: [], inputs: payload, reviewed: false, demo: true, macros: { carbs: { percent: carbsPercent, kcal: Math.round(kcal * carbsPercent / 100), grams: Math.round(kcal * carbsPercent / 100 / 4 * 10) / 10 }, protein: { percent: proteinPercent, kcal: Math.round(kcal * proteinPercent / 100), grams: Math.round(kcal * proteinPercent / 100 / 4 * 10) / 10 }, fat: { percent: fatPercent, kcal: Math.round(kcal * fatPercent / 100), grams: Math.round(kcal * fatPercent / 100 / 9 * 10) / 10 } } }
     }
   },
   macros: (payload) => apiRequest('/nutrition-plans/macros', { method: 'POST', body: JSON.stringify(payload) }),

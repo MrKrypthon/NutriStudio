@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import DocumentPage from '../documents/DocumentPage.jsx'
@@ -51,7 +51,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [pickerSearch, setPickerSearch] = useState('')
   const [adequacy, setAdequacy] = useState(null)
   const [adequacyState, setAdequacyState] = useState('idle')
-  const [form, setForm] = useState({ sex: 'female', age: '28', weightKg: '', heightCm: '', formula: 'mifflin', activityFactor: '1.375', goal: '', carbsPercent: '50', proteinPercent: '25', fatPercent: '25' })
+  const [form, setForm] = useState({ sex: 'female', age: '', weightKg: '', heightCm: '', formula: 'mifflin', activityFactor: '1.375', goal: '', carbsPercent: '50', proteinPercent: '25', fatPercent: '25' })
   const [calcResult, setCalcResult] = useState(null)
   const [calcState, setCalcState] = useState('idle')
   const [calcError, setCalcError] = useState('')
@@ -81,41 +81,44 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     setNotesForm({ hydrationNote: plan.hydrationNote || '', recommendations: plan.recommendations || '' })
   }, [plan?.id])
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientId), recipesApi.list(), patientsApi.consultations(patientId)])
-        if (cancelled) return
-        const activePlan = (plansResponse.items || []).find((item) => item.status !== 'PUBLISHED') || null
-        const initialSlots = {}
-        for (const slot of activePlan?.mealSlots || []) initialSlots[slotKey(slot.dayOfWeek, slot.mealType)] = slot.recipeId
-        // Preload weight/height from real sources, never from arbitrary demo values: the last
-        // saved calculation wins, then the patient's latest clinical measurement, then empty
-        // fields the professional must fill. Before this fix, 72.4 kg / 165 cm were hardcoded
-        // defaults that got persisted as if they were the patient's real anthropometry.
-        const latestMeasurement = (consultationsResponse.items || [])
-          .flatMap((c) => c.measurements || [])
-          .sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
-        const savedInputs = activePlan?.evaluation?.inputs || {}
-        const weightKg = savedInputs.weightKg ?? latestMeasurement?.weightKg ?? ''
-        const heightCm = savedInputs.heightCm ?? latestMeasurement?.heightCm ?? ''
-        setForm((prev) => ({
-          ...prev,
-          weightKg: weightKg !== '' && weightKg != null ? String(weightKg) : '',
-          heightCm: heightCm !== '' && heightCm != null ? String(heightCm) : '',
-        }))
-        setPlan(activePlan)
-        setRecipes(recipesResponse.items || [])
-        setSlots(initialSlots)
-        setLoadState('ready')
-      } catch {
-        if (!cancelled) setLoadState('error')
-      }
+  const loadPlanData = useCallback(async () => {
+    try {
+      const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientId), recipesApi.list(), patientsApi.consultations(patientId)])
+      const activePlan = (plansResponse.items || []).find((item) => item.status !== 'PUBLISHED') || null
+      const initialSlots = {}
+      for (const slot of activePlan?.mealSlots || []) initialSlots[slotKey(slot.dayOfWeek, slot.mealType)] = slot.recipeId
+      // Preload weight/height from real sources, never from arbitrary demo values: the last
+      // saved calculation wins, then the patient's latest clinical measurement, then empty
+      // fields the professional must fill. Before this fix, 72.4 kg / 165 cm were hardcoded
+      // defaults that got persisted as if they were the patient's real anthropometry.
+      const latestMeasurement = (consultationsResponse.items || [])
+        .flatMap((c) => c.measurements || [])
+        .sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
+      const savedInputs = activePlan?.evaluation?.inputs || {}
+      const weightKg = savedInputs.weightKg ?? latestMeasurement?.weightKg ?? ''
+      const heightCm = savedInputs.heightCm ?? latestMeasurement?.heightCm ?? ''
+      setForm((prev) => ({
+        ...prev,
+        weightKg: weightKg !== '' && weightKg != null ? String(weightKg) : '',
+        heightCm: heightCm !== '' && heightCm != null ? String(heightCm) : '',
+      }))
+      setPlan(activePlan)
+      setRecipes(recipesResponse.items || [])
+      setSlots(initialSlots)
+      setLoadState('ready')
+    } catch {
+      setLoadState('error')
     }
-    load()
-    return () => { cancelled = true }
   }, [patientId])
+
+  useEffect(() => { loadPlanData() }, [loadPlanData])
+  // After publishing in step 4 (Entrega), the local `plan` is stale (still DRAFT); re-fetch so the
+  // wizard reflects that there's no draft anymore instead of failing edits with PLAN_LOCKED.
+  const prevStepRef = useRef(step)
+  useEffect(() => {
+    if (prevStepRef.current === 4 && step < 4) loadPlanData()
+    prevStepRef.current = step
+  }, [step, loadPlanData])
 
   const recipeById = (id) => recipes.find((recipe) => recipe.id === id)
 
@@ -296,7 +299,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       {pickerTarget && <div className="recipe-overlay"><div className="recipe-modal panel"><div className="modal-head"><div><p className="eyebrow">RECETAS PARA {MEAL_TYPES.find((m) => m.key === pickerTarget.mealType)?.label.toUpperCase()}{pickerTarget.day ? ` · ${DAYS.find((d) => d.n === pickerTarget.day)?.label}` : ''}</p><h2>Elige una preparación</h2></div><button onClick={() => setPickerTarget(null)}>×</button></div><div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div><div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas del catálogo para este tiempo de comida.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => chooseRecipe(recipe)} key={recipe.id}><div className={'recipe-image ' + RECIPE_COLORS[i % RECIPE_COLORS.length]}><span>✦</span></div><b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal</small></button>)}</div></div></div>}
     </>}
 
-    {step === 4 && <DocumentPage setActive={setActive} patientId={patientId} embedded />}
+    {step === 4 && <DocumentPage setActive={setActive} patientId={patientId} embedded onPublished={loadPlanData} />}
 
     <div className="wizard-footer"><button className="secondary" onClick={() => setStep(Math.max(0, step - 1))}>← Anterior</button><span>{saveState === 'saving' ? 'Guardando…' : saveState === 'saved' ? 'Guardado automáticamente' : saveState === 'error' ? 'Error al guardar los últimos cambios' : 'Guardado automáticamente'}</span><button className="primary" onClick={() => step === 4 ? setActive('Documentos') : setStep(Math.min(step + 1, 4))}>Siguiente paso <span>→</span></button></div>
   </div></AppChrome>
