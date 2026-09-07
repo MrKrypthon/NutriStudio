@@ -117,7 +117,12 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     return Array.from(set).sort()
   }, [appointments])
   const practiceNow = useMemo(() => {
-    if (!practiceTz) return null
+    if (!practiceTz) {
+      // Fallback if the practice timezone hasn't loaded: use the viewer's local wall-clock time,
+      // still expressed in the same YYYY-MM-DD + HH:MM convention.
+      const now = new Date()
+      return { date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`, hour: now.getHours(), minute: now.getMinutes() }
+    }
     try {
       const date = new Date().toLocaleDateString('en-CA', { timeZone: practiceTz })
       const time = new Date().toLocaleTimeString('en-US', { timeZone: practiceTz, hour: '2-digit', minute: '2-digit', hour12: false })
@@ -128,11 +133,16 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   const nowMs = practiceNow ? new Date(`${practiceNow.date}T${String(practiceNow.hour).padStart(2, '0')}:${String(practiceNow.minute).padStart(2, '0')}:00.000Z`).getTime() : Date.now()
   const nowLine = useMemo(() => {
     if (!practiceNow) return null
-    const hourIndex = hours.indexOf(`${String(practiceNow.hour).padStart(2, '0')}:00`)
-    if (hourIndex < 0) return null
     const todayVisible = days.some((d) => toISODate(d) === practiceNow.date)
     if (!todayVisible) return null
-    return { top: hourIndex * 63 + (practiceNow.minute / 60) * 63 }
+    // Clamp "now" to the visible hours range so the line always renders when today is on screen,
+    // even if the current time falls before the first or after the last grid hour.
+    const firstMinutes = hours.length ? Number(hours[0].slice(0, 2)) * 60 : 0
+    const lastMinutes = hours.length ? Number(hours[hours.length - 1].slice(0, 2)) * 60 + 59 : 23 * 60 + 59
+    const minutes = Math.max(firstMinutes, Math.min(practiceNow.hour * 60 + practiceNow.minute, lastMinutes))
+    const hourIndex = hours.indexOf(`${String(Math.floor(minutes / 60)).padStart(2, '0')}:00`)
+    if (hourIndex < 0) return null
+    return { top: hourIndex * 63 + ((minutes % 60) / 60) * 63 }
   }, [practiceNow, hours, days])
 
   const step = view === 'Semana' ? 7 : 1
