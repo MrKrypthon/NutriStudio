@@ -74,10 +74,18 @@ export default function SettingsPage({ setActive }) {
   }
 
   const save = async () => {
+    // Trim before sending: otherwise "  " counts as a value on screen while the server (name ||
+    // oldValue) silently keeps the previous value — a persisted-state desync with no feedback.
+    const trimmed = { name: practiceName.trim(), userName: form.userName.trim(), userEmail: form.userEmail.trim() }
+    if (!trimmed.name || !trimmed.userName || !trimmed.userEmail) {
+      setSaveState('error')
+      setError('El nombre de la práctica, el nombre profesional y el email son obligatorios.')
+      return
+    }
     setSaveState('saving')
     setError('')
     try {
-      await practiceApi.update({ name: practiceName, ...form })
+      await practiceApi.update({ ...form, ...trimmed })
       refreshPractice()
       setSaveState('saved')
       setEditingHours(false)
