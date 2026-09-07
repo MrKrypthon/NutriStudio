@@ -622,3 +622,7 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 
 - **BAJO — El wizard solo pre-cargaba peso/talla** al reabrir un plan guardado; sexo, edad, % grasa y fórmula quedaban en el default y la vista no coincidía con lo persistido. Ahora pre-carga todos los inputs del cálculo guardado.
 - Verificados con Chromium/API en esta tanda: los 3 PDFs (informe, expediente, menú semanal) generan OK tras los cambios en los draw; el timeline excluye citas futuras; el wizard recorre pasos 0-4 sin errores y el campo `% Grasa corporal` aparece/solo con Cunningham/Katch-McArdle; la distribución no se puede modificar en un plan publicado (PLAN_LOCKED).
+
+### Fase 64 · 11ª tanda (Entrega vs. distribución)
+
+- **MEDIO — La vista previa de Entrega podía mostrar el menú viejo** si editabas una celda e ibas al paso 4 al instante (el PUT de distribución seguía en vuelo). Ahora la navegación a Entrega espera el vaciado de la cola (`selectStep` → `await flushPromiseRef`), y la persistencia usa una promesa compartida para que el último snapshot siempre gane.
