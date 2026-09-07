@@ -106,6 +106,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       const heightCm = savedInputs.heightCm ?? latestMeasurement?.heightCm ?? ''
       setForm((prev) => ({
         ...prev,
+        sex: savedInputs.sex ?? prev.sex,
+        age: savedInputs.age != null ? String(savedInputs.age) : prev.age,
+        bodyFatPercent: savedInputs.bodyFatPercent != null ? String(savedInputs.bodyFatPercent) : prev.bodyFatPercent,
+        formula: activePlan?.formula ?? prev.formula,
         weightKg: weightKg !== '' && weightKg != null ? String(weightKg) : '',
         heightCm: heightCm !== '' && heightCm != null ? String(heightCm) : '',
       }))
