@@ -356,13 +356,23 @@ app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (req
 // The anthropometric ClinicalSection payload is free-form (whatever labels the form on
 // screen happens to use) so the record report and the PDF instead read structured
 // Measurement rows — this is the only way to create one; nothing wrote it before.
+// Registering twice on the same day is a CORRECTION, not a new data point (it would show as two
+// stacked points on the evolution chart), so a second register for the same consultation within
+// the same UTC day updates the existing row instead of inserting a duplicate.
 app.post('/api/v1/consultations/:consultationId/measurements', async (request, reply) => {
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   const { measuredAt, weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes } = request.body || {}
-  const measurement = await prisma.measurement.create({
-    data: { patientId: consultation.patientId, consultationId: consultation.id, measuredAt: measuredAt ? new Date(measuredAt) : new Date(), weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes },
-  })
+  const at = measuredAt ? new Date(measuredAt) : new Date()
+  const values = { patientId: consultation.patientId, consultationId: consultation.id, measuredAt: at, weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes }
+  const [latest] = await prisma.measurement.findMany({ where: { consultationId: consultation.id }, orderBy: { measuredAt: 'desc' }, take: 1 })
+  if (latest && new Date(latest.measuredAt).toISOString().slice(0, 10) === at.toISOString().slice(0, 10)) {
+    const measurement = await prisma.measurement.update({ where: { id: latest.id }, data: values })
+    await logAudit(request, { action: 'updated', entity: 'Measurement', entityId: measurement.id, patientId: consultation.patientId, metadata: { corrected: true } })
+    return measurement
+  }
+  const measurement = await prisma.measurement.create({ data: values })
+  await logAudit(request, { action: 'created', entity: 'Measurement', entityId: measurement.id, patientId: consultation.patientId })
   return reply.code(201).send(measurement)
 })
 
@@ -1016,6 +1026,19 @@ function drawDocumentBrand(file, subtitle, practice, logoBuffer) {
   }
 }
 
+// Values in section payloads can be nested (e.g. Bioquímico "Estudios" is an array of objects);
+// a bare join would print "[object Object]". Flatten objects to "clave: valor" pairs recursively.
+const stringifyEntry = (value) => {
+  if (Array.isArray(value)) return value.map(stringifyEntry).filter(Boolean).join(', ')
+  if (value && typeof value === 'object') {
+    const parts = Object.entries(value).filter(([, v]) => v !== null && v !== undefined && v !== '')
+    return parts.length ? parts.map(([k, v]) => `${k}: ${stringifyEntry(v)}`).join(' · ') : ''
+  }
+  return value
+}
+const diagnosisLine = (d) => [`${d.code || ''}`, `(${d.domain}) — ${d.problem}`, d.etiology ? `Causa: ${d.etiology}` : null, d.evidence ? `Evidencia: ${d.evidence}` : null].filter(Boolean).join(' ').trim()
+const signatureFor = (user, practice) => [user?.name || practice?.name || 'Nutri Studio', user?.specialty || null].filter(Boolean).join(' · ')
+
 function drawConsultationReport(file, document, practice, user, logoBuffer) {
   drawDocumentBrand(file, 'EXPEDIENTE DE CONSULTA NUTRICIONAL', practice, logoBuffer)
   file.fontSize(18).fillColor('#1c232f').text('Informe de consulta')
@@ -1026,7 +1049,9 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   const consultation = document.consultation
   const sections = consultation?.sections || []
   const payloadOf = (key) => sections.find((section) => section.sectionKey === key)?.payload || {}
-  const measurement = (consultation?.measurements || [])[0]
+  // Queries return measurements oldest-first; the PDF must show the LATEST one captured for the
+  // consultation, not the first (stale) row.
+  const measurement = [...(consultation?.measurements || [])].sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
   const diagnoses = consultation?.diagnoses || []
 
   // Summary box showing the real reason/objective when the expediente has them, not generic text.
@@ -1044,7 +1069,7 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   let sectionIndex = 0
   const drawTitle = (title) => { sectionIndex += 1; file.fillColor('#7267ef').fontSize(13).text(`${sectionIndex}. ${title}`); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#ddd6fa').stroke(); file.moveDown() }
   const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, { width: 480 })
-  const drawEntries = (payload) => { const entries = Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== '') ; if (!entries.length) return false; for (const [key, value] of entries) drawLine(`${key}: ${Array.isArray(value) ? value.join(', ') : value}`); return true }
+  const drawEntries = (payload) => { const entries = Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== '') ; if (!entries.length) return false; for (const [key, value] of entries) drawLine(`${key}: ${stringifyEntry(value)}`); return true }
 
   drawTitle('Datos generales')
   if (!drawEntries(payloadOf('general'))) drawLine('Sin datos generales registrados.')
@@ -1061,7 +1086,7 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   file.moveDown(1.5)
 
   drawTitle('Diagnóstico nutricio')
-  if (diagnoses.length) for (const d of diagnoses) drawLine(`${d.code} (${d.domain}) — ${d.problem}. Causa: ${d.etiology}. Evidencia: ${d.evidence}`)
+  if (diagnoses.length) for (const d of diagnoses) drawLine(diagnosisLine(d))
   else drawLine('Sin diagnóstico registrado.')
   file.moveDown(1.5)
 
@@ -1071,7 +1096,7 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
 
   // Explicit width: pdfkit persists the last text() box, so a bare { align: 'center' } would pin
   // the footer to whatever width/x the previous line used (see the menu footer fix).
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, 48, file.y, { width: 516, align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
 }
 
 const EXPORT_SECTION_KEYS = [
@@ -1099,7 +1124,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
   const consultation = document.consultation
   const sections = consultation?.sections || []
   const payloadOf = (key) => sections.find((section) => section.sectionKey === key)?.payload || {}
-  const measurement = (consultation?.measurements || [])[0]
+  const measurement = [...(consultation?.measurements || [])].sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
   const diagnoses = consultation?.diagnoses || []
 
   const summary = payloadOf('summary')
@@ -1125,7 +1150,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
     if (!entries.length) return false
     for (const [key, value] of entries) {
       if (value === true) drawLine(key.replace(/__/g, ' · '))
-      else if (Array.isArray(value)) drawLine(`${key}: ${value.join(', ')}`)
+      else if (Array.isArray(value) || (value && typeof value === 'object')) drawLine(`${key}: ${stringifyEntry(value)}`)
       else drawLine(`${key}: ${value}`)
     }
     return true
@@ -1149,7 +1174,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
       drawEntries(payloadOf('anthropometric'))
       file.moveDown(1)
     } else if (key === 'diagnosis') {
-      if (diagnoses.length) for (const d of diagnoses) drawLine(`${d.code ? d.code + ' ' : ''}(${d.domain}) — ${d.problem}. Causa: ${d.etiology}. Evidencia: ${d.evidence}`)
+      if (diagnoses.length) for (const d of diagnoses) drawLine(diagnosisLine(d))
       else drawLine('Sin diagnóstico registrado.')
       file.moveDown(1)
     } else {
@@ -1157,7 +1182,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
       file.moveDown(1)
     }
   }
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, 48, file.y, { width: 516, align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
 }
 
 function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
@@ -1256,7 +1281,7 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   // the footer onto a second, almost-empty page. Also pass an explicit width: pdfkit persists the
   // last text() width/x, so a bare { align: 'center' } after the cell loop inherited the last
   // cell's narrow box and pinned the footer to the far right.
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, x0, file.y, { width: contentW, align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), x0, file.y, { width: contentW, align: 'center' })
 }
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {

@@ -156,6 +156,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [reportState, setReportState] = useState('idle')
   const [exportDoc, setExportDoc] = useState(null)
   const [exportState, setExportState] = useState('idle')
+  const [completionState, setCompletionState] = useState('idle')
   const [attachments, setAttachments] = useState([])
   const [uploadState, setUploadState] = useState('idle')
   const [uploadError, setUploadError] = useState('')
@@ -186,13 +187,18 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           let active = (list.items || []).find((item) => item.status === 'IN_PROGRESS')
           if (!active) {
             active = await clinicalApi.create(patientId, appointmentId ? { appointmentId } : {})
-            onConsumeAppointment?.()
+            if (appointmentId) onConsumeAppointment?.()
           } else if (appointmentId) {
-            // Creating a consultation marks the appointment that started it COMPLETED as a side
-            // effect (see clinicalApi.create above) -- but here we're reusing an already
-            // IN_PROGRESS consultation instead, so that side effect never ran. Without this, the
-            // appointment that was actually clicked stays CONFIRMED forever.
-            await appointmentsApi.complete(appointmentId).catch(() => {})
+            // Same-day second appointment joins the open session (documented intent). But a session
+            // left open from a PREVIOUS day must be closed before starting a new one, otherwise
+            // different visits keep merging into a single ever-growing consultation.
+            const stale = new Date(active.startedAt).toISOString().slice(0, 10) !== new Date().toISOString().slice(0, 10)
+            if (stale) {
+              await clinicalApi.complete(active.id).catch(() => {})
+              active = await clinicalApi.create(patientId, { appointmentId })
+            } else {
+              await appointmentsApi.complete(appointmentId).catch(() => {})
+            }
             onConsumeAppointment?.()
           }
           full = await clinicalApi.get(active.id)
@@ -278,6 +284,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const saveLabel = SAVE_LABELS[saveState]
   const anthro = sections.anthropometric?.payload || {}
   const numOrUndefined = (value) => value !== undefined && value !== '' ? Number(value) : undefined
+  // The server upserts today's measurement, so re-registering corrects it instead of stacking a
+  // duplicate point; the button just reflects whether a value was already captured today.
+  const todayMeasured = consultation
+    ? measurements.some((m) => m.consultationId === consultation.id && new Date(m.measuredAt).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10))
+    : false
 
   const registerMeasurement = async () => {
     if (!consultation) return
@@ -309,6 +320,21 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       await clinicalApi.removeDiagnosis(consultation.id, id)
       setDiagnoses((prev) => prev.filter((d) => d.id !== id))
     } catch { /* leave it in the list; the professional can retry */ }
+  }
+
+  // Sessions were never closable from the UI (the server route existed but nothing called it), so
+  // consultations stayed IN_PROGRESS forever and every later visit merged into the same session.
+  const completeConsultation = async () => {
+    if (!consultation || consultation.status === 'COMPLETED') return
+    if (!window.confirm('¿Cerrar la consulta? Quedará en el historial, pero dejará de ser la sesión en curso.')) return
+    setCompletionState('saving')
+    try {
+      await clinicalApi.complete(consultation.id)
+      setConsultation((prev) => (prev ? { ...prev, status: 'COMPLETED', completedAt: new Date().toISOString() } : prev))
+      setCompletionState('idle')
+    } catch {
+      setCompletionState('error')
+    }
   }
 
   // Diagnoses were create/delete only; the PATCH endpoint existed but was never wired.
@@ -473,7 +499,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
     {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
     <div className="record-tabs">{TABS.map((x) => <button className={tab === x ? 'active' : ''} onClick={() => setTab(x)} key={x}>{x}</button>)}</div>
-    <div className="record-banner"><span className="spark">✦</span><div><b>{consultation?.status === 'COMPLETED' ? 'Consulta completada' : 'Consulta en curso'}</b><small>{consultation?.status === 'COMPLETED' ? `Sesión cerrada · ${formatDate(consultation.completedAt || consultation.startedAt)}` : `Los cambios se guardan automáticamente · ${saveLabel}`}</small></div><button className="secondary" onClick={() => setTab('Transcripción')}>Grabar consulta</button></div>
+    <div className="record-banner"><span className="spark">✦</span><div><b>{consultation?.status === 'COMPLETED' ? 'Consulta completada' : 'Consulta en curso'}</b><small>{consultation?.status === 'COMPLETED' ? `Sesión cerrada · ${formatDate(consultation.completedAt || consultation.startedAt)}` : `Los cambios se guardan automáticamente · ${saveLabel}`}</small></div><button className="secondary" onClick={() => setTab('Transcripción')}>Grabar consulta</button>{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={completeConsultation}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}</div>
 
     {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando expediente…</h3></div>}
     {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar ni crear la consulta de {patientName}.</div>}
@@ -493,7 +519,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           <FormCard title="Composición corporal" fields={['% Grasa corporal|', 'Kg de grasa|', 'Kg de músculo|', '% Músculo|']} values={currentValues} onFieldChange={updateField} />
           <FormCard title="Pliegues cutáneos" fields={['Tricipital (mm)|', 'Bicipital (mm)|', 'Subescapular (mm)|', 'Suprailiaco (mm)|']} values={currentValues} onFieldChange={updateField} />
         </section>
-        <aside className="record-aside panel"><p className="eyebrow">RESUMEN DE HOY</p><div className="measure-highlight"><small>Peso actual</small><b>{currentValues['Peso (kg)'] || '—'} kg</b></div><div className="measure-highlight">{currentValues['% Grasa corporal'] ? <><small>% grasa corporal</small><b>{currentValues['% Grasa corporal']}%</b></> : <><small>% grasa corporal</small><b>—</b><span className="muted">Aún no capturado</span></>}</div><button className="link-button" disabled={measurementState === 'saving' || measurementState === 'saved' || (!anthro['Peso (kg)'] && !anthro['Talla (cm)'])} onClick={registerMeasurement}>{measurementState === 'saving' ? 'Registrando…' : measurementState === 'saved' ? '✓ Medición registrada hoy' : 'Registrar medición de hoy →'}</button></aside>
+        <aside className="record-aside panel"><p className="eyebrow">RESUMEN DE HOY</p><div className="measure-highlight"><small>Peso actual</small><b>{currentValues['Peso (kg)'] || '—'} kg</b></div><div className="measure-highlight">{currentValues['% Grasa corporal'] ? <><small>% grasa corporal</small><b>{currentValues['% Grasa corporal']}%</b></> : <><small>% grasa corporal</small><b>—</b><span className="muted">Aún no capturado</span></>}</div><button className="link-button" disabled={measurementState === 'saving' || (!anthro['Peso (kg)'] && !anthro['Talla (cm)'])} onClick={registerMeasurement}>{measurementState === 'saving' ? 'Registrando…' : todayMeasured ? 'Actualizar medición de hoy →' : 'Registrar medición de hoy →'}</button></aside>
       </div>
 
       : tab === 'Bioquímico' ? <div className="clinical-layout">
