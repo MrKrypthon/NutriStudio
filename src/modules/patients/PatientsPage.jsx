@@ -27,7 +27,7 @@ const AUDIT_LABELS = {
   'Document:delivered': 'Documento entregado',
   'LabAttachment:uploaded': 'PDF de análisis clínicos adjuntado',
 }
-const DONE_STATUSES = new Set(['CONFIRMED', 'COMPLETED', 'PUBLISHED', 'DELIVERED', 'DONE'])
+const DONE_STATUSES = new Set(['COMPLETED', 'PUBLISHED', 'DELIVERED', 'DONE'])
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
 const formatUTCDate = (iso) => { const d = new Date(iso); return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
 // "Próxima cita" shows the upcoming appointment's date + time (UTC wall-clock convention, same
@@ -70,12 +70,16 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
       .catch(() => setStatus('demo'))
   }, [statusFilter])
 
-  useEffect(() => {
-    if (!selected?.[6]) { setTimeline([]); setTimelineState('idle'); return }
+  const loadTimeline = (patientId) => {
     setTimelineState('loading')
-    patientsApi.timeline(selected[6])
+    patientsApi.timeline(patientId)
       .then((response) => { setTimeline(response.items || []); setTimelineState('ready') })
       .catch(() => setTimelineState('error'))
+  }
+
+  useEffect(() => {
+    if (!selected?.[6]) { setTimeline([]); setTimelineState('idle'); return }
+    loadTimeline(selected[6])
   }, [selected?.[6]])
 
   const visible = rows
@@ -112,6 +116,8 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
       setRows((prev) => prev.map((row) => (row[6] === selected[6] ? nextRow : row)))
       setSelected(nextRow)
       setEditing(false)
+      // The edit just logged a Patient:updated audit event; refresh the open drawer's timeline.
+      loadTimeline(updated.id)
     } catch (error) {
       setEditState('error')
       setEditError(error.message || 'No se pudo guardar los cambios.')

@@ -190,10 +190,12 @@ app.get('/api/v1/patients', async (request) => {
   return { items, page: currentPage, pageSize: take, total }
 })
 
+const emptyToNull = (value) => (value === undefined ? undefined : value === '' ? null : value)
+
 app.post('/api/v1/patients', async (request, reply) => {
   const { firstName, lastName, email, phone, birthDate, sex, occupation, consentDataAt } = request.body || {}
   if (!firstName || !lastName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido son obligatorios.', fields: { firstName: !firstName, lastName: !lastName } })
-  const patient = await prisma.patient.create({ data: { practiceId: request.practiceId, firstName, lastName, email, phone, sex, occupation, birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: consentDataAt ? new Date(consentDataAt) : undefined } })
+  const patient = await prisma.patient.create({ data: { practiceId: request.practiceId, firstName, lastName, email: emptyToNull(email), phone: emptyToNull(phone), sex, occupation: emptyToNull(occupation), birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: consentDataAt ? new Date(consentDataAt) : undefined } })
   return reply.code(201).send(patient)
 })
 
@@ -219,11 +221,11 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
     data: {
       ...(firstName !== undefined ? { firstName } : {}),
       ...(lastName !== undefined ? { lastName } : {}),
-      ...(email !== undefined ? { email } : {}),
-      ...(phone !== undefined ? { phone } : {}),
+      ...(email !== undefined ? { email: emptyToNull(email) } : {}),
+      ...(phone !== undefined ? { phone: emptyToNull(phone) } : {}),
       ...(birthDate !== undefined ? { birthDate: birthDate ? new Date(birthDate) : null } : {}),
       ...(sex !== undefined ? { sex } : {}),
-      ...(occupation !== undefined ? { occupation } : {}),
+      ...(occupation !== undefined ? { occupation: emptyToNull(occupation) } : {}),
       ...(status !== undefined ? { status, archivedAt: status === 'ARCHIVED' ? new Date() : null } : {}),
     },
   })
@@ -241,7 +243,9 @@ app.get('/api/v1/patients/:patientId/timeline', async (request, reply) => {
   const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   const [appointments, consultations, plans, documents, auditEvents] = await prisma.$transaction([
-    prisma.appointment.findMany({ where: { patientId }, orderBy: { startAt: 'desc' }, take: 20 }),
+    // The timeline is activity HISTORY — exclude upcoming (not yet started) appointments so a
+    // future confirmed visit doesn't render as already-done activity at the top of the drawer.
+    prisma.appointment.findMany({ where: { patientId, startAt: { lte: new Date() } }, orderBy: { startAt: 'desc' }, take: 20 }),
     prisma.consultation.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.nutritionPlan.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.document.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),

@@ -336,6 +336,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     const weight = Number(next['Peso (kg)'])
     const height = Number(next['Talla (cm)'])
     if (weight > 0 && height > 0) next['IMC calculado'] = (weight / ((height / 100) ** 2)).toFixed(1)
+    // Clearing weight/height must drop the previously derived IMC instead of showing a stale value.
+    else delete next['IMC calculado']
     updateFields(next)
   }
 
@@ -361,7 +363,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         bodyFatPercent: numOrUndefined(anthro['% Grasa corporal']),
         muscleMassKg: numOrUndefined(anthro['Kg de músculo']),
       })
-      setMeasurements((prev) => [...prev, created].sort((a, b) => new Date(a.measuredAt) - new Date(b.measuredAt)))
+      // The server upserts a same-day correction (same id); replace any existing row with that id
+      // instead of appending, so the chart never shows two stacked points for one measurement.
+      setMeasurements((prev) => [...prev.filter((m) => m.id !== created.id), created].sort((a, b) => new Date(a.measuredAt) - new Date(b.measuredAt)))
       setMeasurementState('saved')
     } catch {
       setMeasurementState('error')
@@ -430,7 +434,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
   const uploadLabAttachment = async (file) => {
     if (!consultation || !file) return
-    if (file.type !== 'application/pdf') { setUploadState('error'); setUploadError('Solo se aceptan archivos PDF.'); return }
+    // Some OSes/browsers report an empty file.type for a valid .pdf; fall back to the extension
+    // so the server-side check (the source of truth) actually gets the chance to accept it.
+    const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name)
+    if (!isPdf) { setUploadState('error'); setUploadError('Solo se aceptan archivos PDF.'); return }
     setUploadState('uploading')
     setUploadError('')
     try {
