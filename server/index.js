@@ -1216,7 +1216,7 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   const menu = plan?.menuSnapshot || []
   if (!menu.length) {
     file.fillColor('#6e6e73').fontSize(10).text('Este plan no tiene recetas asignadas.')
-    file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, 48, file.y, { width: 516, align: 'center' })
+    file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
     return
   }
 
