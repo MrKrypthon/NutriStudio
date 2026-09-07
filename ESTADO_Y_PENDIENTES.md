@@ -626,3 +626,7 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 ### Fase 64 · 11ª tanda (Entrega vs. distribución)
 
 - **MEDIO — La vista previa de Entrega podía mostrar el menú viejo** si editabas una celda e ibas al paso 4 al instante (el PUT de distribución seguía en vuelo). Ahora la navegación a Entrega espera el vaciado de la cola (`selectStep` → `await flushPromiseRef`), y la persistencia usa una promesa compartida para que el último snapshot siempre gane.
+
+### Fase 64 · 12ª tanda (transcripción de voz)
+
+- **BAJO — Dos chunks finales de voz en el mismo tick se pisaban**: `appendFinalChunk` leía `values` del closure de render y pasaba el string completo, así que el segundo chunk partía del valor viejo y perdía el primero. Ahora `appendField` acumula contra el mirror síncrono.
