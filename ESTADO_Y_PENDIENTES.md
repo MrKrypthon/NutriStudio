@@ -527,3 +527,21 @@ Batch de mejoras reales (bugs, datos falsos, huecos de funcionalidad) acumuladas
 18. **Verificación**: barrido con Chromium de los 12 módulos del sidebar sin errores de consola; el motor de micronutrientes no divide entre cero (ninguna meta IDR es 0).
 
 Verificado commit a commit (build OK, 47/47 tests, casos probados contra API/Chromium). Todos los datos modificados durante las pruebas se revirtieron (macros del borrador de Mariana, sección antropométrica, nombre de la práctica).
+
+## Rama unificada (fase-62 + fase-63) — 35 commits: refinamiento visual de componentes + Agenda interactiva
+
+Dos lotes de trabajo en una sola rama (la visual + la de Agenda), listos para revisar en un PR:
+
+**Visual (32 commits)** — pulido de prácticamente todos los componentes visuales de la app contra la paleta de marca (morado `#7267ef` / mint `#eeecfd` / navy `#1c232f`), limpiando casi todos los restos del verde/índigo viejos que los recolor de fases 36/39/40 no alcanzaron:
+- **Pacientes**: fila seleccionada resaltada (tinte + acento izquierdo), cajón con acento superior y acciones apiladas, cabecera de tabla con contraste/letter-spacing, filtro/búsqueda con alturas consistentes.
+- **Agenda**: día actual con tinte, cabecera con más contraste, eventos con elevación al hover.
+- **Recetas**: tarjetas con borde/sombra al hover; **Consultas**: tarjetas de sesión con borde de marca; **Constructor**: paso activo, celdas de semana, workspace, distribución; **Plantillas**: tarjetas y pestañas; **Ingredientes**: pills; **Educación**: portada mint en morado y zoom al hover; **Dashboard**: filas de citas, next, estados vacíos con ícono mint; **Configuración**: menú y hovers; **expediente**: pastillas de toggle; **login**: acento superior.
+- Componentes compartidos: modal con borde, botones secundarios/enlaces con hover, foco morado en inputs, sync/draft labels como pills, badges de sidebar, y barridos de colores verdes en texto/fondos/bordes (cabeceras de tabla, form-card, consent, previews, etc.). Quedan solo los verdes semánticos deliberados (✓ de completado, rotación decorativa de iconos).
+
+**Agenda interactiva (3 commits)**:
+- Línea de la hora actual (roja, se mueve cada minuto, zona horaria de la práctica, se ancla al borde de la grilla si la hora cae fuera del rango y cae a la hora local si no carga la zona).
+- Citas pasadas atenuadas.
+- Arrastrar una cita para moverla de fecha/hora (con vibración al arrastrar, drop highlight, y `PATCH /appointments/:id` nuevo con validación de solapamiento).
+- Nombres de cita más grandes/legibles.
+
+Verificado: build OK, 47/47 tests, barrido de los 12 módulos sin errores de consola. La línea de hora y el CSS de Agenda se re-verificaron tras resolver un conflicto de merge en `globals.css`.

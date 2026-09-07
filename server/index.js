@@ -480,6 +480,23 @@ app.post('/api/v1/appointments/:appointmentId/complete', async (request, reply) 
   return prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'COMPLETED' }, include: { patient: true } })
 })
 
+// Move a cita (drag & drop in Agenda): change its startAt/endAt keeping the existing duration
+// unless one is provided. Validates the target slot against overlaps like creation does.
+app.patch('/api/v1/appointments/:appointmentId', async (request, reply) => {
+  const { startAt, endAt, durationMinutes } = request.body || {}
+  if (!startAt) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'startAt es obligatorio.', fields: { startAt: 'required' } })
+  const practiceId = request.practiceId
+  const appointment = await prisma.appointment.findFirst({ where: { id: request.params.appointmentId, practiceId } })
+  if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
+  const start = new Date(startAt)
+  const duration = durationMinutes != null ? Number(durationMinutes) : Math.max(15, Math.round((appointment.endAt - appointment.startAt) / 60000))
+  const end = endAt ? new Date(endAt) : new Date(start.getTime() + duration * 60000)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha y duración válidas son obligatorias.', fields: {} })
+  const overlap = await prisma.appointment.findFirst({ where: { practiceId, id: { not: appointment.id }, status: { notIn: ['CANCELLED', 'NO_SHOW'] }, startAt: { lt: end }, endAt: { gt: start } } })
+  if (overlap) return reply.code(409).send({ code: 'APPOINTMENT_OVERLAP', message: 'Ese horario ya está ocupado.', fields: {} })
+  return prisma.appointment.update({ where: { id: appointment.id }, data: { startAt: start, endAt: end }, include: { patient: true } })
+})
+
 app.get('/api/v1/tasks', async (request) => {
   const { status, type } = request.query
   const tasks = await prisma.task.findMany({
