@@ -112,6 +112,12 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   }, [patientId])
 
   useEffect(() => { loadPlanData() }, [loadPlanData])
+  // pendingRecipeName (from "Asignar al plan") prefills the recipe picker, but only gets consumed
+  // when a picker opens — leaving without opening it would leak the stale name into a later,
+  // unrelated picker. Consume it on unmount if it was never used.
+  const consumeRecipeNameRef = useRef(onConsumeRecipeName)
+  useEffect(() => { consumeRecipeNameRef.current = onConsumeRecipeName })
+  useEffect(() => () => consumeRecipeNameRef.current?.(), [])
   // After publishing in step 4 (Entrega), the local `plan` is stale (still DRAFT); re-fetch so the
   // wizard reflects that there's no draft anymore instead of failing edits with PLAN_LOCKED.
   const prevStepRef = useRef(step)

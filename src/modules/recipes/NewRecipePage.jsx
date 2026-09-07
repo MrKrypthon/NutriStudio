@@ -19,6 +19,7 @@ export default function NewRecipePage({ setActive, recipeId }) {
   const [saved, setSaved] = useState(false)
   const [saveState, setSaveState] = useState('idle')
   const [saveError, setSaveError] = useState('')
+  const [recalcWarning, setRecalcWarning] = useState('')
 
   useEffect(() => {
     const query = ingredientSearch.trim()
@@ -64,7 +65,14 @@ export default function NewRecipePage({ setActive, recipeId }) {
         await recipesApi.replaceIngredients(recipeId, ingredients)
       } else {
         const created = await recipesApi.create({ name, mealTypes: [MEAL_TYPE_KEYS[meal]], portions, restrictions: [], instructions: instructions || 'Preparación pendiente de completar.', ingredients })
-        await recipesApi.recalculate(created.id).catch(() => {})
+        // A failed recalc would leave the recipe with 0-kcal nutrition and the success panel
+        // would still say "guardada" — surface it instead of swallowing it.
+        setRecalcWarning('')
+        try {
+          await recipesApi.recalculate(created.id)
+        } catch {
+          setRecalcWarning('La receta se guardó, pero no se pudieron calcular sus nutrientes. Vuelve a abrirla para reintentar.')
+        }
       }
       setSaveState('idle')
       setSaved(true)
@@ -81,7 +89,7 @@ export default function NewRecipePage({ setActive, recipeId }) {
     {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando receta…</h3></div>}
     {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar la receta.</div>}
 
-    {loadState === 'ready' && (saved ? <div className="success-panel panel"><span>✓</span><h2>Receta {recipeId ? 'actualizada' : 'guardada'} correctamente</h2><p>La receta ya está relacionada con {chosen.length} ingrediente{chosen.length === 1 ? '' : 's'} locales.</p><button className="primary" onClick={() => setActive('Recetas')}>Ver recetario <span>→</span></button></div> : <div className="new-recipe-layout">
+    {loadState === 'ready' && (saved ? <div className="success-panel panel"><span>✓</span><h2>Receta {recipeId ? 'actualizada' : 'guardada'} correctamente</h2><p>La receta ya está relacionada con {chosen.length} ingrediente{chosen.length === 1 ? '' : 's'} locales.</p>{recalcWarning && <p className="form-error" style={{ marginTop: 10 }}>⚠ {recalcWarning}</p>}<button className="primary" onClick={() => setActive('Recetas')}>Ver recetario <span>→</span></button></div> : <div className="new-recipe-layout">
       <section className="panel recipe-form">
         <div className="form-section-title"><span>01</span><div><h2>Información de la receta</h2><p>Define cómo aparecerá en el plan del paciente.</p></div></div>
         <label>Nombre de la receta *<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Bowl de pollo con verduras" /></label>
