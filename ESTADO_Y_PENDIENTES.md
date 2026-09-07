@@ -635,3 +635,8 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 
 - **BAJO — El PDF del menú firmaba "Nutrióloga" hardcodeada en el early-return de menú vacío** → firma real (especialidad).
 - **BAJO — Las indicaciones del plan (consumo de agua/recomendaciones) se perdían si navegabas dentro de la ventana de 800ms** → flush al desmontar.
+
+### Fase 64 · 14ª tanda (adecuación de micronutrientes)
+
+- **MEDIO — La adecuación de vitamina D quedaba ~40× baja**: la tabla IDR transcribió 400/800 (UI) pero el catálogo de ingredientes y el label están en µg; un filete de salmón (11 µg) mostraba ~3% en vez de ~110%. Se normaliza a µg (10 µg adultos/niños, 20 µg adultos mayores) igual que se hizo con el calcio, se corrige el label de vitamina A a 'µg RE' y se agrega test de regresión.
+- Verificado además: el walkthrough completo del wizard (crear paciente → calcular → guardar → asignar receta base → publicar) con 0 errores y limpieza total; y que todas las rutas /api/v1 requieren JWT y filtran por practiceId.
