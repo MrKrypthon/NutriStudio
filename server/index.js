@@ -848,7 +848,9 @@ app.get('/api/v1/dashboard/today', async (request) => {
   const [appointments, pendingConfirmations, followUps, activePatients, tasks] = await prisma.$transaction([
     prisma.appointment.findMany({ where: { practiceId, startAt: { gte: start, lte: end }, status: { notIn: ['CANCELLED', 'NO_SHOW'] }, type: { not: 'BLOCK' } }, include: { patient: true }, orderBy: { startAt: 'asc' } }),
     prisma.appointment.count({ where: { practiceId, startAt: { gte: start, lte: end }, status: 'PENDING_CONFIRMATION' } }),
-    prisma.task.count({ where: { practiceId, status: 'pending', type: { in: ['nutrition_plan', 'consultation_report'] } } }),
+    // FollowupsPage counts ALL pending tasks regardless of type; the card must match the page it
+    // links to (previously it only counted nutrition_plan + consultation_report and undercounted).
+    prisma.task.count({ where: { practiceId, status: 'pending' } }),
     prisma.patient.count({ where: { practiceId, status: 'ACTIVE' } }),
     prisma.task.findMany({ where: { practiceId, status: 'pending' }, include: { patient: true }, orderBy: { dueAt: 'asc' }, take: 3 }),
   ])

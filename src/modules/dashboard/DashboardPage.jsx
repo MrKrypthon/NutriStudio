@@ -24,14 +24,13 @@ const formatUTCTime = (iso) => { const d = new Date(iso); return `${String(d.get
 // "Today" is the viewer's real local date (not a fixed demo day — see AgendaPage for the same fix).
 const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
 const MONTHS_LONG = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-const today = new Date()
-const TODAY_ISO = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-const TODAY_WEEKDAY = WEEKDAYS[today.getDay()]
-const TODAY_EYEBROW = `${TODAY_WEEKDAY.toUpperCase()}, ${today.getDate()} DE ${MONTHS_LONG[today.getMonth()].toUpperCase()}`
-const TODAY_LONG_LABEL = `${TODAY_WEEKDAY[0].toUpperCase()}${TODAY_WEEKDAY.slice(1)} ${today.getDate()} de ${MONTHS_LONG[today.getMonth()]}, ${today.getFullYear()}`
-
-const greetingFor = () => {
-  const hour = today.getHours()
+// Derived from a live `now` state (not module-import time) so "Hoy" rolls over at midnight without
+// a full page reload — a stale date would keep showing yesterday and re-fetching yesterday's data.
+const todayISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+const todayEyebrow = (d) => `${WEEKDAYS[d.getDay()].toUpperCase()}, ${d.getDate()} DE ${MONTHS_LONG[d.getMonth()].toUpperCase()}`
+const todayLongLabel = (d) => `${WEEKDAYS[d.getDay()][0].toUpperCase()}${WEEKDAYS[d.getDay()].slice(1)} ${d.getDate()} de ${MONTHS_LONG[d.getMonth()]}, ${d.getFullYear()}`
+const greetingFor = (d) => {
+  const hour = d.getHours()
   if (hour < 6) return 'Buenas noches'
   if (hour < 12) return 'Buenos días'
   if (hour < 20) return 'Buenas tardes'
@@ -42,12 +41,19 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
   const { user } = useAuth()
   const [data, setData] = useState({ stats: DEMO_STATS, appointments: DEMO_APPOINTMENTS, tasks: DEMO_TASKS })
   const [status, setStatus] = useState('loading')
+  // Live clock: rolls the date/greeting over at midnight and re-fetches the new day's data.
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(t) }, [])
+
+  const TODAY_ISO = todayISO(now)
+  const TODAY_EYEBROW = todayEyebrow(now)
+  const TODAY_LONG_LABEL = todayLongLabel(now)
 
   useEffect(() => {
     dashboardApi.today(TODAY_ISO)
       .then((response) => { if (response?.stats) setData(response); setStatus('online') })
       .catch(() => setStatus('demo'))
-  }, [])
+  }, [TODAY_ISO])
 
   const firstName = user?.name ? user.name.split(' ')[0] : 'Gabriela'
   const nextTask = (data.tasks || [])[0]
@@ -67,7 +73,7 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
     } catch { /* keep the list as-is; retry in Agenda */ }
   }
 
-  return <AppChrome active="Hoy" setActive={setActive}><div className="content"><section className="welcome"><div><p className="eyebrow">{TODAY_EYEBROW}</p><h1>{greetingFor()}, {firstName} <span>✦</span></h1><p className="subtitle">Tu práctica, tus pacientes, un solo lugar.</p></div><div className="module-actions"><span className={'sync-label ' + (isReal ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'loading' ? 'Cargando…' : isReal ? 'Sincronizado' : 'Datos de demostración'}</span><button className="primary" onClick={() => onNewAppointment ? onNewAppointment() : setActive('Agenda')}><span>+</span> Nueva cita</button></div></section>
+  return <AppChrome active="Hoy" setActive={setActive}><div className="content"><section className="welcome"><div><p className="eyebrow">{TODAY_EYEBROW}</p><h1>{greetingFor(now)}, {firstName} <span>✦</span></h1><p className="subtitle">Tu práctica, tus pacientes, un solo lugar.</p></div><div className="module-actions"><span className={'sync-label ' + (isReal ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'loading' ? 'Cargando…' : isReal ? 'Sincronizado' : 'Datos de demostración'}</span><button className="primary" onClick={() => onNewAppointment ? onNewAppointment() : setActive('Agenda')}><span>+</span> Nueva cita</button></div></section>
     <section className="stats-grid">{[['Citas de hoy', data.stats.appointments, '◷', true, 'Agenda', null], ['Por confirmar', data.stats.pendingConfirmations, '◌', false, 'Agenda', () => onOpenAgendaFiltered && onOpenAgendaFiltered('pending')], ['Seguimientos', data.stats.followUps, '◒', false, 'Seguimientos', null], ['Pacientes activos', data.stats.activePatients, '♧', false, 'Pacientes', null]].map(([label, value, icon, featured, target, handler]) => <button type="button" className={featured ? 'stat-card featured' : 'stat-card'} key={label} onClick={() => handler ? handler() : setActive(target)}><div className="stat-head"><span>{label}</span><span className="stat-icon">{icon}</span></div><div className="stat-value">{value}</div><div className="stat-foot"><span>{footLabel}</span></div></button>)}</section>
     <div className="dashboard-grid">
       <section className="panel appointments"><div className="panel-title"><div><h2>Agenda de hoy</h2><p>Tus citas programadas</p></div><button className="link-button" onClick={() => setActive('Agenda')}>Abrir agenda →</button></div><div className="day-line"><span className="today-pill">HOY</span><span>{TODAY_LONG_LABEL}</span></div><div className="appointment-list">{data.appointments.length === 0 ? <p className="muted" style={{ padding: '22px 0', textAlign: 'center' }}>{isReal ? 'No tienes citas programadas para hoy.' : 'Sin citas de demostración.'}</p> : data.appointments.map((item, index) => { const isPending = item.status === 'PENDING_CONFIRMATION'; const isConfirmedLike = item.status === 'CONFIRMED' || item.status === 'SCHEDULED'; const startable = isConfirmedLike && item.patient?.id; const durationLabel = item.durationMinutes != null ? `${item.durationMinutes} min` : (() => { const ms = item.endAt && item.startAt ? new Date(item.endAt) - new Date(item.startAt) : NaN; return Number.isFinite(ms) && ms > 0 ? `${Math.round(ms / 60000)} min` : (item.duration || '60 min') })(); return <div className="appointment" key={item.id || item.name} onClick={() => { if (isPending) confirmAppointment(item.id); else if (startable) onStartConsultation?.(item.patient.id, item.id) }} style={(isPending || startable) ? { cursor: 'pointer' } : undefined} title={isPending ? 'Clic para confirmar la cita' : startable ? 'Clic para iniciar la consulta' : undefined}><div className="time"><b>{item.time || formatUTCTime(item.startAt)}</b><small>{durationLabel}</small></div><div className={'person-avatar ' + (item.color || ['coral', 'blue', 'purple', 'yellow'][index % 4])}>{item.initials || item.patient?.firstName?.[0] || 'P'}</div><div className="appointment-info"><b>{item.name || `${item.patient?.firstName || ''} ${item.patient?.lastName || ''}`}</b><span>{item.type ? (APPOINTMENT_TYPE_LABELS[item.type] || item.type) : 'Consulta'}</span></div><span className={'status ' + (isConfirmedLike || item.status === 'Confirmada' ? 'confirmed' : 'pending')}>{isConfirmedLike ? 'Confirmada' : item.status === 'PENDING_CONFIRMATION' ? 'Por confirmar' : item.status}</span></div> })}</div></section>
