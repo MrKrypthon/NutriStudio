@@ -61,6 +61,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [notesForm, setNotesForm] = useState({ hydrationNote: '', recommendations: '' })
   const [notesSaveState, setNotesSaveState] = useState('idle')
   const notesSaveTimer = useRef(null)
+  const notesPendingRef = useRef(null)
   // Distribution saves are full-snapshot PUTs; two rapid edits used to overlap and the older
   // snapshot could land last and silently drop the newest slot. Serialize: keep only the latest
   // snapshot queued, one request in flight at a time, and re-flush whatever arrived meanwhile.
@@ -130,6 +131,12 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const consumeRecipeNameRef = useRef(onConsumeRecipeName)
   useEffect(() => { consumeRecipeNameRef.current = onConsumeRecipeName })
   useEffect(() => () => consumeRecipeNameRef.current?.(), [])
+  // Flush a pending notes edit on unmount (the 800ms debounce would otherwise drop it).
+  useEffect(() => () => {
+    clearTimeout(notesSaveTimer.current)
+    const pending = notesPendingRef.current
+    if (pending) plansApi.update(pending.planId, pending.next).catch(() => {})
+  }, [])
   // After publishing in step 4 (Entrega), the local `plan` is stale (still DRAFT); re-fetch so the
   // wizard reflects that there's no draft anymore instead of failing edits with PLAN_LOCKED.
   const prevStepRef = useRef(step)
@@ -185,6 +192,9 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     setNotesForm(next)
     if (!plan) return
     setNotesSaveState('editing')
+    // Keep the latest payload for the unmount flush (a navigation within the 800ms window must
+    // not drop the edit on the floor).
+    notesPendingRef.current = { planId: plan.id, next }
     clearTimeout(notesSaveTimer.current)
     notesSaveTimer.current = setTimeout(async () => {
       setNotesSaveState('saving')
@@ -192,6 +202,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         const updated = await plansApi.update(plan.id, next)
         setPlan(updated)
         setNotesSaveState('saved')
+        notesPendingRef.current = null
       } catch {
         setNotesSaveState('error')
       }
