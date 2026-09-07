@@ -576,3 +576,8 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 - **BAJO — "Causa: null / Evidencia: null"** en los diagnósticos del PDF → se omiten los campos vacíos.
 - **BAJO — Firma del PDF hardcodeada "· Nutrióloga"** → usa el nombre + especialidad real del profesional.
 - Pendiente (decisión de producto, no bloqueante): una consulta `COMPLETED` aún se puede editar en el historial (no hay guarda de solo lectura); el cierre evita que siga creciendo, pero editar una sesión cerrada sigue permitido.
+
+### Fase 64 · 4ª tanda (Configuración + barrido de estabilidad)
+
+- **BAJO — Configuración desincronizaba el estado.** Al dejar en blanco (o con solo espacios) el nombre/email, el servidor `name: userName || user.name` guardaba el valor viejo en silencio mientras la UI mostraba el campo vacío hasta recargar. Ahora se recortan los valores y se rechaza el guardado si nombre de práctica, nombre profesional o email quedan vacíos, con mensaje claro.
+- **Barrido de estabilidad:** se recorrieron con Chromium las 12 pantallas principales + el Expediente (cajón de paciente): **0 errores de consola / 0 crashes de React** en el estado actual de la rama.
