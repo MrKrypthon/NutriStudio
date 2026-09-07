@@ -34,6 +34,21 @@ export async function apiRequest(path, options = {}) {
   return response.json()
 }
 
+// Blob downloads use raw fetch (they can't go through response.json()); route them through the
+// same session-loss handling so a 401 on a download also logs the professional out instead of
+// failing silently.
+async function downloadBlobRequest(path, fallbackMessage) {
+  const token = getToken()
+  const response = await fetch(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!response.ok) {
+    let error = null
+    try { error = await response.json() } catch { /* body may not be JSON */ }
+    if (error?.code === 'UNAUTHORIZED') notifyUnauthorized()
+    throw Object.assign(new Error(error?.message || fallbackMessage), { code: error?.code || 'DOWNLOAD_FAILED' })
+  }
+  return response.blob()
+}
+
 export const authApi = {
   login: (email, password) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   logout: () => apiRequest('/auth/logout', { method: 'POST' }),
@@ -137,23 +152,13 @@ export const documentsApi = {
   // A plain <a href> click can't carry the Authorization header the download route requires
   // (every /api/v1/* route needs a session) — fetch it as an authenticated request instead and
   // hand back a Blob the caller can wrap in an object URL to trigger the actual download.
-  downloadBlob: async (id) => {
-    const token = getToken()
-    const response = await fetch(`${API_BASE}/documents/${id}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    if (!response.ok) throw Object.assign(new Error('No se pudo descargar el documento.'), { code: 'DOWNLOAD_FAILED' })
-    return response.blob()
-  },
+  downloadBlob: (id) => downloadBlobRequest(`/documents/${id}/download`, 'No se pudo descargar el documento.'),
 }
 
 export const labAttachmentsApi = {
   upload: (consultationId, fileName, dataUrl) => apiRequest(`/consultations/${consultationId}/lab-attachments`, { method: 'POST', body: JSON.stringify({ fileName, dataUrl }) }),
   remove: (id) => apiRequest(`/lab-attachments/${id}`, { method: 'DELETE' }),
-  downloadBlob: async (id) => {
-    const token = getToken()
-    const response = await fetch(`${API_BASE}/lab-attachments/${id}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    if (!response.ok) throw Object.assign(new Error('No se pudo descargar el archivo.'), { code: 'DOWNLOAD_FAILED' })
-    return response.blob()
-  },
+  downloadBlob: (id) => downloadBlobRequest(`/lab-attachments/${id}/download`, 'No se pudo descargar el archivo.'),
 }
 
 export const tasksApi = {
@@ -181,12 +186,7 @@ export const educationApi = {
   archive: (id) => apiRequest(`/education-materials/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ARCHIVED' }) }),
   attach: (id, fileName, dataUrl) => apiRequest(`/education-materials/${id}/attachment`, { method: 'POST', body: JSON.stringify({ fileName, dataUrl }) }),
   removeAttachment: (id) => apiRequest(`/education-materials/${id}/attachment`, { method: 'DELETE' }),
-  downloadAttachmentBlob: async (id) => {
-    const token = getToken()
-    const response = await fetch(`${API_BASE}/education-materials/${id}/attachment`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    if (!response.ok) throw Object.assign(new Error('No se pudo descargar el archivo.'), { code: 'DOWNLOAD_FAILED' })
-    return response.blob()
-  },
+  downloadAttachmentBlob: (id) => downloadBlobRequest(`/education-materials/${id}/attachment`, 'No se pudo descargar el archivo.'),
 }
 
 export const ingredientsApi = {

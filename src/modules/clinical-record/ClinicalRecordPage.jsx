@@ -161,10 +161,18 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [uploadState, setUploadState] = useState('idle')
   const [uploadError, setUploadError] = useState('')
   const saveTimer = useRef(null)
-  // Holds everything needed to replay the in-flight debounced save if the component unmounts
-  // before the 800ms timer fires (see the cleanup below) — captured fresh on every call to
-  // updateFields, so it never reads stale `consultation`/`sections` from an old closure.
-  const pendingSaveRef = useRef(null)
+  // Per-section autosave state (a single pendingSaveRef + single timer LOST edits: switching
+  // sections within the 800ms window cancelled the previous section's save, and the finally in
+  // the resolved request wiped a newer pending edit). Now:
+  //  - pendingRef: sectionKey -> latest payload awaiting a flush (every edited section persists)
+  //  - lastSavedAtRef: the latest server-confirmed lastSavedAt per section, read at FLUSH time so
+  //    a save that lands while the user keeps typing never sends a stale optimistic token (self-409)
+  //  - payloadMirrorRef: synchronous mirror of each section payload so two edits in the same tick
+  //    merge instead of the second overwriting the first from a stale render closure
+  const pendingRef = useRef({})
+  const inFlightRef = useRef(new Set())
+  const lastSavedAtRef = useRef({})
+  const payloadMirrorRef = useRef({})
 
   useEffect(() => {
     let cancelled = false
@@ -179,27 +187,33 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         let full
         if (consultationId) {
           // A specific historical session requested from Consultas → load it as-is (a completed
-          // one included) instead of the current in-progress consultation. Consuming the id after
-          // the fetch means a later plain "Abrir expediente" falls back to the current session.
-          full = await clinicalApi.get(consultationId)
+          // one included) instead of the current in-progress consultation. Consume the id even if
+          // the fetch fails — otherwise it stays set and the next "Abrir expediente" reopens the
+          // wrong (stale or other-patient) session.
+          full = await clinicalApi.get(consultationId).catch((err) => { onConsumeConsultation?.(); throw err })
           onConsumeConsultation?.()
         } else {
-          let active = (list.items || []).find((item) => item.status === 'IN_PROGRESS')
-          if (!active) {
-            active = await clinicalApi.create(patientId, appointmentId ? { appointmentId } : {})
-            if (appointmentId) onConsumeAppointment?.()
-          } else if (appointmentId) {
-            // Same-day second appointment joins the open session (documented intent). But a session
-            // left open from a PREVIOUS day must be closed before starting a new one, otherwise
-            // different visits keep merging into a single ever-growing consultation.
-            const stale = new Date(active.startedAt).toISOString().slice(0, 10) !== new Date().toISOString().slice(0, 10)
-            if (stale) {
-              await clinicalApi.complete(active.id).catch(() => {})
-              active = await clinicalApi.create(patientId, { appointmentId })
-            } else {
-              await appointmentsApi.complete(appointmentId).catch(() => {})
+          let active
+          try {
+            active = (list.items || []).find((item) => item.status === 'IN_PROGRESS')
+            if (!active) {
+              active = await clinicalApi.create(patientId, appointmentId ? { appointmentId } : {})
+            } else if (appointmentId) {
+              // Same-day second appointment joins the open session (documented intent). But a session
+              // left open from a PREVIOUS day must be closed before starting a new one, otherwise
+              // different visits keep merging into a single ever-growing consultation.
+              const stale = new Date(active.startedAt).toISOString().slice(0, 10) !== new Date().toISOString().slice(0, 10)
+              if (stale) {
+                await clinicalApi.complete(active.id).catch(() => {})
+                active = await clinicalApi.create(patientId, { appointmentId })
+              } else {
+                await appointmentsApi.complete(appointmentId).catch(() => {})
+              }
             }
-            onConsumeAppointment?.()
+          } finally {
+            // Consume the appointment id whether or not the calls above succeeded — a stuck id
+            // would re-run complete/create side effects on the same appointment next open.
+            if (appointmentId) onConsumeAppointment?.()
           }
           full = await clinicalApi.get(active.id)
         }
@@ -207,7 +221,13 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         setConsultation(full)
         setAttachments(full.labAttachments || [])
         const bySectionKey = {}
-        for (const section of full.sections || []) bySectionKey[section.sectionKey] = section
+        payloadMirrorRef.current = {}
+        lastSavedAtRef.current = {}
+        for (const section of full.sections || []) {
+          bySectionKey[section.sectionKey] = section
+          payloadMirrorRef.current[section.sectionKey] = section.payload || {}
+          lastSavedAtRef.current[section.sectionKey] = section.lastSavedAt
+        }
         setSections(bySectionKey)
         setDiagnoses(full.diagnoses || [])
         setLoadState('ready')
@@ -219,13 +239,13 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     return () => {
       cancelled = true
       clearTimeout(saveTimer.current)
-      // The debounce below trades "save on every keystroke" for "save 800ms after the user
-      // stops typing" — but if they navigate away inside that window, cancelling the timer
-      // alone would drop the edit on the floor with no error. Replay it as a best-effort
-      // fire-and-forget request instead: the component is gone, so there's no state left to
-      // update and no UI left to report a failure to.
-      const pending = pendingSaveRef.current
-      if (pending) clinicalApi.saveSection(pending.consultationId, pending.key, pending.payload, pending.lastSavedAt).catch(() => {})
+      // The debounce trades "save on every keystroke" for "save 800ms after the user stops
+      // typing" — but navigating away inside that window must not drop edits. Replay every
+      // pending section as a best-effort fire-and-forget request (in-flight ones finish on
+      // their own; the component is gone so failures have nowhere to surface anyway).
+      for (const [key, payload] of Object.entries(pendingRef.current)) {
+        if (consultation?.id) clinicalApi.saveSection(consultation.id, key, payload, lastSavedAtRef.current[key]).catch(() => {})
+      }
     }
   }, [patientId])
 
@@ -245,36 +265,74 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const currentValues = sections[sectionKey]?.payload || {}
 
   const saveSection = async (key, payload) => {
-    if (!consultation) return
+    if (!consultation || inFlightRef.current.has(key)) return
+    inFlightRef.current.add(key)
     setSaveState('saving')
     try {
-      const saved = await clinicalApi.saveSection(consultation.id, key, payload, sections[key]?.lastSavedAt)
+      const saved = await clinicalApi.saveSection(consultation.id, key, payload, lastSavedAtRef.current[key])
+      lastSavedAtRef.current[key] = saved.lastSavedAt
+      payloadMirrorRef.current[key] = saved.payload || {}
       setSections((prev) => ({ ...prev, [key]: saved }))
       setSaveState('saved')
     } catch (error) {
-      setSaveState(error.code === 'CONCURRENT_EDIT' ? 'conflict' : 'error')
+      if (error.code === 'CONCURRENT_EDIT') {
+        setSaveState('conflict')
+        // The optimistic token was stale (e.g. a prior save for this section resolved mid-typing).
+        // Resync lastSavedAt from the server and re-queue the local version so it actually lands
+        // instead of 409-ing forever.
+        try {
+          const fresh = await clinicalApi.get(consultation.id)
+          for (const s of fresh.sections || []) {
+            lastSavedAtRef.current[s.sectionKey] = s.lastSavedAt
+            payloadMirrorRef.current[s.sectionKey] = s.payload || {}
+          }
+          pendingRef.current[key] = payload
+          scheduleFlush()
+        } catch { /* leave the conflict banner visible */ }
+      } else {
+        setSaveState('error')
+      }
     } finally {
-      pendingSaveRef.current = null
+      inFlightRef.current.delete(key)
+      if (pendingRef.current[key]) scheduleFlush()
     }
   }
 
-  // Two sequential updateField calls in the same tick would each read the same stale
-  // currentValues closure and the second would silently overwrite the first's change —
-  // updateFields lets a caller that needs to set more than one key do it atomically.
+  const scheduleFlush = () => {
+    clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(flushPending, 800)
+  }
+
+  // Every section with pending edits gets saved — switching tabs mid-debounce must not discard
+  // the previous section's work. Sections with an in-flight request are re-queued and flushed
+  // once their save resolves (serialized per section, so no overlapping writes).
+  const flushPending = () => {
+    const batch = pendingRef.current
+    pendingRef.current = {}
+    for (const [key, pending] of Object.entries(batch)) {
+      if (inFlightRef.current.has(key)) { pendingRef.current[key] = pending; continue }
+      saveSection(key, pending.payload)
+    }
+  }
+
+  // updateFields merges against the synchronous payloadMirrorRef instead of the render-time
+  // currentValues closure, so two edits landing in the same tick (e.g. two transcription chunks)
+  // accumulate instead of the second silently overwriting the first.
   const updateFields = (updates) => {
-    const nextValues = { ...currentValues, ...updates }
+    const base = payloadMirrorRef.current[sectionKey] || {}
+    const nextValues = { ...base, ...updates }
+    payloadMirrorRef.current[sectionKey] = nextValues
     setSections((prev) => ({ ...prev, [sectionKey]: { ...prev[sectionKey], payload: nextValues } }))
     setSaveState('editing')
-    pendingSaveRef.current = { consultationId: consultation.id, key: sectionKey, payload: nextValues, lastSavedAt: sections[sectionKey]?.lastSavedAt }
-    clearTimeout(saveTimer.current)
-    saveTimer.current = setTimeout(() => saveSection(sectionKey, nextValues), 800)
+    pendingRef.current[sectionKey] = { payload: nextValues }
+    scheduleFlush()
   }
   const updateField = (label, value) => updateFields({ [label]: value })
 
   // For Antropométrico: as soon as weight and height are both present, derive the IMC instead of
   // making the nutritionist type it by hand.
   const updateAnthropometric = (label, value) => {
-    const next = { ...currentValues, [label]: value }
+    const next = { ...(payloadMirrorRef.current[sectionKey] || {}), [label]: value }
     const weight = Number(next['Peso (kg)'])
     const height = Number(next['Talla (cm)'])
     if (weight > 0 && height > 0) next['IMC calculado'] = (weight / ((height / 100) ** 2)).toFixed(1)
@@ -407,24 +465,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     } catch { /* leave it in the list; the professional can retry */ }
   }
 
+  // Generate always re-renders the PDF from CURRENT data (bumping the version) instead of turning
+  // into a permanent download of stale content once a storageKey exists — that left edited
+  // sections/measurements out of the report forever.
   const generateReport = async () => {
     if (!consultation) return
-    if (report?.storageKey) {
-      setReportState('working')
-      try {
-        const blob = await documentsApi.downloadBlob(report.id)
-        const url = URL.createObjectURL(blob)
-        const link = window.document.createElement('a')
-        link.href = url
-        link.download = report.storageKey
-        link.click()
-        URL.revokeObjectURL(url)
-        setReportState('idle')
-      } catch {
-        setReportState('error')
-      }
-      return
-    }
     setReportState('working')
     try {
       const doc = report || await documentsApi.createForReport(consultation.id)
@@ -436,31 +481,49 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     }
   }
 
+  const downloadReport = async () => {
+    if (!report?.storageKey) return
+    setReportState('working')
+    try {
+      const blob = await documentsApi.downloadBlob(report.id)
+      const url = URL.createObjectURL(blob)
+      const link = window.document.createElement('a')
+      link.href = url
+      link.download = report.storageKey
+      link.click()
+      URL.revokeObjectURL(url)
+      setReportState('idle')
+    } catch {
+      setReportState('error')
+    }
+  }
+
   // RF-05: full expediente export — all sections in a single PDF, separate from the condensed
   // patient-facing report above.
   const generateExport = async () => {
     if (!consultation) return
-    if (exportDoc?.storageKey) {
-      setExportState('working')
-      try {
-        const blob = await documentsApi.downloadBlob(exportDoc.id)
-        const url = URL.createObjectURL(blob)
-        const link = window.document.createElement('a')
-        link.href = url
-        link.download = exportDoc.storageKey
-        link.click()
-        URL.revokeObjectURL(url)
-        setExportState('idle')
-      } catch {
-        setExportState('error')
-      }
-      return
-    }
     setExportState('working')
     try {
       const doc = exportDoc || await documentsApi.createForExport(consultation.id)
       const generated = await documentsApi.generate(doc.id)
       setExportDoc(generated)
+      setExportState('idle')
+    } catch {
+      setExportState('error')
+    }
+  }
+
+  const downloadExport = async () => {
+    if (!exportDoc?.storageKey) return
+    setExportState('working')
+    try {
+      const blob = await documentsApi.downloadBlob(exportDoc.id)
+      const url = URL.createObjectURL(blob)
+      const link = window.document.createElement('a')
+      link.href = url
+      link.download = exportDoc.storageKey
+      link.click()
+      URL.revokeObjectURL(url)
       setExportState('idle')
     } catch {
       setExportState('error')
@@ -493,7 +556,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
       <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Consulta nutricional · {CONSULTATION_STATUS_LABELS[consultation?.status] || 'en curso'}</span></div></div>
-      <div className="clinical-actions"><button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button><button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : 'Expediente completo'}</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Descargar informe' : 'Generar informe'}</button></div>
+      <div className="clinical-actions"><button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}<button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
     </div>
     {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
     {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
