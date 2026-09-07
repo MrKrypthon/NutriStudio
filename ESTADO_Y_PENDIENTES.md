@@ -630,3 +630,8 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 ### Fase 64 · 12ª tanda (transcripción de voz)
 
 - **BAJO — Dos chunks finales de voz en el mismo tick se pisaban**: `appendFinalChunk` leía `values` del closure de render y pasaba el string completo, así que el segundo chunk partía del valor viejo y perdía el primero. Ahora `appendField` acumula contra el mirror síncrono.
+
+### Fase 64 · 13ª tanda (menú PDF, notas del plan)
+
+- **BAJO — El PDF del menú firmaba "Nutrióloga" hardcodeada en el early-return de menú vacío** → firma real (especialidad).
+- **BAJO — Las indicaciones del plan (consumo de agua/recomendaciones) se perdían si navegabas dentro de la ventana de 800ms** → flush al desmontar.
