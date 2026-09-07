@@ -89,13 +89,11 @@ function useSpeechRecognition(onFinalChunk) {
   return { supported, isRecording, interimText, error, start, stop }
 }
 
-function TranscriptionTab({ values, updateField, updateFields, patientName }) {
+function TranscriptionTab({ values, updateField, updateFields, appendField, patientName }) {
   const consentGiven = !!values['Consentimiento confirmado']
 
   const appendFinalChunk = (chunk) => {
-    const existing = values[TRANSCRIPT_FIELD] || ''
-    const separator = existing && !existing.endsWith('\n') && !existing.endsWith(' ') ? ' ' : ''
-    updateField(TRANSCRIPT_FIELD, `${existing}${separator}${chunk}`)
+    appendField(TRANSCRIPT_FIELD, chunk)
   }
 
   const { supported, isRecording, interimText, error, start, stop } = useSpeechRecognition(appendFinalChunk)
@@ -328,6 +326,15 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     scheduleFlush()
   }
   const updateField = (label, value) => updateFields({ [label]: value })
+
+  // Appends against the synchronous payloadMirrorRef, so consecutive speech chunks landing in the
+  // same tick accumulate instead of the second overwriting the first from a stale render closure.
+  const appendField = (label, text) => {
+    const base = payloadMirrorRef.current[sectionKey] || {}
+    const existing = base[label] || ''
+    const separator = existing && !existing.endsWith('\n') && !existing.endsWith(' ') ? ' ' : ''
+    updateFields({ [label]: `${existing}${separator}${text}` })
+  }
 
   // For Antropométrico: as soon as weight and height are both present, derive the IMC instead of
   // making the nutritionist type it by hand.
@@ -672,7 +679,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <FormCard title="Evaluación de la consulta" fields={['Calidad de preparación de comidas|', 'Modificaciones al plan|', 'Tema para la próxima consulta|', 'Observaciones|']} values={currentValues} onFieldChange={updateField} />
       </div>
 
-      : tab === 'Transcripción' ? <TranscriptionTab values={currentValues} updateField={updateField} updateFields={updateFields} patientName={patientName} />
+      : tab === 'Transcripción' ? <TranscriptionTab values={currentValues} updateField={updateField} updateFields={updateFields} appendField={appendField} patientName={patientName} />
 
       : tab === 'Dietético' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Dietético</h1><p className="subtitle">Hábitos alimentarios de {patientName}.</p>
