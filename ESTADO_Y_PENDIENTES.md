@@ -607,3 +607,13 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 - **MEDIO — Cunningham/Katch-McArdle calculaban con masa total en silencio** (sin % grasa capturado). El wizard ahora pide `% Grasa corporal` cuando se seleccionan esas fórmulas y lo persiste en la evaluación.
 - **MEDIO — Recetas archivadas quedaban como slots fantasma** invisibles e irremovibles en la distribución → al cargar se filtran los slots con recetas archivadas/desconocidas y el guardado ya no los reenvía.
 - **BAJO — Medidas absurdas producían BMR negativos** (p. ej. 1 kg / 30 cm) → límites mínimos de peso (5 kg) y talla (40 cm) en calculate y evaluation.
+
+### Fase 64 · 9ª tanda (timeline, medición, datos de paciente, adjuntos, educación)
+
+- **MEDIO — Corregir la medición del día duplicaba el punto en el gráfico**: el servidor hace upsert (mismo id) pero la UI hacía `append` → dos filas con el mismo id. Ahora reemplaza la fila existente con ese id.
+- **MEDIO — El timeline del cajón marcaba citas futuras CONFIRMED como "hechas"** (dot lleno): la query traía citas sin filtrar por fecha y `DONE_STATUSES` incluía CONFIRMED. Ahora el timeline es solo historial (excluye citas no iniciadas) y CONFIRMED ya no cuenta como done.
+- **BAJO — Email/teléfono/ocupación vacíos se guardaban como `''`** en vez de NULL (columnas nullable) → `emptyToNull` en crear/editar paciente.
+- **BAJO — PDF de laboratorio rechazado cuando el navegador reporta `file.type` vacío** → se acepta si la extensión es `.pdf` (el servidor sigue siendo la validación de verdad).
+- **BAJO — `IMC calculado` quedaba obsoleto al limpiar peso/talla** → se elimina del payload.
+- **BAJO — Fallo al archivar material educativo sin feedback** → error visible en el modal.
+- **BAJO — El timeline no se actualizaba tras editar el paciente abierto** → se recarga tras guardar.
