@@ -545,3 +545,16 @@ Dos lotes de trabajo en una sola rama (la visual + la de Agenda), listos para re
 - Nombres de cita más grandes/legibles.
 
 Verificado: build OK, 47/47 tests, barrido de los 12 módulos sin errores de consola. La línea de hora y el CSS de Agenda se re-verificaron tras resolver un conflicto de merge en `globals.css`.
+
+## Fase 64 — Quinta auditoría (flujos): plan correcto en Entrega, estado fresco tras publicar, y 4 correcciones menores
+
+Auditoría dirigida a los flujos aún no verificados a fondo: Constructor de plan paso a paso (0→4), DocumentPage (publicar→generar→descargar→entregar), cajón del paciente (timeline/edición/archivar), y el expediente (medición/gráfico/informes). Flujos mayormente limpios; corregidos:
+
+- **MEDIO — La pestaña Entrega del Constructor mostraba el plan equivocado.** `DocumentPage` embebido cargaba `find(PUBLISHED) || [0]`, así que si existía un plan publicado previo, ignoraba el borrador actual — el borrador nuevo no se podía publicar/entregar desde el wizard. Ahora en modo embebido selecciona el **mismo plan activo que el Constructor** (el borrador no publicado, fallback al publicado); la ruta standalone `/Documento` sigue mostrando el publicado para descargar/entregar.
+- **MEDIO — El estado del plan quedaba obsoleto tras publicar.** Al publicar en el paso 4 y volver a pasos de edición, `plan` seguía siendo el DRAFT viejo y las ediciones fallaban con `PLAN_LOCKED` (409) sin explicación. `DocumentPage` ahora llama `onPublished` al publicar y `PlanStudio` re-fetchea el plan (quedando "No hay un plan en borrador"), y también refresca al volver desde el paso 4.
+- **BAJO — `nutritionApi.calculate` calculaba las macros del resultado con 50/25/25 fijos** (ignoraba la distribución editable), y el demo igual. Ahora usa `carbsPercent/proteinPercent/fatPercent` del payload.
+- **BAJO — Edad `'28'` hardcodeada** en el formulario del Constructor que se persistía como real si el paciente no tenía fecha de nacimiento. Ahora queda vacía (se captura).
+- **BAJO — Fallback `'Gabriela Alonso'` en el PDF** del plan (si el API de práctica fallaba). Ahora genérico "Nutrióloga".
+- **BAJO — "Registrar medición de hoy" permitía duplicados** tras un guardado exitoso (POSTeaba otra fila idéntica). Ahora el botón se deshabilita tras "✓ Medición registrada hoy".
+
+Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en borrador · Publicar plan" para un paciente con un plan publicado previo (antes mostraba el publicado).
