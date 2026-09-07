@@ -593,3 +593,8 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 
 - **BAJO — `pendingRecipeName` ("Asignar al plan") se quedaba clavado** si salías del Constructor sin abrir el picker, y prellenaba un picker posterior ajeno. Ahora se consume también al desmontar.
 - **BAJO — El recálculo de nutrientes al crear una receta fallaba en silencio** (quedaba con 0 kcal y el panel decía "guardada"). Ahora se muestra un aviso visible.
+
+### Fase 64 · 7ª tanda (Hoy)
+
+- **BAJO — "Hoy" se quedaba con el día del import del módulo**: si la app quedaba abierta al pasar la medianoche, seguía mostrando ayer y re-cargando los datos de ayer. Ahora `now` vive en estado con un tick por minuto (fecha, saludo y re-fetch del día).
+- **BAJO — El contador "Seguimientos" de Hoy subcontaba** (solo contaba tareas `nutrition_plan` + `consultation_report`) frente a la página de Seguimientos que muestra todas → ahora cuenta todas las pendientes.
