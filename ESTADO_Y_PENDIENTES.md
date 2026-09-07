@@ -588,3 +588,8 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 - **MEDIO — `selectedConsultationId` se quedaba clavado si el GET fallaba**, y la próxima "Abrir expediente" (incluso de otro paciente) reabría esa sesión ajena. Ahora el id se consume también en el fallo. Lo mismo para el `appointmentId` de inicio (evita re-ejecutar complete/create sobre la misma cita).
 - **MEDIO — Informe/expediente sin regenerar:** con `storageKey` el botón era un "Descargar" permanente de datos viejos. Ahora "Generar informe"→"Actualizar informe" siempre regenera el PDF (versión nueva) y hay "Descargar" aparte.
 - **BAJO — Las descargas autenticadas (documentos/adjuntos/materiales) no disparaban el logout en 401** (fetch crudo sin `notifyUnauthorized`). Centralizado en `downloadBlobRequest`.
+
+### Fase 64 · 6ª tanda (detalles BAJO)
+
+- **BAJO — `pendingRecipeName` ("Asignar al plan") se quedaba clavado** si salías del Constructor sin abrir el picker, y prellenaba un picker posterior ajeno. Ahora se consume también al desmontar.
+- **BAJO — El recálculo de nutrientes al crear una receta fallaba en silencio** (quedaba con 0 kcal y el panel decía "guardada"). Ahora se muestra un aviso visible.
