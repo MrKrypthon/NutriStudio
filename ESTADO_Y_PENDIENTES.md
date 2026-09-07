@@ -598,3 +598,12 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 
 - **BAJO — "Hoy" se quedaba con el día del import del módulo**: si la app quedaba abierta al pasar la medianoche, seguía mostrando ayer y re-cargando los datos de ayer. Ahora `now` vive en estado con un tick por minuto (fecha, saludo y re-fetch del día).
 - **BAJO — El contador "Seguimientos" de Hoy subcontaba** (solo contaba tareas `nutrition_plan` + `consultation_report`) frente a la página de Seguimientos que muestra todas → ahora cuenta todas las pendientes.
+
+### Fase 64 · 8ª tanda (Constructor de plan — internos)
+
+- **MEDIO — Publicar un plan a medio hacer**: si asignabas recetas sin haber guardado el cálculo, el plan se publicaba sin kcal/macros (la vista previa y el PDF omitían la caja de requerimiento). Ahora el servidor exige `targetKcal` (`PLAN_WITHOUT_CALCULATION`) y el botón "Publicar plan" se deshabilita con un aviso que apunta al paso Plan alimentario.
+- **MEDIO — Los PUT de distribución se pisaban**: dos ediciones rápidas lanzaban `deleteMany+createMany` superpuestos y el snapshot viejo podía llegar al final, borrando el cambio más nuevo. Ahora la persistencia se **serializa** (una petición en vuelo + cola del último snapshot).
+- **MEDIO — La receta base de la semana sobrescribía personalizaciones** día por día sin aviso → ahora confirma antes si hay recetas distintas ya asignadas.
+- **MEDIO — Cunningham/Katch-McArdle calculaban con masa total en silencio** (sin % grasa capturado). El wizard ahora pide `% Grasa corporal` cuando se seleccionan esas fórmulas y lo persiste en la evaluación.
+- **MEDIO — Recetas archivadas quedaban como slots fantasma** invisibles e irremovibles en la distribución → al cargar se filtran los slots con recetas archivadas/desconocidas y el guardado ya no los reenvía.
+- **BAJO — Medidas absurdas producían BMR negativos** (p. ej. 1 kg / 30 cm) → límites mínimos de peso (5 kg) y talla (40 cm) en calculate y evaluation.
