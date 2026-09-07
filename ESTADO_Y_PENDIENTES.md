@@ -617,3 +617,8 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 - **BAJO — `IMC calculado` quedaba obsoleto al limpiar peso/talla** → se elimina del payload.
 - **BAJO — Fallo al archivar material educativo sin feedback** → error visible en el modal.
 - **BAJO — El timeline no se actualizaba tras editar el paciente abierto** → se recarga tras guardar.
+
+### Fase 64 · 10ª tanda (wizard — preload y verificaciones)
+
+- **BAJO — El wizard solo pre-cargaba peso/talla** al reabrir un plan guardado; sexo, edad, % grasa y fórmula quedaban en el default y la vista no coincidía con lo persistido. Ahora pre-carga todos los inputs del cálculo guardado.
+- Verificados con Chromium/API en esta tanda: los 3 PDFs (informe, expediente, menú semanal) generan OK tras los cambios en los draw; el timeline excluye citas futuras; el wizard recorre pasos 0-4 sin errores y el campo `% Grasa corporal` aparece/solo con Cunningham/Katch-McArdle; la distribución no se puede modificar en un plan publicado (PLAN_LOCKED).
