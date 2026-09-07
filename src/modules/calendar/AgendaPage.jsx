@@ -58,6 +58,14 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   const [submitState, setSubmitState] = useState('idle')
   const [submitError, setSubmitError] = useState('')
   const [statusFilter, setStatusFilter] = useState(() => (autoFilter && ['pending', 'confirmed', 'blocks'].includes(autoFilter) ? autoFilter : 'all'))
+  // Drag & drop: which appointment is being dragged, its duration (to keep it on the move), and
+  // the slot currently under the pointer (for the drop highlight).
+  const [dragId, setDragId] = useState(null)
+  const [dragDuration, setDragDuration] = useState(null)
+  const [dropKey, setDropKey] = useState(null)
+  // Ticks every minute so the "now" line moves and past appointments fade out as time passes.
+  const [nowTick, setNowTick] = useState(0)
+  useEffect(() => { const t = setInterval(() => setNowTick((n) => n + 1), 60000); return () => clearInterval(t) }, [])
 
   const days = useMemo(() => { const start = startOfWeek(anchor); return view === 'Día' ? [anchor] : Array.from({ length: 7 }, (_, i) => addDays(start, i)) }, [anchor, view])
 
@@ -87,10 +95,12 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   // The grid header used to say a hardcoded "GMT-6" — the practice's real time zone is what the
   // appointments are stored against, so show its actual UTC offset instead.
   const [tzLabel, setTzLabel] = useState('GMT-6')
+  const [practiceTz, setPracticeTz] = useState(null)
   useEffect(() => {
     practiceApi.get().then((practice) => {
       const tz = practice?.timeZone
       if (!tz) return
+      setPracticeTz(tz)
       try {
         const part = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')
         setTzLabel(part?.value || tz)
@@ -98,11 +108,42 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     }).catch(() => {})
   }, [])
 
+  // "Now" in the practice's own timezone, expressed in the same UTC-wall-clock convention the
+  // grid uses (09:00 means 09:00 regardless of the viewer's system time). Drives the current-time
+  // line and the "fade past appointments" state; refreshed every minute via nowTick.
   const hours = useMemo(() => {
     const set = new Set(DEFAULT_HOURS)
     for (const appointment of appointments) set.add(`${String(new Date(appointment.startAt).getUTCHours()).padStart(2, '0')}:00`)
     return Array.from(set).sort()
   }, [appointments])
+  const practiceNow = useMemo(() => {
+    if (!practiceTz) {
+      // Fallback if the practice timezone hasn't loaded: use the viewer's local wall-clock time,
+      // still expressed in the same YYYY-MM-DD + HH:MM convention.
+      const now = new Date()
+      return { date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`, hour: now.getHours(), minute: now.getMinutes() }
+    }
+    try {
+      const date = new Date().toLocaleDateString('en-CA', { timeZone: practiceTz })
+      const time = new Date().toLocaleTimeString('en-US', { timeZone: practiceTz, hour: '2-digit', minute: '2-digit', hour12: false })
+      const [hour, minute] = time.split(':').map(Number)
+      return { date, hour, minute }
+    } catch { return null }
+  }, [practiceTz, nowTick])
+  const nowMs = practiceNow ? new Date(`${practiceNow.date}T${String(practiceNow.hour).padStart(2, '0')}:${String(practiceNow.minute).padStart(2, '0')}:00.000Z`).getTime() : Date.now()
+  const nowLine = useMemo(() => {
+    if (!practiceNow) return null
+    const todayVisible = days.some((d) => toISODate(d) === practiceNow.date)
+    if (!todayVisible) return null
+    // Clamp "now" to the visible hours range so the line always renders when today is on screen,
+    // even if the current time falls before the first or after the last grid hour.
+    const firstMinutes = hours.length ? Number(hours[0].slice(0, 2)) * 60 : 0
+    const lastMinutes = hours.length ? Number(hours[hours.length - 1].slice(0, 2)) * 60 + 59 : 23 * 60 + 59
+    const minutes = Math.max(firstMinutes, Math.min(practiceNow.hour * 60 + practiceNow.minute, lastMinutes))
+    const hourIndex = hours.indexOf(`${String(Math.floor(minutes / 60)).padStart(2, '0')}:00`)
+    if (hourIndex < 0) return null
+    return { top: hourIndex * 63 + ((minutes % 60) / 60) * 63 }
+  }, [practiceNow, hours, days])
 
   const step = view === 'Semana' ? 7 : 1
   const goToday = () => setAnchor(TODAY)
@@ -155,6 +196,24 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
 
   const visibleAppointments = appointments.filter((a) => matchesStatusFilter(a, statusFilter))
 
+  // Drag & drop: drop on a day+hour slot moves the appointment to that date/time, keeping its
+  // duration. The source "vibrates" while dragged (see .event.dragging CSS).
+  const startDrag = (appointment) => {
+    setDragId(appointment.id)
+    setDragDuration(appointment.endAt ? Math.round((new Date(appointment.endAt) - new Date(appointment.startAt)) / 60000) : 60)
+  }
+  const handleMove = async (day, time) => {
+    if (!dragId) return
+    const startAt = `${toISODate(day)}T${time}:00.000Z`
+    try {
+      const updated = await appointmentsApi.move(dragId, startAt, dragDuration)
+      setAppointments((prev) => prev.map((a) => (a.id === dragId ? updated : a)))
+    } catch { /* keep the original slot; a reload shows the truth */ }
+    setDragId(null)
+    setDragDuration(null)
+    setDropKey(null)
+  }
+
   return <AppChrome active="Agenda" setActive={setActive}><div className="content">
     <ModuleHeader eyebrow={`AGENDA · ${MONTHS[anchor.getUTCMonth()].toUpperCase()} ${anchor.getUTCFullYear()}`} title="Tu agenda" subtitle="Organiza tu tiempo y llega preparado a cada consulta." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizada' : status === 'loading' ? 'Cargando…' : status === 'error' ? 'Sin conexión' : 'Datos de demostración'}</span><button className="primary" onClick={() => openModal()}><span>+</span> Nueva cita</button><button className="secondary" onClick={openBlockModal}><span>+</span> Bloqueo</button></div>} />
 
@@ -171,23 +230,41 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
         {days.map((day) => <div className={toISODate(day) === toISODate(TODAY) ? 'calendar-day current' : 'calendar-day'} key={day.toISOString()}><small>{DAY_SHORT[(day.getUTCDay() + 6) % 7]}</small><b>{day.getUTCDate()}</b></div>)}
       </div>
       <div className="calendar-body">
+        {nowLine && <div className="now-line" style={{ top: nowLine.top }}><span /></div>}
         {hours.map((time) => <div className="calendar-row" style={{ gridTemplateColumns: `68px repeat(${days.length},1fr)` }} key={time}>
           <span className="hour">{time}</span>
           {days.map((day) => {
             const dayEvents = visibleAppointments.filter((a) => { const start = new Date(a.startAt); return toISODate(start) === toISODate(day) && `${String(start.getUTCHours()).padStart(2, '0')}:00` === time })
-            return <div className="slot" key={day.toISOString()}>
+            const slotKey = `${toISODate(day)}|${time}`
+            return <div
+              className={'slot' + (dragId && dropKey === slotKey ? ' drop-target' : '')}
+              key={day.toISOString()}
+              onDragOver={(e) => { e.preventDefault(); if (dragId) setDropKey(slotKey) }}
+              onDragLeave={() => setDropKey((prev) => (prev === slotKey ? null : prev))}
+              onDrop={(e) => { e.preventDefault(); handleMove(day, time) }}
+            >
               {dayEvents.map((appointment) => {
                 const start = new Date(appointment.startAt)
                 const durationMinutes = appointment.endAt ? Math.round((new Date(appointment.endAt) - start) / 60000) : 60
                 const top = 4 + (start.getUTCMinutes() / 60) * 63
-                const height = Math.max(30, (durationMinutes / 60) * 63 - 8)
+                const height = Math.max(34, (durationMinutes / 60) * 63 - 8)
                 const color = TYPE_COLORS[appointment.type] || 'coral'
                 const pending = appointment.status === 'PENDING_CONFIRMATION'
                 const confirmed = appointment.status === 'CONFIRMED'
                 const isBlockEvent = appointment.type === 'BLOCK'
+                const isPast = appointment.endAt ? new Date(appointment.endAt).getTime() < nowMs : false
                 const name = isBlockEvent ? 'Bloqueo' : appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Paciente'
                 const onClick = () => { if (pending) confirmAppointment(appointment.id); else if (confirmed) onStartConsultation?.(appointment.patientId, appointment.id) }
-                return <div className={`event ${color}-event`} style={{ top, height, cursor: pending || confirmed ? 'pointer' : 'default' }} onClick={onClick} key={appointment.id} title={pending ? 'Clic para confirmar la cita' : confirmed ? 'Clic para iniciar la consulta' : undefined}>
+                return <div
+                  className={`event ${color}-event${isPast ? ' past' : ''}${dragId === appointment.id ? ' dragging' : ''}`}
+                  style={{ top, height, cursor: pending || confirmed ? 'pointer' : 'default' }}
+                  onClick={onClick}
+                  key={appointment.id}
+                  title={pending ? 'Clic para confirmar la cita' : confirmed ? 'Clic para iniciar la consulta' : 'Arrastra para mover de fecha u hora'}
+                  draggable
+                  onDragStart={() => startDrag(appointment)}
+                  onDragEnd={() => { setDragId(null); setDragDuration(null); setDropKey(null) }}
+                >
                   <b>{name}</b>
                   <small>{TYPE_LABELS[appointment.type] || appointment.type}{isBlockEvent ? '' : pending ? ' · Por confirmar' : ` · ${durationMinutes} min`}</small>
                 </div>
