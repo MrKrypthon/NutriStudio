@@ -558,3 +558,11 @@ Auditoría dirigida a los flujos aún no verificados a fondo: Constructor de pla
 - **BAJO — "Registrar medición de hoy" permitía duplicados** tras un guardado exitoso (POSTeaba otra fila idéntica). Ahora el botón se deshabilita tras "✓ Medición registrada hoy".
 
 Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en borrador · Publicar plan" para un paciente con un plan publicado previo (antes mostraba el publicado).
+
+### Fase 64 · 2ª tanda (módulos: Documentos, Hoy, Agenda, Recetas, Ingredientes)
+
+- **ALTO — Documentos abría el documento equivocado tras buscar.** La tabla renderizaba filas filtradas por búsqueda (`visibleRows`) pero el clic mapeaba con el *índice visible* hacia `filteredItems[i]` (sin filtrar): cualquier fila descartada corría los índices y se abría otro documento (que además podía descargarse/marcarse como entregado). Ahora la búsqueda filtra los **ítems reales** (`visibleItems`) y cada fila lleva su propio documento.
+- **MEDIO — Hoy mostraba "60 min" en todas las citas.** El objeto de cita real no trae `durationMinutes`, así que `durationLabel` caía en el hardcode. Ahora deriva `endAt - startAt` como la Agenda.
+- **MEDIO — Citas creadas con "No notificar" quedaban en SCHEDULED sin ningún affordance** (ni confirmables ni arrancables; etiqueta cruda en Hoy y fuera del filtro "Confirmadas"). Al no haber notificación no hay nada que confirmar, así que ahora `SCHEDULED` se trata como confirmada: arrancable desde Hoy ("Confirmada" · "Clic para iniciar la consulta") y listada en "Confirmadas" de la Agenda.
+- **MEDIO — Unidades de receta incoherentes.** El editor de cantidades está etiquetado y calculado en gramos, pero se persistía la unidad nativa del ingrediente (p. ej. "100 taza" mientras la nutrición se calcula como si fueran gramos). Ahora siempre se guarda `unit: 'g'`. Además se impide guardar con cantidades ≤ 0 (antes `Number('') = 0` pasaba y sumaba 0 a la nutrición).
+- **BAJO — Equivalencia importada fabricaba "100 gramos".** Al importar un alimento se guardaba `equivalence` sin gramos y el catálogo mostraba "100 gramos · 1 equivalente" inventado. Ahora el formulario pide los gramos reales por equivalente y, si no se capturan, la UI muestra "por definir" en vez de inventar.
