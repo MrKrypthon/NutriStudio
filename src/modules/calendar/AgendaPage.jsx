@@ -39,7 +39,7 @@ const matchesStatusFilter = (appointment, filter) => {
   if (filter === 'all') return true
   if (filter === 'blocks') return appointment.type === 'BLOCK'
   if (filter === 'pending') return appointment.status === 'PENDING_CONFIRMATION'
-  return isConfirmedLike(appointment.status)
+  return isConfirmedLike(appointment.status) && appointment.type !== 'BLOCK'
 }
 
 function formatRangeLabel(days) {
@@ -66,6 +66,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   const [dragId, setDragId] = useState(null)
   const [dragDuration, setDragDuration] = useState(null)
   const [dropKey, setDropKey] = useState(null)
+  const [moveError, setMoveError] = useState('')
   // Ticks every minute so the "now" line moves and past appointments fade out as time passes.
   const [nowTick, setNowTick] = useState(0)
   useEffect(() => { const t = setInterval(() => setNowTick((n) => n + 1), 60000); return () => clearInterval(t) }, [])
@@ -208,10 +209,14 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   const handleMove = async (day, time) => {
     if (!dragId) return
     const startAt = `${toISODate(day)}T${time}:00.000Z`
+    setMoveError('')
     try {
       const updated = await appointmentsApi.move(dragId, startAt, dragDuration)
       setAppointments((prev) => prev.map((a) => (a.id === dragId ? updated : a)))
-    } catch { /* keep the original slot; a reload shows the truth */ }
+    } catch (error) {
+      // The server rejects overlapping moves; snap back and tell the professional why.
+      setMoveError(error.code === 'APPOINTMENT_OVERLAP' ? 'Ese horario ya está ocupado.' : (error.message || 'No se pudo mover la cita.'))
+    }
     setDragId(null)
     setDragDuration(null)
     setDropKey(null)
@@ -226,6 +231,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       <div className="view-switch agenda-status-filter">{STATUS_FILTERS.map(([key, label]) => <button className={statusFilter === key ? 'selected' : ''} onClick={() => setStatusFilter(key)} key={key}>{label}</button>)}</div>
       <button className="secondary" onClick={goToday}>Hoy</button>
     </div>
+    {moveError && <div className="form-error">⚠ {moveError}</div>}
 
     <div className="calendar panel">
       <div className="calendar-head" style={{ gridTemplateColumns: `68px repeat(${days.length},1fr)` }}>
@@ -253,8 +259,9 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
                 const height = Math.max(34, (durationMinutes / 60) * 63 - 8)
                 const color = TYPE_COLORS[appointment.type] || 'coral'
                 const pending = appointment.status === 'PENDING_CONFIRMATION'
-                const confirmed = isConfirmedLike(appointment.status)
                 const isBlockEvent = appointment.type === 'BLOCK'
+                // Blocks are SCHEDULED but must never be startable (they carry no patient).
+                const confirmed = isConfirmedLike(appointment.status) && !isBlockEvent
                 const isPast = appointment.endAt ? new Date(appointment.endAt).getTime() < nowMs : false
                 const name = isBlockEvent ? 'Bloqueo' : appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Paciente'
                 const onClick = () => { if (pending) confirmAppointment(appointment.id); else if (confirmed) onStartConsultation?.(appointment.patientId, appointment.id) }
