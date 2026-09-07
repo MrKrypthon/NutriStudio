@@ -640,3 +640,8 @@ Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en b
 
 - **MEDIO — La adecuación de vitamina D quedaba ~40× baja**: la tabla IDR transcribió 400/800 (UI) pero el catálogo de ingredientes y el label están en µg; un filete de salmón (11 µg) mostraba ~3% en vez de ~110%. Se normaliza a µg (10 µg adultos/niños, 20 µg adultos mayores) igual que se hizo con el calcio, se corrige el label de vitamina A a 'µg RE' y se agrega test de regresión.
 - Verificado además: el walkthrough completo del wizard (crear paciente → calcular → guardar → asignar receta base → publicar) con 0 errores y limpieza total; y que todas las rutas /api/v1 requieren JWT y filtran por practiceId.
+
+### Fase 64 · 15ª tanda (agenda — bloques y drag)
+
+- **Regresión corregida — Los bloques (status SCHEDULED) se volvieron 'confirmados'** con el fix de SCHEDULED: al hacer clic llamaban a iniciar consulta sin paciente y aparecían bajo el filtro "Confirmadas". Ahora los bloques se excluyen de arrancar y del filtro 'confirmed'.
+- **BAJO — Arrastrar una cita a un horario ocupado fallaba en silencio** (el servidor responde APPOINTMENT_OVERLAP pero la UI lo tragaba): ahora se muestra "Ese horario ya está ocupado".
