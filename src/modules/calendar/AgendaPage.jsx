@@ -32,11 +32,14 @@ const toISODate = (date) => date.toISOString().slice(0, 10)
 const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'FOLLOW_UP', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '', recurrence: 'none', recurCount: 10 })
 
 const STATUS_FILTERS = [['all', 'Todas'], ['pending', 'Por confirmar'], ['confirmed', 'Confirmadas'], ['blocks', 'Bloques']]
+// An appointment created with "No notificar" arrives with status SCHEDULED: nothing to confirm, so
+// it is already a firm booking and must behave like CONFIRMED (startable, counted as confirmed).
+const isConfirmedLike = (status) => status === 'CONFIRMED' || status === 'SCHEDULED'
 const matchesStatusFilter = (appointment, filter) => {
   if (filter === 'all') return true
   if (filter === 'blocks') return appointment.type === 'BLOCK'
   if (filter === 'pending') return appointment.status === 'PENDING_CONFIRMATION'
-  return appointment.status === 'CONFIRMED'
+  return isConfirmedLike(appointment.status)
 }
 
 function formatRangeLabel(days) {
@@ -250,7 +253,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
                 const height = Math.max(34, (durationMinutes / 60) * 63 - 8)
                 const color = TYPE_COLORS[appointment.type] || 'coral'
                 const pending = appointment.status === 'PENDING_CONFIRMATION'
-                const confirmed = appointment.status === 'CONFIRMED'
+                const confirmed = isConfirmedLike(appointment.status)
                 const isBlockEvent = appointment.type === 'BLOCK'
                 const isPast = appointment.endAt ? new Date(appointment.endAt).getTime() < nowMs : false
                 const name = isBlockEvent ? 'Bloqueo' : appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Paciente'

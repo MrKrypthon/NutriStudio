@@ -13,6 +13,8 @@ export default function ImportFoodsPage({ setActive }) {
   const [selected, setSelected] = useState(null)
   const [group, setGroup] = useState('Verduras')
   const [portion, setPortion] = useState('100 g')
+  // Grams per equivalent (the SMAE math needs a real weight; without it the UI would fabricate one).
+  const [grams, setGrams] = useState('100')
   const [saved, setSaved] = useState(false)
   const [translatedFrom, setTranslatedFrom] = useState(null)
 
@@ -33,7 +35,7 @@ export default function ImportFoodsPage({ setActive }) {
       group,
       unit: 'g',
       nutrition: selected.nutrition,
-      equivalence: { group, serving: portion.trim() || '100 g' },
+      equivalence: { group, serving: portion.trim() || '100 g', grams: Number(grams) > 0 ? Number(grams) : null },
     }).catch(() => null)
     setSaved(true)
   }
@@ -74,6 +76,7 @@ export default function ImportFoodsPage({ setActive }) {
               </div>
               <label>Grupo alimentario<select value={group} onChange={(e) => setGroup(e.target.value)}>{GROUPS.map((g) => <option key={g}>{g}</option>)}</select></label>
               <label>Porción equivalente<input value={portion} onChange={(e) => setPortion(e.target.value)} placeholder="Ej. 100 g, 1 pieza, 1/2 taza" /></label>
+              <label>Gramos por equivalente<input type="number" min="0" value={grams} onChange={(e) => setGrams(e.target.value)} placeholder="Ej. 100" /><small className="muted" style={{ fontWeight: 400 }}>Peso real de 1 equivalente para el cálculo nutricional.</small></label>
               <div className="review-warning">ⓘ Revisa unidad, porción y grupo antes de importarlo al sistema de equivalentes.</div>
               <button className="primary full-button" onClick={save}>Guardar en mi catálogo <span>→</span></button>
             </>

@@ -40,9 +40,17 @@ export default function DocumentsPage({ setActive }) {
   }, [])
 
   const filteredItems = items.filter((item) => typeFilter === 'all' || item.type === typeFilter)
-  const rows = state === 'demo' ? FALLBACK : filteredItems.map(rowFor)
+  const query = search.trim().toLowerCase()
+  // Search applies to the real items (not to rendered rows) so each visible row keeps a correct
+  // reference to its source document. Before, rows were filtered by index and clicking after a
+  // search opened the WRONG document.
+  const visibleItems = state === 'demo' ? [] : filteredItems.filter((item) => {
+    const docLabel = (DOC_TYPE_LABELS[item.type] || '').toLowerCase()
+    const patientLabel = `${item.patient?.firstName || ''} ${item.patient?.lastName || ''}`.toLowerCase()
+    return !query || docLabel.includes(query) || patientLabel.includes(query)
+  })
+  const visibleRows = state === 'demo' ? FALLBACK.filter((row) => row[0].toLowerCase().includes(query) || row[1].toLowerCase().includes(query)) : visibleItems.map(rowFor)
   const allRows = state === 'demo' ? FALLBACK : items.map(rowFor)
-  const visibleRows = rows.filter((row) => row[0].toLowerCase().includes(search.toLowerCase()) || row[1].toLowerCase().includes(search.toLowerCase()))
 
   const openDetail = (item) => { setDetail(item); setDetailState('idle'); setDetailError('') }
 
@@ -87,8 +95,8 @@ export default function DocumentsPage({ setActive }) {
 
     <div className="document-stats">
       <div className="panel"><span className="stat-icon mint">▣</span><div><b>{allRows.length}</b><small>Documentos disponibles</small></div></div>
-      <div className="panel"><span className="stat-icon orange">↗</span><div><b>{allRows.filter((x) => x[4].includes('Pendiente')).length}</b><small>Pendientes de envío</small></div></div>
-      <div className="panel"><span className="stat-icon purple">✓</span><div><b>{allRows.filter((x) => x[4].includes('Generado') || x[4].includes('Entregado')).length}</b><small>Generados</small></div></div>
+      <div className="panel"><span className="stat-icon orange">↗</span><div><b>{allRows.filter((x) => x[4] !== 'Entregado').length}</b><small>Pendientes de envío</small></div></div>
+      <div className="panel"><span className="stat-icon purple">✓</span><div><b>{allRows.filter((x) => x[4] === 'Entregado').length}</b><small>Entregados</small></div></div>
     </div>
 
     <div className="documents-toolbar panel">
@@ -98,16 +106,24 @@ export default function DocumentsPage({ setActive }) {
 
     <div className="documents-table panel">
       <div className="documents-head"><span>Documento</span><span>Paciente</span><span>Fecha</span><span>Estado</span><span /></div>
-      {visibleRows.map((row, i) => {
-        const item = state === 'demo' ? null : filteredItems[i]
-        return <div className="documents-row" key={row[0] + row[1] + i} onClick={() => item && openDetail(item)} style={{ cursor: item ? 'pointer' : 'default' }}>
-          <span className="document-name"><i>▤</i><span><b>{row[0]}</b><small>{row[3]}</small></span></span>
-          <span className="muted">{row[1]}</span>
-          <span className="muted">{row[2]}</span>
-          <span className={'status ' + (row[5] === 'confirmed' ? 'confirmed' : 'pending')}>{row[4]}</span>
-          <button className="row-arrow" onClick={(e) => { e.stopPropagation(); item && openDetail(item) }}>→</button>
-        </div>
-      })}
+      {state === 'demo'
+        ? visibleRows.map((row, i) => <div className="documents-row" key={i} style={{ cursor: 'default' }}>
+            <span className="document-name"><i>▤</i><span><b>{row[0]}</b><small>{row[3]}</small></span></span>
+            <span className="muted">{row[1]}</span>
+            <span className="muted">{row[2]}</span>
+            <span className={'status ' + (row[5] === 'confirmed' ? 'confirmed' : 'pending')}>{row[4]}</span>
+            <span className="row-arrow">→</span>
+          </div>)
+        : visibleItems.map((item) => {
+            const row = rowFor(item)
+            return <div className="documents-row" key={item.id} onClick={() => openDetail(item)} style={{ cursor: 'pointer' }}>
+              <span className="document-name"><i>▤</i><span><b>{row[0]}</b><small>{row[3]}</small></span></span>
+              <span className="muted">{row[1]}</span>
+              <span className="muted">{row[2]}</span>
+              <span className={'status ' + (row[5] === 'confirmed' ? 'confirmed' : 'pending')}>{row[4]}</span>
+              <button className="row-arrow" onClick={(e) => { e.stopPropagation(); openDetail(item) }}>→</button>
+            </div>
+          })}
       {visibleRows.length === 0 && <div className="result-empty"><span>◌</span><h3>Sin documentos con esos filtros</h3><p>Ajusta la búsqueda o el filtro de tipo.</p></div>}
     </div>
   </div>
