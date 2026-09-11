@@ -625,9 +625,16 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
   let plan = await prisma.nutritionPlan.findFirst({ where: { patientId, status: { not: 'PUBLISHED' } }, orderBy: { createdAt: 'desc' } })
   if (!plan) plan = await prisma.nutritionPlan.create({ data: { patientId, consultationId: consultation.id } })
   const slots = template.mealSlots || []
+  // The template's mealSlots are a snapshot of recipeId taken at creation time (see POST above) --
+  // if any of those recipes no longer exist in this practice (same defensive check as
+  // PUT /plans/:planId/distribution), inserting them as-is would violate the FK and 500. Drop the
+  // dangling ones instead of failing the whole apply.
+  const recipeIds = [...new Set(slots.map((slot) => slot.recipeId).filter(Boolean))]
+  const validRecipes = recipeIds.length ? await prisma.recipe.findMany({ where: { id: { in: recipeIds }, practiceId: request.practiceId }, select: { id: true } }) : []
+  const validRecipeIds = new Set(validRecipes.map((item) => item.id))
   await prisma.$transaction([
     prisma.mealSlot.deleteMany({ where: { planId: plan.id } }),
-    prisma.mealSlot.createMany({ data: slots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: slot.recipeId, servings: slot.servings })) }),
+    prisma.mealSlot.createMany({ data: slots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: validRecipeIds.has(slot.recipeId) ? slot.recipeId : null, servings: slot.servings })) }),
   ])
   return { type: 'plan', planId: plan.id, patientId }
 })
