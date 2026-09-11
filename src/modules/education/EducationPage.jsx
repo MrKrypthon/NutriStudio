@@ -19,6 +19,7 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
   const [category, setCategory] = useState('')
   const [detail, setDetail] = useState(null)
   const [archiveState, setArchiveState] = useState('idle')
+  const [archiveError, setArchiveError] = useState('')
   const [shareState, setShareState] = useState('idle')
   const [attachState, setAttachState] = useState('idle')
   const [removeState, setRemoveState] = useState('idle')
@@ -60,8 +61,9 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
   const archive = async (material) => {
     if (!isReal) return
     setArchiveState('archiving')
+    setArchiveError('')
     try { await educationApi.archive(material.id); setArchiveState('idle'); setDetail(null); load() }
-    catch { setArchiveState('error') }
+    catch { setArchiveState('error'); setArchiveError('No se pudo archivar el material. Intenta de nuevo.') }
   }
 
   const onPickFile = (e) => {
@@ -151,6 +153,7 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
           {attachError && <span className="form-error" style={{ display: 'block' }}>⚠ {attachError}</span>}
         </div>}
         <div className="modal-actions">
+          {archiveError && <span className="form-error" style={{ display: 'block', width: '100%' }}>⚠ {archiveError}</span>}
           {isReal && <button className="secondary" disabled={archiveState === 'archiving'} onClick={() => archive(detail)}>{archiveState === 'archiving' ? 'Archivando…' : 'Archivar'}</button>}
           {isReal && <button className="secondary" onClick={() => startEdit(detail)}>Editar</button>}
           <button className="primary" onClick={() => share(detail)}>{shareState === 'copied' ? '✓ Copiado' : 'Copiar contenido'}</button>

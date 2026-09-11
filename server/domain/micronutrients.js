@@ -8,19 +8,23 @@
 // Nota sobre el valor de calcio en adolescentes: la celda original decía "1.2" (g) mientras el
 // resto de la fila usa mg — se normalizó a 1200 mg, consistente con la IDR oficial de calcio
 // en adolescentes. Si esto no refleja la intención original, corrígelo aquí.
+// Nota sobre vitamina D: la hoja transcribió 400/800, que son UI (400 UI = 10 µg, 800 UI =
+// 20 µg), pero los nutrientes del catálogo y el label de la UI están en µg — compararlos
+// directamente dejaba la adecuación de vitamina D ~40× por debajo (un filete de salmón, 11 µg,
+// daba 3% en vez de ~110%). Se normalizó a µg (10/20), igual que se hizo con el calcio.
 const IDR_TABLE = {
-  children: { label: 'Niños (1-3 años)', fiber: 20, vitaminA: 300, vitaminC: 15, vitaminD: 400, vitaminE: 6, vitaminK: 30, vitaminB12: 0.9, folicAcid: 150, calcium: 800, iron: 10, zinc: 10, iodine: 70, selenium: 20 },
-  male_teen: { label: 'Hombre adolescente (14-18 años)', fiber: null, vitaminA: 900, vitaminC: 90, vitaminD: 400, vitaminE: 15, vitaminK: 75, vitaminB12: 2.4, folicAcid: 400, calcium: 1200, iron: 12, zinc: 12, iodine: 150, selenium: 40 },
-  female_teen: { label: 'Mujer adolescente (14-18 años)', fiber: null, vitaminA: 700, vitaminC: 75, vitaminD: 400, vitaminE: 15, vitaminK: 60, vitaminB12: 2.4, folicAcid: 400, calcium: 1200, iron: 15, zinc: 15, iodine: 150, selenium: 50 },
-  male_adult: { label: 'Hombre adulto (19-70 años)', fiber: null, vitaminA: 900, vitaminC: 90, vitaminD: 400, vitaminE: 15, vitaminK: 80, vitaminB12: 2.4, folicAcid: 400, calcium: 800, iron: 10, zinc: 11, iodine: 150, selenium: 70 },
-  female_adult: { label: 'Mujer adulta (19-70 años)', fiber: 30, vitaminA: 700, vitaminC: 75, vitaminD: 400, vitaminE: 15, vitaminK: 65, vitaminB12: 2.4, folicAcid: 400, calcium: 800, iron: 15, zinc: 15, iodine: 150, selenium: 55 },
-  male_senior: { label: 'Hombre adulto mayor (>70 años)', fiber: null, vitaminA: 900, vitaminC: 90, vitaminD: 800, vitaminE: 15, vitaminK: 80, vitaminB12: 2.4, folicAcid: 400, calcium: 800, iron: 10, zinc: 11, iodine: 150, selenium: 70 },
-  female_senior: { label: 'Mujer adulta mayor (>70 años)', fiber: null, vitaminA: 700, vitaminC: 75, vitaminD: 800, vitaminE: 15, vitaminK: 65, vitaminB12: 2.4, folicAcid: 400, calcium: 800, iron: 10, zinc: 12, iodine: 150, selenium: 55 },
+  children: { label: 'Niños (1-3 años)', fiber: 20, vitaminA: 300, vitaminC: 15, vitaminD: 10, vitaminE: 6, vitaminK: 30, vitaminB12: 0.9, folicAcid: 150, calcium: 800, iron: 10, zinc: 10, iodine: 70, selenium: 20 },
+  male_teen: { label: 'Hombre adolescente (14-18 años)', fiber: null, vitaminA: 900, vitaminC: 90, vitaminD: 10, vitaminE: 15, vitaminK: 75, vitaminB12: 2.4, folicAcid: 400, calcium: 1200, iron: 12, zinc: 12, iodine: 150, selenium: 40 },
+  female_teen: { label: 'Mujer adolescente (14-18 años)', fiber: null, vitaminA: 700, vitaminC: 75, vitaminD: 10, vitaminE: 15, vitaminK: 60, vitaminB12: 2.4, folicAcid: 400, calcium: 1200, iron: 15, zinc: 15, iodine: 150, selenium: 50 },
+  male_adult: { label: 'Hombre adulto (19-70 años)', fiber: null, vitaminA: 900, vitaminC: 90, vitaminD: 10, vitaminE: 15, vitaminK: 80, vitaminB12: 2.4, folicAcid: 400, calcium: 800, iron: 10, zinc: 11, iodine: 150, selenium: 70 },
+  female_adult: { label: 'Mujer adulta (19-70 años)', fiber: 30, vitaminA: 700, vitaminC: 75, vitaminD: 10, vitaminE: 15, vitaminK: 65, vitaminB12: 2.4, folicAcid: 400, calcium: 800, iron: 15, zinc: 15, iodine: 150, selenium: 55 },
+  male_senior: { label: 'Hombre adulto mayor (>70 años)', fiber: null, vitaminA: 900, vitaminC: 90, vitaminD: 20, vitaminE: 15, vitaminK: 80, vitaminB12: 2.4, folicAcid: 400, calcium: 800, iron: 10, zinc: 11, iodine: 150, selenium: 70 },
+  female_senior: { label: 'Mujer adulta mayor (>70 años)', fiber: null, vitaminA: 700, vitaminC: 75, vitaminD: 20, vitaminE: 15, vitaminK: 65, vitaminB12: 2.4, folicAcid: 400, calcium: 800, iron: 10, zinc: 12, iodine: 150, selenium: 55 },
 }
 
 const NUTRIENT_LABELS = {
   fiber: { label: 'Fibra', unit: 'g' },
-  vitaminA: { label: 'Vitamina A', unit: 'mg RE' },
+  vitaminA: { label: 'Vitamina A', unit: 'µg RE' },
   vitaminC: { label: 'Vitamina C', unit: 'mg' },
   vitaminD: { label: 'Vitamina D', unit: 'µg' },
   vitaminE: { label: 'Vitamina E', unit: 'mg' },

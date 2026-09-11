@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import DocumentPage from '../documents/DocumentPage.jsx'
@@ -51,7 +51,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [pickerSearch, setPickerSearch] = useState('')
   const [adequacy, setAdequacy] = useState(null)
   const [adequacyState, setAdequacyState] = useState('idle')
-  const [form, setForm] = useState({ sex: 'female', age: '28', weightKg: '', heightCm: '', formula: 'mifflin', activityFactor: '1.375', goal: '', carbsPercent: '50', proteinPercent: '25', fatPercent: '25' })
+  const [form, setForm] = useState({ sex: 'female', age: '', weightKg: '', heightCm: '', bodyFatPercent: '', formula: 'mifflin', activityFactor: '1.375', goal: '', carbsPercent: '50', proteinPercent: '25', fatPercent: '25' })
   const [calcResult, setCalcResult] = useState(null)
   const [calcState, setCalcState] = useState('idle')
   const [calcError, setCalcError] = useState('')
@@ -61,6 +61,13 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [notesForm, setNotesForm] = useState({ hydrationNote: '', recommendations: '' })
   const [notesSaveState, setNotesSaveState] = useState('idle')
   const notesSaveTimer = useRef(null)
+  const notesPendingRef = useRef(null)
+  // Distribution saves are full-snapshot PUTs; two rapid edits used to overlap and the older
+  // snapshot could land last and silently drop the newest slot. Serialize: keep only the latest
+  // snapshot queued, one request in flight at a time, and re-flush whatever arrived meanwhile.
+  const slotsInFlightRef = useRef(false)
+  const slotsDirtyRef = useRef(null)
+  const flushPromiseRef = useRef(null)
 
   useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
@@ -81,41 +88,62 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     setNotesForm({ hydrationNote: plan.hydrationNote || '', recommendations: plan.recommendations || '' })
   }, [plan?.id])
 
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      try {
-        const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientId), recipesApi.list(), patientsApi.consultations(patientId)])
-        if (cancelled) return
-        const activePlan = (plansResponse.items || []).find((item) => item.status !== 'PUBLISHED') || null
-        const initialSlots = {}
-        for (const slot of activePlan?.mealSlots || []) initialSlots[slotKey(slot.dayOfWeek, slot.mealType)] = slot.recipeId
-        // Preload weight/height from real sources, never from arbitrary demo values: the last
-        // saved calculation wins, then the patient's latest clinical measurement, then empty
-        // fields the professional must fill. Before this fix, 72.4 kg / 165 cm were hardcoded
-        // defaults that got persisted as if they were the patient's real anthropometry.
-        const latestMeasurement = (consultationsResponse.items || [])
-          .flatMap((c) => c.measurements || [])
-          .sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
-        const savedInputs = activePlan?.evaluation?.inputs || {}
-        const weightKg = savedInputs.weightKg ?? latestMeasurement?.weightKg ?? ''
-        const heightCm = savedInputs.heightCm ?? latestMeasurement?.heightCm ?? ''
-        setForm((prev) => ({
-          ...prev,
-          weightKg: weightKg !== '' && weightKg != null ? String(weightKg) : '',
-          heightCm: heightCm !== '' && heightCm != null ? String(heightCm) : '',
-        }))
-        setPlan(activePlan)
-        setRecipes(recipesResponse.items || [])
-        setSlots(initialSlots)
-        setLoadState('ready')
-      } catch {
-        if (!cancelled) setLoadState('error')
-      }
+  const loadPlanData = useCallback(async () => {
+    try {
+      const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientId), recipesApi.list(), patientsApi.consultations(patientId)])
+      const activePlan = (plansResponse.items || []).find((item) => item.status !== 'PUBLISHED') || null
+      const initialSlots = {}
+      const activeRecipeIds = new Set((recipesResponse.items || []).map((r) => r.id))
+      // Drop slots that reference archived/unknown recipes so they don't linger as invisible rows.
+      for (const slot of activePlan?.mealSlots || []) if (activeRecipeIds.has(slot.recipeId)) initialSlots[slotKey(slot.dayOfWeek, slot.mealType)] = slot.recipeId
+      // Preload weight/height from real sources, never from arbitrary demo values: the last
+      // saved calculation wins, then the patient's latest clinical measurement, then empty
+      // fields the professional must fill. Before this fix, 72.4 kg / 165 cm were hardcoded
+      // defaults that got persisted as if they were the patient's real anthropometry.
+      const latestMeasurement = (consultationsResponse.items || [])
+        .flatMap((c) => c.measurements || [])
+        .sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
+      const savedInputs = activePlan?.evaluation?.inputs || {}
+      const weightKg = savedInputs.weightKg ?? latestMeasurement?.weightKg ?? ''
+      const heightCm = savedInputs.heightCm ?? latestMeasurement?.heightCm ?? ''
+      setForm((prev) => ({
+        ...prev,
+        sex: savedInputs.sex ?? prev.sex,
+        age: savedInputs.age != null ? String(savedInputs.age) : prev.age,
+        bodyFatPercent: savedInputs.bodyFatPercent != null ? String(savedInputs.bodyFatPercent) : prev.bodyFatPercent,
+        formula: activePlan?.formula ?? prev.formula,
+        weightKg: weightKg !== '' && weightKg != null ? String(weightKg) : '',
+        heightCm: heightCm !== '' && heightCm != null ? String(heightCm) : '',
+      }))
+      setPlan(activePlan)
+      setRecipes(recipesResponse.items || [])
+      setSlots(initialSlots)
+      setLoadState('ready')
+    } catch {
+      setLoadState('error')
     }
-    load()
-    return () => { cancelled = true }
   }, [patientId])
+
+  useEffect(() => { loadPlanData() }, [loadPlanData])
+  // pendingRecipeName (from "Asignar al plan") prefills the recipe picker, but only gets consumed
+  // when a picker opens — leaving without opening it would leak the stale name into a later,
+  // unrelated picker. Consume it on unmount if it was never used.
+  const consumeRecipeNameRef = useRef(onConsumeRecipeName)
+  useEffect(() => { consumeRecipeNameRef.current = onConsumeRecipeName })
+  useEffect(() => () => consumeRecipeNameRef.current?.(), [])
+  // Flush a pending notes edit on unmount (the 800ms debounce would otherwise drop it).
+  useEffect(() => () => {
+    clearTimeout(notesSaveTimer.current)
+    const pending = notesPendingRef.current
+    if (pending) plansApi.update(pending.planId, pending.next).catch(() => {})
+  }, [])
+  // After publishing in step 4 (Entrega), the local `plan` is stale (still DRAFT); re-fetch so the
+  // wizard reflects that there's no draft anymore instead of failing edits with PLAN_LOCKED.
+  const prevStepRef = useRef(step)
+  useEffect(() => {
+    if (prevStepRef.current === 4 && step < 4) loadPlanData()
+    prevStepRef.current = step
+  }, [step, loadPlanData])
 
   const recipeById = (id) => recipes.find((recipe) => recipe.id === id)
 
@@ -123,6 +151,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   // map to grams against the calculated requirement.
   const macroSum = Number(form.carbsPercent || 0) + Number(form.proteinPercent || 0) + Number(form.fatPercent || 0)
   const macroGrams = (pct, factor) => (calcResult?.get ? Math.round((calcResult.get * (Number(pct) || 0)) / 100 / factor) : null)
+  // Cunningham / Katch-McArdle compute BMR from lean mass (needs body fat); without an input they
+  // silently fall back to total mass and inflate the requirement — so the field is only shown and
+  // only required meaningfully for those two formulas.
+  const needsBodyFat = form.formula === 'cunningham' || form.formula === 'katch-mcardle'
 
   const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
 
@@ -160,6 +192,9 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     setNotesForm(next)
     if (!plan) return
     setNotesSaveState('editing')
+    // Keep the latest payload for the unmount flush (a navigation within the 800ms window must
+    // not drop the edit on the floor).
+    notesPendingRef.current = { planId: plan.id, next }
     clearTimeout(notesSaveTimer.current)
     notesSaveTimer.current = setTimeout(async () => {
       setNotesSaveState('saving')
@@ -167,6 +202,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         const updated = await plansApi.update(plan.id, next)
         setPlan(updated)
         setNotesSaveState('saved')
+        notesPendingRef.current = null
       } catch {
         setNotesSaveState('error')
       }
@@ -189,26 +225,67 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     }
   }
 
-  const persistSlots = async (nextSlots) => {
+  const persistSlots = (nextSlots) => {
+    slotsDirtyRef.current = nextSlots
     if (!plan) return
-    setSaveState('saving')
-    const payload = Object.entries(nextSlots).filter(([, recipeId]) => recipeId).map(([key, recipeId]) => {
-      const [day, mealType] = key.split(':')
-      return { dayOfWeek: Number(day), mealType, recipeId, servings: 1 }
-    })
-    try {
-      const updated = await plansApi.saveDistribution(plan.id, payload)
-      setPlan(updated)
-      setSaveState('saved')
-    } catch {
-      setSaveState('error')
+    // Serialize saves (see the refs above) and share the in-flight promise so navigation to the
+    // Entrega step can AWAIT the final menu instead of showing a stale snapshot.
+    if (!flushPromiseRef.current) flushPromiseRef.current = flushEverything().finally(() => { flushPromiseRef.current = null })
+  }
+
+  const flushEverything = async () => {
+    const activeIds = new Set(recipes.map((recipe) => recipe.id))
+    // Loop until both the queue and the in-flight request are empty (new edits land while one
+    // save is pending are picked up on the next pass, so the LAST snapshot always wins).
+    while (slotsDirtyRef.current || slotsInFlightRef.current) {
+      if (slotsDirtyRef.current && !slotsInFlightRef.current) {
+        const snapshot = slotsDirtyRef.current
+        slotsDirtyRef.current = null
+        slotsInFlightRef.current = true
+        setSaveState('saving')
+        const payload = Object.entries(snapshot)
+          .filter(([, recipeId]) => recipeId && activeIds.has(recipeId))
+          .map(([key, recipeId]) => {
+            const [day, mealType] = key.split(':')
+            return { dayOfWeek: Number(day), mealType, recipeId, servings: 1 }
+          })
+        try {
+          const updated = await plansApi.saveDistribution(plan.id, payload)
+          setPlan(updated)
+          setSaveState('saved')
+        } catch {
+          setSaveState('error')
+        } finally {
+          slotsInFlightRef.current = false
+        }
+      } else {
+        await new Promise((resolve) => setTimeout(resolve, 30))
+      }
     }
+  }
+
+  const selectStep = async (next) => {
+    // Entering Entrega must see the final menu: flush any pending distribution save first.
+    if (next === 4 && plan && (slotsDirtyRef.current || slotsInFlightRef.current)) {
+      if (!flushPromiseRef.current) flushPromiseRef.current = flushEverything().finally(() => { flushPromiseRef.current = null })
+      await flushPromiseRef.current
+    }
+    setStep(next)
   }
 
   const openPicker = (mealType, day = null) => { setPickerSearch(pendingRecipeName || ''); if (pendingRecipeName) onConsumeRecipeName?.(); setPickerTarget({ mealType, day }) }
 
   const chooseRecipe = (recipe) => {
     if (!pickerTarget) return
+    if (!pickerTarget.day) {
+      // "Receta base de la semana" writes to all 7 days; warn before silently clobbering any
+      // per-day customizations the professional made in the Semana step.
+      const differing = DAYS.filter((day) => slots[slotKey(day.n, pickerTarget.mealType)] && slots[slotKey(day.n, pickerTarget.mealType)] !== recipe.id)
+      if (differing.length && !window.confirm(`Establecer "${recipe.name}" como base reemplazará las ${differing.length} receta(s) personalizada(s) de ese tiempo de comida. ¿Continuar?`)) {
+        setPickerTarget(null)
+        return
+      }
+    }
     const nextSlots = { ...slots }
     if (pickerTarget.day) nextSlots[slotKey(pickerTarget.day, pickerTarget.mealType)] = recipe.id
     else for (const day of DAYS) nextSlots[slotKey(day.n, pickerTarget.mealType)] = recipe.id
@@ -249,11 +326,11 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const meals = MEAL_TYPES.map((m) => m.label)
 
-  return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Borrador · Se guarda automáticamente</span></div></div><label className="patient-switch">Paciente<select value={patientId || ''} onChange={(e) => onSelectPatient?.(e.target.value)}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => setStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
+  return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Borrador · Se guarda automáticamente</span></div></div><label className="patient-switch">Paciente<select value={patientId || ''} onChange={(e) => onSelectPatient?.(e.target.value)}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
 
-    {step === 0 && <><ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="Resumen del expediente y del último cálculo guardado en el paso Plan alimentario." action={<button className="secondary" onClick={() => setStep(1)}>Ir al cálculo →</button>} /><div className="plan-grid"><div className="plan-card panel"><h3>Datos antropométricos</h3><div className="form-grid three"><label>Sexo<input value={patient?.sex || '—'} readOnly /></label><label>Fecha nacimiento<input value={formatUTCDate(patient?.birthDate) || '—'} readOnly /></label><label>Edad<input value={computeAge(patient?.birthDate) ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label><label>Peso actual<input value={plan?.evaluation?.inputs?.weightKg ? `${plan.evaluation.inputs.weightKg} kg` : '—'} readOnly /></label><label>Talla<input value={plan?.evaluation?.inputs?.heightCm ? `${plan.evaluation.inputs.heightCm} cm` : '—'} readOnly /></label><label>IMC calculado<input value={plan?.evaluation?.bmi ?? '—'} readOnly /></label></div></div><div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3>{plan?.evaluation?.idealWeightRange ? <div className="ideal-number">{plan.evaluation.idealWeightRange.minKg} <small>– {plan.evaluation.idealWeightRange.maxKg} kg</small></div> : <p className="muted">Calcula el requerimiento en el paso "Plan alimentario" para ver el rango.</p>}<p className="muted">Rango estimado para su estatura</p></div><div className="plan-card panel full"><h3>Objetivo terapéutico</h3>{plan?.goal ? <p>{plan.goal}</p> : <p className="muted">Sin definir todavía — se guarda junto con el cálculo en el paso "Plan alimentario".</p>}</div></div></>}
+    {step === 0 && <><ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="Resumen del expediente y del último cálculo guardado en el paso Plan alimentario." action={<button className="secondary" onClick={() => selectStep(1)}>Ir al cálculo →</button>} /><div className="plan-grid"><div className="plan-card panel"><h3>Datos antropométricos</h3><div className="form-grid three"><label>Sexo<input value={patient?.sex || '—'} readOnly /></label><label>Fecha nacimiento<input value={formatUTCDate(patient?.birthDate) || '—'} readOnly /></label><label>Edad<input value={computeAge(patient?.birthDate) ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label><label>Peso actual<input value={plan?.evaluation?.inputs?.weightKg ? `${plan.evaluation.inputs.weightKg} kg` : '—'} readOnly /></label><label>Talla<input value={plan?.evaluation?.inputs?.heightCm ? `${plan.evaluation.inputs.heightCm} cm` : '—'} readOnly /></label><label>IMC calculado<input value={plan?.evaluation?.bmi ?? '—'} readOnly /></label></div></div><div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3>{plan?.evaluation?.idealWeightRange ? <div className="ideal-number">{plan.evaluation.idealWeightRange.minKg} <small>– {plan.evaluation.idealWeightRange.maxKg} kg</small></div> : <p className="muted">Calcula el requerimiento en el paso "Plan alimentario" para ver el rango.</p>}<p className="muted">Rango estimado para su estatura</p></div><div className="plan-card panel full"><h3>Objetivo terapéutico</h3>{plan?.goal ? <p>{plan.goal}</p> : <p className="muted">Sin definir todavía — se guarda junto con el cálculo en el paso "Plan alimentario".</p>}</div></div></>}
 
-    {step === 1 && <><ModuleHeader eyebrow="PLAN ALIMENTARIO · REQUERIMIENTO" title="Calcula el punto de partida" subtitle="Cada resultado queda asociado a la fórmula y a los datos utilizados." /><form className="calculator-layout" onSubmit={calculate}><section className="panel calculator-form"><div className="section-heading"><div><h2>Datos de la paciente</h2><p className="subtitle">Puedes ajustar estos valores para simular el plan.</p></div></div><div className="form-grid three"><label>Sexo<select value={form.sex} onChange={(e) => updateForm('sex', e.target.value)}><option value="female">Femenino</option><option value="male">Masculino</option></select></label><label>Edad (años)<input type="number" min="1" max="120" value={form.age} onChange={(e) => updateForm('age', e.target.value)} /></label><label>Peso (kg)<input type="number" step="0.1" min="1" value={form.weightKg} onChange={(e) => updateForm('weightKg', e.target.value)} /></label><label>Talla (cm)<input type="number" step="0.1" min="30" value={form.heightCm} onChange={(e) => updateForm('heightCm', e.target.value)} /></label><label>Fórmula energética<select value={form.formula} onChange={(e) => updateForm('formula', e.target.value)}><option value="mifflin">Mifflin-St Jeor</option><option value="harris">Harris-Benedict</option><option value="schofield">FAO/OMS/ONU (Schofield)</option><option value="valencia">Valencia (población mexicana)</option><option value="cunningham">Cunningham</option><option value="katch-mcardle">Katch-McArdle</option></select></label><label>Actividad física<select value={form.activityFactor} onChange={(e) => updateForm('activityFactor', e.target.value)}><option value="1.2">Sedentaria · 1.2</option><option value="1.375">Ligera · 1.375</option><option value="1.55">Moderada · 1.55</option><option value="1.725">Intensa · 1.725</option></select></label></div><div className="macro-distribution"><div className="section-heading"><div><h2>Distribución de macronutrientes</h2><p className="subtitle">Porcentaje del requerimiento energético. La suma debe dar 100%.</p></div></div><div className="form-grid three"><label>Carbohidratos (%)<input type="number" min="0" max="100" value={form.carbsPercent} onChange={(e) => updateForm('carbsPercent', e.target.value)} /></label><label>Proteína (%)<input type="number" min="0" max="100" value={form.proteinPercent} onChange={(e) => updateForm('proteinPercent', e.target.value)} /></label><label>Grasas (%)<input type="number" min="0" max="100" value={form.fatPercent} onChange={(e) => updateForm('fatPercent', e.target.value)} /></label></div><div className={'macro-sum' + (macroSum === 100 ? '' : ' invalid')}>{macroSum}% {macroSum === 100 ? '· distribución correcta' : '· debe sumar 100%'}</div>{calcResult?.get && macroSum === 100 && <div className="macro-grams">Carbohidratos {macroGrams(form.carbsPercent, 4)} g · Proteína {macroGrams(form.proteinPercent, 4)} g · Grasas {macroGrams(form.fatPercent, 9)} g</div>}</div><label>Objetivo terapéutico<textarea className="wide-textarea" placeholder="Resultado clínico y conductual esperado..." value={form.goal} onChange={(e) => updateForm('goal', e.target.value)} /></label><button className="primary calculate-button" disabled={calcState === 'loading'}>{calcState === 'loading' ? 'Calculando...' : 'Calcular requerimiento'} <span>→</span></button>{calcState === 'error' && <div className="form-error">⚠ {calcError}</div>}</section><aside className="panel calculation-result">{!calcResult && calcState !== 'loading' ? <div className="result-empty"><span>◌</span><h3>Tu resultado aparecerá aquí</h3><p>Completa o confirma los datos y calcula el requerimiento energético.</p></div> : calcState === 'loading' ? <div className="result-empty"><span className="loading-dot">●</span><h3>Calculando requerimiento...</h3><p>Estamos aplicando la fórmula seleccionada.</p></div> : <><div className="result-header"><div><p className="eyebrow">RESULTADO CALCULADO</p><h2>Requerimiento energético</h2></div><span className="result-check">✓</span></div><div className="get-number"><small>GET · Gasto energético total</small><b>{calcResult.get.toLocaleString()} <em>kcal/día</em></b><span>Basado en {calcResult.formulaLabel || calcResult.formula} · factor {form.activityFactor}</span></div><div className="result-details"><div><small>Metabolismo basal</small><b>{calcResult.bmr.toLocaleString()} kcal</b></div><div><small>Actividad estimada</small><b>+{calcResult.activityKcal.toLocaleString()} kcal</b></div></div>{calcResult.bmi && <div className="result-details"><div><small>IMC</small><b>{calcResult.bmi}</b></div><div><small>Peso saludable estimado</small><b>{calcResult.idealWeightRange.minKg}–{calcResult.idealWeightRange.maxKg} kg</b></div></div>}{calcResult.flags?.length > 0 && <div className="form-error">⚠ {calcResult.flags.map((f) => f.message).join(' ')}</div>}<button type="button" className="primary full-button" disabled={evalSaveState === 'saving' || !plan || macroSum !== 100} onClick={saveToPlan}>{evalSaveState === 'saving' ? 'Guardando...' : evalSaveState === 'saved' ? 'Guardado en el plan ✓' : 'Guardar en el plan'} <span>→</span></button>{!plan && <p className="muted">Crea una consulta y un plan en borrador para poder guardar.</p>}{evalSaveState === 'error' && <div className="form-error">⚠ {evalSaveError}</div>}</>}</aside></form></>}
+    {step === 1 && <><ModuleHeader eyebrow="PLAN ALIMENTARIO · REQUERIMIENTO" title="Calcula el punto de partida" subtitle="Cada resultado queda asociado a la fórmula y a los datos utilizados." /><form className="calculator-layout" onSubmit={calculate}><section className="panel calculator-form"><div className="section-heading"><div><h2>Datos de la paciente</h2><p className="subtitle">Puedes ajustar estos valores para simular el plan.</p></div></div><div className="form-grid three"><label>Sexo<select value={form.sex} onChange={(e) => updateForm('sex', e.target.value)}><option value="female">Femenino</option><option value="male">Masculino</option></select></label><label>Edad (años)<input type="number" min="1" max="120" value={form.age} onChange={(e) => updateForm('age', e.target.value)} /></label><label>Peso (kg)<input type="number" step="0.1" min="1" value={form.weightKg} onChange={(e) => updateForm('weightKg', e.target.value)} /></label><label>Talla (cm)<input type="number" step="0.1" min="30" value={form.heightCm} onChange={(e) => updateForm('heightCm', e.target.value)} /></label><label>Fórmula energética<select value={form.formula} onChange={(e) => updateForm('formula', e.target.value)}><option value="mifflin">Mifflin-St Jeor</option><option value="harris">Harris-Benedict</option><option value="schofield">FAO/OMS/ONU (Schofield)</option><option value="valencia">Valencia (población mexicana)</option><option value="cunningham">Cunningham</option><option value="katch-mcardle">Katch-McArdle</option></select></label>{needsBodyFat && <label>% Grasa corporal<input type="number" step="0.1" min="1" max="75" value={form.bodyFatPercent} onChange={(e) => updateForm('bodyFatPercent', e.target.value)} /></label>}<label>Actividad física<select value={form.activityFactor} onChange={(e) => updateForm('activityFactor', e.target.value)}><option value="1.2">Sedentaria · 1.2</option><option value="1.375">Ligera · 1.375</option><option value="1.55">Moderada · 1.55</option><option value="1.725">Intensa · 1.725</option></select></label></div><div className="macro-distribution"><div className="section-heading"><div><h2>Distribución de macronutrientes</h2><p className="subtitle">Porcentaje del requerimiento energético. La suma debe dar 100%.</p></div></div><div className="form-grid three"><label>Carbohidratos (%)<input type="number" min="0" max="100" value={form.carbsPercent} onChange={(e) => updateForm('carbsPercent', e.target.value)} /></label><label>Proteína (%)<input type="number" min="0" max="100" value={form.proteinPercent} onChange={(e) => updateForm('proteinPercent', e.target.value)} /></label><label>Grasas (%)<input type="number" min="0" max="100" value={form.fatPercent} onChange={(e) => updateForm('fatPercent', e.target.value)} /></label></div><div className={'macro-sum' + (macroSum === 100 ? '' : ' invalid')}>{macroSum}% {macroSum === 100 ? '· distribución correcta' : '· debe sumar 100%'}</div>{calcResult?.get && macroSum === 100 && <div className="macro-grams">Carbohidratos {macroGrams(form.carbsPercent, 4)} g · Proteína {macroGrams(form.proteinPercent, 4)} g · Grasas {macroGrams(form.fatPercent, 9)} g</div>}</div><label>Objetivo terapéutico<textarea className="wide-textarea" placeholder="Resultado clínico y conductual esperado..." value={form.goal} onChange={(e) => updateForm('goal', e.target.value)} /></label><button className="primary calculate-button" disabled={calcState === 'loading'}>{calcState === 'loading' ? 'Calculando...' : 'Calcular requerimiento'} <span>→</span></button>{calcState === 'error' && <div className="form-error">⚠ {calcError}</div>}</section><aside className="panel calculation-result">{!calcResult && calcState !== 'loading' ? <div className="result-empty"><span>◌</span><h3>Tu resultado aparecerá aquí</h3><p>Completa o confirma los datos y calcula el requerimiento energético.</p></div> : calcState === 'loading' ? <div className="result-empty"><span className="loading-dot">●</span><h3>Calculando requerimiento...</h3><p>Estamos aplicando la fórmula seleccionada.</p></div> : <><div className="result-header"><div><p className="eyebrow">RESULTADO CALCULADO</p><h2>Requerimiento energético</h2></div><span className="result-check">✓</span></div><div className="get-number"><small>GET · Gasto energético total</small><b>{calcResult.get.toLocaleString()} <em>kcal/día</em></b><span>Basado en {calcResult.formulaLabel || calcResult.formula} · factor {form.activityFactor}</span></div><div className="result-details"><div><small>Metabolismo basal</small><b>{calcResult.bmr.toLocaleString()} kcal</b></div><div><small>Actividad estimada</small><b>+{calcResult.activityKcal.toLocaleString()} kcal</b></div></div>{calcResult.bmi && <div className="result-details"><div><small>IMC</small><b>{calcResult.bmi}</b></div><div><small>Peso saludable estimado</small><b>{calcResult.idealWeightRange.minKg}–{calcResult.idealWeightRange.maxKg} kg</b></div></div>}{calcResult.flags?.length > 0 && <div className="form-error">⚠ {calcResult.flags.map((f) => f.message).join(' ')}</div>}<button type="button" className="primary full-button" disabled={evalSaveState === 'saving' || !plan || macroSum !== 100} onClick={saveToPlan}>{evalSaveState === 'saving' ? 'Guardando...' : evalSaveState === 'saved' ? 'Guardado en el plan ✓' : 'Guardar en el plan'} <span>→</span></button>{!plan && <p className="muted">Crea una consulta y un plan en borrador para poder guardar.</p>}{evalSaveState === 'error' && <div className="form-error">⚠ {evalSaveError}</div>}</>}</aside></form></>}
 
     {step === 2 && <>
       <ModuleHeader eyebrow="PLAN ALIMENTARIO · DISTRIBUCIÓN" title="Distribuye por tiempos" subtitle="Elige la receta base de cada tiempo de comida para toda la semana; luego ajusta día por día en el paso Semana." action={<span className={'sync-label ' + (saveState === 'saving' ? 'loading' : saveState === 'error' ? 'demo' : 'online')}>{saveState === 'saving' ? '● Guardando…' : saveState === 'error' ? '● Error al guardar' : plan ? '● Sincronizado' : '● Sin plan en borrador'}</span>} />
@@ -280,7 +357,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         <h3>% Adecuación de micronutrientes</h3>
         {adequacyState === 'loading' && <p className="muted">Calculando…</p>}
         {adequacyState === 'error' && <div className="form-error">⚠ No se pudo calcular la adecuación de micronutrientes.</div>}
-        {adequacyState === 'ready' && !adequacy?.bracket && <p className="muted">Calcula y guarda el requerimiento en el paso "Plan alimentario" para poder calcular la adecuación. <button type="button" className="link-button" onClick={() => setStep(1)}>Ir al cálculo →</button></p>}
+        {adequacyState === 'ready' && !adequacy?.bracket && <p className="muted">Calcula y guarda el requerimiento en el paso "Plan alimentario" para poder calcular la adecuación. <button type="button" className="link-button" onClick={() => selectStep(1)}>Ir al cálculo →</button></p>}
         {adequacyState === 'ready' && adequacy?.bracket && !adequacy.nutrients.length && <p className="muted">Asigna al menos una receta a la semana para calcular la adecuación.</p>}
         {adequacyState === 'ready' && adequacy?.nutrients.length > 0 && <>
           <p className="muted">Referencia: {adequacy.bracketLabel}. Promedio diario de los días con al menos una receta asignada.</p>
@@ -296,8 +373,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       {pickerTarget && <div className="recipe-overlay"><div className="recipe-modal panel"><div className="modal-head"><div><p className="eyebrow">RECETAS PARA {MEAL_TYPES.find((m) => m.key === pickerTarget.mealType)?.label.toUpperCase()}{pickerTarget.day ? ` · ${DAYS.find((d) => d.n === pickerTarget.day)?.label}` : ''}</p><h2>Elige una preparación</h2></div><button onClick={() => setPickerTarget(null)}>×</button></div><div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div><div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas del catálogo para este tiempo de comida.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => chooseRecipe(recipe)} key={recipe.id}><div className={'recipe-image ' + RECIPE_COLORS[i % RECIPE_COLORS.length]}><span>✦</span></div><b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal</small></button>)}</div></div></div>}
     </>}
 
-    {step === 4 && <DocumentPage setActive={setActive} patientId={patientId} embedded />}
+    {step === 4 && <DocumentPage setActive={setActive} patientId={patientId} embedded onPublished={loadPlanData} />}
 
-    <div className="wizard-footer"><button className="secondary" onClick={() => setStep(Math.max(0, step - 1))}>← Anterior</button><span>{saveState === 'saving' ? 'Guardando…' : saveState === 'saved' ? 'Guardado automáticamente' : saveState === 'error' ? 'Error al guardar los últimos cambios' : 'Guardado automáticamente'}</span><button className="primary" onClick={() => step === 4 ? setActive('Documentos') : setStep(Math.min(step + 1, 4))}>Siguiente paso <span>→</span></button></div>
+    <div className="wizard-footer"><button className="secondary" onClick={() => selectStep(Math.max(0, step - 1))}>← Anterior</button><span>{saveState === 'saving' ? 'Guardando…' : saveState === 'saved' ? 'Guardado automáticamente' : saveState === 'error' ? 'Error al guardar los últimos cambios' : 'Guardado automáticamente'}</span><button className="primary" onClick={() => step === 4 ? setActive('Documentos') : selectStep(Math.min(step + 1, 4))}>Siguiente paso <span>→</span></button></div>
   </div></AppChrome>
 }

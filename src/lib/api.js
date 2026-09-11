@@ -34,6 +34,21 @@ export async function apiRequest(path, options = {}) {
   return response.json()
 }
 
+// Blob downloads use raw fetch (they can't go through response.json()); route them through the
+// same session-loss handling so a 401 on a download also logs the professional out instead of
+// failing silently.
+async function downloadBlobRequest(path, fallbackMessage) {
+  const token = getToken()
+  const response = await fetch(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!response.ok) {
+    let error = null
+    try { error = await response.json() } catch { /* body may not be JSON */ }
+    if (error?.code === 'UNAUTHORIZED') notifyUnauthorized()
+    throw Object.assign(new Error(error?.message || fallbackMessage), { code: error?.code || 'DOWNLOAD_FAILED' })
+  }
+  return response.blob()
+}
+
 export const authApi = {
   login: (email, password) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   logout: () => apiRequest('/auth/logout', { method: 'POST' }),
@@ -74,9 +89,12 @@ export const appointmentsApi = {
 
 export const nutritionApi = {
   calculate: async (payload) => {
+    const carbsPercent = Number(payload.carbsPercent) || 50
+    const proteinPercent = Number(payload.proteinPercent) || 25
+    const fatPercent = Number(payload.fatPercent) || 25
     try {
       const result = await apiRequest('/nutrition-plans/calculate', { method: 'POST', body: JSON.stringify(payload) })
-      const macros = await apiRequest('/nutrition-plans/macros', { method: 'POST', body: JSON.stringify({ kcal: result.get, carbsPercent: 50, proteinPercent: 25, fatPercent: 25 }) })
+      const macros = await apiRequest('/nutrition-plans/macros', { method: 'POST', body: JSON.stringify({ kcal: result.get, carbsPercent, proteinPercent, fatPercent }) })
       return { ...result, macros: macros.macros }
     } catch (error) {
       if (error.code !== 'DEMO_MODE') throw error
@@ -89,7 +107,7 @@ export const nutritionApi = {
       const kcal = Math.round(bmr * factor)
       const heightM = height / 100
       const bmi = weight / (heightM * heightM)
-      return { formula: payload.formula || 'mifflin', formulaLabel: 'Mifflin-St Jeor', bmr: Math.round(bmr), activityKcal: Math.round(bmr * (factor - 1)), get: kcal, activityMethod: 'factor', bmi: Math.round(bmi * 10) / 10, idealWeightRange: { minKg: Math.round(18.5 * heightM * heightM * 10) / 10, maxKg: Math.round(24.9 * heightM * heightM * 10) / 10 }, flags: [], inputs: payload, reviewed: false, demo: true, macros: { carbs: { percent: 50, kcal: Math.round(kcal * .5), grams: Math.round(kcal * .5 / 4 * 10) / 10 }, protein: { percent: 25, kcal: Math.round(kcal * .25), grams: Math.round(kcal * .25 / 4 * 10) / 10 }, fat: { percent: 25, kcal: Math.round(kcal * .25), grams: Math.round(kcal * .25 / 9 * 10) / 10 } } }
+      return { formula: payload.formula || 'mifflin', formulaLabel: 'Mifflin-St Jeor', bmr: Math.round(bmr), activityKcal: Math.round(bmr * (factor - 1)), get: kcal, activityMethod: 'factor', bmi: Math.round(bmi * 10) / 10, idealWeightRange: { minKg: Math.round(18.5 * heightM * heightM * 10) / 10, maxKg: Math.round(24.9 * heightM * heightM * 10) / 10 }, flags: [], inputs: payload, reviewed: false, demo: true, macros: { carbs: { percent: carbsPercent, kcal: Math.round(kcal * carbsPercent / 100), grams: Math.round(kcal * carbsPercent / 100 / 4 * 10) / 10 }, protein: { percent: proteinPercent, kcal: Math.round(kcal * proteinPercent / 100), grams: Math.round(kcal * proteinPercent / 100 / 4 * 10) / 10 }, fat: { percent: fatPercent, kcal: Math.round(kcal * fatPercent / 100), grams: Math.round(kcal * fatPercent / 100 / 9 * 10) / 10 } } }
     }
   },
   macros: (payload) => apiRequest('/nutrition-plans/macros', { method: 'POST', body: JSON.stringify(payload) }),
@@ -134,23 +152,13 @@ export const documentsApi = {
   // A plain <a href> click can't carry the Authorization header the download route requires
   // (every /api/v1/* route needs a session) — fetch it as an authenticated request instead and
   // hand back a Blob the caller can wrap in an object URL to trigger the actual download.
-  downloadBlob: async (id) => {
-    const token = getToken()
-    const response = await fetch(`${API_BASE}/documents/${id}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    if (!response.ok) throw Object.assign(new Error('No se pudo descargar el documento.'), { code: 'DOWNLOAD_FAILED' })
-    return response.blob()
-  },
+  downloadBlob: (id) => downloadBlobRequest(`/documents/${id}/download`, 'No se pudo descargar el documento.'),
 }
 
 export const labAttachmentsApi = {
   upload: (consultationId, fileName, dataUrl) => apiRequest(`/consultations/${consultationId}/lab-attachments`, { method: 'POST', body: JSON.stringify({ fileName, dataUrl }) }),
   remove: (id) => apiRequest(`/lab-attachments/${id}`, { method: 'DELETE' }),
-  downloadBlob: async (id) => {
-    const token = getToken()
-    const response = await fetch(`${API_BASE}/lab-attachments/${id}/download`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    if (!response.ok) throw Object.assign(new Error('No se pudo descargar el archivo.'), { code: 'DOWNLOAD_FAILED' })
-    return response.blob()
-  },
+  downloadBlob: (id) => downloadBlobRequest(`/lab-attachments/${id}/download`, 'No se pudo descargar el archivo.'),
 }
 
 export const tasksApi = {
@@ -178,12 +186,7 @@ export const educationApi = {
   archive: (id) => apiRequest(`/education-materials/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ARCHIVED' }) }),
   attach: (id, fileName, dataUrl) => apiRequest(`/education-materials/${id}/attachment`, { method: 'POST', body: JSON.stringify({ fileName, dataUrl }) }),
   removeAttachment: (id) => apiRequest(`/education-materials/${id}/attachment`, { method: 'DELETE' }),
-  downloadAttachmentBlob: async (id) => {
-    const token = getToken()
-    const response = await fetch(`${API_BASE}/education-materials/${id}/attachment`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
-    if (!response.ok) throw Object.assign(new Error('No se pudo descargar el archivo.'), { code: 'DOWNLOAD_FAILED' })
-    return response.blob()
-  },
+  downloadAttachmentBlob: (id) => downloadBlobRequest(`/education-materials/${id}/attachment`, 'No se pudo descargar el archivo.'),
 }
 
 export const ingredientsApi = {

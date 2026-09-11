@@ -75,7 +75,7 @@ export default function IngredientsPage({ setActive }) {
         <div className="serving-box">
           <span>Porción de equivalencia</span>
           <b>{selected.equivalence?.serving || 'Sin definir'}</b>
-          <small>{selected.equivalence?.grams || 100} gramos · 1 equivalente</small>
+          <small>{selected.equivalence?.grams ? `${selected.equivalence.grams} gramos · 1 equivalente` : 'Gramos por equivalente por definir'}</small>
         </div>
         <h3>Información nutricional por 100 g</h3>
         <div className="nutrient-table">{NUTRIENT_ROWS.map(([key, label, unit]) => <div key={key}><span>{label}</span><b>{selected.nutrition?.[key] ?? 0} {unit}</b></div>)}</div>

@@ -190,10 +190,12 @@ app.get('/api/v1/patients', async (request) => {
   return { items, page: currentPage, pageSize: take, total }
 })
 
+const emptyToNull = (value) => (value === undefined ? undefined : value === '' ? null : value)
+
 app.post('/api/v1/patients', async (request, reply) => {
   const { firstName, lastName, email, phone, birthDate, sex, occupation, consentDataAt } = request.body || {}
   if (!firstName || !lastName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido son obligatorios.', fields: { firstName: !firstName, lastName: !lastName } })
-  const patient = await prisma.patient.create({ data: { practiceId: request.practiceId, firstName, lastName, email, phone, sex, occupation, birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: consentDataAt ? new Date(consentDataAt) : undefined } })
+  const patient = await prisma.patient.create({ data: { practiceId: request.practiceId, firstName, lastName, email: emptyToNull(email), phone: emptyToNull(phone), sex, occupation: emptyToNull(occupation), birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: consentDataAt ? new Date(consentDataAt) : undefined } })
   return reply.code(201).send(patient)
 })
 
@@ -219,11 +221,11 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
     data: {
       ...(firstName !== undefined ? { firstName } : {}),
       ...(lastName !== undefined ? { lastName } : {}),
-      ...(email !== undefined ? { email } : {}),
-      ...(phone !== undefined ? { phone } : {}),
+      ...(email !== undefined ? { email: emptyToNull(email) } : {}),
+      ...(phone !== undefined ? { phone: emptyToNull(phone) } : {}),
       ...(birthDate !== undefined ? { birthDate: birthDate ? new Date(birthDate) : null } : {}),
       ...(sex !== undefined ? { sex } : {}),
-      ...(occupation !== undefined ? { occupation } : {}),
+      ...(occupation !== undefined ? { occupation: emptyToNull(occupation) } : {}),
       ...(status !== undefined ? { status, archivedAt: status === 'ARCHIVED' ? new Date() : null } : {}),
     },
   })
@@ -241,7 +243,9 @@ app.get('/api/v1/patients/:patientId/timeline', async (request, reply) => {
   const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   const [appointments, consultations, plans, documents, auditEvents] = await prisma.$transaction([
-    prisma.appointment.findMany({ where: { patientId }, orderBy: { startAt: 'desc' }, take: 20 }),
+    // The timeline is activity HISTORY — exclude upcoming (not yet started) appointments so a
+    // future confirmed visit doesn't render as already-done activity at the top of the drawer.
+    prisma.appointment.findMany({ where: { patientId, startAt: { lte: new Date() } }, orderBy: { startAt: 'desc' }, take: 20 }),
     prisma.consultation.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.nutritionPlan.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.document.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
@@ -356,13 +360,23 @@ app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (req
 // The anthropometric ClinicalSection payload is free-form (whatever labels the form on
 // screen happens to use) so the record report and the PDF instead read structured
 // Measurement rows — this is the only way to create one; nothing wrote it before.
+// Registering twice on the same day is a CORRECTION, not a new data point (it would show as two
+// stacked points on the evolution chart), so a second register for the same consultation within
+// the same UTC day updates the existing row instead of inserting a duplicate.
 app.post('/api/v1/consultations/:consultationId/measurements', async (request, reply) => {
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   const { measuredAt, weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes } = request.body || {}
-  const measurement = await prisma.measurement.create({
-    data: { patientId: consultation.patientId, consultationId: consultation.id, measuredAt: measuredAt ? new Date(measuredAt) : new Date(), weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes },
-  })
+  const at = measuredAt ? new Date(measuredAt) : new Date()
+  const values = { patientId: consultation.patientId, consultationId: consultation.id, measuredAt: at, weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes }
+  const [latest] = await prisma.measurement.findMany({ where: { consultationId: consultation.id }, orderBy: { measuredAt: 'desc' }, take: 1 })
+  if (latest && new Date(latest.measuredAt).toISOString().slice(0, 10) === at.toISOString().slice(0, 10)) {
+    const measurement = await prisma.measurement.update({ where: { id: latest.id }, data: values })
+    await logAudit(request, { action: 'updated', entity: 'Measurement', entityId: measurement.id, patientId: consultation.patientId, metadata: { corrected: true } })
+    return measurement
+  }
+  const measurement = await prisma.measurement.create({ data: values })
+  await logAudit(request, { action: 'created', entity: 'Measurement', entityId: measurement.id, patientId: consultation.patientId })
   return reply.code(201).send(measurement)
 })
 
@@ -838,7 +852,9 @@ app.get('/api/v1/dashboard/today', async (request) => {
   const [appointments, pendingConfirmations, followUps, activePatients, tasks] = await prisma.$transaction([
     prisma.appointment.findMany({ where: { practiceId, startAt: { gte: start, lte: end }, status: { notIn: ['CANCELLED', 'NO_SHOW'] }, type: { not: 'BLOCK' } }, include: { patient: true }, orderBy: { startAt: 'asc' } }),
     prisma.appointment.count({ where: { practiceId, startAt: { gte: start, lte: end }, status: 'PENDING_CONFIRMATION' } }),
-    prisma.task.count({ where: { practiceId, status: 'pending', type: { in: ['nutrition_plan', 'consultation_report'] } } }),
+    // FollowupsPage counts ALL pending tasks regardless of type; the card must match the page it
+    // links to (previously it only counted nutrition_plan + consultation_report and undercounted).
+    prisma.task.count({ where: { practiceId, status: 'pending' } }),
     prisma.patient.count({ where: { practiceId, status: 'ACTIVE' } }),
     prisma.task.findMany({ where: { practiceId, status: 'pending' }, include: { patient: true }, orderBy: { dueAt: 'asc' }, take: 3 }),
   ])
@@ -850,7 +866,7 @@ app.post('/api/v1/nutrition-plans/calculate', async (request, reply) => {
   const values = { age: Number(age), weightKg: Number(weightKg), heightCm: Number(heightCm) }
   const invalid = Object.entries(values).filter(([, value]) => !Number.isFinite(value) || value <= 0).map(([key]) => key)
   if (invalid.length) return reply.code(400).send({ code: 'INVALID_MEASUREMENTS', message: 'Edad, peso y talla deben ser valores positivos.', fields: Object.fromEntries(invalid.map((key) => [key, 'invalid'])) })
-  if (values.age < 1 || values.age > 120 || values.weightKg > 500 || values.heightCm > 250) return reply.code(400).send({ code: 'OUT_OF_RANGE', message: 'Revisa que las medidas estén dentro de un rango plausible.', fields: {} })
+  if (values.age < 1 || values.age > 120 || values.weightKg > 500 || values.heightCm > 250 || values.weightKg < 5 || values.heightCm < 40) return reply.code(400).send({ code: 'OUT_OF_RANGE', message: 'Revisa que las medidas estén dentro de un rango plausible.', fields: {} })
   try {
     return computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor, mets })
   } catch (error) {
@@ -916,7 +932,7 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
   const values = { age: Number(age), weightKg: Number(weightKg), heightCm: Number(heightCm) }
   const invalid = Object.entries(values).filter(([, value]) => !Number.isFinite(value) || value <= 0).map(([key]) => key)
   if (invalid.length) return reply.code(400).send({ code: 'INVALID_MEASUREMENTS', message: 'Edad, peso y talla deben ser valores positivos.', fields: Object.fromEntries(invalid.map((key) => [key, 'invalid'])) })
-  if (values.age < 1 || values.age > 120 || values.weightKg > 500 || values.heightCm > 250) return reply.code(400).send({ code: 'OUT_OF_RANGE', message: 'Revisa que las medidas estén dentro de un rango plausible.', fields: {} })
+  if (values.age < 1 || values.age > 120 || values.weightKg > 500 || values.heightCm > 250 || values.weightKg < 5 || values.heightCm < 40) return reply.code(400).send({ code: 'OUT_OF_RANGE', message: 'Revisa que las medidas estén dentro de un rango plausible.', fields: {} })
 
   try {
     const energy = computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor, mets })
@@ -960,6 +976,9 @@ app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_ALREADY_PUBLISHED', message: 'Este plan ya fue publicado.', fields: {} })
   if (!plan.mealSlots.length) return reply.code(400).send({ code: 'EMPTY_PLAN', message: 'Agrega al menos un tiempo de comida antes de publicar.', fields: {} })
+  // A plan can be half-created (recipes assigned) without ever saving the requirement — the
+  // Entrega preview and the PDF would then lack the kcal/macro box. Require the calculation.
+  if (plan.targetKcal == null || plan.carbsPercent == null) return reply.code(400).send({ code: 'PLAN_WITHOUT_CALCULATION', message: 'Guarda el cálculo de requerimientos en el paso "Plan alimentario" antes de publicar.', fields: {} })
   const menuSnapshot = buildMenuSnapshot(plan.mealSlots)
   const published = await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'PUBLISHED', publishedAt: new Date(), menuSnapshot } })
   await logAudit(request, { action: 'published', entity: 'NutritionPlan', entityId: plan.id, patientId: plan.patientId })
@@ -1016,6 +1035,19 @@ function drawDocumentBrand(file, subtitle, practice, logoBuffer) {
   }
 }
 
+// Values in section payloads can be nested (e.g. Bioquímico "Estudios" is an array of objects);
+// a bare join would print "[object Object]". Flatten objects to "clave: valor" pairs recursively.
+const stringifyEntry = (value) => {
+  if (Array.isArray(value)) return value.map(stringifyEntry).filter(Boolean).join(', ')
+  if (value && typeof value === 'object') {
+    const parts = Object.entries(value).filter(([, v]) => v !== null && v !== undefined && v !== '')
+    return parts.length ? parts.map(([k, v]) => `${k}: ${stringifyEntry(v)}`).join(' · ') : ''
+  }
+  return value
+}
+const diagnosisLine = (d) => [`${d.code || ''}`, `(${d.domain}) — ${d.problem}`, d.etiology ? `Causa: ${d.etiology}` : null, d.evidence ? `Evidencia: ${d.evidence}` : null].filter(Boolean).join(' ').trim()
+const signatureFor = (user, practice) => [user?.name || practice?.name || 'Nutri Studio', user?.specialty || null].filter(Boolean).join(' · ')
+
 function drawConsultationReport(file, document, practice, user, logoBuffer) {
   drawDocumentBrand(file, 'EXPEDIENTE DE CONSULTA NUTRICIONAL', practice, logoBuffer)
   file.fontSize(18).fillColor('#1c232f').text('Informe de consulta')
@@ -1026,7 +1058,9 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   const consultation = document.consultation
   const sections = consultation?.sections || []
   const payloadOf = (key) => sections.find((section) => section.sectionKey === key)?.payload || {}
-  const measurement = (consultation?.measurements || [])[0]
+  // Queries return measurements oldest-first; the PDF must show the LATEST one captured for the
+  // consultation, not the first (stale) row.
+  const measurement = [...(consultation?.measurements || [])].sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
   const diagnoses = consultation?.diagnoses || []
 
   // Summary box showing the real reason/objective when the expediente has them, not generic text.
@@ -1044,7 +1078,7 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   let sectionIndex = 0
   const drawTitle = (title) => { sectionIndex += 1; file.fillColor('#7267ef').fontSize(13).text(`${sectionIndex}. ${title}`); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#ddd6fa').stroke(); file.moveDown() }
   const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, { width: 480 })
-  const drawEntries = (payload) => { const entries = Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== '') ; if (!entries.length) return false; for (const [key, value] of entries) drawLine(`${key}: ${Array.isArray(value) ? value.join(', ') : value}`); return true }
+  const drawEntries = (payload) => { const entries = Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== '') ; if (!entries.length) return false; for (const [key, value] of entries) drawLine(`${key}: ${stringifyEntry(value)}`); return true }
 
   drawTitle('Datos generales')
   if (!drawEntries(payloadOf('general'))) drawLine('Sin datos generales registrados.')
@@ -1061,7 +1095,7 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   file.moveDown(1.5)
 
   drawTitle('Diagnóstico nutricio')
-  if (diagnoses.length) for (const d of diagnoses) drawLine(`${d.code} (${d.domain}) — ${d.problem}. Causa: ${d.etiology}. Evidencia: ${d.evidence}`)
+  if (diagnoses.length) for (const d of diagnoses) drawLine(diagnosisLine(d))
   else drawLine('Sin diagnóstico registrado.')
   file.moveDown(1.5)
 
@@ -1071,7 +1105,7 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
 
   // Explicit width: pdfkit persists the last text() box, so a bare { align: 'center' } would pin
   // the footer to whatever width/x the previous line used (see the menu footer fix).
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, 48, file.y, { width: 516, align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
 }
 
 const EXPORT_SECTION_KEYS = [
@@ -1099,7 +1133,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
   const consultation = document.consultation
   const sections = consultation?.sections || []
   const payloadOf = (key) => sections.find((section) => section.sectionKey === key)?.payload || {}
-  const measurement = (consultation?.measurements || [])[0]
+  const measurement = [...(consultation?.measurements || [])].sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
   const diagnoses = consultation?.diagnoses || []
 
   const summary = payloadOf('summary')
@@ -1125,7 +1159,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
     if (!entries.length) return false
     for (const [key, value] of entries) {
       if (value === true) drawLine(key.replace(/__/g, ' · '))
-      else if (Array.isArray(value)) drawLine(`${key}: ${value.join(', ')}`)
+      else if (Array.isArray(value) || (value && typeof value === 'object')) drawLine(`${key}: ${stringifyEntry(value)}`)
       else drawLine(`${key}: ${value}`)
     }
     return true
@@ -1149,7 +1183,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
       drawEntries(payloadOf('anthropometric'))
       file.moveDown(1)
     } else if (key === 'diagnosis') {
-      if (diagnoses.length) for (const d of diagnoses) drawLine(`${d.code ? d.code + ' ' : ''}(${d.domain}) — ${d.problem}. Causa: ${d.etiology}. Evidencia: ${d.evidence}`)
+      if (diagnoses.length) for (const d of diagnoses) drawLine(diagnosisLine(d))
       else drawLine('Sin diagnóstico registrado.')
       file.moveDown(1)
     } else {
@@ -1157,7 +1191,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
       file.moveDown(1)
     }
   }
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, 48, file.y, { width: 516, align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
 }
 
 function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
@@ -1182,7 +1216,7 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   const menu = plan?.menuSnapshot || []
   if (!menu.length) {
     file.fillColor('#6e6e73').fontSize(10).text('Este plan no tiene recetas asignadas.')
-    file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, 48, file.y, { width: 516, align: 'center' })
+    file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
     return
   }
 
@@ -1256,7 +1290,7 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   // the footer onto a second, almost-empty page. Also pass an explicit width: pdfkit persists the
   // last text() width/x, so a bare { align: 'center' } after the cell loop inherited the last
   // cell's narrow box and pinned the footer to the far right.
-  file.fillColor('#8e8f9a').fontSize(9).text(`${user?.name || practice?.name || 'Nutri Studio'} · Nutrióloga`, x0, file.y, { width: contentW, align: 'center' })
+  file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), x0, file.y, { width: contentW, align: 'center' })
 }
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {

@@ -19,6 +19,7 @@ export default function NewRecipePage({ setActive, recipeId }) {
   const [saved, setSaved] = useState(false)
   const [saveState, setSaveState] = useState('idle')
   const [saveError, setSaveError] = useState('')
+  const [recalcWarning, setRecalcWarning] = useState('')
 
   useEffect(() => {
     const query = ingredientSearch.trim()
@@ -52,17 +53,26 @@ export default function NewRecipePage({ setActive, recipeId }) {
   const update = (id, key, value) => setChosen(chosen.map((item) => item.id === id ? { ...item, [key]: Number(value) } : item))
 
   const save = async () => {
-    if (!name || !chosen.length) return
+    if (!name || !chosen.length || chosen.some((x) => Number(x.quantity) <= 0)) return
     setSaveState('saving')
     setSaveError('')
-    const ingredients = chosen.map((item) => ({ ingredientId: item.id, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence }))
+    // The quantity editor is labeled and computed in grams (per-100g nutrition math); persist that
+    // unit explicitly instead of leaking the ingredient's native unit (e.g. "100 taza").
+    const ingredients = chosen.map((item) => ({ ingredientId: item.id, quantity: item.quantity, unit: 'g', equivalence: item.equivalence }))
     try {
       if (recipeId) {
         await recipesApi.update(recipeId, { name, mealTypes: [MEAL_TYPE_KEYS[meal]], portions, instructions: instructions || 'Preparación pendiente de completar.' })
         await recipesApi.replaceIngredients(recipeId, ingredients)
       } else {
         const created = await recipesApi.create({ name, mealTypes: [MEAL_TYPE_KEYS[meal]], portions, restrictions: [], instructions: instructions || 'Preparación pendiente de completar.', ingredients })
-        await recipesApi.recalculate(created.id).catch(() => {})
+        // A failed recalc would leave the recipe with 0-kcal nutrition and the success panel
+        // would still say "guardada" — surface it instead of swallowing it.
+        setRecalcWarning('')
+        try {
+          await recipesApi.recalculate(created.id)
+        } catch {
+          setRecalcWarning('La receta se guardó, pero no se pudieron calcular sus nutrientes. Vuelve a abrirla para reintentar.')
+        }
       }
       setSaveState('idle')
       setSaved(true)
@@ -79,7 +89,7 @@ export default function NewRecipePage({ setActive, recipeId }) {
     {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando receta…</h3></div>}
     {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar la receta.</div>}
 
-    {loadState === 'ready' && (saved ? <div className="success-panel panel"><span>✓</span><h2>Receta {recipeId ? 'actualizada' : 'guardada'} correctamente</h2><p>La receta ya está relacionada con {chosen.length} ingrediente{chosen.length === 1 ? '' : 's'} locales.</p><button className="primary" onClick={() => setActive('Recetas')}>Ver recetario <span>→</span></button></div> : <div className="new-recipe-layout">
+    {loadState === 'ready' && (saved ? <div className="success-panel panel"><span>✓</span><h2>Receta {recipeId ? 'actualizada' : 'guardada'} correctamente</h2><p>La receta ya está relacionada con {chosen.length} ingrediente{chosen.length === 1 ? '' : 's'} locales.</p>{recalcWarning && <p className="form-error" style={{ marginTop: 10 }}>⚠ {recalcWarning}</p>}<button className="primary" onClick={() => setActive('Recetas')}>Ver recetario <span>→</span></button></div> : <div className="new-recipe-layout">
       <section className="panel recipe-form">
         <div className="form-section-title"><span>01</span><div><h2>Información de la receta</h2><p>Define cómo aparecerá en el plan del paciente.</p></div></div>
         <label>Nombre de la receta *<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Bowl de pollo con verduras" /></label>
@@ -93,7 +103,7 @@ export default function NewRecipePage({ setActive, recipeId }) {
         <div className="form-section-title second"><span>03</span><div><h2>Preparación</h2><p>Estos pasos se mostrarán al paciente.</p></div></div>
         <textarea className="wide-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Escribe los pasos de preparación..." />
         {saveState === 'error' && <div className="form-error">⚠ {saveError}</div>}
-        <div className="form-actions"><button type="button" className="secondary" onClick={() => setActive('Recetas')}>Cancelar</button><button type="button" className="primary" disabled={!name || !chosen.length || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : recipeId ? 'Guardar cambios' : 'Guardar receta'} <span>→</span></button></div>
+        <div className="form-actions"><button type="button" className="secondary" onClick={() => setActive('Recetas')}>Cancelar</button><button type="button" className="primary" disabled={!name || !chosen.length || chosen.some((x) => Number(x.quantity) <= 0) || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : recipeId ? 'Guardar cambios' : 'Guardar receta'} <span>→</span></button></div>
       </section>
       <aside className="panel recipe-preview"><p className="eyebrow">VISTA PREVIA</p><div className="recipe-preview-image coral">✦</div><span className="recipe-meal">{meal}</span><h2>{name || 'Nombre de tu receta'}</h2><p className="muted">Receta propia · {chosen.length} ingredientes</p><div className="preview-note">La nutrición se calculará automáticamente a partir de las cantidades guardadas.</div></aside>
     </div>)}

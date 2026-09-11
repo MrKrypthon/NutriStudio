@@ -545,3 +545,103 @@ Dos lotes de trabajo en una sola rama (la visual + la de Agenda), listos para re
 - Nombres de cita más grandes/legibles.
 
 Verificado: build OK, 47/47 tests, barrido de los 12 módulos sin errores de consola. La línea de hora y el CSS de Agenda se re-verificaron tras resolver un conflicto de merge en `globals.css`.
+
+## Fase 64 — Quinta auditoría (flujos): plan correcto en Entrega, estado fresco tras publicar, y 4 correcciones menores
+
+Auditoría dirigida a los flujos aún no verificados a fondo: Constructor de plan paso a paso (0→4), DocumentPage (publicar→generar→descargar→entregar), cajón del paciente (timeline/edición/archivar), y el expediente (medición/gráfico/informes). Flujos mayormente limpios; corregidos:
+
+- **MEDIO — La pestaña Entrega del Constructor mostraba el plan equivocado.** `DocumentPage` embebido cargaba `find(PUBLISHED) || [0]`, así que si existía un plan publicado previo, ignoraba el borrador actual — el borrador nuevo no se podía publicar/entregar desde el wizard. Ahora en modo embebido selecciona el **mismo plan activo que el Constructor** (el borrador no publicado, fallback al publicado); la ruta standalone `/Documento` sigue mostrando el publicado para descargar/entregar.
+- **MEDIO — El estado del plan quedaba obsoleto tras publicar.** Al publicar en el paso 4 y volver a pasos de edición, `plan` seguía siendo el DRAFT viejo y las ediciones fallaban con `PLAN_LOCKED` (409) sin explicación. `DocumentPage` ahora llama `onPublished` al publicar y `PlanStudio` re-fetchea el plan (quedando "No hay un plan en borrador"), y también refresca al volver desde el paso 4.
+- **BAJO — `nutritionApi.calculate` calculaba las macros del resultado con 50/25/25 fijos** (ignoraba la distribución editable), y el demo igual. Ahora usa `carbsPercent/proteinPercent/fatPercent` del payload.
+- **BAJO — Edad `'28'` hardcodeada** en el formulario del Constructor que se persistía como real si el paciente no tenía fecha de nacimiento. Ahora queda vacía (se captura).
+- **BAJO — Fallback `'Gabriela Alonso'` en el PDF** del plan (si el API de práctica fallaba). Ahora genérico "Nutrióloga".
+- **BAJO — "Registrar medición de hoy" permitía duplicados** tras un guardado exitoso (POSTeaba otra fila idéntica). Ahora el botón se deshabilita tras "✓ Medición registrada hoy".
+
+Verificado: build OK, 47/47 tests, y con Chromium que Entrega muestra "Plan en borrador · Publicar plan" para un paciente con un plan publicado previo (antes mostraba el publicado).
+
+### Fase 64 · 2ª tanda (módulos: Documentos, Hoy, Agenda, Recetas, Ingredientes)
+
+- **ALTO — Documentos abría el documento equivocado tras buscar.** La tabla renderizaba filas filtradas por búsqueda (`visibleRows`) pero el clic mapeaba con el *índice visible* hacia `filteredItems[i]` (sin filtrar): cualquier fila descartada corría los índices y se abría otro documento (que además podía descargarse/marcarse como entregado). Ahora la búsqueda filtra los **ítems reales** (`visibleItems`) y cada fila lleva su propio documento.
+- **MEDIO — Hoy mostraba "60 min" en todas las citas.** El objeto de cita real no trae `durationMinutes`, así que `durationLabel` caía en el hardcode. Ahora deriva `endAt - startAt` como la Agenda.
+- **MEDIO — Citas creadas con "No notificar" quedaban en SCHEDULED sin ningún affordance** (ni confirmables ni arrancables; etiqueta cruda en Hoy y fuera del filtro "Confirmadas"). Al no haber notificación no hay nada que confirmar, así que ahora `SCHEDULED` se trata como confirmada: arrancable desde Hoy ("Confirmada" · "Clic para iniciar la consulta") y listada en "Confirmadas" de la Agenda.
+- **MEDIO — Unidades de receta incoherentes.** El editor de cantidades está etiquetado y calculado en gramos, pero se persistía la unidad nativa del ingrediente (p. ej. "100 taza" mientras la nutrición se calcula como si fueran gramos). Ahora siempre se guarda `unit: 'g'`. Además se impide guardar con cantidades ≤ 0 (antes `Number('') = 0` pasaba y sumaba 0 a la nutrición).
+- **BAJO — Equivalencia importada fabricaba "100 gramos".** Al importar un alimento se guardaba `equivalence` sin gramos y el catálogo mostraba "100 gramos · 1 equivalente" inventado. Ahora el formulario pide los gramos reales por equivalente y, si no se capturan, la UI muestra "por definir" en vez de inventar.
+
+### Fase 64 · 3ª tanda (Expediente / consultas / informes)
+
+- **ALTO — Las consultas nunca se cerraban.** Existía el endpoint `POST /consultations/:id/complete` pero nada lo llamaba: cada cita (aun de días distintos) reutilizaba la misma consulta `IN_PROGRESS`, fusionando visitas distintas en una sola sesión que crecía sin fin (verificado: todos los pacientes activos tenían una consulta abierta de semanas atrás). Ahora: (a) el banner del Expediente tiene **"Terminar consulta"** (con confirmación) que cierra la sesión → "Consulta completada · Sesión cerrada"; y (b) al iniciar una cita de otro día, si hay una sesión vieja abierta se cierra antes de abrir la nueva.
+- **MEDIO — Registrar medición del mismo día duplicaba filas** (dos puntos apilados en el gráfico). Ahora el servidor hace *upsert*: re-registrar el mismo día corrige la fila existente, y la UI muestra "Actualizar medición de hoy →" (resuelve también el bloqueo permanente que introduje en la 1ª tanda).
+- **MEDIO — Los informes/expediente usaban la medición MÁS ANTIGUA** (`measurements[0]` sin orden) en la sección de Antropometría del PDF → ahora la más reciente.
+- **MEDIO — "Estudios" (Bioquímico) imprimía `[object Object]`** en el expediente exportado → se aplanan arreglos de objetos como "clave: valor".
+- **BAJO — "Causa: null / Evidencia: null"** en los diagnósticos del PDF → se omiten los campos vacíos.
+- **BAJO — Firma del PDF hardcodeada "· Nutrióloga"** → usa el nombre + especialidad real del profesional.
+- Pendiente (decisión de producto, no bloqueante): una consulta `COMPLETED` aún se puede editar en el historial (no hay guarda de solo lectura); el cierre evita que siga creciendo, pero editar una sesión cerrada sigue permitido.
+
+### Fase 64 · 4ª tanda (Configuración + barrido de estabilidad)
+
+- **BAJO — Configuración desincronizaba el estado.** Al dejar en blanco (o con solo espacios) el nombre/email, el servidor `name: userName || user.name` guardaba el valor viejo en silencio mientras la UI mostraba el campo vacío hasta recargar. Ahora se recortan los valores y se rechaza el guardado si nombre de práctica, nombre profesional o email quedan vacíos, con mensaje claro.
+- **Barrido de estabilidad:** se recorrieron con Chromium las 12 pantallas principales + el Expediente (cajón de paciente): **0 errores de consola / 0 crashes de React** en el estado actual de la rama.
+
+### Fase 64 · 5ª tanda (autosave, navegación entre sesiones, informes, descargas)
+
+- **ALTO — El autosave del Expediente perdía ediciones al cambiar de sección.** Un solo `pendingSaveRef` + un solo `saveTimer`: editar la sección A y pasar a B en los 800ms cancelaba el guardado de A (que quedaba solo en estado local, perdido al navegar); y el `finally` del request resuelto pisaba un pendiente más nuevo. Rediseñado a cola **por sección**: `pendingRef` acumula cada sección editada, un único flush las persiste todas, `lastSavedAtRef` se lee al momento del envío (elimina el **self-409** por token optimista obsoleto al teclear durante un guardado en vuelo), y `payloadMirrorRef` fusiona ediciones en el mismo tick (p. ej. dos chunks de transcripción). En 409, se resincroniza `lastSavedAt` desde el servidor y se re-encola la versión local en vez de quedar en bucle. **Verificado con Chromium**: editar General y cambiar a Notas <800ms → ambas secciones persisten.
+- **MEDIO — `selectedConsultationId` se quedaba clavado si el GET fallaba**, y la próxima "Abrir expediente" (incluso de otro paciente) reabría esa sesión ajena. Ahora el id se consume también en el fallo. Lo mismo para el `appointmentId` de inicio (evita re-ejecutar complete/create sobre la misma cita).
+- **MEDIO — Informe/expediente sin regenerar:** con `storageKey` el botón era un "Descargar" permanente de datos viejos. Ahora "Generar informe"→"Actualizar informe" siempre regenera el PDF (versión nueva) y hay "Descargar" aparte.
+- **BAJO — Las descargas autenticadas (documentos/adjuntos/materiales) no disparaban el logout en 401** (fetch crudo sin `notifyUnauthorized`). Centralizado en `downloadBlobRequest`.
+
+### Fase 64 · 6ª tanda (detalles BAJO)
+
+- **BAJO — `pendingRecipeName` ("Asignar al plan") se quedaba clavado** si salías del Constructor sin abrir el picker, y prellenaba un picker posterior ajeno. Ahora se consume también al desmontar.
+- **BAJO — El recálculo de nutrientes al crear una receta fallaba en silencio** (quedaba con 0 kcal y el panel decía "guardada"). Ahora se muestra un aviso visible.
+
+### Fase 64 · 7ª tanda (Hoy)
+
+- **BAJO — "Hoy" se quedaba con el día del import del módulo**: si la app quedaba abierta al pasar la medianoche, seguía mostrando ayer y re-cargando los datos de ayer. Ahora `now` vive en estado con un tick por minuto (fecha, saludo y re-fetch del día).
+- **BAJO — El contador "Seguimientos" de Hoy subcontaba** (solo contaba tareas `nutrition_plan` + `consultation_report`) frente a la página de Seguimientos que muestra todas → ahora cuenta todas las pendientes.
+
+### Fase 64 · 8ª tanda (Constructor de plan — internos)
+
+- **MEDIO — Publicar un plan a medio hacer**: si asignabas recetas sin haber guardado el cálculo, el plan se publicaba sin kcal/macros (la vista previa y el PDF omitían la caja de requerimiento). Ahora el servidor exige `targetKcal` (`PLAN_WITHOUT_CALCULATION`) y el botón "Publicar plan" se deshabilita con un aviso que apunta al paso Plan alimentario.
+- **MEDIO — Los PUT de distribución se pisaban**: dos ediciones rápidas lanzaban `deleteMany+createMany` superpuestos y el snapshot viejo podía llegar al final, borrando el cambio más nuevo. Ahora la persistencia se **serializa** (una petición en vuelo + cola del último snapshot).
+- **MEDIO — La receta base de la semana sobrescribía personalizaciones** día por día sin aviso → ahora confirma antes si hay recetas distintas ya asignadas.
+- **MEDIO — Cunningham/Katch-McArdle calculaban con masa total en silencio** (sin % grasa capturado). El wizard ahora pide `% Grasa corporal` cuando se seleccionan esas fórmulas y lo persiste en la evaluación.
+- **MEDIO — Recetas archivadas quedaban como slots fantasma** invisibles e irremovibles en la distribución → al cargar se filtran los slots con recetas archivadas/desconocidas y el guardado ya no los reenvía.
+- **BAJO — Medidas absurdas producían BMR negativos** (p. ej. 1 kg / 30 cm) → límites mínimos de peso (5 kg) y talla (40 cm) en calculate y evaluation.
+
+### Fase 64 · 9ª tanda (timeline, medición, datos de paciente, adjuntos, educación)
+
+- **MEDIO — Corregir la medición del día duplicaba el punto en el gráfico**: el servidor hace upsert (mismo id) pero la UI hacía `append` → dos filas con el mismo id. Ahora reemplaza la fila existente con ese id.
+- **MEDIO — El timeline del cajón marcaba citas futuras CONFIRMED como "hechas"** (dot lleno): la query traía citas sin filtrar por fecha y `DONE_STATUSES` incluía CONFIRMED. Ahora el timeline es solo historial (excluye citas no iniciadas) y CONFIRMED ya no cuenta como done.
+- **BAJO — Email/teléfono/ocupación vacíos se guardaban como `''`** en vez de NULL (columnas nullable) → `emptyToNull` en crear/editar paciente.
+- **BAJO — PDF de laboratorio rechazado cuando el navegador reporta `file.type` vacío** → se acepta si la extensión es `.pdf` (el servidor sigue siendo la validación de verdad).
+- **BAJO — `IMC calculado` quedaba obsoleto al limpiar peso/talla** → se elimina del payload.
+- **BAJO — Fallo al archivar material educativo sin feedback** → error visible en el modal.
+- **BAJO — El timeline no se actualizaba tras editar el paciente abierto** → se recarga tras guardar.
+
+### Fase 64 · 10ª tanda (wizard — preload y verificaciones)
+
+- **BAJO — El wizard solo pre-cargaba peso/talla** al reabrir un plan guardado; sexo, edad, % grasa y fórmula quedaban en el default y la vista no coincidía con lo persistido. Ahora pre-carga todos los inputs del cálculo guardado.
+- Verificados con Chromium/API en esta tanda: los 3 PDFs (informe, expediente, menú semanal) generan OK tras los cambios en los draw; el timeline excluye citas futuras; el wizard recorre pasos 0-4 sin errores y el campo `% Grasa corporal` aparece/solo con Cunningham/Katch-McArdle; la distribución no se puede modificar en un plan publicado (PLAN_LOCKED).
+
+### Fase 64 · 11ª tanda (Entrega vs. distribución)
+
+- **MEDIO — La vista previa de Entrega podía mostrar el menú viejo** si editabas una celda e ibas al paso 4 al instante (el PUT de distribución seguía en vuelo). Ahora la navegación a Entrega espera el vaciado de la cola (`selectStep` → `await flushPromiseRef`), y la persistencia usa una promesa compartida para que el último snapshot siempre gane.
+
+### Fase 64 · 12ª tanda (transcripción de voz)
+
+- **BAJO — Dos chunks finales de voz en el mismo tick se pisaban**: `appendFinalChunk` leía `values` del closure de render y pasaba el string completo, así que el segundo chunk partía del valor viejo y perdía el primero. Ahora `appendField` acumula contra el mirror síncrono.
+
+### Fase 64 · 13ª tanda (menú PDF, notas del plan)
+
+- **BAJO — El PDF del menú firmaba "Nutrióloga" hardcodeada en el early-return de menú vacío** → firma real (especialidad).
+- **BAJO — Las indicaciones del plan (consumo de agua/recomendaciones) se perdían si navegabas dentro de la ventana de 800ms** → flush al desmontar.
+
+### Fase 64 · 14ª tanda (adecuación de micronutrientes)
+
+- **MEDIO — La adecuación de vitamina D quedaba ~40× baja**: la tabla IDR transcribió 400/800 (UI) pero el catálogo de ingredientes y el label están en µg; un filete de salmón (11 µg) mostraba ~3% en vez de ~110%. Se normaliza a µg (10 µg adultos/niños, 20 µg adultos mayores) igual que se hizo con el calcio, se corrige el label de vitamina A a 'µg RE' y se agrega test de regresión.
+- Verificado además: el walkthrough completo del wizard (crear paciente → calcular → guardar → asignar receta base → publicar) con 0 errores y limpieza total; y que todas las rutas /api/v1 requieren JWT y filtran por practiceId.
+
+### Fase 64 · 15ª tanda (agenda — bloques y drag)
+
+- **Regresión corregida — Los bloques (status SCHEDULED) se volvieron 'confirmados'** con el fix de SCHEDULED: al hacer clic llamaban a iniciar consulta sin paciente y aparecían bajo el filtro "Confirmadas". Ahora los bloques se excluyen de arrancar y del filtro 'confirmed'.
+- **BAJO — Arrastrar una cita a un horario ocupado fallaba en silencio** (el servidor responde APPOINTMENT_OVERLAP pero la UI lo tragaba): ahora se muestra "Ese horario ya está ocupado".

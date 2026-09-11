@@ -78,6 +78,18 @@ describe('computeMicronutrientAdequacy', () => {
     expect(result.nutrients).toEqual([])
   })
 
+  it('uses vitamin D targets in µg (not the 400/800 IU the sheet originally stored)', () => {
+    // 11 µg of vitamin D (a salmon serving) against the adult IDR must be ~110%, not ~3% — a
+    // 400 IU target compared against µg ingredient values was a ~40x unit error.
+    const salmon = { dayOfWeek: 1, servings: 1, recipe: { nutrition: { vitaminD: 11 } } }
+    const adult = computeMicronutrientAdequacy([salmon], 35, 'female')
+    const vitD = adult.nutrients.find((n) => n.key === 'vitaminD')
+    expect(vitD.target).toBe(10)
+    expect(vitD.percent).toBeCloseTo(110, 1)
+    const senior = computeMicronutrientAdequacy([salmon], 75, 'female')
+    expect(senior.nutrients.find((n) => n.key === 'vitaminD').target).toBe(20)
+  })
+
   it('returns an empty nutrient list when the plan has no assigned recipes yet', () => {
     const result = computeMicronutrientAdequacy([], 35, 'female')
     expect(result.bracket).toBe('female_adult')

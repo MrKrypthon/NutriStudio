@@ -9,7 +9,7 @@ const DAY_LABELS = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: '
 const DAYS_ORDER = [1, 2, 3, 4, 5, 6, 7]
 const MEAL_TYPES_ORDER = ['breakfast', 'lunch', 'snack', 'dinner']
 
-export default function DocumentPage({ setActive, patientId, embedded = false }) {
+export default function DocumentPage({ setActive, patientId, embedded = false, onPublished }) {
   const { patient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const [preview, setPreview] = useState(false)
@@ -30,7 +30,12 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
       try {
         const plansResponse = await patientsApi.plans(patientId)
         const items = plansResponse.items || []
-        const activePlan = items.find((item) => item.status === 'PUBLISHED') || items[0] || null
+        // Embedded (plan wizard step 4) must work on the SAME plan PlanStudio is editing — the
+        // draft that's not yet published — not a previously published one. Standalone (/Documento)
+        // shows the published plan to download/deliver.
+        const activePlan = embedded
+          ? items.find((item) => item.status !== 'PUBLISHED') || items[0] || null
+          : items.find((item) => item.status === 'PUBLISHED') || items[0] || null
         if (cancelled) return
         setPlan(activePlan)
         if (activePlan?.status === 'PUBLISHED') {
@@ -46,7 +51,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
     }
     load()
     return () => { cancelled = true }
-  }, [patientId])
+  }, [patientId, embedded])
 
   const publishPlan = async () => {
     if (!plan) return
@@ -56,6 +61,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
       const published = await plansApi.publish(plan.id)
       setPlan(published)
       setPublishState('published')
+      onPublished?.()
     } catch (err) {
       setPublishState('error')
       setError(err.message || 'No se pudo publicar el plan.')
@@ -136,7 +142,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
             </>
           : plan?.status === 'PUBLISHED'
             ? <button className="primary" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Generando…' : 'Generar PDF'}</button>
-            : <button className="primary" disabled={!plan || publishState === 'publishing'} onClick={publishPlan}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar plan'}</button>}
+            : <button className="primary" disabled={!plan || publishState === 'publishing' || !menu.length || !plan.targetKcal} onClick={publishPlan}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar plan'}</button>}
       </div>
     </div>
 
@@ -149,7 +155,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
         <div className="paper-toolbar"><span>Vista previa del plan</span><small>{plan.status === 'PUBLISHED' ? 'Publicado · no se modificará' : 'Borrador · aún puede cambiar'}</small></div>
         <div className="paper">
           <div className="paper-brand">{practice?.logoUrl ? <img src={`${practiceApi.logoUrl(practice.id)}?v=${practice.updatedAt}`} alt="" className="brand-mark logo-preview" /> : <div className="brand-mark placeholder">N</div>}<div><b>{practice?.name || 'nutri·studio'}</b><small>PLAN DE ALIMENTACIÓN</small></div></div>
-          <div className="paper-meta"><b>Menú semanal</b><span>Paciente: {patientName}</span><span>Nutrióloga: {practice?.user?.name || 'Gabriela Alonso'}</span></div>
+          <div className="paper-meta"><b>Menú semanal</b><span>Paciente: {patientName}</span><span>Nutrióloga: {practice?.user?.name || 'Nutrióloga'}</span></div>
           {plan.targetKcal && <div className="paper-highlight"><b>Objetivo: {plan.goal || 'Sin objetivo registrado'}</b><p>{plan.targetKcal} kcal/día · {plan.carbsPercent}% carbohidratos · {plan.proteinPercent}% proteína · {plan.fatPercent}% grasas</p></div>}
           {!menu.length && <p className="muted">Este plan todavía no tiene recetas asignadas en la distribución semanal.</p>}
           {menu.length > 0 && <div className="paper-week">
@@ -167,6 +173,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false })
         <h2>{plan.status === 'PUBLISHED' ? 'Plan publicado' : 'Plan en borrador'}</h2>
         <p className="muted">{plan.status === 'PUBLISHED' ? 'El menú quedó congelado: aunque edites una receta después, este documento no cambiará.' : 'Publica el plan para congelar el menú y poder generar su PDF.'}</p>
         <div className="document-summary"><span>{menu.length} comidas asignadas</span><b>{plan.status === 'PUBLISHED' ? (document?.storageKey ? (document.deliveredAt ? 'Entregado' : 'PDF listo') : 'Falta generar el PDF') : 'Falta publicar'}</b></div>
+        {!plan.targetKcal && <p className="muted">Falta guardar el cálculo de requerimientos: vuelve al paso "Plan alimentario" para poder publicar el plan.</p>}
         {plan.status !== 'PUBLISHED' && <button className="primary full-button" disabled={publishState === 'publishing' || !menu.length} onClick={publishPlan}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar plan'} <span>→</span></button>}
         {plan.status === 'PUBLISHED' && !document?.storageKey && <button className="primary full-button" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Generando…' : 'Generar PDF'} <span>→</span></button>}
         {plan.status === 'PUBLISHED' && document?.storageKey && <button className="primary full-button" onClick={downloadPdf}>Descargar PDF <span>→</span></button>}
