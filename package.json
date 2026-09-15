@@ -16,7 +16,13 @@
     "recetario:extract": "node prisma/tools/extract-recetario.js && node prisma/tools/extract-recetario-images.js",
     "test": "vitest run",
     "db:link-smae": "node prisma/tools/link-smae.js --write",
-    "recetario:link": "node prisma/tools/link-smae.js --analyze"
+    "recetario:link": "node prisma/tools/link-smae.js --analyze",
+    "db:import-smae": "node prisma/import-smae.js",
+    "db:import-recetas": "node prisma/import-recetas.js",
+    "db:setup": "npm run db:push && npm run db:seed && npm run db:import-smae && npm run db:import-base && npm run db:import-recetas && npm run db:import-recetario && npm run db:link-smae",
+    "db:import-base": "node prisma/import-base-alimentos.js",
+    "predev:all": "node prisma/sync-dev.js",
+    "db:sync": "node prisma/sync-dev.js"
   },
   "dependencies": {
     "@fastify/cors": "latest",

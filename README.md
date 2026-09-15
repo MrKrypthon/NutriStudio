@@ -11,6 +11,57 @@ npm run dev
 
 Este comando ejecuta la interfaz en modo demo y no intenta conectarse al API. Por eso no debe mostrar errores de proxy.
 
+## Poner todo en marcha en otro dispositivo
+
+Requisitos: Node 20+, Git, Docker (para PostgreSQL).
+
+```bash
+git clone https://github.com/MrKrypthon/NutriStudio.git
+cd NutriStudio
+git checkout main          # o la rama de la fase mientras el PR no esté fusionado
+npm install
+cp .env.example .env
+docker compose up -d postgres
+npm run db:setup           # push + seed + SMAE + base + recetas propias + recetario + cálculo SMAE
+npm run dev:all            # API en :3001 y web en :5173
+```
+
+`db:setup` reconstruye toda la base desde cero con datos versionados en el repo:
+`prisma/data/smae.json`, `prisma/data/base-alimentos.json` y `prisma/data/recetario.json`
+(más las 501 fotos en `storage/recipes/`). No hace falta el PDF original ni el Excel.
+
+### Si ya tenías el repo clonado
+
+Solo hace falta:
+
+```bash
+git pull
+npm run dev:all
+```
+
+Antes de arrancar, `predev:all` ejecuta `prisma/sync-dev.js`, que de forma **idempotente**
+sincroniza el esquema (`prisma db push`) e importa únicamente lo que falte (seed, catálogos,
+recetario y cálculo SMAE). No sobrescribe ediciones manuales. Para omitirlo (por ejemplo con una
+base remota ya lista): `SKIP_DB_SYNC=1 npm run dev:all`. Requiere PostgreSQL corriendo
+(`docker compose up -d postgres`) y el `.env` configurado.
+
+### Alternativa: copiar la base tal cual (sin reimportar)
+
+Si quieres exactamente la misma base (incluye ediciones manuales y `calculatedNutrition` ya
+calculado), exporta/importa un respaldo de PostgreSQL:
+
+```bash
+# En el dispositivo origen
+docker compose exec -T postgres pg_dump -U nutri -d nutri_studio > respaldo.sql
+
+# En el dispositivo destino (misma versión del esquema; cópiale respaldo.sql)
+docker compose up -d postgres
+cat respaldo.sql | docker compose exec -T postgres psql -U nutri -d nutri_studio
+```
+
+`npm run db:setup` es más reproducible y ligero; el respaldo es más fiel pero acopla la versión
+del esquema.
+
 ## API y base de datos local
 
 Requiere Docker para PostgreSQL:
