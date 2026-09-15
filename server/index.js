@@ -28,10 +28,10 @@ const SESSION_TTL = '7d'
 // preflight (@fastify/cors replies to OPTIONS before this hook runs, but excluded here too
 // in case that ever changes) and health check.
 const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login'])
-// Practice logos are branding, not patient data, and need to load in a plain <img src>
-// (which can't send an Authorization header) both in-app and inside generated PDFs/emails —
-// so this one route is public by design, scoped by the practice's own unguessable uuid.
-const PUBLIC_ROUTE_PATTERNS = [/^\/api\/v1\/practice\/[^/]+\/logo$/]
+// Practice logos and recipe photos are branding/content, not patient data, and need to load in a
+// plain <img src> (which can't send an Authorization header) both in-app and inside generated
+// PDFs/emails — so these routes are public by design, scoped by unguessable ids/file names.
+const PUBLIC_ROUTE_PATTERNS = [/^\/api\/v1\/practice\/[^/]+\/logo$/, /^\/api\/v1\/recipes\/images\/[^/]+$/]
 
 // @fastify/cors defaults `methods` to 'GET,HEAD,POST' only (the CORS-spec "simple methods"),
 // so without this every PUT here has silently failed preflight for any cross-origin caller
@@ -157,6 +157,21 @@ app.get('/api/v1/practice/:practiceId/logo', async (request, reply) => {
   const mime = Object.entries(LOGO_MIME_EXT).find(([, e]) => e === ext)?.[0] || 'application/octet-stream'
   const file = await readFile(path.join(directory, practice.logoUrl))
   return reply.type(mime).header('Cache-Control', 'public, max-age=300').send(file)
+})
+
+// Public for the same reason as the logo route above: recipe cards use these directly as <img
+// src>. The strict file-name pattern blocks path traversal. Files live in storage/recipes, which
+// prisma/import-recetario.js fills from the ebook's embedded photos.
+app.get('/api/v1/recipes/images/:fileName', async (request, reply) => {
+  const { fileName } = request.params
+  if (!/^[a-z0-9][a-z0-9-]*\.jpg$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
+  const directory = path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH || './storage/recipes')
+  try {
+    const file = await readFile(path.join(directory, fileName))
+    return reply.type('image/jpeg').header('Cache-Control', 'public, max-age=86400').send(file)
+  } catch {
+    return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
+  }
 })
 
 app.get('/api/v1/patients', async (request) => {
@@ -654,16 +669,16 @@ app.get('/api/v1/recipes', async (request) => {
     ...(mealType ? { mealTypes: { has: mealType } } : {}),
     ...(restriction ? { restrictions: { has: restriction } } : {}),
   }
-  const recipes = await prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' }, take: 100 })
+  const recipes = await prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' }, take: 1000 })
   return { items: recipes }
 })
 
 app.post('/api/v1/recipes', async (request, reply) => {
-  const { name, mealTypes = [], portions, instructions, nutrition = {}, restrictions = [], imageUrl, ingredients = [] } = request.body || {}
+  const { name, mealTypes = [], portions, instructions, nutrition = {}, restrictions = [], imageUrl, ingredientsText, timeMinutes, ingredients = [] } = request.body || {}
   if (!name || !mealTypes.length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y al menos un tiempo de comida son obligatorios.', fields: { name: !name, mealTypes: !mealTypes.length } })
   const validIngredients = ingredients.length ? await prisma.ingredient.findMany({ where: { id: { in: ingredients.map((item) => item.ingredientId).filter(Boolean) }, practiceId: request.practiceId }, select: { id: true } }) : []
   const validIds = new Set(validIngredients.map((item) => item.id))
-  const recipe = await prisma.recipe.create({ data: { practiceId: request.practiceId, name, mealTypes, portions, instructions, nutrition, restrictions, imageUrl, ingredients: { create: ingredients.filter((item) => validIds.has(item.ingredientId)).map((item) => ({ ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) } }, include: { ingredients: { include: { ingredient: true } } } })
+  const recipe = await prisma.recipe.create({ data: { practiceId: request.practiceId, name, mealTypes, portions, instructions, nutrition, restrictions, imageUrl, ...(ingredientsText !== undefined ? { ingredientsText } : {}), ...(timeMinutes !== undefined ? { timeMinutes } : {}), ingredients: { create: ingredients.filter((item) => validIds.has(item.ingredientId)).map((item) => ({ ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) } }, include: { ingredients: { include: { ingredient: true } } } })
   return reply.code(201).send(recipe)
 })
 
@@ -676,7 +691,7 @@ app.get('/api/v1/recipes/:recipeId', async (request, reply) => {
 app.patch('/api/v1/recipes/:recipeId', async (request, reply) => {
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
-  const { name, mealTypes, portions, instructions, restrictions, imageUrl, status } = request.body || {}
+  const { name, mealTypes, portions, instructions, restrictions, imageUrl, ingredientsText, timeMinutes, status } = request.body || {}
   if (name !== undefined && !name) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El nombre no puede quedar vacío.', fields: { name: true } })
   if (mealTypes !== undefined && !mealTypes.length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Selecciona al menos un tiempo de comida.', fields: { mealTypes: true } })
   const updated = await prisma.recipe.update({
@@ -688,6 +703,8 @@ app.patch('/api/v1/recipes/:recipeId', async (request, reply) => {
       ...(instructions !== undefined ? { instructions } : {}),
       ...(restrictions !== undefined ? { restrictions } : {}),
       ...(imageUrl !== undefined ? { imageUrl } : {}),
+      ...(ingredientsText !== undefined ? { ingredientsText } : {}),
+      ...(timeMinutes !== undefined ? { timeMinutes } : {}),
       ...(status !== undefined ? { status } : {}),
     },
     include: { ingredients: { include: { ingredient: true } } },

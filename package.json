@@ -12,6 +12,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",
+    "db:import-recetario": "node prisma/import-recetario.js",
+    "recetario:extract": "node prisma/tools/extract-recetario.js && node prisma/tools/extract-recetario-images.js",
     "test": "vitest run"
   },
   "dependencies": {

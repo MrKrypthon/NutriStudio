@@ -25,6 +25,18 @@ npm run api
 
 La API queda disponible en `http://localhost:3001`. El frontend utiliza `/api/v1` por defecto y puede cambiarse con `VITE_API_URL`.
 
+### Recetario `500 Recetas Cero - México`
+
+El catálogo del libro se extrae del PDF y se importa a la base de datos:
+
+```bash
+npm run recetario:extract      # PDF -> prisma/data/recetario.json + storage/recipes/*.jpg
+npm run db:import-recetario    # JSON -> tabla Recipe (requiere db:seed previo)
+```
+
+`recetario:extract` requiere `poppler-utils` (`pdftotext`, `pdfimages`) e ImageMagick (`convert`). Las recetas importadas guardan ingredientes en texto libre, tiempo de preparación, foto y macros por porción; al ajustar las porciones en la vista de recetas se escalan macros e ingredientes. Re-ejecutar `db:import-recetario` es idempotente (actualiza por nombre + tiempo de comida) y acepta `--reset` para reemplazarlas.
+
+
 Para levantar frontend y API simultáneamente:
 
 ```bash

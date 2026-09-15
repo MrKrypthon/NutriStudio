@@ -285,12 +285,22 @@ model Recipe {
   nutrition     Json
   restrictions  String[]
   imageUrl      String?
+  // Imported cookbook recipes (see prisma/import-recetario.js) carry free-text ingredient lines
+  // and a prep time instead of catalog-linked RecipeIngredient rows, because the source states
+  // quantities in household measures ("1/2 taza") and only gives per-serving macros. `nutrition`
+  // keeps its usual meaning: values for one portion, scaled by `portions`/servings at read time.
+  ingredientsText Json?
+  timeMinutes   Int?
+  imageFile     String?
+  source        String?
   status        RecordStatus @default(ACTIVE)
   version       Int         @default(1)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
   ingredients   RecipeIngredient[]
   mealSlots     MealSlot[]
+
+  @@index([practiceId, source])
 }
 
 model EducationMaterial {
