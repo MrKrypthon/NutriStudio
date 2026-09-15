@@ -133,6 +133,13 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   const textIngredients = Array.isArray(selected?.ingredientsText) ? selected.ingredientsText : []
   const yieldPortions = Number(selected?.portions) || null
 
+  // "Contraste": the original book values (`nutrition`) against the manual SMAE calculation
+  // (`calculatedNutrition`), both scaled to the servings currently selected.
+  const isImported = Boolean(selected?.source)
+  const calculatedNutrition = selected?.calculatedNutrition || null
+  const contrastValue = (source, key) => round1((Number(source?.[key]) || 0) * servings)
+  const hasApproxIngredients = linkedIngredients.some((item) => item.ingredient.group === 'Aproximados Menu 500')
+
   return <AppChrome active="Recetas" setActive={setActive}><div className="content recipe-workspace">
     <ModuleHeader eyebrow="BIBLIOTECA · RECETAS LOCALES" title="Recetas" subtitle="Tu catálogo propio, listo para personalizar en cada plan." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizado' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span><button className="primary" onClick={startCreate}><span>+</span> Nueva receta</button></div>} />
 
@@ -172,12 +179,18 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
           <div className="nutrition-summary"><div><b>{scaled('kcal')}</b><small>kcal</small></div><div><b>{scaled('carbs')}g</b><small>Carbohidratos</small></div><div><b>{scaled('protein')}g</b><small>Proteína</small></div><div><b>{scaled('fat')}g</b><small>Grasas</small></div></div>
           {Number(nutrition.fiber) > 0 && <p className="nutrition-note">Fibra {scaled('fiber')} g · calculado para {servings} {servings === 1 ? 'porción' : 'porciones'}</p>}
 
+          {isImported && (calculatedNutrition ? <div className="smae-summary">
+            <div className="smae-summary-head"><span>Calculado según SMAE{hasApproxIngredients ? ' + aprox.' : ''}</span><small>{servings === 1 ? 'por porción' : `por ${servings} porciones`}</small></div>
+            <div className="smae-summary-values"><b>{contrastValue(calculatedNutrition, 'kcal')} kcal</b><span>{contrastValue(calculatedNutrition, 'carbs')} g carb · {contrastValue(calculatedNutrition, 'protein')} g prot · {contrastValue(calculatedNutrition, 'fat')} g grasa</span></div>
+            {linkedIngredients.length > 0 && <small className="smae-summary-ingredients">Con {linkedIngredients.length} ingrediente{linkedIngredients.length === 1 ? '' : 's'}{hasApproxIngredients ? ' (incluye aproximados)' : ''}: {linkedIngredients.map((item) => item.ingredient.name).join(', ')}</small>}
+          </div> : <div className="smae-summary empty"><span>Sin cálculo SMAE todavía.</span><button type="button" className="link-button" onClick={startEdit}>Vincular ingredientes →</button></div>)}
+
           <div className={selected.instructions ? 'detail-columns' : undefined}>
           <div className="detail-section">
             <div className="detail-section-head"><h3>Ingredientes{servings !== 1 ? ' (ajustados)' : ''}</h3></div>
-            {linkedIngredients.map((item) => <div className="recipe-ingredient" key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.ingredient.name}</b><small>{round1(Number(item.quantity) * servings)} {item.unit} · {item.equivalence || 0} eq.</small></div></div>)}
-            {!linkedIngredients.length && textIngredients.map((line, index) => <div className="recipe-ingredient" key={index}><span className="ingredient-icon">◉</span><div><b>{scaleIngredientLine(line, servings)}</b></div></div>)}
-            {!linkedIngredients.length && !textIngredients.length && <p className="muted">Sin ingredientes registrados.</p>}
+            {textIngredients.length > 0 && textIngredients.map((line, index) => <div className="recipe-ingredient" key={index}><span className="ingredient-icon">◉</span><div><b>{scaleIngredientLine(line, servings)}</b></div></div>)}
+            {!textIngredients.length && linkedIngredients.map((item) => <div className="recipe-ingredient" key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.ingredient.name}</b><small>{round1(Number(item.quantity) * servings)} {item.unit} · {item.equivalence || 0} eq.</small></div></div>)}
+            {!textIngredients.length && !linkedIngredients.length && <p className="muted">Sin ingredientes registrados.</p>}
           </div>
 
           {selected.instructions && <div className="detail-section">
@@ -185,6 +198,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
             <p className="muted" style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{selected.instructions}</p>
           </div>}
           </div>
+
           <button className="primary detail-assign" onClick={() => onAssignRecipe ? onAssignRecipe(selected.name) : setActive('Constructor de plan')}>Asignar al plan <span>→</span></button>
           {isReal && <button className="link-button" disabled={archiveState === 'archiving'} onClick={archive}>{archiveState === 'archiving' ? 'Archivando…' : 'Archivar receta'}</button>}
         </div>

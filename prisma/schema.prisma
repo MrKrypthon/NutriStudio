@@ -293,6 +293,11 @@ model Recipe {
   timeMinutes   Int?
   imageFile     String?
   source        String?
+  // For imported recipes, `nutrition` holds the book's per-serving values and stays untouched.
+  // `calculatedNutrition` is the per-serving result of the manually linked SMAE ingredients, so
+  // the recipe view can contrast "Original (PDF)" against "Calculado (SMAE)".
+  calculatedNutrition Json?
+  calculationUpdatedAt DateTime?
   status        RecordStatus @default(ACTIVE)
   version       Int         @default(1)
   createdAt     DateTime    @default(now())
