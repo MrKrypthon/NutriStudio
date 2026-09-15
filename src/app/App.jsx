@@ -40,7 +40,14 @@ export default function App() {
   const setActive = (next) => {
     setActiveState(next)
     const slug = moduleToSlug[next]
-    if (slug && window.location.pathname !== `/${slug}`) window.history.pushState({}, '', `/${slug}`)
+    if (slug) {
+      if (window.location.pathname !== `/${slug}`) window.history.pushState({}, '', `/${slug}`)
+      return
+    }
+    // "Nueva receta"/"Editar receta" have no slug of their own. Push a history entry anyway
+    // (keeping the /recetas URL) so the browser back returns to the recipe list and unmounts the
+    // form — which is what stores its in-memory draft — instead of leaving the section entirely.
+    if (next === 'Nueva receta' || next === 'Editar receta') window.history.pushState({}, '', '/recetas')
   }
 
   useEffect(() => {
@@ -98,8 +105,8 @@ export default function App() {
   if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} autoOpenNew={autoOpenNewAppointment} autoOpenPatientId={newAppointmentPatientId} onConsumeAutoOpen={() => { setAutoOpenNewAppointment(false); setNewAppointmentPatientId('') }} autoFilter={autoAgendaFilter} onConsumeAutoFilter={() => setAutoAgendaFilter(null)} />
   if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
-  if (active === 'Nueva receta') return <NewRecipePage setActive={setActive} />
-  if (active === 'Editar receta') return <NewRecipePage setActive={setActive} recipeId={selectedRecipeId} />
+  if (active === 'Nueva receta') return <NewRecipePage key="new" setActive={setActive} />
+  if (active === 'Editar receta') return <NewRecipePage key={selectedRecipeId || 'new'} setActive={setActive} recipeId={selectedRecipeId} />
   if (active === 'Configuración') return <SettingsPage setActive={setActive} />
   if (active === 'Importar alimentos') return <ImportFoodsPage setActive={setActive} />
   if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} consultationId={selectedConsultationId} onConsumeConsultation={() => setSelectedConsultationId(null)} appointmentId={startAppointmentId} onConsumeAppointment={() => setStartAppointmentId(null)} onScheduleAppointment={() => goToNewAppointment(selectedPatientId)} />

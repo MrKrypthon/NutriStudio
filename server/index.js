@@ -660,14 +660,38 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
 const RECIPE_NUTRITION_KEYS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'sodium', 'vitaminA', 'vitaminC', 'folicAcid', 'calcium', 'iron', 'vitaminD', 'vitaminE', 'vitaminK', 'vitaminB12', 'zinc', 'iodine', 'selenium']
 const emptyNutritionTotals = () => Object.fromEntries(RECIPE_NUTRITION_KEYS.map((key) => [key, 0]))
 
+// Per-serving nutrition from linked catalog ingredients (the SMAE calculation). Imported recipes
+// use this to contrast against the book's original values instead of overwriting them.
+const perServingFromIngredients = (ingredients, portions) => {
+  const totals = emptyNutritionTotals()
+  for (const item of ingredients) {
+    const nutrition = item.ingredient.nutrition || {}
+    const factor = Number(item.quantity) / 100
+    for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor
+  }
+  const servings = Number(portions || 1)
+  return Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round((value / servings) * 10) / 10]))
+}
+
 app.get('/api/v1/recipes', async (request) => {
-  const { search = '', mealType, restriction, status = 'ACTIVE' } = request.query
+  const { search = '', mealType, restriction, status = 'ACTIVE', page, pageSize } = request.query
   const where = {
     practiceId: request.practiceId,
     status,
     ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
     ...(mealType ? { mealTypes: { has: mealType } } : {}),
     ...(restriction ? { restrictions: { has: restriction } } : {}),
+  }
+  // Pagination is opt-in: the plan builder fetches the whole catalog (no params), while the
+  // recipes library passes page/pageSize and gets a `total` back for the pager.
+  if (page !== undefined || pageSize !== undefined) {
+    const currentPage = Math.max(Number(page) || 1, 1)
+    const take = Math.min(Math.max(Number(pageSize) || 24, 1), 200)
+    const [items, total] = await prisma.$transaction([
+      prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' }, skip: (currentPage - 1) * take, take }),
+      prisma.recipe.count({ where }),
+    ])
+    return { items, total, page: currentPage, pageSize: take }
   }
   const recipes = await prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' }, take: 1000 })
   return { items: recipes }
@@ -719,17 +743,21 @@ app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
   const validIngredients = ingredients.length ? await prisma.ingredient.findMany({ where: { id: { in: ingredients.map((item) => item.ingredientId).filter(Boolean) }, practiceId: request.practiceId }, select: { id: true } }) : []
   const validIds = new Set(validIngredients.map((item) => item.id))
   const filteredIngredients = ingredients.filter((item) => validIds.has(item.ingredientId))
-  if (!filteredIngredients.length) return reply.code(400).send({ code: 'EMPTY_RECIPE', message: 'La receta debe conservar al menos un ingrediente.', fields: {} })
+  // An imported recipe may legitimately have no SMAE linkage (that just clears the calculated
+  // side); a handmade recipe still needs at least one ingredient or its nutrition would be 0.
+  if (!filteredIngredients.length && !recipe.source) return reply.code(400).send({ code: 'EMPTY_RECIPE', message: 'La receta debe conservar al menos un ingrediente.', fields: {} })
   const updated = await prisma.$transaction(async (transaction) => {
     await transaction.recipeIngredient.deleteMany({ where: { recipeId: recipe.id } })
-    await transaction.recipeIngredient.createMany({ data: filteredIngredients.map((item) => ({ recipeId: recipe.id, ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) })
+    if (filteredIngredients.length) await transaction.recipeIngredient.createMany({ data: filteredIngredients.map((item) => ({ recipeId: recipe.id, ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) })
     return transaction.recipe.findUnique({ where: { id: recipe.id }, include: { ingredients: { include: { ingredient: true } } } })
   })
-  const totals = emptyNutritionTotals()
-  for (const item of updated.ingredients) { const nutrition = item.ingredient.nutrition || {}; const factor = Number(item.quantity) / 100; for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor }
-  const servings = Number(updated.portions || 1)
-  const nutrition = Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round((value / servings) * 10) / 10]))
-  return prisma.recipe.update({ where: { id: updated.id }, data: { nutrition, version: { increment: 1 } }, include: { ingredients: { include: { ingredient: true } } } })
+  const computed = perServingFromIngredients(updated.ingredients, updated.portions)
+  // Imported recipes keep their original per-serving values in `nutrition` and store the SMAE
+  // result in `calculatedNutrition`; handmade recipes keep the old behavior (nutrition = computed).
+  const data = updated.source
+    ? { calculatedNutrition: filteredIngredients.length ? computed : null, calculationUpdatedAt: new Date(), version: { increment: 1 } }
+    : { nutrition: computed, version: { increment: 1 } }
+  return prisma.recipe.update({ where: { id: updated.id }, data, include: { ingredients: { include: { ingredient: true } } } })
 })
 
 app.get('/api/v1/recipes/:recipeId/nutrition', async (request, reply) => {
@@ -747,12 +775,12 @@ app.get('/api/v1/recipes/:recipeId/nutrition', async (request, reply) => {
 app.post('/api/v1/recipes/:recipeId/recalculate', async (request, reply) => {
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId }, include: { ingredients: { include: { ingredient: true } } } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
-  const totals = emptyNutritionTotals()
-  for (const item of recipe.ingredients) { const nutrition = item.ingredient.nutrition || {}; const factor = Number(item.quantity) / 100; for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor }
-  const servings = Number(recipe.portions || 1)
-  const nutrition = Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round((value / servings) * 10) / 10]))
-  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { nutrition, version: { increment: 1 } } })
-  return { recipe: updated, nutrition, version: updated.version }
+  const computed = perServingFromIngredients(recipe.ingredients, recipe.portions)
+  const data = recipe.source
+    ? { calculatedNutrition: recipe.ingredients.length ? computed : null, calculationUpdatedAt: new Date(), version: { increment: 1 } }
+    : { nutrition: computed, version: { increment: 1 } }
+  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data })
+  return { recipe: updated, nutrition: recipe.source ? recipe.nutrition : computed, calculatedNutrition: recipe.source ? updated.calculatedNutrition : null, version: updated.version }
 })
 
 app.get('/api/v1/education-materials', async (request) => {
@@ -856,6 +884,17 @@ app.post('/api/v1/ingredients/import', async (request, reply) => {
   const practiceId = request.practiceId
   const ingredient = await prisma.ingredient.create({ data: { practiceId, name, group, unit, nutrition, equivalence: { ...equivalence, source: { provider: source, externalId, importedAt: new Date().toISOString() } } } })
   return reply.code(201).send({ ...ingredient, imageUrl: imageUrl || null })
+})
+
+// Manual ingredient (e.g. the "Aproximados Menu 500" group) so a missing catalog item can be
+// approximated and then linked into a recipe to contrast the SMAE calculation against the book.
+app.post('/api/v1/ingredients', async (request, reply) => {
+  const { name, group, unit = 'g', nutrition = {}, equivalence } = request.body || {}
+  if (!name || !group) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y grupo son obligatorios.', fields: { name: !name, group: !group } })
+  const duplicate = await prisma.ingredient.findFirst({ where: { practiceId: request.practiceId, name: { equals: name, mode: 'insensitive' } } })
+  if (duplicate) return reply.code(409).send({ code: 'INGREDIENT_EXISTS', message: 'Ya existe un ingrediente con ese nombre.', fields: { name: true } })
+  const ingredient = await prisma.ingredient.create({ data: { practiceId: request.practiceId, name, group, unit, nutrition, equivalence: equivalence || null } })
+  return reply.code(201).send(ingredient)
 })
 
 app.get('/api/v1/food/search', async (request, reply) => {

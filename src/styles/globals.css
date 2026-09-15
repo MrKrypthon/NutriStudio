@@ -96,3 +96,106 @@ html{scroll-behavior:smooth}
 .nutrition-note{margin:-8px 0 12px;color:var(--muted);font-size:9px}
 .week-image.has-photo img{width:100%;height:100%;object-fit:cover;display:block}
 .recipe-pick .recipe-image.has-photo img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* Biblioteca de recetas: tarjetas compactas, detalle con scroll propio y paginación */
+.recipe-layout{grid-template-columns:minmax(0,1fr) 360px}
+.recipe-catalog .recipe-grid{grid-template-columns:repeat(auto-fill,minmax(154px,1fr));gap:12px}
+.recipe-catalog .recipe-card .recipe-image{height:92px}
+.recipe-catalog .recipe-body{padding:11px}
+.recipe-catalog .recipe-body h3{font-size:11.5px;margin:5px 0;line-height:1.25}
+.recipe-catalog .recipe-body p{font-size:9px;margin-bottom:0}
+.recipe-catalog .recipe-meal{font-size:8px}
+.recipe-detail{top:calc(var(--header-h) + 12px);max-height:calc(100vh - var(--header-h) - 28px);display:flex;flex-direction:column}
+.recipe-detail .detail-content{overflow-y:auto;flex:1;min-height:0}
+.recipe-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 13px;margin-top:14px;font-size:10px;color:var(--muted)}
+.recipe-pagination label{display:flex;align-items:center;gap:6px}
+.recipe-pagination select{border:1px solid var(--line);border-radius:6px;padding:5px 7px;font-size:10px;background:#fbfcfc;color:#45564d}
+.pagination-nav{display:flex;align-items:center;gap:10px}
+.pagination-nav button{border:1px solid var(--line);background:#fff;border-radius:6px;padding:5px 11px;color:var(--green);font-size:12px;cursor:pointer}
+.pagination-nav button:hover:not(:disabled){border-color:var(--green)}
+.pagination-nav button:disabled{opacity:.4;cursor:default}
+.pagination-nav span{font:600 10px 'DM Mono';color:#45564d}
+@media(max-width:900px){.recipe-detail{max-height:none;display:block}.recipe-detail .detail-content{overflow:visible}}
+
+/* Detalle de receta: imagen más chica y espaciado compacto para ver todo sin scroll interno */
+.recipe-detail .detail-image{height:104px;font-size:36px}
+.recipe-detail .detail-content{padding:15px}
+.recipe-detail .detail-title h2{font-size:16px;max-width:210px;margin-top:5px}
+.recipe-detail .recipe-meal{font-size:8px}
+.recipe-detail .recipe-yield{margin:-2px 0 10px}
+.recipe-detail .servings-control{padding:8px 10px;margin:10px 0}
+.recipe-detail .nutrition-summary{padding:9px;margin:11px 0;gap:4px}
+.recipe-detail .nutrition-summary b{font-size:12px}
+.recipe-detail .nutrition-summary small{font-size:7.5px;margin-top:3px}
+.recipe-detail .nutrition-note{margin:-5px 0 9px}
+.recipe-detail .detail-section{padding-top:9px;margin-top:9px}
+.recipe-detail .detail-section h3{font-size:11px}
+.recipe-detail .recipe-ingredient{padding:6px 0}
+.recipe-detail .detail-section p{font-size:9.5px;line-height:1.45}
+.recipe-detail .detail-assign{margin-top:11px}
+
+/* Detalle de receta: ingredientes y preparación en dos columnas para evitar scroll */
+.recipe-detail .detail-image{height:72px;font-size:30px}
+.recipe-detail .detail-content{padding:13px}
+.recipe-detail .detail-title h2{font-size:15px}
+.recipe-detail .recipe-yield{margin:0 0 8px}
+.recipe-detail .servings-control{margin:8px 0;padding:7px 10px}
+.recipe-detail .nutrition-summary{margin:9px 0;padding:8px}
+.recipe-detail .nutrition-note{margin:-4px 0 8px}
+.recipe-detail .recipe-ingredient{padding:4px 0}
+.recipe-detail .recipe-ingredient .ingredient-icon{height:22px;width:22px;font-size:10px}
+.recipe-detail .recipe-ingredient b{font-size:9px}
+.recipe-detail .detail-section h3{font-size:10.5px}
+.recipe-detail .detail-section p{font-size:9px;line-height:1.4}
+.recipe-detail .detail-columns{display:grid;grid-template-columns:1.25fr .75fr;gap:0 12px;border-top:1px solid var(--line);margin-top:8px;padding-top:8px}
+.recipe-detail .detail-columns .detail-section{border-top:0;margin-top:0;padding-top:0}
+@media(max-width:900px){.recipe-detail .detail-columns{grid-template-columns:1fr}}
+
+/* El contenedor de imagen usaba display:grid con altura fija; en un grid de fila auto el
+   height:100% de la <img> no resuelve y la foto se desbordaba. Con block, la imagen respeta
+   exactamente la altura del contenedor (detalle, tarjetas y semana). */
+.recipe-image.has-photo,.detail-image.has-photo,.week-image.has-photo{display:block}
+
+/* Vista previa con foto real y aviso de borrador sin guardar */
+.recipe-preview-image.has-photo{display:block;overflow:hidden}
+.recipe-preview-image.has-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.draft-banner{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:14px;background:#fff8e6;border:1px solid rgba(240,214,37,.45)}
+.draft-banner>span{color:#b98a00;font-size:17px}
+.draft-banner p{flex:1;margin:0;font-size:10px;color:#7a6420}
+.draft-banner .link-button{white-space:nowrap}
+
+/* Contraste SMAE en la vista de receta, guía en el formulario y alta manual de ingredientes */
+.contrast-section .detail-section-head small{font-size:8px;color:var(--muted)}
+.contrast-ingredients{margin:4px 0 8px}
+.contrast-table{margin-top:6px}
+.contrast-head,.contrast-row{display:grid;grid-template-columns:1.2fr .8fr .8fr .7fr;gap:6px;padding:5px 0;border-bottom:1px solid var(--line);align-items:center}
+.contrast-head span{font:600 8px 'DM Mono';color:var(--muted);text-transform:uppercase}
+.contrast-row span{font-size:9px;color:#45564d}
+.contrast-row b{text-align:right;font:600 9px 'DM Mono';color:#4e6d5d}
+.contrast-row b.calc-value{color:var(--green)}
+.contrast-row em{text-align:right;font-style:normal;font:10px 'DM Mono';color:var(--muted)}
+.contrast-row em.up{color:#b24035}
+.contrast-row em.down{color:#218168}
+.contrast-head span:nth-child(n+2){text-align:right}
+.contrast-cta{margin-top:8px}
+.smae-hint{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:#eef6f1;border:1px solid rgba(33,129,104,.2);border-radius:8px;padding:10px 12px;margin-top:12px}
+.smae-hint p{flex:1;margin:0;font-size:9.5px;color:#3d5a4d}
+.ingredient-create{padding:18px;margin-bottom:16px}
+.ingredient-create .create-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.ingredient-create .create-head h2{font:800 15px Manrope;margin:0 0 4px}
+.ingredient-create .create-head p{margin:0;font-size:10px;max-width:680px}
+.form-grid.five{grid-template-columns:repeat(5,1fr)}
+@media(max-width:900px){.form-grid.five{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:520px){.form-grid.five{grid-template-columns:1fr}}
+
+/* Cálculo SMAE en la ficha, justo debajo de los datos originales */
+.smae-summary{margin:10px 0 0;padding:9px 11px;border-radius:8px;background:#eef6f1;border:1px solid rgba(33,129,104,.2)}
+.smae-summary-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.smae-summary-head span{font:700 9px 'DM Mono';letter-spacing:.04em;text-transform:uppercase;color:var(--green)}
+.smae-summary-head small{font-size:8px;color:var(--muted)}
+.smae-summary-values{display:flex;align-items:baseline;gap:9px;margin-top:5px;flex-wrap:wrap}
+.smae-summary-values b{font:700 13px 'DM Mono';color:var(--green)}
+.smae-summary-values span{font-size:9px;color:#4e6d5d}
+.smae-summary-ingredients{display:block;margin-top:5px;font-size:8.5px;line-height:1.4;color:#6b7d73}
+.smae-summary.empty{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f5f6f8;border-color:var(--line)}
+.smae-summary.empty span{font-size:9px;color:var(--muted)}

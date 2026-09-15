@@ -14,7 +14,9 @@
     "db:seed": "prisma db seed",
     "db:import-recetario": "node prisma/import-recetario.js",
     "recetario:extract": "node prisma/tools/extract-recetario.js && node prisma/tools/extract-recetario-images.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:link-smae": "node prisma/tools/link-smae.js --write",
+    "recetario:link": "node prisma/tools/link-smae.js --analyze"
   },
   "dependencies": {
     "@fastify/cors": "latest",

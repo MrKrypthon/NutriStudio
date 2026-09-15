@@ -3,7 +3,11 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { ingredientsApi } from '../../lib/api.js'
 
-const GROUPS = ['Todos', 'Verduras', 'Frutas', 'Cereales S/G', 'Cereales C/G', 'AOA MBAG', 'AOA BAG', 'AOA MAG', 'AOA AAG', 'Leguminosas', 'Leche entera', 'Leche semidescremada', 'Leche descremada', 'Leche con azúcar', 'Grasas sin proteínas', 'Grasas con proteínas', 'Azucares sin grasa', 'Azucares con grasa', 'Libres en energía', 'Alcohol']
+const APPROX_GROUP = 'Aproximados Menu 500'
+const GROUPS = ['Todos', 'Verduras', 'Frutas', 'Cereales S/G', 'Cereales C/G', 'AOA MBAG', 'AOA BAG', 'AOA MAG', 'AOA AAG', 'Leguminosas', 'Leche entera', 'Leche semidescremada', 'Leche descremada', 'Leche con azúcar', 'Grasas sin proteínas', 'Grasas con proteínas', 'Azucares sin grasa', 'Azucares con grasa', 'Libres en energía', 'Alcohol', APPROX_GROUP]
+const GROUP_OPTIONS = GROUPS.filter((g) => g !== 'Todos')
+
+const EMPTY_FORM = { name: '', group: APPROX_GROUP, unit: 'gramos', kcal: '', protein: '', carbs: '', fat: '', fiber: '', serving: '', grams: '' }
 
 const FALLBACK = [
   { id: 'demo-a', name: 'Aguacate Hass', group: 'Grasas sin proteínas', unit: 'taza', nutrition: { kcal: 160, carbs: 8.5, protein: 2, fat: 14.7, fiber: 6.7 }, equivalence: { serving: '1/3 pieza', grams: 50 } },
@@ -26,6 +30,11 @@ export default function IngredientsPage({ setActive }) {
   const [status, setStatus] = useState('loading')
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState('Todos')
+  const [reloadKey, setReloadKey] = useState(0)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [createState, setCreateState] = useState('idle')
+  const [createError, setCreateError] = useState('')
 
   useEffect(() => {
     setStatus('loading')
@@ -44,14 +53,67 @@ export default function IngredientsPage({ setActive }) {
         .catch(() => setStatus('demo'))
     }, 300)
     return () => clearTimeout(timer)
-  }, [search, group])
+  }, [search, group, reloadKey])
 
-  const source = selected?.equivalence?.source === 'SMAE' ? 'Sistema Mexicano de Equivalentes' : 'Fuente local revisada'
+  const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
+
+  const createIngredient = async () => {
+    if (!form.name.trim() || !form.group) return
+    setCreateState('saving')
+    setCreateError('')
+    const nutrition = {
+      kcal: Number(form.kcal) || 0,
+      protein: Number(form.protein) || 0,
+      carbs: Number(form.carbs) || 0,
+      fat: Number(form.fat) || 0,
+      fiber: Number(form.fiber) || 0,
+    }
+    const payload = { name: form.name.trim(), group: form.group, unit: form.unit, nutrition }
+    if (form.serving.trim() || form.grams) payload.equivalence = { serving: form.serving.trim() || 'Por definir', grams: Number(form.grams) || null }
+    try {
+      const created = await ingredientsApi.create(payload)
+      setForm(EMPTY_FORM)
+      setShowForm(false)
+      setCreateState('idle')
+      setSearch(created.name)
+      setGroup(created.group)
+      setSelected(created)
+      setReloadKey((key) => key + 1)
+    } catch (error) {
+      setCreateState('error')
+      setCreateError(error.message || 'No se pudo crear el ingrediente.')
+    }
+  }
+
+  const source = selected?.equivalence?.source === 'SMAE' ? 'Sistema Mexicano de Equivalentes' : selected?.equivalence?.source?.provider ? 'Importado de fuente externa' : 'Fuente local revisada'
 
   return <AppChrome active="Ingredientes" setActive={setActive}><div className="content ingredient-workspace">
-    <ModuleHeader eyebrow="BIBLIOTECA · INGREDIENTES LOCALES" title="Ingredientes" subtitle="Datos nutricionales revisados y equivalencias de tu práctica." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizados' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span><button className="primary" onClick={() => setActive('Importar alimentos')}><span>+</span> Importar alimento</button></div>} />
+    <ModuleHeader eyebrow="BIBLIOTECA · INGREDIENTES LOCALES" title="Ingredientes" subtitle="Datos nutricionales revisados y equivalencias de tu práctica." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizados' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span><button className="secondary" onClick={() => setShowForm((value) => !value)}><span>+</span> Nuevo ingrediente</button><button className="primary" onClick={() => setActive('Importar alimentos')}><span>+</span> Importar alimento</button></div>} />
 
     <div className="group-pills">{GROUPS.map((g) => <button className={group === g ? 'selected' : ''} onClick={() => setGroup(g)} key={g}>{g}</button>)}</div>
+
+    {showForm && <section className="panel ingredient-create">
+      <div className="create-head"><div><h2>Nuevo ingrediente manual</h2><p className="muted">Útil para los faltantes del recetario: agrégalos en <b>{APPROX_GROUP}</b> y luego vincúlalos en la receta para contrastar el cálculo SMAE.</p></div><button type="button" className="link-button" onClick={() => setShowForm(false)}>Cerrar</button></div>
+      <div className="form-grid three">
+        <label>Nombre *<input value={form.name} onChange={(e) => updateForm('name', e.target.value)} placeholder="Ej. Masa de maíz nixtamalizada" /></label>
+        <label>Grupo<select value={form.group} onChange={(e) => updateForm('group', e.target.value)}>{GROUP_OPTIONS.map((g) => <option key={g}>{g}</option>)}</select></label>
+        <label>Unidad<select value={form.unit} onChange={(e) => updateForm('unit', e.target.value)}><option value="gramos">gramos</option><option value="ml">ml</option><option value="taza">taza</option><option value="pieza">pieza</option><option value="cucharada">cucharada</option></select></label>
+      </div>
+      <p className="eyebrow" style={{ marginTop: 12 }}>INFORMACIÓN NUTRICIONAL POR 100 G</p>
+      <div className="form-grid five">
+        <label>Energía (kcal)<input type="number" min="0" value={form.kcal} onChange={(e) => updateForm('kcal', e.target.value)} /></label>
+        <label>Proteína (g)<input type="number" min="0" step="0.1" value={form.protein} onChange={(e) => updateForm('protein', e.target.value)} /></label>
+        <label>Carbohidratos (g)<input type="number" min="0" step="0.1" value={form.carbs} onChange={(e) => updateForm('carbs', e.target.value)} /></label>
+        <label>Grasas (g)<input type="number" min="0" step="0.1" value={form.fat} onChange={(e) => updateForm('fat', e.target.value)} /></label>
+        <label>Fibra (g)<input type="number" min="0" step="0.1" value={form.fiber} onChange={(e) => updateForm('fiber', e.target.value)} /></label>
+      </div>
+      <div className="form-grid three" style={{ marginTop: 4 }}>
+        <label>Porción de equivalencia<input value={form.serving} onChange={(e) => updateForm('serving', e.target.value)} placeholder="Ej. 1 taza" /></label>
+        <label>Gramos por equivalente<input type="number" min="0" value={form.grams} onChange={(e) => updateForm('grams', e.target.value)} placeholder="Ej. 100" /></label>
+      </div>
+      {createState === 'error' && <div className="form-error">⚠ {createError}</div>}
+      <div className="form-actions"><button type="button" className="secondary" onClick={() => { setShowForm(false); setForm(EMPTY_FORM); setCreateState('idle') }}>Cancelar</button><button type="button" className="primary" disabled={!form.name.trim() || createState === 'saving'} onClick={createIngredient}>{createState === 'saving' ? 'Guardando…' : 'Crear ingrediente'} <span>→</span></button></div>
+    </section>}
 
     <div className="ingredient-layout">
       <section>

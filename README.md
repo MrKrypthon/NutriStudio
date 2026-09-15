@@ -36,6 +36,18 @@ npm run db:import-recetario    # JSON -> tabla Recipe (requiere db:seed previo)
 
 `recetario:extract` requiere `poppler-utils` (`pdftotext`, `pdfimages`) e ImageMagick (`convert`). Las recetas importadas guardan ingredientes en texto libre, tiempo de preparación, foto y macros por porción; al ajustar las porciones en la vista de recetas se escalan macros e ingredientes. Re-ejecutar `db:import-recetario` es idempotente (actualiza por nombre + tiempo de comida) y acepta `--reset` para reemplazarlas.
 
+#### Cálculo SMAE automático (contraste)
+
+Cada receta del recetario puede contrastar los macros originales del PDF con un cálculo hecho a partir del catálogo:
+
+```bash
+npm run recetario:link     # reporte de cobertura (no escribe nada)
+npm run db:link-smae       # vincula ingredientes y calcula calculatedNutrition
+```
+
+El vinculador (`prisma/tools/link-smae.js`) empareja el texto libre con el catálogo SMAE exacto y, cuando falta un alimento, lo crea en el grupo **"Aproximados Menu 500"** con valores de referencia por 100 g (`prisma/tools/recetarioFoods.js`). Los macros originales del PDF (`nutrition`) nunca se modifican: el cálculo queda en `Recipe.calculatedNutrition` y se muestra en la ficha de la receta como "Calculado según SMAE + aprox.". Es una aproximación para contraste, no un dato de laboratorio, y las líneas sin cantidad ("al gusto") no se cuantifican.
+
+
 
 Para levantar frontend y API simultáneamente:
 

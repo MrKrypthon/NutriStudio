@@ -195,6 +195,7 @@ export const educationApi = {
 export const ingredientsApi = {
   list: (query = '') => apiRequest(`/ingredients${query}`),
   import: (payload) => apiRequest('/ingredients/import', { method: 'POST', body: JSON.stringify(payload) }),
+  create: (payload) => apiRequest('/ingredients', { method: 'POST', body: JSON.stringify(payload) }),
 }
 
 export const foodApi = {
