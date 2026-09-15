@@ -30,6 +30,21 @@ npm run dev:all            # API en :3001 y web en :5173
 `prisma/data/smae.json`, `prisma/data/base-alimentos.json` y `prisma/data/recetario.json`
 (más las 501 fotos en `storage/recipes/`). No hace falta el PDF original ni el Excel.
 
+### Si ya tenías el repo clonado
+
+Solo hace falta:
+
+```bash
+git pull
+npm run dev:all
+```
+
+Antes de arrancar, `predev:all` ejecuta `prisma/sync-dev.js`, que de forma **idempotente**
+sincroniza el esquema (`prisma db push`) e importa únicamente lo que falte (seed, catálogos,
+recetario y cálculo SMAE). No sobrescribe ediciones manuales. Para omitirlo (por ejemplo con una
+base remota ya lista): `SKIP_DB_SYNC=1 npm run dev:all`. Requiere PostgreSQL corriendo
+(`docker compose up -d postgres`) y el `.env` configurado.
+
 ### Alternativa: copiar la base tal cual (sin reimportar)
 
 Si quieres exactamente la misma base (incluye ediciones manuales y `calculatedNutrition` ya
