@@ -81,3 +81,18 @@ button,input,select,textarea{font-family:inherit}button:focus-visible,input:focu
 .record-tabs{position:sticky;top:var(--header-h);z-index:9}
 .plan-steps{position:sticky;top:var(--header-h);z-index:9;background:#fff}
 html{scroll-behavior:smooth}
+
+/* Recetario importado: fotos reales y escalado de porciones */
+.recipe-image.has-photo,.detail-image.has-photo{background:#eef1f4}
+.recipe-image.has-photo img,.detail-image.has-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.recipe-image.has-photo:before,.detail-image.has-photo:before{display:none}
+.recipe-yield{margin:-6px 0 14px;font-size:10px}
+.servings-control{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#f4f4f7;border-radius:8px;padding:10px 12px;margin:14px 0}
+.servings-control>span{font:600 10px Manrope;color:#45564d}
+.servings-stepper{display:flex;align-items:center;gap:6px}
+.servings-stepper button{width:26px;height:26px;border:1px solid var(--line);background:#fff;border-radius:6px;color:var(--green);font-size:15px;line-height:1;cursor:pointer}
+.servings-stepper button:hover{border-color:var(--green)}
+.servings-stepper input{width:52px;border:1px solid var(--line);border-radius:6px;padding:5px;text-align:center;font:600 12px 'DM Mono';color:var(--green);background:#fff}
+.nutrition-note{margin:-8px 0 12px;color:var(--muted);font-size:9px}
+.week-image.has-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.recipe-pick .recipe-image.has-photo img{width:100%;height:100%;object-fit:cover;display:block}

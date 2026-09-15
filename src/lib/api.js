@@ -176,6 +176,9 @@ export const recipesApi = {
   nutrition: (id) => apiRequest(`/recipes/${id}/nutrition`),
   recalculate: (id) => apiRequest(`/recipes/${id}/recalculate`, { method: 'POST' }),
   replaceIngredients: (id, ingredients) => apiRequest(`/recipes/${id}/ingredients`, { method: 'PUT', body: JSON.stringify({ ingredients }) }),
+  // Imported cookbook recipes store only the file name (see prisma/import-recetario.js); build
+  // the public URL here so the same relative API base works in dev and production.
+  imageUrl: (file) => (file ? `${API_BASE}/recipes/images/${file}` : null),
 }
 
 export const educationApi = {
