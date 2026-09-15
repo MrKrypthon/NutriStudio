@@ -73,6 +73,9 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   const [restriction, setRestriction] = useState('')
   const [archiveState, setArchiveState] = useState('idle')
   const [servings, setServings] = useState(1)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(12)
+  const [total, setTotal] = useState(FALLBACK.length)
 
   const load = () => {
     setStatus('loading')
@@ -80,11 +83,13 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
     if (search.trim()) params.set('search', search.trim())
     if (mealType) params.set('mealType', mealType)
     if (restriction) params.set('restriction', restriction)
-    const query = params.toString() ? `?${params}` : ''
-    recipesApi.list(query)
+    params.set('page', String(page))
+    params.set('pageSize', String(pageSize))
+    recipesApi.list(`?${params}`)
       .then((response) => {
         const list = response.items || []
         setItems(list)
+        setTotal(response.total ?? list.length)
         setSelected((prev) => list.find((recipe) => recipe.id === prev?.id) || list[0] || null)
         setStatus('online')
       })
@@ -95,13 +100,19 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
     const timer = setTimeout(load, 300)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, mealType, restriction])
+  }, [search, mealType, restriction, page, pageSize])
+
+  // Any new search or filter goes back to the first page instead of showing an empty page 4.
+  useEffect(() => { setPage(1) }, [search, mealType, restriction])
 
   // A new recipe starts at one serving; re-selecting one shouldn't silently keep a previous scale.
   useEffect(() => { setServings(1) }, [selected?.id])
 
   const restrictionOptions = useMemo(() => [...new Set(items.flatMap((recipe) => recipe.restrictions || []))], [items])
   const isReal = status === 'online' && selected && !String(selected.id).startsWith('demo-')
+  const totalPages = Math.max(Math.ceil(total / pageSize), 1)
+  const firstOnPage = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const lastOnPage = Math.min(page * pageSize, total)
 
   const startCreate = () => { onSelectRecipe?.(null); setActive('Nueva receta') }
   const startEdit = () => { if (!isReal) return; onSelectRecipe?.(selected.id); setActive('Editar receta') }
@@ -133,9 +144,17 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
 
     <div className="recipe-layout">
       <section className="recipe-catalog">
-        <div className="catalog-meta">{items.length} receta{items.length === 1 ? '' : 's'} <span>Fuente: catálogo Nutri Studio</span></div>
+        <div className="catalog-meta">{total === 0 ? 'Sin recetas' : `${firstOnPage}–${lastOnPage} de ${total} receta${total === 1 ? '' : 's'}`} <span>Fuente: catálogo Nutri Studio</span></div>
         {status !== 'loading' && items.length === 0 && <div className="result-empty panel"><span>◌</span><h3>No hay recetas con esos filtros</h3><p>Ajusta la búsqueda o crea una receta nueva.</p></div>}
         <div className="recipe-grid">{items.map((recipe, i) => <button className={'recipe-card panel ' + (selected?.id === recipe.id ? 'recipe-selected' : '')} onClick={() => setSelected(recipe)} key={recipe.id}><RecipeImage recipe={recipe} colorIndex={i} className="recipe-image" /><div className="recipe-body"><span className="recipe-meal">{MEAL_TYPE_LABELS[recipe.mealTypes?.[0]] || recipe.mealTypes?.[0] || 'Receta'}{recipe.timeMinutes ? ` · ${recipe.timeMinutes} min` : ''}</span><h3>{recipe.name}</h3><p>{Math.round(recipe.nutrition?.kcal || 0)} kcal {recipe.source ? '· por porción' : '· Ingredientes revisados'}</p></div></button>)}</div>
+        {total > 0 && <div className="recipe-pagination panel">
+          <label>Mostrar <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>{[12, 24, 48, 96].map((size) => <option value={size} key={size}>{size}</option>)}</select> por página</label>
+          <div className="pagination-nav">
+            <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} aria-label="Página anterior">←</button>
+            <span>Página {page} de {totalPages}</span>
+            <button type="button" disabled={page >= totalPages} onClick={() => setPage(page + 1)} aria-label="Página siguiente">→</button>
+          </div>
+        </div>}
       </section>
 
       {selected && <aside className="recipe-detail panel">
@@ -153,6 +172,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
           <div className="nutrition-summary"><div><b>{scaled('kcal')}</b><small>kcal</small></div><div><b>{scaled('carbs')}g</b><small>Carbohidratos</small></div><div><b>{scaled('protein')}g</b><small>Proteína</small></div><div><b>{scaled('fat')}g</b><small>Grasas</small></div></div>
           {Number(nutrition.fiber) > 0 && <p className="nutrition-note">Fibra {scaled('fiber')} g · calculado para {servings} {servings === 1 ? 'porción' : 'porciones'}</p>}
 
+          <div className={selected.instructions ? 'detail-columns' : undefined}>
           <div className="detail-section">
             <div className="detail-section-head"><h3>Ingredientes{servings !== 1 ? ' (ajustados)' : ''}</h3></div>
             {linkedIngredients.map((item) => <div className="recipe-ingredient" key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.ingredient.name}</b><small>{round1(Number(item.quantity) * servings)} {item.unit} · {item.equivalence || 0} eq.</small></div></div>)}
@@ -164,6 +184,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
             <div className="detail-section-head"><h3>Preparación</h3></div>
             <p className="muted" style={{ lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{selected.instructions}</p>
           </div>}
+          </div>
           <button className="primary detail-assign" onClick={() => onAssignRecipe ? onAssignRecipe(selected.name) : setActive('Constructor de plan')}>Asignar al plan <span>→</span></button>
           {isReal && <button className="link-button" disabled={archiveState === 'archiving'} onClick={archive}>{archiveState === 'archiving' ? 'Archivando…' : 'Archivar receta'}</button>}
         </div>

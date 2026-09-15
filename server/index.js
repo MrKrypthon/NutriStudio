@@ -661,13 +661,24 @@ const RECIPE_NUTRITION_KEYS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'suga
 const emptyNutritionTotals = () => Object.fromEntries(RECIPE_NUTRITION_KEYS.map((key) => [key, 0]))
 
 app.get('/api/v1/recipes', async (request) => {
-  const { search = '', mealType, restriction, status = 'ACTIVE' } = request.query
+  const { search = '', mealType, restriction, status = 'ACTIVE', page, pageSize } = request.query
   const where = {
     practiceId: request.practiceId,
     status,
     ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
     ...(mealType ? { mealTypes: { has: mealType } } : {}),
     ...(restriction ? { restrictions: { has: restriction } } : {}),
+  }
+  // Pagination is opt-in: the plan builder fetches the whole catalog (no params), while the
+  // recipes library passes page/pageSize and gets a `total` back for the pager.
+  if (page !== undefined || pageSize !== undefined) {
+    const currentPage = Math.max(Number(page) || 1, 1)
+    const take = Math.min(Math.max(Number(pageSize) || 24, 1), 200)
+    const [items, total] = await prisma.$transaction([
+      prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' }, skip: (currentPage - 1) * take, take }),
+      prisma.recipe.count({ where }),
+    ])
+    return { items, total, page: currentPage, pageSize: take }
   }
   const recipes = await prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' }, take: 1000 })
   return { items: recipes }
