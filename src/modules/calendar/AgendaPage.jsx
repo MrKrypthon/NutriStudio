@@ -30,8 +30,15 @@ const startOfWeek = (date) => { const d = new Date(date); const day = (d.getUTCD
 const addDays = (date, amount) => { const d = new Date(date); d.setUTCDate(d.getUTCDate() + amount); return d }
 const toISODate = (date) => date.toISOString().slice(0, 10)
 const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'FOLLOW_UP', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '', recurrence: 'none', recurCount: 10 })
+const EMPTY_NEW_PATIENT = { firstName: '', lastName: '', phone: '', email: '' }
 
-const STATUS_FILTERS = [['all', 'Todas'], ['pending', 'Por confirmar'], ['confirmed', 'Confirmadas'], ['blocks', 'Bloques']]
+// Fallback when the practice hasn't configured "Horarios y disponibilidad" (see SettingsPage).
+const DEFAULT_BUSINESS_HOURS = { label: 'Lunes a viernes', ranges: [{ start: '09:00', end: '13:00' }, { start: '15:00', end: '19:00' }] }
+const toMinutes = (time) => { const [h, m] = time.split(':').map(Number); return h * 60 + m }
+// Business days are Monday–Friday (the settings screen only edits label + hours, not weekdays).
+const isBusinessDay = (day) => { const dow = day.getUTCDay(); return dow >= 1 && dow <= 5 }
+
+const STATUS_FILTERS = [['all', 'Todas'], ['pending', 'Por confirmar'], ['confirmed', 'Confirmadas'], ['blocks', 'Bloqueos']]
 // An appointment created with "No notificar" arrives with status SCHEDULED: nothing to confirm, so
 // it is already a firm booking and must behave like CONFIRMED (startable, counted as confirmed).
 const isConfirmedLike = (status) => status === 'CONFIRMED' || status === 'SCHEDULED'
@@ -60,6 +67,11 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   const [form, setForm] = useState(() => emptyForm(TODAY))
   const [submitState, setSubmitState] = useState('idle')
   const [submitError, setSubmitError] = useState('')
+  const [newPatient, setNewPatient] = useState(EMPTY_NEW_PATIENT)
+  const [newPatientState, setNewPatientState] = useState('idle')
+  const [newPatientError, setNewPatientError] = useState('')
+  const [showNewPatient, setShowNewPatient] = useState(false)
+  const [businessHours, setBusinessHours] = useState(DEFAULT_BUSINESS_HOURS)
   const [statusFilter, setStatusFilter] = useState(() => (autoFilter && ['pending', 'confirmed', 'blocks'].includes(autoFilter) ? autoFilter : 'all'))
   // Drag & drop: which appointment is being dragged, its duration (to keep it on the move), and
   // the slot currently under the pointer (for the drop highlight).
@@ -103,6 +115,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   useEffect(() => {
     practiceApi.get().then((practice) => {
       const tz = practice?.timeZone
+      if (practice?.businessHours?.ranges?.length) setBusinessHours(practice.businessHours)
       if (!tz) return
       setPracticeTz(tz)
       try {
@@ -117,9 +130,15 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   // line and the "fade past appointments" state; refreshed every minute via nowTick.
   const hours = useMemo(() => {
     const set = new Set(DEFAULT_HOURS)
+    // Include the configured business hours so late slots (e.g. 18:00) are visible and bookable.
+    for (const range of businessHours.ranges) {
+      const start = Number(range.start.slice(0, 2))
+      const end = Number(range.end.slice(0, 2))
+      for (let h = start; h < end; h += 1) set.add(`${String(h).padStart(2, '0')}:00`)
+    }
     for (const appointment of appointments) set.add(`${String(new Date(appointment.startAt).getUTCHours()).padStart(2, '0')}:00`)
     return Array.from(set).sort()
-  }, [appointments])
+  }, [appointments, businessHours])
   const practiceNow = useMemo(() => {
     if (!practiceTz) {
       // Fallback if the practice timezone hasn't loaded: use the viewer's local wall-clock time,
@@ -149,6 +168,38 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     return { top: hourIndex * 63 + ((minutes % 60) / 60) * 63 }
   }, [practiceNow, hours, days])
 
+  // "Today" for the grid (highlight + quick booking) follows the practice's timezone, matching
+  // the now-line, instead of the viewer's system date.
+  const todayISO = practiceNow?.date || toISODate(TODAY)
+
+  const isWithinBusinessHours = (time) => businessHours.ranges.some((range) => toMinutes(time) >= toMinutes(range.start) && toMinutes(time) < toMinutes(range.end))
+
+  // Bookable: business day, inside the configured hours, in the future, and free of overlaps
+  // (checked against ALL appointments so a filtered-out block still occupies its time).
+  const canBookSlot = (day, time) => {
+    if (!isBusinessDay(day)) return false
+    if (!isWithinBusinessHours(time)) return false
+    const slotMs = Date.parse(`${toISODate(day)}T${time}:00.000Z`)
+    if (!(slotMs > nowMs)) return false
+    const slotEnd = slotMs + 60 * 60000
+    return !appointments.some((appointment) => {
+      const start = new Date(appointment.startAt).getTime()
+      const end = appointment.endAt ? new Date(appointment.endAt).getTime() : start + 60 * 60000
+      return start < slotEnd && end > slotMs
+    })
+  }
+
+  // The whole white cell is clickable: the time comes from where inside the row you click
+  // (first half → :00, second half → :30), instead of a fixed per-hour block.
+  const handleSlotClick = (event, day, time) => {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const offset = Math.max(0, Math.min(rect.height - 1, event.clientY - rect.top))
+    const hour = time.slice(0, 2)
+    const prefer = offset / rect.height < 0.5 ? [`${hour}:00`, `${hour}:30`] : [`${hour}:30`, `${hour}:00`]
+    const target = prefer.find((candidate) => canBookSlot(day, candidate))
+    if (target) openSlotModal(day, target)
+  }
+
   const step = view === 'Semana' ? 7 : 1
   const goToday = () => setAnchor(TODAY)
   const goPrev = () => setAnchor((prev) => addDays(prev, -step))
@@ -161,8 +212,35 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     } catch { /* The list keeps its previous state; the professional can retry. */ }
   }
 
-  const openModal = (defaultPatientId) => { setIsBlock(false); setForm(emptyForm(anchor, defaultPatientId)); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
-  const openBlockModal = () => { setIsBlock(true); setForm({ ...emptyForm(anchor), type: 'BLOCK', notify: 'none' }); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const openModal = (defaultPatientId) => { setIsBlock(false); setForm(emptyForm(anchor, defaultPatientId)); setResetNewPatient(); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const openBlockModal = () => { setIsBlock(true); setForm({ ...emptyForm(anchor), type: 'BLOCK', notify: 'none' }); setResetNewPatient(); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const openSlotModal = (day, time) => { setIsBlock(false); setForm({ ...emptyForm(day), date: toISODate(day), time }); setResetNewPatient(); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const setResetNewPatient = () => { setNewPatient(EMPTY_NEW_PATIENT); setNewPatientState('idle'); setNewPatientError(''); setShowNewPatient(false) }
+
+  // Quick "add patient" inside the appointment modal: keeps the in-progress booking (date, time,
+  // notes) instead of navigating away to the full patient form.
+  const persistNewPatient = async () => {
+    const created = await patientsApi.create({ firstName: newPatient.firstName.trim(), lastName: newPatient.lastName.trim(), phone: newPatient.phone, email: newPatient.email, consentDataAt: new Date().toISOString() })
+    setPatients((prev) => [created, ...prev])
+    setNewPatient(EMPTY_NEW_PATIENT)
+    setNewPatientState('idle')
+    setShowNewPatient(false)
+    return created
+  }
+
+  // "Crear y seleccionar" del formulario inline.
+  const createPatient = async () => {
+    if (!newPatient.firstName.trim() || !newPatient.lastName.trim()) { setNewPatientState('error'); setNewPatientError('Nombre y apellido son obligatorios.'); return }
+    setNewPatientState('saving')
+    setNewPatientError('')
+    try {
+      const created = await persistNewPatient()
+      setForm((prev) => ({ ...prev, patientId: created.id }))
+    } catch (error) {
+      setNewPatientState('error')
+      setNewPatientError(error.code === 'DEMO_MODE' ? 'Modo demostración: no se guardará. Conecta el API para crear pacientes.' : (error.message || 'No se pudo crear el paciente.'))
+    }
+  }
 
   // "Nueva cita" from Hoy (or "Agendar" from a patient's expediente, which also passes a
   // patientId to preselect) sets this before navigating here instead of just landing on the
@@ -182,13 +260,31 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   const submit = async (event) => {
     event.preventDefault()
     if (status !== 'online') { setSubmitError('Modo demostración: no se guardará. Conecta el API para poder agendar.'); return }
-    if (!isBlock && !form.patientId) { setSubmitError('Selecciona un paciente.'); return }
     setSubmitState('saving')
     setSubmitError('')
+    // If the professional filled the quick "new patient" form and hit "Crear cita" directly,
+    // create the patient first instead of blocking with "select a patient".
+    let patientId = form.patientId
+    if (!isBlock && !patientId && showNewPatient) {
+      if (!newPatient.firstName.trim() || !newPatient.lastName.trim()) {
+        setSubmitState('error')
+        setSubmitError('Escribe el nombre y apellido del nuevo paciente, o selecciona uno existente.')
+        return
+      }
+      try {
+        const created = await persistNewPatient()
+        patientId = created.id
+      } catch (error) {
+        setSubmitState('error')
+        setSubmitError(error.code === 'DEMO_MODE' ? 'Modo demostración: no se guardará.' : (error.message || 'No se pudo crear el paciente.'))
+        return
+      }
+    }
+    if (!isBlock && !patientId) { setSubmitState('error'); setSubmitError('Selecciona un paciente o créalo con "Nuevo paciente".'); return }
     const notifyVia = form.notify === 'both' ? ['whatsapp', 'email'] : form.notify === 'none' ? [] : [form.notify]
     const recurrence = form.recurrence === 'none' ? undefined : { frequency: form.recurrence === 'daily' ? 'DAILY' : 'WEEKLY', count: Number(form.recurCount) || 10 }
     try {
-      await appointmentsApi.create({ patientId: form.patientId, startAt: `${form.date}T${form.time}:00.000Z`, durationMinutes: form.duration, type: form.type, notifyVia, internalNote: form.internalNote, patientNote: form.patientNote, recurrence })
+      await appointmentsApi.create({ patientId, startAt: `${form.date}T${form.time}:00.000Z`, durationMinutes: form.duration, type: form.type, notifyVia, internalNote: form.internalNote, patientNote: form.patientNote, recurrence })
       setSubmitState('saved')
       closeModal()
       loadAppointments()
@@ -236,7 +332,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     <div className="calendar panel">
       <div className="calendar-head" style={{ gridTemplateColumns: `68px repeat(${days.length},1fr)` }}>
         <span>{tzLabel}</span>
-        {days.map((day) => <div className={toISODate(day) === toISODate(TODAY) ? 'calendar-day current' : 'calendar-day'} key={day.toISOString()}><small>{DAY_SHORT[(day.getUTCDay() + 6) % 7]}</small><b>{day.getUTCDate()}</b></div>)}
+        {days.map((day) => <div className={toISODate(day) === todayISO ? 'calendar-day current' : 'calendar-day'} key={day.toISOString()}><small>{DAY_SHORT[(day.getUTCDay() + 6) % 7]}</small><b>{day.getUTCDate()}</b></div>)}
       </div>
       <div className="calendar-body">
         {nowLine && <div className="now-line" style={{ top: nowLine.top }}><span /></div>}
@@ -245,9 +341,12 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
           {days.map((day) => {
             const dayEvents = visibleAppointments.filter((a) => { const start = new Date(a.startAt); return toISODate(start) === toISODate(day) && `${String(start.getUTCHours()).padStart(2, '0')}:00` === time })
             const slotKey = `${toISODate(day)}|${time}`
+            const bookable = dayEvents.length === 0 && (canBookSlot(day, `${time.slice(0, 2)}:00`) || canBookSlot(day, `${time.slice(0, 2)}:30`))
             return <div
-              className={'slot' + (dragId && dropKey === slotKey ? ' drop-target' : '')}
+              className={'slot' + (dragId && dropKey === slotKey ? ' drop-target' : '') + (bookable ? ' slot-bookable' : '')}
               key={day.toISOString()}
+              onClick={bookable ? (e) => handleSlotClick(e, day, time) : undefined}
+              title={bookable ? 'Agendar una cita a esta hora' : undefined}
               onDragOver={(e) => { e.preventDefault(); if (dragId) setDropKey(slotKey) }}
               onDragLeave={() => setDropKey((prev) => (prev === slotKey ? null : prev))}
               onDrop={(e) => { e.preventDefault(); handleMove(day, time) }}
@@ -264,7 +363,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
                 const confirmed = isConfirmedLike(appointment.status) && !isBlockEvent
                 const isPast = appointment.endAt ? new Date(appointment.endAt).getTime() < nowMs : false
                 const name = isBlockEvent ? 'Bloqueo' : appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Paciente'
-                const onClick = () => { if (pending) confirmAppointment(appointment.id); else if (confirmed) onStartConsultation?.(appointment.patientId, appointment.id) }
+                const onClick = (e) => { e.stopPropagation(); if (pending) confirmAppointment(appointment.id); else if (confirmed) onStartConsultation?.(appointment.patientId, appointment.id) }
                 return <div
                   className={`event ${color}-event${isPast ? ' past' : ''}${dragId === appointment.id ? ' dragging' : ''}`}
                   style={{ top, height, cursor: pending || confirmed ? 'pointer' : 'default' }}
@@ -290,7 +389,13 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     <div className="modal-head"><div><p className="eyebrow">{isBlock ? 'NUEVO BLOQUEO' : 'NUEVA CITA'}</p><h2>{isBlock ? 'Bloquea tu disponibilidad' : 'Programa una consulta'}</h2><span className="modal-subtitle">{isBlock ? 'Ocupa un horario en tu agenda sin asignarlo a un paciente.' : 'La cita quedará visible en tu agenda.'}</span></div><button onClick={closeModal}>×</button></div>
     <form onSubmit={submit}>
       {!isBlock && <div className="form-step active-step"><span>1</span><b>Selecciona el paciente</b></div>}
-      {!isBlock && <label>Paciente<select value={form.patientId} onChange={(e) => update('patientId', e.target.value)} required><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label>}
+      {!isBlock && <div className="patient-field"><span className="field-label">Paciente</span><div className="patient-select-row"><select value={form.patientId} onChange={(e) => { update('patientId', e.target.value); setShowNewPatient(false) }}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select><button type="button" className={showNewPatient ? 'primary' : 'secondary'} onClick={() => setShowNewPatient((value) => !value)}>{showNewPatient ? 'Cancelar' : '＋ Nuevo paciente'}</button></div></div>}
+      {!isBlock && showNewPatient && <div className="new-patient-inline">
+        <div className="form-row"><label>Nombre(s) *<input value={newPatient.firstName} onChange={(e) => setNewPatient((prev) => ({ ...prev, firstName: e.target.value }))} placeholder="Ej. Mariana" /></label><label>Apellido(s) *<input value={newPatient.lastName} onChange={(e) => setNewPatient((prev) => ({ ...prev, lastName: e.target.value }))} placeholder="Ej. Torres" /></label></div>
+        <div className="form-row"><label>Teléfono<input value={newPatient.phone} onChange={(e) => setNewPatient((prev) => ({ ...prev, phone: e.target.value }))} placeholder="+52 55 1234 5678" /></label><label>Email<input type="email" value={newPatient.email} onChange={(e) => setNewPatient((prev) => ({ ...prev, email: e.target.value }))} placeholder="correo@email.com" /></label></div>
+        {newPatientError && <div className="form-error">⚠ {newPatientError}</div>}
+        <button type="button" className="secondary" disabled={newPatientState === 'saving'} onClick={createPatient}>{newPatientState === 'saving' ? 'Creando…' : 'Crear y seleccionar'} <span>→</span></button>
+      </div>}
       {!isBlock && <div className="notify-box"><b>Notificar al paciente</b><div className="notify-options">{[['whatsapp', 'WhatsApp'], ['email', 'Email'], ['both', 'Ambos'], ['none', 'No notificar']].map(([value, label]) => <label key={value}><input type="radio" name="notify" checked={form.notify === value} onChange={() => update('notify', value)} /> {label}</label>)}</div></div>}
       <div className="form-step"><span>{isBlock ? '1' : '2'}</span><b>Confirma los datos{isBlock ? ' del bloqueo' : ' de la consulta'}</b></div>
       <div className="form-row"><label>Fecha<input type="date" value={form.date} onChange={(e) => update('date', e.target.value)} required /></label><label>Hora<select value={form.time} onChange={(e) => update('time', e.target.value)}>{TIME_OPTIONS.map((t) => <option key={t}>{t}</option>)}</select></label></div>
