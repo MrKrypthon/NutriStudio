@@ -124,7 +124,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
   const menu = plan?.menuSnapshot?.length ? plan.menuSnapshot : draftMenu
   const entryFor = (day, mealType) => menu.find((entry) => entry.dayOfWeek === day && entry.mealType === mealType)
 
-  const body = <div className="content document-content">
+  const body = <div className={embedded ? 'document-content' : 'content document-content'}>
     <div className="document-top">
       <div>
         {!embedded && <button className="back-button" onClick={() => setActive('Constructor de plan')}>← Regresar al plan</button>}
