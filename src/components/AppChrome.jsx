@@ -20,6 +20,9 @@ export default function AppChrome({ active, setActive, children }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifData, setNotifData] = useState(null)
   const [profileOpen, setProfileOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('nutri.sidebar') !== 'collapsed')
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width:1000px)').matches)
   const searchRef = useRef(null)
   const notifRef = useRef(null)
   const profileRef = useRef(null)
@@ -38,21 +41,37 @@ export default function AppChrome({ active, setActive, children }) {
   }, [searchQuery])
 
   useEffect(() => {
+    const media = window.matchMedia('(max-width:1000px)')
+    const onChange = () => setIsMobile(media.matches)
+    media.addEventListener('change', onChange)
+    return () => media.removeEventListener('change', onChange)
+  }, [])
+
+  // Desktop keeps the sidebar preference in localStorage; on mobile the drawer always starts closed.
+  useEffect(() => { if (!isMobile) localStorage.setItem('nutri.sidebar', sidebarOpen ? 'open' : 'collapsed') }, [sidebarOpen, isMobile])
+  const toggleSidebar = () => { if (isMobile) setDrawerOpen((open) => !open); else setSidebarOpen((open) => !open) }
+
+  useEffect(() => {
     const onClickOutside = (event) => {
       if (searchRef.current && !searchRef.current.contains(event.target)) setSearchOpen(false)
       if (notifRef.current && !notifRef.current.contains(event.target)) setNotifOpen(false)
       if (profileRef.current && !profileRef.current.contains(event.target)) setProfileOpen(false)
     }
+    const onKeyDown = (event) => { if (event.key === 'Escape') setDrawerOpen(false) }
     document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
+    document.addEventListener('keydown', onKeyDown)
+    return () => { document.removeEventListener('mousedown', onClickOutside); document.removeEventListener('keydown', onKeyDown) }
   }, [])
+
+  // Close the drawer whenever navigation happens (tapping a link on mobile).
+  useEffect(() => { setDrawerOpen(false) }, [active])
 
   const goToPatients = () => { setActive('Pacientes'); setSearchOpen(false); setSearchQuery('') }
   const pendingConfirmations = notifData?.stats?.pendingConfirmations || 0
   const pendingTasks = notifData?.tasks?.length || 0
   const hasNotifications = pendingConfirmations > 0 || pendingTasks > 0
 
-  return <div className="app-shell"><aside className="pc-sidebar"><button type="button" className="pc-brand" onClick={() => setActive('Hoy')} title="Ir a Hoy"><div className="brand-mark">N</div><div><strong>nutri<span>·</span>studio</strong><small>CLINICAL WORKSPACE</small></div></button><button type="button" className="pc-workspace" onClick={() => setActive('Configuración')} title="Ir a Configuración"><span className="avatar small">{initials}</span><div style={{ minWidth: 0 }}><b style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name || 'Cargando…'}</b><small style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{practice?.name || 'Consulta privada'}</small></div><span className="chevron">⌄</span></button><div className="pc-navbar">{navGroups.map((group) => <div className="pc-nav-group" key={group.label}><div className="pc-caption">{group.label}</div><nav>{group.items.map(([icon, label]) => <button key={label} className={active === label ? 'pc-link active' : 'pc-link'} onClick={() => setActive(label)}><span className="pc-micon"><Icon>{icon}</Icon></span><span className="pc-mtext">{label}</span>{label === 'Pacientes' && notifData?.stats?.activePatients != null && <span className="pc-badge">{notifData.stats.activePatients}</span>}</button>)}</nav></div>)}<button className={active === 'Configuración' ? 'pc-link pc-settings-link active' : 'pc-link pc-settings-link'} onClick={() => setActive('Configuración')}><span className="pc-micon"><Icon>⚙</Icon></span><span className="pc-mtext">Configuración</span></button></div><div className="pc-sidebar-footer"><button type="button" className="plan-tag" onClick={() => setActive('Configuración')} title="Ir a Configuración"><span className="spark">✦</span><div><b>{practice?.name || 'Consulta privada'}</b><small>Configuración de tu práctica →</small></div></button></div></aside><main className="main"><header className="pc-header"><div className="crumb"><span>Tu espacio</span><b>/</b><strong>{active}</strong></div><div className="top-actions">
+  return <div className={'app-shell' + (isMobile && drawerOpen ? ' sidebar-open' : '') + (!isMobile && !sidebarOpen ? ' sidebar-collapsed' : '')}><aside className="pc-sidebar" id="app-sidebar"><div className="pc-sidebar-head"><button type="button" className="pc-brand" onClick={() => setActive('Hoy')} title="Ir a Hoy"><div className="brand-mark">N</div><div><strong>nutri<span>·</span>studio</strong><small>CLINICAL WORKSPACE</small></div></button><button type="button" className="sidebar-toggle" aria-label={(isMobile ? drawerOpen : sidebarOpen) ? 'Ocultar menú' : 'Mostrar menú'} aria-expanded={isMobile ? drawerOpen : sidebarOpen} aria-controls="app-sidebar" onClick={toggleSidebar}><Icon>menu</Icon></button></div><div className="pc-navbar">{navGroups.map((group) => <div className="pc-nav-group" key={group.label}><div className="pc-caption">{group.label}</div><nav>{group.items.map(([icon, label]) => <button key={label} title={label} className={active === label ? 'pc-link active' : 'pc-link'} onClick={() => setActive(label)}><span className="pc-micon"><Icon>{icon}</Icon></span><span className="pc-mtext">{label}</span>{label === 'Pacientes' && notifData?.stats?.activePatients != null && <span className="pc-badge">{notifData.stats.activePatients}</span>}</button>)}</nav></div>)}<button title="Configuración" className={active === 'Configuración' ? 'pc-link pc-settings-link active' : 'pc-link pc-settings-link'} onClick={() => setActive('Configuración')}><span className="pc-micon"><Icon>settings</Icon></span><span className="pc-mtext">Configuración</span></button></div><div className="pc-sidebar-footer"><button type="button" className="plan-tag" onClick={() => setActive('Configuración')} title="Ir a Configuración"><span className="spark">✦</span><div><b>{practice?.name || 'Consulta privada'}</b><small>Configuración de tu práctica →</small></div></button></div></aside>{drawerOpen && <button type="button" className="sidebar-backdrop" aria-label="Cerrar menú" onClick={() => setDrawerOpen(false)} />}<main className="main"><header className="pc-header"><div className="header-left"><button type="button" className="hamburger" aria-label={(isMobile ? drawerOpen : sidebarOpen) ? 'Ocultar menú' : 'Mostrar menú'} aria-expanded={isMobile ? drawerOpen : sidebarOpen} aria-controls="app-sidebar" onClick={toggleSidebar}>☰</button><div className="crumb"><span>Tu espacio</span><b>/</b><strong>{active}</strong></div></div><div className="top-actions">
     <div className="header-pop" ref={searchRef}>
       <button className="icon-button" onClick={() => setSearchOpen((v) => !v)} title="Buscar paciente">⌕</button>
       {searchOpen && <div className="dropdown-panel search-dropdown">
