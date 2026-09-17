@@ -287,6 +287,13 @@ html{scroll-behavior:smooth}
 .app-shell.sidebar-collapsed .pc-sidebar .pc-link:hover{background:#ffffff14}
 .app-shell.sidebar-collapsed .pc-sidebar .pc-link.active{background:#ffffff1f}
 
+/* Etiqueta flotante del menú colapsado: dice el nombre de la sección al pasar el puntero. Va con
+   position:fixed para que no la recorte el scroll interno del sidebar (overflow-y:auto). */
+.pc-tooltip{position:fixed;left:84px;transform:translateY(-50%);background:var(--ink);color:#fff;font:600 11px 'DM Sans';letter-spacing:.1px;padding:7px 11px;border-radius:7px;box-shadow:0 8px 22px rgba(18,62,56,.3);z-index:60;pointer-events:none;white-space:nowrap;animation:tipIn .12s ease}
+.pc-tooltip::before{content:'';position:absolute;left:-9px;top:50%;transform:translateY(-50%);border:5px solid transparent;border-right-color:var(--ink)}
+@keyframes tipIn{from{opacity:0;margin-left:-4px}to{opacity:1;margin-left:0}}
+@media(max-width:1000px){.pc-tooltip{display:none}}
+
 /* Encabezado de sección un poco más compacto. */
 .module-header h1{font-size:27px;letter-spacing:-1px}
 .module-header .subtitle{margin-bottom:0}
