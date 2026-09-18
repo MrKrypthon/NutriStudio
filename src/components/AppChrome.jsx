@@ -2,12 +2,32 @@ import { useEffect, useRef, useState } from 'react'
 import Icon from './Icon.jsx'
 import { navGroups } from '../app/navItems.js'
 import { useAuth } from '../lib/AuthContext.jsx'
-import { dashboardApi, patientsApi } from '../lib/api.js'
+import { dashboardApi, patientsApi, practiceApi } from '../lib/api.js'
 
 const ROLE_LABELS = { OWNER: 'Propietaria', NUTRITIONIST: 'Nutrióloga', ASSISTANT: 'Asistente' }
 // Same "today" definition DashboardPage uses, kept local since this is the only other place
 // that needs it just to size the notification badge.
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+
+// Aviso de cita próxima: aparece 5 min antes, se queda 15 s y se cierra solo. El intervalo refresca
+// cada 20 s (suficiente para un aviso de 5 min sin golpear la API con demasiada frecuencia).
+const ALERT_LEAD_MS = 5 * 60 * 1000
+const ALERT_VISIBLE_MS = 15000
+const ALERT_TICK_MS = 20000
+const APPOINTMENT_TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia' }
+
+// "Ahora" en el reloj de pared de la práctica, con la misma convención que las citas (startAt se
+// guarda como hora local etiquetada con "Z"; ver nota en AgendaPage sobre por qué se usan getters UTC).
+const practiceNowMs = (timeZone) => {
+  if (timeZone) {
+    try {
+      const date = new Date().toLocaleDateString('en-CA', { timeZone })
+      const time = new Date().toLocaleTimeString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false })
+      return new Date(`${date}T${time}:00.000Z`).getTime()
+    } catch { /* cae al reloj del sistema */ }
+  }
+  return Date.now()
+}
 
 export default function AppChrome({ active, setActive, children }) {
   const { user, practice, logout } = useAuth()
@@ -24,11 +44,61 @@ export default function AppChrome({ active, setActive, children }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width:1000px)').matches)
   const [tip, setTip] = useState(null)
+  const [alerts, setAlerts] = useState([])
+  const [tick, setTick] = useState(0)
+  const [practiceTz, setPracticeTz] = useState(() => practice?.timeZone || null)
   const searchRef = useRef(null)
   const notifRef = useRef(null)
   const profileRef = useRef(null)
+  const notifiedRef = useRef(new Set())
+  const alertTimersRef = useRef(new Map())
 
-  useEffect(() => { dashboardApi.today(todayIso()).then(setNotifData).catch(() => {}) }, [])
+  // Refresca en segundo plano (citas y contadores del encabezado) cada pocos segundos.
+  useEffect(() => { const timer = setInterval(() => setTick((value) => value + 1), ALERT_TICK_MS); return () => clearInterval(timer) }, [])
+  // Limpia los temporizadores de autocierre al desmontar.
+  useEffect(() => () => { alertTimersRef.current.forEach((timer) => clearTimeout(timer)); alertTimersRef.current.clear() }, [])
+
+  const dismissAlert = (id) => {
+    setAlerts((prev) => prev.filter((alert) => alert.id !== id))
+    const timer = alertTimersRef.current.get(id)
+    if (timer) { clearTimeout(timer); alertTimersRef.current.delete(id) }
+  }
+
+  // La zona horaria de la práctica puede venir ya en la sesión o requerir una consulta aparte.
+  useEffect(() => {
+    if (practice?.timeZone) { setPracticeTz(practice.timeZone); return undefined }
+    let cancelled = false
+    practiceApi.get().then((data) => { if (!cancelled) setPracticeTz(data?.timeZone || null) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [practice?.timeZone])
+
+  useEffect(() => {
+    let cancelled = false
+    const now = practiceNowMs(practiceTz)
+    dashboardApi.today(todayIso()).then((payload) => {
+      if (cancelled) return
+      setNotifData(payload)
+      const upcoming = (payload.appointments || []).filter((appointment) => {
+        if (!appointment?.id || !appointment.startAt || notifiedRef.current.has(appointment.id) || appointment.status === 'COMPLETED') return false
+        const diff = new Date(appointment.startAt).getTime() - now
+        return diff > 0 && diff <= ALERT_LEAD_MS
+      })
+      if (!upcoming.length) return
+      upcoming.forEach((appointment) => notifiedRef.current.add(appointment.id))
+      setAlerts((prev) => [...prev, ...upcoming.map((appointment) => ({
+        id: appointment.id,
+        name: `${appointment.patient?.firstName || ''} ${appointment.patient?.lastName || ''}`.trim() || 'Paciente',
+        time: `${String(new Date(appointment.startAt).getUTCHours()).padStart(2, '0')}:${String(new Date(appointment.startAt).getUTCMinutes()).padStart(2, '0')}`,
+        minutes: Math.max(1, Math.round((new Date(appointment.startAt).getTime() - now) / 60000)),
+        type: APPOINTMENT_TYPE_LABELS[appointment.type] || 'Consulta',
+      }))])
+      upcoming.forEach((appointment) => {
+        const timer = setTimeout(() => { setAlerts((prev) => prev.filter((alert) => alert.id !== appointment.id)); alertTimersRef.current.delete(appointment.id) }, ALERT_VISIBLE_MS)
+        alertTimersRef.current.set(appointment.id, timer)
+      })
+    }).catch(() => {})
+    return () => { cancelled = true }
+  }, [tick, practiceTz])
 
   useEffect(() => {
     if (!searchQuery.trim()) { setSearchResults([]); return undefined }
@@ -103,5 +173,7 @@ export default function AppChrome({ active, setActive, children }) {
         <button className="dropdown-item" onClick={logout}><span className="stat-icon orange">⏻</span><div><b>Cerrar sesión</b></div></button>
       </div>}
     </div>
-  </div></header>{children}</main></div>
+  </div></header>{children}</main>
+    {alerts.length > 0 && <div className="appt-alerts" aria-live="polite">{alerts.map((alert) => <div className="appt-alert" key={alert.id} role="status"><span className="appt-alert-icon"><Icon>clock</Icon></span><div className="appt-alert-body"><b>{alert.name}</b><small>En {alert.minutes} min · {alert.time} · {alert.type}</small></div><button type="button" className="appt-alert-close" aria-label="Cerrar aviso" onClick={() => dismissAlert(alert.id)}>×</button><span className="appt-alert-bar" /></div>)}</div>}
+  </div>
 }

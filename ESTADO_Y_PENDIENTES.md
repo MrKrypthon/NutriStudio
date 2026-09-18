@@ -658,3 +658,26 @@ Cierre del rediseño empezado en el commit "Detalles de diseño: iconos SVG, men
 - **Menú lateral colapsado: etiqueta con el nombre de la sección al pasar el puntero.** Antes solo había `title` nativo (lento y sin estilo). Ahora aparece una burbuja flotante junto al icono. Va con `position:fixed` calculada en `mouseenter` para que no la recorte el `overflow-y:auto` del sidebar; se oculta en móvil y con el menú expandido (donde las etiquetas ya se ven).
 
 Verificado con Chromium headless vía CDP contra la app servida en 5173 con login real: en 1920×1000, 1440×900, 1280×720 y 760/500 se midió que la cabecera global y las barras de sección mantienen su `top`, que los títulos de columna quedan `sticky` dentro de la lista, y que **no hay contenido recortado sin scroll** (`scrollHeight ≈ clientHeight` en `.content` en todas las pantallas, incluidas Expediente y los 5 pasos del Constructor). `npm run build` OK y `npm test` (48/48). Sin cambios de backend.
+
+## Fase 66 — Aviso de cita próxima (5 min antes), discreto y con autocierre
+
+Pedido de la usuaria: alertas en tiempo real cuando esté por empezar una cita, con 5 minutos de anticipación, abajo, minimalistas, que no se sientan como emergencia y que se quiten solas.
+
+- **Aparece abajo al centro, sobrio.** Tarjeta blanca con borde izquierdo verde, icono de reloj en el verde suave de la paleta y una barra fina inferior que marca el tiempo restante. Sin rojo ni parpadeos: dice `En 5 min · 11:00` con el nombre de la paciente.
+- **Autocierre a los 15 s**, o antes con la "×". Cada cita avisa una sola vez por sesión (set de ids ya notificados).
+- **Polling ligero** cada 20 s de `dashboard/today` (que ya trae las citas del día con su paciente): sin websockets ni infraestructura nueva. El mismo ciclo refresca los contadores del encabezado. Se descartan citas completadas, las de tipo `BLOCK` (el endpoint ya las excluye) y las que ya empezaron.
+- **Zona horaria de la práctica.** Las citas se guardan como hora local etiquetada con "Z", así que el aviso compara contra el reloj de pared de la práctica (misma lógica que AgendaPage). Para eso `practice.timeZone` ahora se incluye en `/auth/login` y `/auth/me` (cambio aditivo); mientras el API no se reinicie, AppChrome cae a `GET /practice` para obtenerla.
+
+Verificado con Chromium headless/CDP en 1440×900 interceptando `dashboard/today` (sin tocar la base): con una cita a 4 min se midió que el aviso sale centrado a 24 px del fondo y que se cierra solo pasados los 15 s (0 nodos tras 16 s). Se probaron las dos vías de zona horaria (desde la sesión y con el fallback a `/practice`). `npm run build` OK, `node --check server/index.js` OK y `npm test` (48/48).
+
+## Fase 67 — Agendar en horarios no exactos (precisión de 15 min)
+
+Pedido de la usuaria: poder seleccionar horarios que no caen en una hora en punto; si queda un hueco que no es exacto, poder agendarlo de inmediato.
+
+- **El selector de hora del modal ahora es libre** (`<input type="time" step=300>`) en vez de una lista fija de :00/:30. Se puede escribir cualquier hora.
+- **Clic en la celda a precisión de 15 min.** Antes toda la fila de una hora sólo ofrecía :00 o :30 según si el clic caía en la primera o segunda mitad, y exigía que la hora estuviera completamente vacía (`dayEvents.length === 0`), así que un hueco como "de 09:45 a 10:00" era inalcanzable. Ahora el minuto sale de dónde se hace clic (redondeado a 15) y se agenda en el **primer inicio libre a partir de ahí** (`firstFreeFrom`), aunque no caiga en :00/:30.
+- **La celda se marca como disponible** si queda cualquier inicio libre dentro de la hora (antes bastaba una cita que empezara en esa hora para bloquear toda la fila).
+- **Duración auto-ajustada.** Al abrir desde un hueco, se elige la duración más larga (60/45/30/15) que quepa antes de la siguiente cita o del cierre (`fitDuration`), en vez de forzar 60.
+- **Arrastrar también respeta los 15 min:** el destino del drop usa el minuto donde se suelta.
+
+Verificado con Chromium headless/CDP en 1440×900 interceptando `GET /appointments` (sin tocar la base) con una cita 09:00–09:45: al hacer clic en el hueco de las 09:45 el modal abre con `Hora = 09:45` y Fecha correcta. `npm run build` OK y `npm test` (48/48).

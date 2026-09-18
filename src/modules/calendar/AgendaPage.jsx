@@ -17,7 +17,10 @@ const TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUI
 const TYPE_COLORS = { INITIAL: 'coral', FOLLOW_UP: 'blue', QUICK_CONTROL: 'yellow', EMERGENCY: 'purple', BLOCK: 'purple' }
 const TYPE_OPTIONS = [['FOLLOW_UP', 'Seguimiento'], ['INITIAL', 'Primera consulta'], ['QUICK_CONTROL', 'Control rápido'], ['EMERGENCY', 'Emergencia']]
 const DURATION_OPTIONS = [60, 45, 30, 15]
-const TIME_OPTIONS = Array.from({ length: 23 }, (_, i) => { const h = 8 + Math.floor(i / 2); const m = i % 2 === 0 ? '00' : '30'; return `${String(h).padStart(2, '0')}:${m}` })
+// Granularidad al agendar: 15 min, en vez de sólo :00/:30. Así se puede ocupar un hueco que no cae
+// en una hora exacta (p. ej. justo donde terminó la cita anterior).
+const SLOT_STEP_MINUTES = 15
+const minutesToLabel = (total) => `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
 
 const DEMO_APPOINTMENTS = [
   { id: 'demo-1', startAt: '2026-08-26T09:00:00.000Z', endAt: '2026-08-26T10:00:00.000Z', type: 'INITIAL', status: 'CONFIRMED', patient: { firstName: 'Mariana', lastName: 'Torres' } },
@@ -174,29 +177,58 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
 
   const isWithinBusinessHours = (time) => businessHours.ranges.some((range) => toMinutes(time) >= toMinutes(range.start) && toMinutes(time) < toMinutes(range.end))
 
-  // Bookable: business day, inside the configured hours, in the future, and free of overlaps
-  // (checked against ALL appointments so a filtered-out block still occupies its time).
-  const canBookSlot = (day, time) => {
-    if (!isBusinessDay(day)) return false
-    if (!isWithinBusinessHours(time)) return false
+  // A slot is free when no appointment overlaps [time, time + duration). Checked against ALL
+  // appointments (including blocks and filtered-out ones) so a hidden block still occupies its time.
+  const slotIsFree = (day, time, durationMinutes = SLOT_STEP_MINUTES) => {
     const slotMs = Date.parse(`${toISODate(day)}T${time}:00.000Z`)
-    if (!(slotMs > nowMs)) return false
-    const slotEnd = slotMs + 60 * 60000
+    const slotEnd = slotMs + durationMinutes * 60000
     return !appointments.some((appointment) => {
       const start = new Date(appointment.startAt).getTime()
       const end = appointment.endAt ? new Date(appointment.endAt).getTime() : start + 60 * 60000
       return start < slotEnd && end > slotMs
     })
   }
-
-  // The whole white cell is clickable: the time comes from where inside the row you click
-  // (first half → :00, second half → :30), instead of a fixed per-hour block.
-  const handleSlotClick = (event, day, time) => {
+  // Bookable: business day, inside the configured hours, in the future, and free of overlaps.
+  const canBookSlot = (day, time, durationMinutes = SLOT_STEP_MINUTES) => {
+    if (!isBusinessDay(day)) return false
+    if (!isWithinBusinessHours(time)) return false
+    if (!(Date.parse(`${toISODate(day)}T${time}:00.000Z`) > nowMs)) return false
+    return slotIsFree(day, time, durationMinutes)
+  }
+  // Primer inicio libre a partir de un minuto concreto, en pasos de SLOT_STEP_MINUTES. Es lo que
+  // permite agendar en huecos que no caen en :00/:30 (p. ej. justo al terminar la cita anterior).
+  const firstFreeFrom = (day, fromMinutes) => {
+    for (let minutes = Math.max(0, fromMinutes); minutes < 24 * 60; minutes += SLOT_STEP_MINUTES) {
+      const candidate = minutesToLabel(minutes)
+      if (canBookSlot(day, candidate)) return candidate
+    }
+    return null
+  }
+  // Duración más larga (de las ofrecidas) que cabe antes de la siguiente cita o del cierre.
+  const fitDuration = (day, time) => {
+    const slotMs = Date.parse(`${toISODate(day)}T${time}:00.000Z`)
+    let limit = Infinity
+    for (const appointment of appointments) {
+      const start = new Date(appointment.startAt).getTime()
+      if (start > slotMs && toISODate(new Date(appointment.startAt)) === toISODate(day)) limit = Math.min(limit, start)
+    }
+    businessHours.ranges.forEach((range) => {
+      const end = toMinutes(range.end)
+      if (end > toMinutes(time)) limit = Math.min(limit, Date.parse(`${toISODate(day)}T${minutesToLabel(end)}:00.000Z`))
+    })
+    const available = Number.isFinite(limit) ? Math.round((limit - slotMs) / 60000) : 60
+    return DURATION_OPTIONS.find((duration) => duration <= available) || DURATION_OPTIONS[DURATION_OPTIONS.length - 1]
+  }
+  // Toda la celda es clicable: el minuto sale de dónde se hace clic dentro de la fila, redondeado a
+  // SLOT_STEP_MINUTES, en vez de forzar :00/:30.
+  const snappedMinutesFromClick = (event, time) => {
     const rect = event.currentTarget.getBoundingClientRect()
     const offset = Math.max(0, Math.min(rect.height - 1, event.clientY - rect.top))
-    const hour = time.slice(0, 2)
-    const prefer = offset / rect.height < 0.5 ? [`${hour}:00`, `${hour}:30`] : [`${hour}:30`, `${hour}:00`]
-    const target = prefer.find((candidate) => canBookSlot(day, candidate))
+    const minute = Math.min(60 - SLOT_STEP_MINUTES, Math.round(((offset / rect.height) * 60) / SLOT_STEP_MINUTES) * SLOT_STEP_MINUTES)
+    return Number(time.slice(0, 2)) * 60 + minute
+  }
+  const handleSlotClick = (event, day, time) => {
+    const target = firstFreeFrom(day, snappedMinutesFromClick(event, time))
     if (target) openSlotModal(day, target)
   }
 
@@ -214,7 +246,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
 
   const openModal = (defaultPatientId) => { setIsBlock(false); setForm(emptyForm(anchor, defaultPatientId)); setResetNewPatient(); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
   const openBlockModal = () => { setIsBlock(true); setForm({ ...emptyForm(anchor), type: 'BLOCK', notify: 'none' }); setResetNewPatient(); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
-  const openSlotModal = (day, time) => { setIsBlock(false); setForm({ ...emptyForm(day), date: toISODate(day), time }); setResetNewPatient(); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const openSlotModal = (day, time) => { setIsBlock(false); setForm({ ...emptyForm(day), date: toISODate(day), time, duration: fitDuration(day, time) }); setResetNewPatient(); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
   const setResetNewPatient = () => { setNewPatient(EMPTY_NEW_PATIENT); setNewPatientState('idle'); setNewPatientError(''); setShowNewPatient(false) }
 
   // Quick "add patient" inside the appointment modal: keeps the in-progress booking (date, time,
@@ -341,7 +373,10 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
           {days.map((day) => {
             const dayEvents = visibleAppointments.filter((a) => { const start = new Date(a.startAt); return toISODate(start) === toISODate(day) && `${String(start.getUTCHours()).padStart(2, '0')}:00` === time })
             const slotKey = `${toISODate(day)}|${time}`
-            const bookable = dayEvents.length === 0 && (canBookSlot(day, `${time.slice(0, 2)}:00`) || canBookSlot(day, `${time.slice(0, 2)}:30`))
+            // Clicable si queda algún inicio libre dentro de la hora, aunque no sea :00/:30 (p. ej.
+            // una cita de 09:00 a 09:45 deja libre 09:45, que antes no se podía agendar).
+            const rowStart = Number(time.slice(0, 2)) * 60
+            const bookable = isBusinessDay(day) && [0, 15, 30, 45].some((offset) => canBookSlot(day, minutesToLabel(rowStart + offset)))
             return <div
               className={'slot' + (dragId && dropKey === slotKey ? ' drop-target' : '') + (bookable ? ' slot-bookable' : '')}
               key={day.toISOString()}
@@ -349,7 +384,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
               title={bookable ? 'Agendar una cita a esta hora' : undefined}
               onDragOver={(e) => { e.preventDefault(); if (dragId) setDropKey(slotKey) }}
               onDragLeave={() => setDropKey((prev) => (prev === slotKey ? null : prev))}
-              onDrop={(e) => { e.preventDefault(); handleMove(day, time) }}
+              onDrop={(e) => { e.preventDefault(); handleMove(day, minutesToLabel(snappedMinutesFromClick(e, time))) }}
             >
               {dayEvents.map((appointment) => {
                 const start = new Date(appointment.startAt)
@@ -398,7 +433,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       </div>}
       {!isBlock && <div className="notify-box"><b>Notificar al paciente</b><div className="notify-options">{[['whatsapp', 'WhatsApp'], ['email', 'Email'], ['both', 'Ambos'], ['none', 'No notificar']].map(([value, label]) => <label key={value}><input type="radio" name="notify" checked={form.notify === value} onChange={() => update('notify', value)} /> {label}</label>)}</div></div>}
       <div className="form-step"><span>{isBlock ? '1' : '2'}</span><b>Confirma los datos{isBlock ? ' del bloqueo' : ' de la consulta'}</b></div>
-      <div className="form-row"><label>Fecha<input type="date" value={form.date} onChange={(e) => update('date', e.target.value)} required /></label><label>Hora<select value={form.time} onChange={(e) => update('time', e.target.value)}>{TIME_OPTIONS.map((t) => <option key={t}>{t}</option>)}</select></label></div>
+      <div className="form-row"><label>Fecha<input type="date" value={form.date} onChange={(e) => update('date', e.target.value)} required /></label><label>Hora<input type="time" value={form.time} onChange={(e) => update('time', e.target.value)} step={300} required /></label></div>
       {!isBlock && <div className="form-row"><label>Tipo de cita<select value={form.type} onChange={(e) => update('type', e.target.value)}>{TYPE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Duración<select value={form.duration} onChange={(e) => update('duration', Number(e.target.value))}>{DURATION_OPTIONS.map((d) => <option value={d} key={d}>{d} minutos</option>)}</select></label></div>}
       {isBlock && <div className="form-row"><label>Duración<select value={form.duration} onChange={(e) => update('duration', Number(e.target.value))}>{DURATION_OPTIONS.map((d) => <option value={d} key={d}>{d} minutos</option>)}</select></label></div>}
       <div className="form-row"><label>Repetir<select value={form.recurrence} onChange={(e) => update('recurrence', e.target.value)}><option value="none">No repetir</option><option value="daily">Diaria</option><option value="weekly">Semanal</option></select></label>{form.recurrence !== 'none' && <label>Número de veces<input type="number" min="2" max="30" value={form.recurCount} onChange={(e) => update('recurCount', Number(e.target.value))} /></label>}</div>

@@ -7,6 +7,7 @@ const ICONS = {
   users: <><path d="M15.5 20v-1.6a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4V20" /><circle cx="8.8" cy="7" r="3.2" /><path d="M16.6 4.2a3.2 3.2 0 0 1 0 6.2M22 20v-1.6a4 4 0 0 0-3-3.8" /></>,
   clipboard: <><rect x="5" y="4" width="14" height="17" rx="2.5" /><path d="M9 4V3h6v1M8.7 10h6.6M8.7 14h6.6M8.7 18h4" /></>,
   bell: <><path d="M6.2 9.3a5.8 5.8 0 0 1 11.6 0c0 4.8 2 5.9 2 5.9H4.2s2-1.1 2-5.9Z" /><path d="M10 19.6a2 2 0 0 0 4 0" /></>,
+  clock: <><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3.2 2" /></>,
   layout: <><rect x="3" y="3" width="8" height="8" rx="1.6" /><rect x="13" y="3" width="8" height="5" rx="1.6" /><rect x="13" y="10" width="8" height="11" rx="1.6" /><rect x="3" y="13" width="8" height="8" rx="1.6" /></>,
   recipes: <><path d="M3.5 11h17a8.5 8.5 0 0 1-17 0Z" /><path d="M12 11V6.5M8.4 7.7c0-1.9 1.4-3 2-4.2M15.6 7.7c0-1.9-1.4-3-2-4.2" /></>,
   leaf: <><path d="M5 19c9 1 14-4 14-13-9 0-14 4-14 13Z" /><path d="M5 19c2.2-4.2 5.2-7.2 9-9.2" /></>,

@@ -78,7 +78,7 @@ app.post('/api/v1/auth/login', async (request, reply) => {
   const valid = user ? await bcrypt.compare(password, user.passwordHash) : false
   if (!user || !valid) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Email o contraseña incorrectos.', fields: {} })
   const token = jwt.sign({ sub: user.id, practiceId: user.practiceId, role: user.role }, JWT_SECRET, { expiresIn: SESSION_TTL })
-  return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, practice: { id: user.practice.id, name: user.practice.name } }
+  return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, practice: { id: user.practice.id, name: user.practice.name, timeZone: user.practice.timeZone } }
 })
 
 // Stateless JWT: there is no server-side session to invalidate yet, so this only exists for
@@ -89,7 +89,7 @@ app.post('/api/v1/auth/logout', async (request, reply) => reply.code(204).send()
 app.get('/api/v1/auth/me', async (request, reply) => {
   const user = await prisma.user.findUnique({ where: { id: request.userId }, include: { practice: true } })
   if (!user) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Sesión inválida.', fields: {} })
-  return { user: { id: user.id, name: user.name, email: user.email, role: user.role }, practice: { id: user.practice.id, name: user.practice.name } }
+  return { user: { id: user.id, name: user.name, email: user.email, role: user.role }, practice: { id: user.practice.id, name: user.practice.name, timeZone: user.practice.timeZone } }
 })
 
 app.get('/api/v1/practice', async (request, reply) => {

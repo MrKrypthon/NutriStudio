@@ -294,6 +294,21 @@ html{scroll-behavior:smooth}
 @keyframes tipIn{from{opacity:0;margin-left:-4px}to{opacity:1;margin-left:0}}
 @media(max-width:1000px){.pc-tooltip{display:none}}
 
+/* Aviso de cita próxima (5 min antes): abajo al centro, sobrio y sin urgencia. Se cierra solo; la
+   barra inferior marca el tiempo restante (debe coincidir con ALERT_VISIBLE_MS en AppChrome). */
+.appt-alerts{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:70;display:flex;flex-direction:column;gap:10px;align-items:center;width:min(430px,calc(100% - 32px));pointer-events:none}
+.appt-alert{pointer-events:auto;position:relative;overflow:hidden;width:100%;display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--line);border-left:3px solid var(--green);border-radius:12px;padding:12px 14px;box-shadow:0 12px 32px -10px rgba(18,62,56,.28);animation:alertIn .22s ease}
+.appt-alert-icon{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;background:var(--mint);color:var(--green);font-size:17px;flex:0 0 auto}
+.appt-alert-body{flex:1;min-width:0}
+.appt-alert-body b{display:block;font:600 12px 'DM Sans';color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.appt-alert-body small{display:block;color:var(--muted);font-size:10px;margin-top:3px}
+.appt-alert-close{border:0;background:none;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:2px 5px;border-radius:6px}
+.appt-alert-close:hover{background:#f4f4f6;color:var(--ink)}
+.appt-alert-bar{position:absolute;left:0;bottom:0;height:2px;width:100%;background:var(--green);opacity:.45;transform-origin:left;animation:alertBar 15s linear forwards}
+@keyframes alertIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes alertBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+@media(max-width:600px){.appt-alerts{bottom:76px}}
+
 /* Encabezado de sección un poco más compacto. */
 .module-header h1{font-size:27px;letter-spacing:-1px}
 .module-header .subtitle{margin-bottom:0}
