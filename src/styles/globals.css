@@ -344,6 +344,8 @@ html{scroll-behavior:smooth}
   .content > *:last-child,
   .content > .module-body,
   .content > .clinical-layout,
+  .content > .generic-section,
+  .content > .diagnosis-panel,
   .content > .plan-body{flex:1 1 auto;min-height:0;overflow:auto}
   /* En páginas con footer, el footer queda fijo y el cuerpo (aunque no sea el último hijo) scrollea. */
   .content > .wizard-footer{flex:0 0 auto;overflow:visible}
@@ -356,7 +358,7 @@ html{scroll-behavior:smooth}
   .pc-header{position:static}
   .content{display:block;height:auto;overflow:visible;max-width:none}
   .content > *{flex:none}
-  .content > *:last-child,.content > .module-body,.content > .clinical-layout,.content > .plan-body{flex:none;overflow:visible}
+  .content > *:last-child,.content > .module-body,.content > .clinical-layout,.content > .generic-section,.content > .diagnosis-panel,.content > .plan-body{flex:none;overflow:visible}
 }
 
 /* ── Finanzas ───────────────────────────────────────────────────────────────────────────────── */
