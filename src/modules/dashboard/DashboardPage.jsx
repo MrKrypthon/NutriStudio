@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
+import FinanceBars from '../../components/FinanceBars.jsx'
 import { appointmentsApi, dashboardApi } from '../../lib/api.js'
 import { useAuth } from '../../lib/AuthContext.jsx'
+import { formatMoney } from '../../lib/finance.js'
 
 const DEMO_APPOINTMENTS = [
   { time: '09:00', duration: '60 min', name: 'Mariana Torres', type: 'Primera consulta', initials: 'MT', color: 'coral', status: 'Confirmada' },
@@ -60,6 +62,8 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
   const moreTasks = Math.max((data.tasks || []).length - 1, 0)
   const isReal = status === 'online'
   const footLabel = isReal ? 'Actualizado desde tu API' : 'Datos de demostración'
+  const emptyTotals = { incomeCents: 0, expenseCents: 0, balanceCents: 0 }
+  const finance = data.finance || { today: emptyTotals, allTime: emptyTotals, last7: [] }
 
   // Consistency with Agenda: a pending appointment can be confirmed with one click from Hoy too.
   const confirmAppointment = async (id) => {
@@ -78,6 +82,16 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
     <div className="dashboard-grid">
       <section className="panel appointments"><div className="panel-title"><div><h2>Agenda de hoy</h2><p>Tus citas programadas</p></div><button className="link-button" onClick={() => setActive('Agenda')}>Abrir agenda →</button></div><div className="day-line"><span className="today-pill">HOY</span><span>{TODAY_LONG_LABEL}</span></div><div className="appointment-list">{data.appointments.length === 0 ? <p className="muted" style={{ padding: '22px 0', textAlign: 'center' }}>{isReal ? 'No tienes citas programadas para hoy.' : 'Sin citas de demostración.'}</p> : data.appointments.map((item, index) => { const isPending = item.status === 'PENDING_CONFIRMATION'; const isConfirmedLike = item.status === 'CONFIRMED' || item.status === 'SCHEDULED'; const startable = isConfirmedLike && item.patient?.id; const durationLabel = item.durationMinutes != null ? `${item.durationMinutes} min` : (() => { const ms = item.endAt && item.startAt ? new Date(item.endAt) - new Date(item.startAt) : NaN; return Number.isFinite(ms) && ms > 0 ? `${Math.round(ms / 60000)} min` : (item.duration || '60 min') })(); return <div className="appointment" key={item.id || item.name} onClick={() => { if (isPending) confirmAppointment(item.id); else if (startable) onStartConsultation?.(item.patient.id, item.id) }} style={(isPending || startable) ? { cursor: 'pointer' } : undefined} title={isPending ? 'Clic para confirmar la cita' : startable ? 'Clic para iniciar la consulta' : undefined}><div className="time"><b>{item.time || formatUTCTime(item.startAt)}</b><small>{durationLabel}</small></div><div className={'person-avatar ' + (item.color || ['coral', 'blue', 'purple', 'yellow'][index % 4])}>{item.initials || item.patient?.firstName?.[0] || 'P'}</div><div className="appointment-info"><b>{item.name || `${item.patient?.firstName || ''} ${item.patient?.lastName || ''}`}</b><span>{item.type ? (APPOINTMENT_TYPE_LABELS[item.type] || item.type) : 'Consulta'}</span></div><span className={'status ' + (isConfirmedLike || item.status === 'Confirmada' ? 'confirmed' : 'pending')}>{isConfirmedLike ? 'Confirmada' : item.status === 'PENDING_CONFIRMATION' ? 'Por confirmar' : item.status}</span></div> })}</div></section>
       <section className="panel followups"><div className="panel-title"><div><h2>Próxima acción</h2><p>{nextTask ? 'Un pendiente por resolver' : 'Todo en orden'}</p></div></div>{nextTask && <div className="next-action-card"><span className="stat-icon orange">◌</span><div><b>{TASK_TYPE_LABELS[nextTask.type] || nextTask.type} de {nextTask.patient?.firstName} {nextTask.patient?.lastName}</b><small>{nextTask.dueAt && new Date(nextTask.dueAt) < new Date() ? `Vencido ${formatUTCDay(nextTask.dueAt)}` : `Vence ${formatUTCDay(nextTask.dueAt)}`}</small></div><button className="message" onClick={() => setActive('Seguimientos')}>Ver ↗</button></div>}<div className="empty-note"><span>{moreTasks ? '◷' : '✓'}</span><p>{moreTasks ? `${moreTasks} pendiente(s) más en Seguimientos` : 'El resto de tu agenda está en orden'}</p></div></section>
+      <section className="panel finance-today">
+        <div className="panel-title"><div><h2>Finanzas de hoy</h2><p>Ingresos, egresos y saldo disponible</p></div><button className="link-button" onClick={() => setActive('Finanzas')}>Ver finanzas →</button></div>
+        <div className="finance-today-stats">
+          <div className="income"><small>Ingresos hoy</small><b>{formatMoney(finance.today.incomeCents)}</b></div>
+          <div className="expense"><small>Egresos hoy</small><b>{formatMoney(finance.today.expenseCents)}</b></div>
+          <div className="balance"><small>Disponible</small><b>{formatMoney(finance.allTime.balanceCents)}</b></div>
+        </div>
+        <FinanceBars series={finance.last7} compact />
+        <p className="finance-today-note">Últimos 7 días · los ingresos se registran solos al terminar cada consulta.</p>
+      </section>
     </div>
   </div></AppChrome>
 }

@@ -64,9 +64,17 @@ export const practiceApi = {
   get: () => apiRequest('/practice'),
   update: (payload) => apiRequest('/practice', { method: 'PUT', body: JSON.stringify(payload) }),
   uploadLogo: (dataUrl) => apiRequest('/practice/logo', { method: 'POST', body: JSON.stringify({ dataUrl }) }),
+  updateFees: (fees) => apiRequest('/practice/fees', { method: 'PUT', body: JSON.stringify({ fees }) }),
   // Public route (no Authorization header needed) so it can be used directly as an <img src> —
   // in the app, inside generated PDFs would need the file on disk instead, see server/index.js.
   logoUrl: (practiceId) => `${API_BASE}/practice/${practiceId}/logo`,
+}
+
+export const financeApi = {
+  overview: (from, to) => apiRequest(`/finance?from=${from}&to=${to}`),
+  addExpense: (payload) => apiRequest('/finance/expenses', { method: 'POST', body: JSON.stringify(payload) }),
+  updateEntry: (id, payload) => apiRequest(`/finance/entries/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  removeEntry: (id) => apiRequest(`/finance/entries/${id}`, { method: 'DELETE' }),
 }
 
 export const patientsApi = {
@@ -127,7 +135,7 @@ export const clinicalApi = {
   get: (id) => apiRequest(`/consultations/${id}`),
   create: (patientId, payload) => apiRequest(`/patients/${patientId}/consultations`, { method: 'POST', body: JSON.stringify(payload) }),
   saveSection: (consultationId, sectionKey, payload, updatedAt) => apiRequest(`/consultations/${consultationId}/sections/${sectionKey}`, { method: 'PUT', body: JSON.stringify({ payload, updatedAt }) }),
-  complete: (id) => apiRequest(`/consultations/${id}/complete`, { method: 'POST' }),
+  complete: (id, payload = {}) => apiRequest(`/consultations/${id}/complete`, { method: 'POST', body: JSON.stringify(payload) }),
   registerMeasurement: (consultationId, payload) => apiRequest(`/consultations/${consultationId}/measurements`, { method: 'POST', body: JSON.stringify(payload) }),
   addDiagnosis: (consultationId, payload) => apiRequest(`/consultations/${consultationId}/diagnoses`, { method: 'POST', body: JSON.stringify(payload) }),
   updateDiagnosis: (consultationId, diagnosisId, payload) => apiRequest(`/consultations/${consultationId}/diagnoses/${diagnosisId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
