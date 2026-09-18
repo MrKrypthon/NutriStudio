@@ -48,6 +48,17 @@ enum PlanStatus {
   SUPERSEDED
 }
 
+enum FinanceEntryType {
+  INCOME
+  EXPENSE
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+}
+
 model Practice {
   id             String        @id @default(uuid())
   name           String
@@ -56,6 +67,8 @@ model Practice {
   defaultPalette String        @default("minimal")
   logoUrl        String?
   businessHours  Json?
+  // Tarifas por tipo de cita, en centavos: { INITIAL, FOLLOW_UP, QUICK_CONTROL, EMERGENCY }.
+  fees           Json?
   users          User[]
   patients       Patient[]
   appointments   Appointment[]
@@ -65,6 +78,7 @@ model Practice {
   auditEvents    AuditEvent[]
   templates      Template[]
   educationMaterials EducationMaterial[]
+  financeEntries FinanceEntry[]
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 }
@@ -160,10 +174,32 @@ model Consultation {
   plans          NutritionPlan[]
   documents      Document[]
   labAttachments LabAttachment[]
+  financeEntry   FinanceEntry?
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
   @@index([patientId, createdAt])
+}
+
+// Movimiento de finanzas del consultorio. Los INCOME se generan solos al terminar una consulta
+// (toman la tarifa del tipo de cita y el método de pago elegido); los EXPENSE los captura la
+// nutrióloga (insumos, renta…). amountCents entero para no arrastrar errores de punto flotante.
+model FinanceEntry {
+  id             String            @id @default(uuid())
+  practiceId     String
+  practice       Practice          @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  type           FinanceEntryType
+  amountCents    Int
+  method         PaymentMethod?
+  category       String?
+  description    String?
+  occurredAt     DateTime          @default(now())
+  consultationId String?           @unique
+  consultation   Consultation?     @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([practiceId, occurredAt])
 }
 
 // A lab-results PDF the professional attaches for reference while filling "Estudios" in

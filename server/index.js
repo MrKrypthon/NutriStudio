@@ -100,9 +100,9 @@ app.get('/api/v1/practice', async (request, reply) => {
 })
 
 app.put('/api/v1/practice', async (request, reply) => {
-  const { name, timeZone, userName, userEmail, userSpecialty, userPhone, businessHours } = request.body || {}
+  const { name, timeZone, userName, userEmail, userSpecialty, userPhone, businessHours, fees } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
-  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(businessHours !== undefined ? { businessHours } : {}) } })
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
   let user = await prisma.user.findUnique({ where: { id: request.userId } })
   if (user) {
     user = await prisma.user.update({
@@ -116,6 +116,12 @@ app.put('/api/v1/practice', async (request, reply) => {
     })
   }
   return { ...practice, user }
+})
+
+// Guardar sólo las tarifas (la pantalla de Finanzas no tiene por qué reenviar nombre/zona horaria).
+app.put('/api/v1/practice/fees', async (request) => {
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { fees: normalizeFees(request.body?.fees) } })
+  return { fees: practice.fees }
 })
 
 app.post('/api/v1/auth/change-password', async (request, reply) => {
@@ -311,7 +317,7 @@ app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => 
 })
 
 app.get('/api/v1/consultations/:consultationId', async (request, reply) => {
-  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } }, include: { patient: true, sections: true, measurements: true, diagnoses: true, plans: true, labAttachments: { orderBy: { createdAt: 'desc' }, include: { uploadedBy: { select: { name: true } } } } } })
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } }, include: { patient: true, appointment: true, sections: true, measurements: true, diagnoses: true, plans: true, labAttachments: { orderBy: { createdAt: 'desc' }, include: { uploadedBy: { select: { name: true } } } } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   return consultation
 })
@@ -357,9 +363,17 @@ app.delete('/api/v1/lab-attachments/:attachmentId', async (request, reply) => {
 })
 
 app.post('/api/v1/consultations/:consultationId/complete', async (request, reply) => {
-  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
+  const { paymentMethod, amountCents } = request.body || {}
+  const consultation = await prisma.consultation.findFirst({
+    where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } },
+    include: { patient: true, appointment: true },
+  })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
-  return prisma.consultation.update({ where: { id: consultation.id }, data: { status: 'COMPLETED', completedAt: new Date() } })
+  const updated = await prisma.consultation.update({ where: { id: consultation.id }, data: { status: 'COMPLETED', completedAt: consultation.completedAt || new Date() } })
+  // Al cerrar la consulta queda registrado su ingreso (tarifa del tipo de cita + método de pago).
+  // Best-effort: un fallo aquí no debe impedir cerrar la sesión clínica.
+  await recordConsultationIncome(consultation, { paymentMethod, amountCents }).catch((error) => app.log.warn({ err: error }, 'No se pudo registrar el ingreso de la consulta'))
+  return updated
 })
 
 app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (request, reply) => {
@@ -921,7 +935,195 @@ app.get('/api/v1/dashboard/today', async (request) => {
     prisma.patient.count({ where: { practiceId, status: 'ACTIVE' } }),
     prisma.task.findMany({ where: { practiceId, status: 'pending' }, include: { patient: true }, orderBy: { dueAt: 'asc' }, take: 3 }),
   ])
-  return { date, stats: { appointments: appointments.length, pendingConfirmations, followUps, activePatients }, appointments, tasks }
+  // Resumen financiero para el dashboard de "Hoy": el día, el saldo acumulado y la serie de 7 días
+  // para la gráfica rápida.
+  const finance = await buildFinanceSnapshot(practiceId, date)
+  return { date, stats: { appointments: appointments.length, pendingConfirmations, followUps, activePatients }, appointments, tasks, finance }
+})
+
+// Tarifas por tipo de cita (centavos). Cualquier valor ausente/negativo se normaliza a 0 para que
+// el JSON guardado en Practice.fees siempre tenga la misma forma.
+const APPOINTMENT_TYPES = ['INITIAL', 'FOLLOW_UP', 'QUICK_CONTROL', 'EMERGENCY']
+const PAYMENT_METHODS = ['CASH', 'CARD', 'TRANSFER']
+const normalizeFees = (fees) => {
+  const source = fees && typeof fees === 'object' ? fees : {}
+  return Object.fromEntries(APPOINTMENT_TYPES.map((type) => [type, Math.max(0, Math.round(Number(source[type]) || 0))]))
+}
+// Normaliza un monto en centavos: entero positivo o 0. La UI ya convierte pesos → centavos.
+const normalizeCents = (value) => {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? Math.round(number) : 0
+}
+
+// "Ahora" en el reloj de pared de la práctica, etiquetado con "Z" (misma convención que las citas):
+// así el movimiento cae en el día correcto al filtrar por fecha local, sin importar la zona del viewer.
+const practiceWallClockNow = (timeZone) => {
+  if (timeZone) {
+    try {
+      const date = new Date().toLocaleDateString('en-CA', { timeZone })
+      const time = new Date().toLocaleTimeString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+      return new Date(`${date}T${time}.000Z`)
+    } catch { /* cae al reloj del sistema */ }
+  }
+  return new Date()
+}
+
+// Registra el ingreso de una consulta recién cerrada. Toma el monto enviado (editable en el modal de
+// cierre) o, si no viene, la tarifa configurada para el tipo de cita. Si ya existe el ingreso de esa
+// consulta (p. ej. se cerró dos veces), lo actualiza en vez de duplicarlo.
+async function recordConsultationIncome(consultation, { paymentMethod, amountCents } = {}) {
+  const practice = await prisma.practice.findUnique({ where: { id: consultation.patient.practiceId } })
+  const type = consultation.appointment?.type && APPOINTMENT_TYPES.includes(consultation.appointment.type) ? consultation.appointment.type : 'FOLLOW_UP'
+  const fees = normalizeFees(practice?.fees)
+  const amount = amountCents !== undefined && amountCents !== null ? normalizeCents(amountCents) : fees[type]
+  if (amount <= 0) return null
+  const method = PAYMENT_METHODS.includes(paymentMethod) ? paymentMethod : 'CASH'
+  const occurredAt = practiceWallClockNow(practice?.timeZone)
+  return prisma.financeEntry.upsert({
+    where: { consultationId: consultation.id },
+    // Al recerrar una consulta se conserva la fecha original del ingreso; sólo cambia monto/método.
+    update: { amountCents: amount, method },
+    create: { practiceId: consultation.patient.practiceId, type: 'INCOME', amountCents: amount, method, occurredAt, consultationId: consultation.id },
+  })
+}
+
+// Totales de ingreso/egreso en un rango (fechas UTC), a partir de los movimientos del consultorio.
+async function financeTotals(practiceId, from, to) {
+  const entries = await prisma.financeEntry.findMany({ where: { practiceId, occurredAt: { gte: from, lte: to } }, select: { type: true, amountCents: true } })
+  let incomeCents = 0
+  let expenseCents = 0
+  for (const entry of entries) { if (entry.type === 'INCOME') incomeCents += entry.amountCents; else expenseCents += entry.amountCents }
+  return { incomeCents, expenseCents, balanceCents: incomeCents - expenseCents }
+}
+
+// Serie diaria (para la gráfica) recortada a 92 días como máximo para no devolver rangos absurdos.
+function dailyFinanceSeries(entries, from, to) {
+  const byDate = new Map()
+  for (const entry of entries) {
+    const key = new Date(entry.occurredAt).toISOString().slice(0, 10)
+    const current = byDate.get(key) || { date: key, incomeCents: 0, expenseCents: 0 }
+    if (entry.type === 'INCOME') current.incomeCents += entry.amountCents; else current.expenseCents += entry.amountCents
+    byDate.set(key, current)
+  }
+  const series = []
+  const startDate = new Date(from)
+  const endDate = new Date(to)
+  const startDay = Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate())
+  const endDay = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate())
+  const days = Math.min(92, Math.max(1, Math.round((endDay - startDay) / 86400000) + 1))
+  for (let i = 0; i < days; i += 1) {
+    const key = new Date(startDay + i * 86400000).toISOString().slice(0, 10)
+    series.push(byDate.get(key) || { date: key, incomeCents: 0, expenseCents: 0 })
+  }
+  return series
+}
+
+// Snapshot financiero corto para "Hoy": hoy, saldo acumulado y últimos 7 días (hoy incluido).
+async function buildFinanceSnapshot(practiceId, date) {
+  const dayStart = new Date(`${date}T00:00:00.000Z`)
+  const dayEnd = new Date(`${date}T23:59:59.999Z`)
+  const weekStart = new Date(dayStart.getTime() - 6 * 86400000)
+  const [today, allTimeEntries, weekEntries] = await prisma.$transaction([
+    prisma.financeEntry.findMany({ where: { practiceId, occurredAt: { gte: dayStart, lte: dayEnd } }, select: { type: true, amountCents: true } }),
+    prisma.financeEntry.findMany({ where: { practiceId }, select: { type: true, amountCents: true } }),
+    prisma.financeEntry.findMany({ where: { practiceId, occurredAt: { gte: weekStart, lte: dayEnd } }, select: { type: true, amountCents: true, occurredAt: true } }),
+  ])
+  const sum = (entries) => entries.reduce((acc, entry) => { if (entry.type === 'INCOME') acc.incomeCents += entry.amountCents; else acc.expenseCents += entry.amountCents; return { ...acc, balanceCents: acc.incomeCents - acc.expenseCents } }, { incomeCents: 0, expenseCents: 0, balanceCents: 0 })
+  return { today: sum(today), allTime: sum(allTimeEntries), last7: dailyFinanceSeries(weekEntries, weekStart, dayEnd) }
+}
+
+app.get('/api/v1/finance', async (request, reply) => {
+  const practiceId = request.practiceId
+  const now = new Date()
+  const defaultFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
+  const defaultTo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString().slice(0, 10)
+  const from = request.query.from || defaultFrom
+  const to = request.query.to || defaultTo
+  const fromDate = new Date(`${from}T00:00:00.000Z`)
+  const toDate = new Date(`${to}T23:59:59.999Z`)
+  if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime()) || fromDate > toDate) {
+    return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Rango de fechas inválido.', fields: { from: true, to: true } })
+  }
+  const [entries, allTime, rangeTotals, practiceFees] = await Promise.all([
+    prisma.financeEntry.findMany({ where: { practiceId, occurredAt: { gte: fromDate, lte: toDate } }, include: { consultation: { include: { patient: true, appointment: true } } }, orderBy: { occurredAt: 'desc' } }),
+    financeTotals(practiceId, new Date(0), new Date('9999-12-31T23:59:59.999Z')),
+    financeTotals(practiceId, fromDate, toDate),
+    prisma.practice.findUnique({ where: { id: practiceId }, select: { fees: true, businessHours: true } }),
+  ])
+  const byMethod = PAYMENT_METHODS.map((method) => {
+    const income = entries.filter((entry) => entry.type === 'INCOME' && entry.method === method)
+    return { method, incomeCents: income.reduce((acc, entry) => acc + entry.amountCents, 0), count: income.length }
+  })
+  return {
+    from,
+    to,
+    allTime,
+    range: rangeTotals,
+    byMethod,
+    daily: dailyFinanceSeries(entries, fromDate, toDate),
+    fees: normalizeFees(practiceFees?.fees),
+    entries: entries.map((entry) => ({
+      id: entry.id,
+      type: entry.type,
+      amountCents: entry.amountCents,
+      method: entry.method,
+      category: entry.category,
+      description: entry.description,
+      occurredAt: entry.occurredAt,
+      appointmentType: entry.consultation?.appointment?.type || null,
+      // El nombre sale de la consulta vinculada; si el ingreso no tiene consulta (p. ej. capturado
+      // a mano) se usa su descripción para que la fila no quede como un genérico "Consulta".
+      patientName: entry.consultation?.patient ? `${entry.consultation.patient.firstName} ${entry.consultation.patient.lastName}`.trim() : (entry.type === 'INCOME' ? entry.description : null),
+    })),
+  }
+})
+
+app.post('/api/v1/finance/expenses', async (request, reply) => {
+  const { amountCents, method, category, description, occurredAt } = request.body || {}
+  const amount = normalizeCents(amountCents)
+  if (amount <= 0) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto del egreso debe ser mayor a cero.', fields: { amountCents: true } })
+  const when = occurredAt ? new Date(occurredAt) : new Date()
+  if (Number.isNaN(when.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha inválida.', fields: { occurredAt: true } })
+  const entry = await prisma.financeEntry.create({
+    data: {
+      practiceId: request.practiceId,
+      type: 'EXPENSE',
+      amountCents: amount,
+      method: PAYMENT_METHODS.includes(method) ? method : null,
+      category: category?.trim() || null,
+      description: description?.trim() || null,
+      occurredAt: when,
+    },
+  })
+  return reply.code(201).send(entry)
+})
+
+app.patch('/api/v1/finance/entries/:entryId', async (request, reply) => {
+  const entry = await prisma.financeEntry.findFirst({ where: { id: request.params.entryId, practiceId: request.practiceId } })
+  if (!entry) return reply.code(404).send({ code: 'FINANCE_ENTRY_NOT_FOUND', message: 'Movimiento no encontrado.', fields: {} })
+  const { amountCents, method, category, description, occurredAt } = request.body || {}
+  const data = {}
+  if (amountCents !== undefined) {
+    const amount = normalizeCents(amountCents)
+    if (amount <= 0) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto debe ser mayor a cero.', fields: { amountCents: true } })
+    data.amountCents = amount
+  }
+  if (method !== undefined) data.method = PAYMENT_METHODS.includes(method) ? method : null
+  if (category !== undefined) data.category = category?.trim() || null
+  if (description !== undefined) data.description = description?.trim() || null
+  if (occurredAt !== undefined) {
+    const when = new Date(occurredAt)
+    if (Number.isNaN(when.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha inválida.', fields: { occurredAt: true } })
+    data.occurredAt = when
+  }
+  return prisma.financeEntry.update({ where: { id: entry.id }, data })
+})
+
+app.delete('/api/v1/finance/entries/:entryId', async (request, reply) => {
+  const entry = await prisma.financeEntry.findFirst({ where: { id: request.params.entryId, practiceId: request.practiceId } })
+  if (!entry) return reply.code(404).send({ code: 'FINANCE_ENTRY_NOT_FOUND', message: 'Movimiento no encontrado.', fields: {} })
+  await prisma.financeEntry.delete({ where: { id: entry.id } })
+  return reply.code(204).send()
 })
 
 app.post('/api/v1/nutrition-plans/calculate', async (request, reply) => {

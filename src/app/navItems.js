@@ -10,6 +10,7 @@ export const navGroups = [
       ['users', 'Pacientes'],
       ['clipboard', 'Consultas'],
       ['bell', 'Seguimientos'],
+      ['wallet', 'Finanzas'],
     ],
   },
   {

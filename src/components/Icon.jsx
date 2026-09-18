@@ -16,6 +16,7 @@ const ICONS = {
   cap: <><path d="M3 9.5 12 5l9 4.5-9 4.5-9-4.5Z" /><path d="M7 11.6V16c0 1.5 2.2 2.5 5 2.5s5-1 5-2.5v-4.4M21 9.5V15" /></>,
   settings: <><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" /><circle cx="15" cy="6" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="17" cy="18" r="2" /></>,
   menu: <><path d="M4 7h16M4 12h16M4 17h16" /></>,
+  wallet: <><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H17a2 2 0 0 1 2 2v1.5" /><rect x="3" y="8.5" width="18" height="11" rx="2.5" /><path d="M16 14h2" /></>,
 }
 
 export default function Icon({ children }) {

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import FormCard from '../../components/FormCard.jsx'
 import { usePatient } from '../../lib/usePatient.js'
-import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi } from '../../lib/api.js'
+import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
+import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
 
 const TABS = ['Resumen', 'General', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
 const SECTION_KEYS = { Resumen: 'summary', General: 'general', Antropométrico: 'anthropometric', Bioquímico: 'biochemical', Clínico: 'clinical', Dietético: 'dietary', 'Estilo de vida': 'lifestyle', Sociocultural: 'sociocultural', Diagnóstico: 'diagnosis', Tratamiento: 'treatment', Monitoreo: 'monitoring', Notas: 'notes', Transcripción: 'transcription' }
@@ -155,6 +156,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [exportDoc, setExportDoc] = useState(null)
   const [exportState, setExportState] = useState('idle')
   const [completionState, setCompletionState] = useState('idle')
+  const [completeOpen, setCompleteOpen] = useState(false)
+  const [completeForm, setCompleteForm] = useState({ method: 'CASH', amount: '' })
+  const [completeError, setCompleteError] = useState('')
   const [attachments, setAttachments] = useState([])
   const [uploadState, setUploadState] = useState('idle')
   const [uploadError, setUploadError] = useState('')
@@ -393,16 +397,30 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
   // Sessions were never closable from the UI (the server route existed but nothing called it), so
   // consultations stayed IN_PROGRESS forever and every later visit merged into the same session.
-  const completeConsultation = async () => {
+  // Al cerrar se registra el pago (método + monto) para que el ingreso aparezca solo en Finanzas.
+  const openCompletion = async () => {
     if (!consultation || consultation.status === 'COMPLETED') return
-    if (!window.confirm('¿Cerrar la consulta? Quedará en el historial, pero dejará de ser la sesión en curso.')) return
+    setCompleteError('')
+    const type = consultation.appointment?.type || 'FOLLOW_UP'
+    let feeCents = 0
+    try { feeCents = normalizeFees((await practiceApi.get())?.fees)[type] || 0 } catch { feeCents = 0 }
+    setCompleteForm({ method: 'CASH', amount: feeCents ? String(centsToPesos(feeCents)) : '' })
+    setCompleteOpen(true)
+  }
+  const submitCompletion = async () => {
+    if (!consultation) return
     setCompletionState('saving')
+    setCompleteError('')
+    const payload = { paymentMethod: completeForm.method }
+    if (completeForm.amount.trim() !== '') payload.amountCents = pesosToCents(completeForm.amount)
     try {
-      await clinicalApi.complete(consultation.id)
+      await clinicalApi.complete(consultation.id, payload)
       setConsultation((prev) => (prev ? { ...prev, status: 'COMPLETED', completedAt: new Date().toISOString() } : prev))
       setCompletionState('idle')
-    } catch {
+      setCompleteOpen(false)
+    } catch (error) {
       setCompletionState('error')
+      setCompleteError(error.message || 'No se pudo cerrar la consulta.')
     }
   }
 
@@ -576,7 +594,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
     {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
     <div className="record-tabs">{TABS.map((x) => <button className={tab === x ? 'active' : ''} onClick={() => setTab(x)} key={x}>{x}</button>)}</div>
-    <div className="record-banner"><span className="spark">✦</span><div><b>{consultation?.status === 'COMPLETED' ? 'Consulta completada' : 'Consulta en curso'}</b><small>{consultation?.status === 'COMPLETED' ? `Sesión cerrada · ${formatDate(consultation.completedAt || consultation.startedAt)}` : `Los cambios se guardan automáticamente · ${saveLabel}`}</small></div><button className="secondary" onClick={() => setTab('Transcripción')}>Grabar consulta</button>{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={completeConsultation}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}</div>
+    <div className="record-banner"><span className="spark">✦</span><div><b>{consultation?.status === 'COMPLETED' ? 'Consulta completada' : 'Consulta en curso'}</b><small>{consultation?.status === 'COMPLETED' ? `Sesión cerrada · ${formatDate(consultation.completedAt || consultation.startedAt)}` : `Los cambios se guardan automáticamente · ${saveLabel}`}</small></div><button className="secondary" onClick={() => setTab('Transcripción')}>Grabar consulta</button>{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}</div>
 
     {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando expediente…</h3></div>}
     {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar ni crear la consulta de {patientName}.</div>}
@@ -739,5 +757,13 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
       <div className="wizard-footer"><button className="secondary" disabled={TABS.indexOf(tab) === 0} onClick={() => setTab(TABS[TABS.indexOf(tab) - 1])}>← Sección anterior</button><span>{saveLabel}</span><button className="primary" disabled={TABS.indexOf(tab) === TABS.length - 1} onClick={() => setTab(TABS[TABS.indexOf(tab) + 1])}>Siguiente sección <span>→</span></button></div>
     </>}
-  </div></AppChrome>
+  </div>
+  {completeOpen && <div className="modal-backdrop" onClick={() => setCompleteOpen(false)}><div className="modal" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-head"><div><p className="eyebrow">TERMINAR CONSULTA</p><h2>Registra el pago</h2><span className="modal-subtitle">El ingreso se guarda solo en Finanzas con el método que elijas.</span></div><button onClick={() => setCompleteOpen(false)}>×</button></div>
+    <label>Monto de la consulta (MXN)<input type="number" min="0" step="0.01" value={completeForm.amount} onChange={(event) => setCompleteForm((prev) => ({ ...prev, amount: event.target.value }))} placeholder="Monto" autoFocus /></label>
+    <label>Método de pago<div className="complete-methods">{PAYMENT_METHODS.map(([value, label]) => <button type="button" key={value} className={completeForm.method === value ? 'selected' : ''} onClick={() => setCompleteForm((prev) => ({ ...prev, method: value }))}>{label}</button>)}</div></label>
+    {completeError && <div className="form-error">⚠ {completeError}</div>}
+    <div className="modal-actions"><button type="button" className="secondary" onClick={() => setCompleteOpen(false)}>Cancelar</button><button type="button" className="primary" disabled={completionState === 'saving'} onClick={submitCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar y registrar'} <span>→</span></button></div>
+  </div></div>}
+  </AppChrome>
 }
