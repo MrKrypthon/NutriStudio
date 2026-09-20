@@ -716,3 +716,13 @@ A partir de dos hojas manuscritas de la usuaria, se completaron las secciones de
 - **`FormCard`** ahora soporta campos de texto multilínea con la sintaxis `'Etiqueta|*'` (antes solo el último campo podía ser nota); los textareas ocupan el ancho completo de la tarjeta.
 
 **Verificado** con Chromium sobre una consulta de prueba (creada y eliminada al terminar): Dietético muestra las 5 tarjetas, 18 filas de frecuencia y 8 textareas; Diagnóstico muestra 6 criterios CESIVA + PES; Clínico y Tratamiento listan las tarjetas nuevas; el cierre registra el pago y muestra el modal de siguiente cita y, tras "Ahora no", el paso de descarga. `npm run build` OK y `npm test` (48/48).
+
+## Fase 72 — Motivo de consulta y pendientes de Agenda (rama `fase-72-motivo-y-agenda`)
+
+Cierra los últimos puntos de las hojas de requerimientos que faltaban.
+
+- **Motivo de consulta y objetivo.** Los PDFs (informe y expediente) ya leían `summary['Motivo de consulta']` y `summary.Objetivo`, pero **no existía ningún campo para capturarlos**, así que el resumen del PDF salía genérico. Se agregó una tarjeta editable al inicio de la pestaña **Resumen** (se guarda en la sección `summary`), con lo que ambos PDFs muestran el motivo y el objetivo reales.
+- **Agenda · sugerencia de horario.** En el modal de nueva cita (y bloqueo no) aparece una fila de **horarios sugeridos**: los próximos espacios libres para la fecha y duración elegidas dentro del horario de atención, en pasos de 15 min. Un clic en la etiqueta fija la hora.
+- **Agenda · pedir que traiga estudios.** Casilla "Pedir que traiga sus estudios (análisis) si tiene" que rellena la nota para el paciente con el recordatorio; al desmarcarla se quita si sigue siendo el texto por defecto.
+
+**Verificado** con Chromium: en el modal de cita para el lunes 21/09/2026 aparecen los horarios sugeridos (08:00, 08:15, 08:30, 08:45, 09:00, 09:15), el clic fija la hora y la casilla rellena la nota; el motivo capturado en Resumen se guardó y quedó en la sección `summary` (confirmado por API). `npm run build` OK y `npm test` (48/48).

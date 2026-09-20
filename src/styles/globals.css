@@ -465,3 +465,12 @@ html{scroll-behavior:smooth}
 .post-complete>p{font-size:12px;color:#3d3e51;margin:0 0 14px}
 @media(max-width:1000px){.cesiva-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:600px){.cesiva-grid{grid-template-columns:1fr}.frequency-head,.frequency-row{grid-template-columns:1fr 90px}}
+
+/* Agenda: horarios sugeridos y recordatorio de estudios en el modal de cita */
+.suggested-slots{display:flex;align-items:center;gap:10px;margin:2px 0 14px;flex-wrap:wrap}
+.suggested-slots>span{font-size:10px;color:var(--muted)}
+.suggested-slot-list{display:flex;gap:6px;flex-wrap:wrap}
+.suggested-slot-list button{border:1px solid var(--line);background:#fff;border-radius:14px;padding:6px 11px;font-size:10px;color:#5b5d6b;cursor:pointer}
+.suggested-slot-list button:hover{border-color:var(--green);color:var(--green);background:var(--mint)}
+.suggested-slot-list button.selected{background:var(--green);border-color:var(--green);color:#fff}
+.studies-check{margin-top:10px}

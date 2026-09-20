@@ -779,7 +779,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>
 
       : tab === 'Resumen' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Resumen</h1><p className="subtitle">Datos generales y contexto de {patientName}.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Resumen</h1><p className="subtitle">Motivo de consulta, datos generales y contexto de {patientName}.</p>
+        <FormCard title="Motivo de consulta y objetivo" fields={['Motivo de consulta|*', 'Objetivo|*']} values={currentValues} onFieldChange={updateField} />
         <div className="summary-card form-card"><h3>Datos del paciente</h3><div className="form-grid three">
           <label>Nombre<input value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} readOnly /></label>
           <label>Sexo<input value={patient?.sex ? (SEX_LABELS[patient.sex] || patient.sex) : '—'} readOnly /></label>
