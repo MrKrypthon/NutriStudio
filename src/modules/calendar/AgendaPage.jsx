@@ -32,7 +32,8 @@ const DEMO_APPOINTMENTS = [
 const startOfWeek = (date) => { const d = new Date(date); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d }
 const addDays = (date, amount) => { const d = new Date(date); d.setUTCDate(d.getUTCDate() + amount); return d }
 const toISODate = (date) => date.toISOString().slice(0, 10)
-const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'FOLLOW_UP', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '', recurrence: 'none', recurCount: 10 })
+const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'FOLLOW_UP', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '', requestStudies: false, recurrence: 'none', recurCount: 10 })
+const STUDIES_NOTE = 'Recuerda traer tus análisis o estudios recientes si los tienes.'
 const EMPTY_NEW_PATIENT = { firstName: '', lastName: '', phone: '', email: '' }
 
 // Fallback when the practice hasn't configured "Horarios y disponibilidad" (see SettingsPage).
@@ -328,6 +329,26 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
 
   const visibleAppointments = appointments.filter((a) => matchesStatusFilter(a, statusFilter))
 
+  // Sugerencia de horarios: los próximos espacios libres para la fecha y duración elegidas dentro
+  // del horario de atención (requisito "sugerencia horario" de la hoja de Agenda).
+  const suggestedSlots = useMemo(() => {
+    if (!open || isBlock || !form.date) return []
+    const day = new Date(`${form.date}T00:00:00.000Z`)
+    if (Number.isNaN(day.getTime()) || !isBusinessDay(day)) return []
+    const duration = Number(form.duration) || 60
+    const slots = []
+    for (const range of businessHours.ranges) {
+      const start = toMinutes(range.start)
+      const end = toMinutes(range.end)
+      for (let minutes = start; minutes + duration <= end && slots.length < 6; minutes += SLOT_STEP_MINUTES) {
+        const time = minutesToLabel(minutes)
+        if (canBookSlot(day, time, duration)) slots.push(time)
+      }
+    }
+    return slots
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isBlock, form.date, form.duration, appointments, businessHours, nowMs])
+
   // Drag & drop: drop on a day+hour slot moves the appointment to that date/time, keeping its
   // duration. The source "vibrates" while dragged (see .event.dragging CSS).
   const startDrag = (appointment) => {
@@ -434,11 +455,13 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       {!isBlock && <div className="notify-box"><b>Notificar al paciente</b><div className="notify-options">{[['whatsapp', 'WhatsApp'], ['email', 'Email'], ['both', 'Ambos'], ['none', 'No notificar']].map(([value, label]) => <label key={value}><input type="radio" name="notify" checked={form.notify === value} onChange={() => update('notify', value)} /> {label}</label>)}</div></div>}
       <div className="form-step"><span>{isBlock ? '1' : '2'}</span><b>Confirma los datos{isBlock ? ' del bloqueo' : ' de la consulta'}</b></div>
       <div className="form-row"><label>Fecha<input type="date" value={form.date} onChange={(e) => update('date', e.target.value)} required /></label><label>Hora<input type="time" value={form.time} onChange={(e) => update('time', e.target.value)} step={300} required /></label></div>
+      {!isBlock && suggestedSlots.length > 0 && <div className="suggested-slots"><span>Horarios sugeridos</span><div className="suggested-slot-list">{suggestedSlots.map((slot) => <button type="button" key={slot} className={form.time === slot ? 'selected' : ''} onClick={() => update('time', slot)}>{slot}</button>)}</div></div>}
       {!isBlock && <div className="form-row"><label>Tipo de cita<select value={form.type} onChange={(e) => update('type', e.target.value)}>{TYPE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Duración<select value={form.duration} onChange={(e) => update('duration', Number(e.target.value))}>{DURATION_OPTIONS.map((d) => <option value={d} key={d}>{d} minutos</option>)}</select></label></div>}
       {isBlock && <div className="form-row"><label>Duración<select value={form.duration} onChange={(e) => update('duration', Number(e.target.value))}>{DURATION_OPTIONS.map((d) => <option value={d} key={d}>{d} minutos</option>)}</select></label></div>}
       <div className="form-row"><label>Repetir<select value={form.recurrence} onChange={(e) => update('recurrence', e.target.value)}><option value="none">No repetir</option><option value="daily">Diaria</option><option value="weekly">Semanal</option></select></label>{form.recurrence !== 'none' && <label>Número de veces<input type="number" min="2" max="30" value={form.recurCount} onChange={(e) => update('recurCount', Number(e.target.value))} /></label>}</div>
       <label>Notas internas<textarea placeholder={isBlock ? 'Ej. Bloqueado para junta de equipo' : "Notas que sólo verá tu equipo..."} value={form.internalNote} onChange={(e) => update('internalNote', e.target.value)} /></label>
       {!isBlock && <label>Nota para el paciente<textarea placeholder="Ej. Recuerda traer tus análisis recientes" value={form.patientNote} onChange={(e) => update('patientNote', e.target.value)} /></label>}
+      {!isBlock && <label className="consent-check studies-check"><input type="checkbox" checked={form.requestStudies} onChange={(e) => setForm((prev) => ({ ...prev, requestStudies: e.target.checked, patientNote: e.target.checked ? (prev.patientNote || STUDIES_NOTE) : (prev.patientNote === STUDIES_NOTE ? '' : prev.patientNote) }))} /> Pedir que traiga sus estudios (análisis) si tiene</label>}
       {submitError && <div className="form-error">⚠ {submitError}</div>}
       <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal}>Cancelar</button><button className="primary" disabled={submitState === 'saving'}>{submitState === 'saving' ? 'Guardando…' : isBlock ? 'Crear bloqueo' : 'Crear cita'} <span>→</span></button></div>
     </form>
