@@ -716,3 +716,13 @@ A partir de dos hojas manuscritas de la usuaria, se completaron las secciones de
 - **`FormCard`** ahora soporta campos de texto multilínea con la sintaxis `'Etiqueta|*'` (antes solo el último campo podía ser nota); los textareas ocupan el ancho completo de la tarjeta.
 
 **Verificado** con Chromium sobre una consulta de prueba (creada y eliminada al terminar): Dietético muestra las 5 tarjetas, 18 filas de frecuencia y 8 textareas; Diagnóstico muestra 6 criterios CESIVA + PES; Clínico y Tratamiento listan las tarjetas nuevas; el cierre registra el pago y muestra el modal de siguiente cita y, tras "Ahora no", el paso de descarga. `npm run build` OK y `npm test` (48/48).
+
+## Fase 71 — Recordatorio de 24 horas con cálculo automático (rama `fase-70-flujo-consulta`)
+
+Continúa el flujo de la consulta: la parte que había quedado pendiente en la fase 70 (el recordatorio de 24 h con cálculo). Como pedía la hoja, el paciente describe lo que comió el día anterior por tiempo de comida y el software suma energía, macros y micros, los compara con las cantidades ideales por sexo y grupo de edad, calcula el % de adecuación y lo interpreta (<95% Bajo, 95–105% Normal, >105% Alto).
+
+- **Captura** (`src/components/RecallBuilder.jsx`): cinco tiempos de comida (desayuno, colación matutina, comida, colación vespertina, cena). Cada uno con hora, descripción libre y alimentos agregados **desde el catálogo de ingredientes** con su cantidad en gramos (siempre 100 g de referencia del catálogo). Se guarda dentro de la sección `dietary` bajo la clave `Recordatorio 24 h` (el endpoint de secciones ya acepta JSON anidado).
+- **Cálculo** (`src/lib/recall.js`): suma cada nutriente por `nutrition × gramos/100` y calcula la adecuación contra el IDR de micronutrientes que ya existía (transcrito del Excel de la usuaria) más una tabla nueva de referencias estándar para energía/macros/grasas/colesterol/azúcar/potasio/sodio/fósforo (DRI/AMDR del IOM y valores FDA), **marcada en el código para que la nutrióloga la revise**.
+- **Presentación**: tabla de totales agrupada (Energía y macronutrientes / Grasas y otros / Vitaminas y minerales) con Consumo, Ideal y Adecuación en color (Bajo/normal/Alto), y el bracket de referencia usado (p. ej. "Mujer adulta (19-70 años)"). Si falta fecha de nacimiento o la edad cae fuera de los rangos soportados, se muestra el total sin veredicto.
+
+**Verificado** con Chromium sobre una consulta de prueba (creada y eliminada al terminar): con "Masa para tortillas 120 g" el sistema mostró Energía 184 kcal (ideal 2000, 9.2% · Bajo), proteína 4.3 g (46, 9.3%), carbohidratos 38.1 g (275), calcio 84 mg (800) y el resto de los 18 nutrientes con su ideal y veredicto. `npm run build` OK y `npm test` (48/48).
