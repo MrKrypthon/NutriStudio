@@ -456,15 +456,16 @@ html{scroll-behavior:smooth}
 .frequency-row:first-of-type{border-top:0}
 .frequency-row input{width:70px;justify-self:end;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:11px 'DM Sans';color:#343647;background:#fbfcfc;text-align:center}
 .cesiva-hint{margin:0 0 12px}
-.cesiva-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.cesiva-item{text-align:left;border:1px solid var(--line);background:#fff;border-radius:9px;padding:11px 13px;cursor:pointer;font:inherit}
-.cesiva-item b{display:block;font-size:11px;color:var(--ink)}
-.cesiva-item small{display:block;color:var(--muted);font-size:9px;margin-top:4px}
-.cesiva-item.active{border-color:var(--green);background:var(--mint)}
-.cesiva-item.active b{color:var(--green)}
+.cesiva-table{border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.cesiva-row{display:grid;grid-template-columns:1.2fr 150px 1.4fr;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--line)}
+.cesiva-row:first-child{border-top:0}
+.cesiva-head{background:#fafafc;color:var(--muted);font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.5px;height:34px;padding:0 14px}
+.cesiva-head b{text-transform:uppercase}
+.cesiva-row>span b{display:block;font-size:11px;color:var(--ink)}
+.cesiva-row>span small{display:block;color:var(--muted);font-size:9px;margin-top:2px}
+.cesiva-row select,.cesiva-row input{width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:11px 'DM Sans';background:#fbfcfc;color:#343647}
 .post-complete>p{font-size:12px;color:#3d3e51;margin:0 0 14px}
-@media(max-width:1000px){.cesiva-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){.cesiva-grid{grid-template-columns:1fr}.frequency-head,.frequency-row{grid-template-columns:1fr 90px}}
+@media(max-width:600px){.cesiva-row{grid-template-columns:1fr 1fr}.cesiva-row>span{grid-column:1/-1}.cesiva-head{display:none}.frequency-head,.frequency-row{grid-template-columns:1fr 90px}}
 
 /* Agenda: horarios sugeridos y recordatorio de estudios en el modal de cita */
 .suggested-slots{display:flex;align-items:center;gap:10px;margin:2px 0 14px;flex-wrap:wrap}
