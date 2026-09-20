@@ -13,7 +13,7 @@ npm-debug.log*
 .directory
 
 # Material de trabajo de la usuaria y salidas de herramientas (no versionado)
-500 Recetas Cero - México.pdf
+500 Recetas Cero*.pdf
 Captura de pantalla_*.png
 [fF]lujo*.jpeg
 prisma/data/link-smae-unmatched.json
