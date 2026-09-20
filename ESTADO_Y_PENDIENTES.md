@@ -726,3 +726,13 @@ Cierra los últimos puntos de las hojas de requerimientos que faltaban.
 - **Agenda · pedir que traiga estudios.** Casilla "Pedir que traiga sus estudios (análisis) si tiene" que rellena la nota para el paciente con el recordatorio; al desmarcarla se quita si sigue siendo el texto por defecto.
 
 **Verificado** con Chromium: en el modal de cita para el lunes 21/09/2026 aparecen los horarios sugeridos (08:00, 08:15, 08:30, 08:45, 09:00, 09:15), el clic fija la hora y la casilla rellena la nota; el motivo capturado en Resumen se guardó y quedó en la sección `summary` (confirmado por API). `npm run build` OK y `npm test` (48/48).
+
+## Fase 74 — Cierre de los últimos puntos de las hojas (rama `fase-74-consultas-resto`)
+
+Completa el ~5% que faltaba del flujo de las dos hojas.
+
+- **Sociocultural**: se agregaron los campos explícitos **Barreras económicas para el plan (presupuesto)** y **Entorno familiar** (además de ocupación, quién prepara los alimentos, acceso a alimentos, restricciones religiosas/culturales y creencias).
+- **Bioquímico**: el subtítulo ahora aclara que los estudios son opcionales en la primera consulta y suelen traerse en la segunda, y se agregó la tarjeta **Solicitud de estudios** (estudios solicitados y notas).
+- **Datos del paciente dentro de la consulta**: el Resumen permite **editar fecha de nacimiento y ocupación** y guardarlos en el registro del paciente (con recarga inmediata); antes eran de solo lectura.
+
+**Verificado** con Chromium sobre una paciente de prueba (creada y eliminada al terminar): Bioquímico muestra la tarjeta de solicitud y el texto de "se sugieren/segunda consulta"; Sociocultural lista los 7 campos; desde Resumen se editaron fecha (1988-07-05) y ocupación (Ingeniera) y quedaron guardados en la base. `npm run build` OK y `npm test` (48/48).
