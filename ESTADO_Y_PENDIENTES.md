@@ -740,3 +740,9 @@ Completa el ~5% que faltaba del flujo de las dos hojas.
 **Corrección CESIVA (misma rama).** La evaluación CESIVA se había hecho como tarjetas seleccionables; la hoja la dibuja como **tabla**. Ahora es una tabla con una fila por criterio (Completa, Equilibrada, Suficiente, Inocua, Variada, Adecuada) y columnas **Evaluación** (Cumple / Parcial / No cumple) y **Comentario**. Los datos previos en booleano se siguen leyendo (se muestran como "Cumple").
 
 **Mejora visual de CESIVA (rama `fase-76-cesiva-visual`).** Tras revisarla, la tabla de la fase anterior se veía plana: se rehizo con el control de evaluación como **botones segmentados con color** (Cumple verde, Parcial ámbar, No cumple rojo), filas con franjas suaves, encabezado limpio y un contador "X de 6 cumplen". En pantallas angostas se apila por fila.
+
+## Fase 77 — Compactar las vistas y el footer del wizard (rama `fase-77-compactar-vistas`)
+
+Reporte de la usuaria: en el expediente/Constructor "hay que hacer mucho scroll y no se aprovecha toda la vista", y los botones "Sección anterior / Siguiente sección" son muy grandes. Se compactó el chrome del flujo en escritorio (dentro del layout de altura completa): padding del contenido 24/44 → 16, banner 12→8, pestañas 13→10, `section-heading` y `form-card` más ajustados, y el footer del wizard pasó de ~80px a ~40px (padding reducido y botones más pequeños). Los botones se acortaron a "← Anterior" y "Siguiente →". En una ventana de 800px de alto, el área de contenido subió de ~450 a ~490px.
+
+**Verificado** con Chromium (1440×800): footer de 40px, botones "← Anterior"/"Siguiente →" y más área útil. `npm run build` OK y `npm test` (48/48).

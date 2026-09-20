@@ -352,6 +352,21 @@ html{scroll-behavior:smooth}
   /* Al hacer scroll dentro de las listas, la fila de títulos de columna se queda visible. */
   .patient-table .table-head,.documents-table .documents-head,.followup-table .followup-head{position:sticky;top:0;z-index:1}
   .document-options,.recipe-preview,.review-panel,.patient-preview,.ingredient-detail,.recipe-detail{top:0}
+  /* Compactación: más área útil para el contenido y footer del wizard más esbelto. */
+  .content{padding:16px 28px 16px}
+  .patient-context{margin-bottom:12px}
+  .record-tabs button{padding:10px}
+  .record-banner{margin:8px 0;padding:9px 12px}
+  .clinical-layout{gap:12px}
+  .section-heading{padding-bottom:10px;margin-bottom:12px}
+  .form-card{padding:14px;margin-bottom:9px}
+  .module-header{margin-bottom:14px}
+  .wizard-footer{margin-top:12px;padding-top:10px}
+  .wizard-footer>span{flex:1;text-align:center}
+  .wizard-footer .secondary,.wizard-footer .primary{padding:7px 12px;font-size:10px;border-radius:7px}
+  .wizard-footer .primary span{font-size:13px;margin-left:4px}
+  .plan-studio .plan-steps{margin-bottom:18px;padding:10px}
+  .plan-studio .patient-context{margin-bottom:12px}
 }
 @media print{
   .app-shell,.main{height:auto;min-height:0;overflow:visible;display:block}
