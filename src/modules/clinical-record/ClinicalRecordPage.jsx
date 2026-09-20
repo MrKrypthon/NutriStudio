@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import FormCard from '../../components/FormCard.jsx'
+import RecallBuilder from '../../components/RecallBuilder.jsx'
 import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
@@ -792,6 +793,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           {FOOD_FREQUENCY.map((food) => <div className="frequency-row" key={food}><span>{food}</span><input type="number" min="0" max="7" value={currentValues[`Frecuencia: ${food}`] ?? ''} onChange={(e) => updateField(`Frecuencia: ${food}`, e.target.value)} /></div>)}
         </div></div>
         <FormCard title="Dieta habitual (alimentos, cantidades y horarios)" fields={['Desayuno|*', 'Colación matutina|*', 'Almuerzo o comida|*', 'Colación vespertina|*', 'Cena|*']} values={currentValues} onFieldChange={updateField} />
+        <RecallBuilder value={currentValues['Recordatorio 24 h']} onChange={(next) => updateField('Recordatorio 24 h', next)} age={computeAge(patient?.birthDate)} sex={patient?.sex} />
       </div>
 
       : tab === 'Estilo de vida' ? <div className="panel generic-section">
