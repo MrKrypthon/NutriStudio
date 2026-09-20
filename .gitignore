@@ -11,3 +11,9 @@ dashboardkit-free-admin-template-v3.2.0.zip
 npm-debug.log*
 .claude/
 .directory
+
+# Material de trabajo de la usuaria y salidas de herramientas (no versionado)
+500 Recetas Cero - México.pdf
+Captura de pantalla_*.png
+[fF]lujo*.jpeg
+prisma/data/link-smae-unmatched.json
