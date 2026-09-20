@@ -455,17 +455,28 @@ html{scroll-behavior:smooth}
 .frequency-row{min-height:42px;border-top:1px solid var(--line);font-size:11px;color:#3d3e51}
 .frequency-row:first-of-type{border-top:0}
 .frequency-row input{width:70px;justify-self:end;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:11px 'DM Sans';color:#343647;background:#fbfcfc;text-align:center}
-.cesiva-hint{margin:0 0 12px}
-.cesiva-table{border:1px solid var(--line);border-radius:9px;overflow:hidden}
-.cesiva-row{display:grid;grid-template-columns:1.2fr 150px 1.4fr;align-items:center;gap:12px;padding:10px 14px;border-top:1px solid var(--line)}
-.cesiva-row:first-child{border-top:0}
-.cesiva-head{background:#fafafc;color:var(--muted);font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.5px;height:34px;padding:0 14px}
+.cesiva-card{padding:20px 22px}
+.cesiva-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:16px}
+.cesiva-card-head h3{margin:0}
+.cesiva-hint{margin:4px 0 0}
+.cesiva-score{background:var(--mint);color:var(--green);border-radius:20px;padding:6px 12px;font:600 10px 'DM Sans';white-space:nowrap}
+.cesiva-table{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.cesiva-row{display:grid;grid-template-columns:1.1fr 250px 1.3fr;align-items:center;gap:14px;padding:12px 16px;border-top:1px solid var(--line)}
+.cesiva-row:nth-child(even){background:#fbfbfd}
+.cesiva-head{background:#f3f2fb!important;color:var(--muted);font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.6px;height:36px;padding:0 16px}
 .cesiva-head b{text-transform:uppercase}
-.cesiva-row>span b{display:block;font-size:11px;color:var(--ink)}
-.cesiva-row>span small{display:block;color:var(--muted);font-size:9px;margin-top:2px}
-.cesiva-row select,.cesiva-row input{width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;font:11px 'DM Sans';background:#fbfcfc;color:#343647}
+.cesiva-criterion b{display:block;font:600 12px 'DM Sans';color:var(--ink)}
+.cesiva-criterion small{display:block;color:var(--muted);font-size:9px;margin-top:3px;line-height:1.35}
+.cesiva-eval{display:flex;gap:5px}
+.cesiva-opt{flex:1;border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 6px;font:500 10px 'DM Sans';color:#6b6d7a;cursor:pointer;transition:background-color .15s,color .15s,border-color .15s}
+.cesiva-opt:hover{border-color:color-mix(in srgb,var(--green) 45%,#fff)}
+.cesiva-opt.selected.cumple{background:#e3f5ec;border-color:#2f9e6b;color:#217a52;font-weight:600}
+.cesiva-opt.selected.parcial{background:#fdf1dc;border-color:#cf9438;color:#9a671d;font-weight:600}
+.cesiva-opt.selected.nocumple{background:#fbe6e2;border-color:#c0564f;color:#a8453f;font-weight:600}
+.cesiva-note{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:11px 'DM Sans';background:#fff;color:#343647}
 .post-complete>p{font-size:12px;color:#3d3e51;margin:0 0 14px}
-@media(max-width:600px){.cesiva-row{grid-template-columns:1fr 1fr}.cesiva-row>span{grid-column:1/-1}.cesiva-head{display:none}.frequency-head,.frequency-row{grid-template-columns:1fr 90px}}
+@media(max-width:900px){.cesiva-row{grid-template-columns:1fr}.cesiva-head{display:none}.cesiva-eval{max-width:340px}}
+@media(max-width:600px){.frequency-head,.frequency-row{grid-template-columns:1fr 90px}}
 
 /* Agenda: horarios sugeridos y recordatorio de estudios en el modal de cita */
 .suggested-slots{display:flex;align-items:center;gap:10px;margin:2px 0 14px;flex-wrap:wrap}

@@ -738,3 +738,5 @@ Completa el ~5% que faltaba del flujo de las dos hojas.
 **Verificado** con Chromium sobre una paciente de prueba (creada y eliminada al terminar): Bioquímico muestra la tarjeta de solicitud y el texto de "se sugieren/segunda consulta"; Sociocultural lista los 7 campos; desde Resumen se editaron fecha (1988-07-05) y ocupación (Ingeniera) y quedaron guardados en la base. `npm run build` OK y `npm test` (48/48).
 
 **Corrección CESIVA (misma rama).** La evaluación CESIVA se había hecho como tarjetas seleccionables; la hoja la dibuja como **tabla**. Ahora es una tabla con una fila por criterio (Completa, Equilibrada, Suficiente, Inocua, Variada, Adecuada) y columnas **Evaluación** (Cumple / Parcial / No cumple) y **Comentario**. Los datos previos en booleano se siguen leyendo (se muestran como "Cumple").
+
+**Mejora visual de CESIVA (rama `fase-76-cesiva-visual`).** Tras revisarla, la tabla de la fase anterior se veía plana: se rehizo con el control de evaluación como **botones segmentados con color** (Cumple verde, Parcial ámbar, No cumple rojo), filas con franjas suaves, encabezado limpio y un contador "X de 6 cumplen". En pantallas angostas se apila por fila.
