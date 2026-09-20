@@ -474,3 +474,7 @@ html{scroll-behavior:smooth}
 .suggested-slot-list button:hover{border-color:var(--green);color:var(--green);background:var(--mint)}
 .suggested-slot-list button.selected{background:var(--green);border-color:var(--green);color:#fff}
 .studies-check{margin-top:10px}
+
+/* Resumen: edición de datos del paciente desde la consulta */
+.summary-card-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.summary-card-actions{display:flex;gap:12px}

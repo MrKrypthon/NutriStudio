@@ -140,7 +140,7 @@ function TranscriptionTab({ values, updateField, updateFields, appendField, pati
 }
 
 export default function ClinicalRecordPage({ setActive, patientId, consultationId, onConsumeConsultation, appointmentId, onConsumeAppointment, onScheduleAppointment }) {
-  const { patient } = usePatient(patientId)
+  const { patient, reload: reloadPatient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
 
@@ -170,6 +170,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [followUp, setFollowUp] = useState({ date: '', time: '09:00', type: 'FOLLOW_UP', duration: 60 })
   const [followUpState, setFollowUpState] = useState('idle')
   const [followUpError, setFollowUpError] = useState('')
+  // Edición de datos del paciente desde el Resumen (fecha de nacimiento y ocupación) en la consulta.
+  const [patientEdit, setPatientEdit] = useState(false)
+  const [patientForm, setPatientForm] = useState({ birthDate: '', occupation: '' })
+  const [patientSaveState, setPatientSaveState] = useState('idle')
   const [attachments, setAttachments] = useState([])
   const [uploadState, setUploadState] = useState('idle')
   const [uploadError, setUploadError] = useState('')
@@ -473,6 +477,24 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     }
   }
 
+  // Datos del paciente capturables durante la consulta (fecha de nacimiento y ocupación).
+  const startPatientEdit = () => {
+    setPatientForm({ birthDate: patient?.birthDate ? new Date(patient.birthDate).toISOString().slice(0, 10) : '', occupation: patient?.occupation || '' })
+    setPatientSaveState('idle')
+    setPatientEdit(true)
+  }
+  const savePatientEdit = async () => {
+    setPatientSaveState('saving')
+    try {
+      await patientsApi.update(patientId, { birthDate: patientForm.birthDate || null, occupation: patientForm.occupation })
+      setPatientEdit(false)
+      setPatientSaveState('idle')
+      reloadPatient()
+    } catch {
+      setPatientSaveState('error')
+    }
+  }
+
   // Diagnoses were create/delete only; the PATCH endpoint existed but was never wired.
   const editDiagnosis = (d) => setDiagnosisForm({ ...d, _editingId: d.id })
   const saveDiagnosis = async () => {
@@ -668,7 +690,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
       : tab === 'Bioquímico' ? <div className="clinical-layout">
         <section className="record-main panel">
-          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 4 DE 13</p><h1>Bioquímico</h1><p className="subtitle">Registra estudios y marca hallazgos para el abordaje.</p></div><button className="primary" onClick={openLabForm}>+ Agregar estudio</button></div>
+          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 4 DE 13</p><h1>Bioquímico</h1><p className="subtitle">Los estudios son opcionales en la primera consulta: se sugieren y suelen traerse en la segunda. Registra los valores que traiga el paciente.</p></div><button className="primary" onClick={openLabForm}>+ Agregar estudio</button></div>
+          <FormCard title="Solicitud de estudios" fields={['Estudios solicitados (se traen en la 2ª consulta)|*', 'Notas de bioquímico|*']} values={currentValues} onFieldChange={updateField} />
           {!labs.length && <div className="lab-empty"><span>▧</span><b>Sin estudios adjuntos</b><small>Registra los resultados manualmente con "+ Agregar estudio".</small></div>}
           {labForm && <div className="diagnosis-form panel">
             <p className="eyebrow">NUEVO ESTUDIO</p>
@@ -774,21 +797,23 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
       : tab === 'Sociocultural' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Sociocultural</h1><p className="subtitle">Contexto socioeconómico y cultural de {patientName}.</p>
-        <FormCard title="Contexto socioeconómico" fields={['Ocupación|', 'Quién prepara los alimentos|', 'Acceso a alimentos|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Cultura y creencias" fields={['Restricciones religiosas o culturales|', 'Creencias sobre alimentación|', 'Notas socioculturales|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Contexto socioeconómico" fields={['Ocupación|', 'Barreras económicas para el plan (presupuesto)|*', 'Acceso a alimentos|', 'Entorno familiar|*']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Cultura y creencias" fields={['Restricciones religiosas o culturales|', 'Creencias sobre alimentación|', 'Notas socioculturales|*']} values={currentValues} onFieldChange={updateField} />
       </div>
 
       : tab === 'Resumen' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Resumen</h1><p className="subtitle">Motivo de consulta, datos generales y contexto de {patientName}.</p>
         <FormCard title="Motivo de consulta y objetivo" fields={['Motivo de consulta|*', 'Objetivo|*']} values={currentValues} onFieldChange={updateField} />
-        <div className="summary-card form-card"><h3>Datos del paciente</h3><div className="form-grid three">
+        <div className="summary-card form-card"><div className="summary-card-head"><h3>Datos del paciente</h3>{!patientEdit
+          ? <button type="button" className="link-button" onClick={startPatientEdit}>Editar fecha de nacimiento y ocupación</button>
+          : <div className="summary-card-actions"><button type="button" className="link-button" onClick={() => setPatientEdit(false)}>Cancelar</button><button type="button" className="link-button" disabled={patientSaveState === 'saving'} onClick={savePatientEdit}>{patientSaveState === 'saving' ? 'Guardando…' : 'Guardar'}</button></div>}</div><div className="form-grid three">
           <label>Nombre<input value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} readOnly /></label>
           <label>Sexo<input value={patient?.sex ? (SEX_LABELS[patient.sex] || patient.sex) : '—'} readOnly /></label>
-          <label>Fecha de nacimiento<input value={patient?.birthDate ? formatDate(patient.birthDate) : '—'} readOnly /></label>
+          <label>Fecha de nacimiento{patientEdit ? <input type="date" value={patientForm.birthDate} onChange={(e) => setPatientForm((prev) => ({ ...prev, birthDate: e.target.value }))} /> : <input value={patient?.birthDate ? formatDate(patient.birthDate) : '—'} readOnly />}</label>
           <label>Edad<input value={computeAge(patient?.birthDate) != null ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label>
-          <label>Ocupación<input value={patient?.occupation || '—'} readOnly /></label>
+          <label>Ocupación{patientEdit ? <input value={patientForm.occupation} onChange={(e) => setPatientForm((prev) => ({ ...prev, occupation: e.target.value }))} placeholder="Ej. Diseñadora" /> : <input value={patient?.occupation || '—'} readOnly />}</label>
           <label>Contacto<input value={[patient?.phone, patient?.email].filter(Boolean).join(' · ') || '—'} readOnly /></label>
-        </div></div>
+        </div>{patientSaveState === 'error' && <div className="form-error">⚠ No se pudieron guardar los datos.</div>}</div>
         <div className="summary-card form-card"><h3>Historial y agenda</h3><div className="form-grid">
           <label>Consultas registradas<input value={`${historyCount}`} readOnly /></label>
           <label>Consulta actual<input value={consultation ? (consultation.status === 'IN_PROGRESS' ? 'En curso' : consultation.status) : '—'} readOnly /></label>
