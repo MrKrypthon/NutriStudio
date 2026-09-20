@@ -108,4 +108,4 @@ Transcripción de las dos hojas de la usuaria, con el avance de cada punto. Se a
 
 - Las secciones del expediente y el cierre guiado se construyeron en las fases 68–74; el **recordatorio de 24 h** y la **eliminación del paciente por defecto** se recuperaron en la fase 77 (habían quedado fuera de `main` por un merge anterior a su push).
 - Las **referencias de energía/macros/grasas/colesterol/azúcar/potasio/sodio/fósforo** del recordatorio son estándar (DRI/AMDR del IOM y valores FDA), marcadas en el código (`src/lib/recall.js`) para revisión de la nutrióloga. Los micronutrientes usan el IDR transcrito del Excel de trabajo.
-- Detalle conocido no bloqueante: la fecha de nacimiento se muestra con conversión de zona horaria (un día antes en husos negativos); pendiente de ajustar a formato UTC.
+- La fecha de nacimiento se muestra con formato UTC (antes se corría un día en husos negativos como el de México), y se puede editar desde la consulta.
