@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { DEMO_PATIENT_ID } from '../lib/demoContext.js'
 import { useAuth } from '../lib/AuthContext.jsx'
 
 import LoginPage from '../modules/auth/LoginPage.jsx'
@@ -29,7 +28,10 @@ const moduleToSlug = { 'Hoy': 'hoy', 'Agenda': 'agenda', 'Pacientes': 'pacientes
 export default function App() {
   const { status } = useAuth()
   const [active, setActiveState] = useState(() => pathToModule[window.location.pathname] || 'Hoy')
-  const [selectedPatientId, setSelectedPatientId] = useState(DEMO_PATIENT_ID)
+  // Sin paciente por defecto: antes arrancaba con el paciente de demostración, así que Consultas y
+  // el Constructor abrían con Mariana Torres sin haber elegido a nadie. Cada pantalla que necesita
+  // un paciente ahora pide elegirlo.
+  const [selectedPatientId, setSelectedPatientId] = useState('')
   const [selectedMaterialId, setSelectedMaterialId] = useState(null)
   const [selectedRecipeId, setSelectedRecipeId] = useState(null)
   const [startAppointmentId, setStartAppointmentId] = useState(null)

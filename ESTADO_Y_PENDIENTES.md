@@ -737,6 +737,17 @@ Cierra los últimos puntos de las hojas de requerimientos que faltaban.
 
 **Verificado** con Chromium: en el modal de cita para el lunes 21/09/2026 aparecen los horarios sugeridos (08:00, 08:15, 08:30, 08:45, 09:00, 09:15), el clic fija la hora y la casilla rellena la nota; el motivo capturado en Resumen se guardó y quedó en la sección `summary` (confirmado por API). `npm run build` OK y `npm test` (48/48).
 
+## Fase 73 — Sin paciente por defecto (rama `fase-72-motivo-y-agenda`)
+
+Cierra el pendiente documentado desde la fase 28 ("el paciente por defecto sigue sin corregir"): `App` inicializaba `selectedPatientId` con el id de demostración, que en la base corresponde a Mariana Torres, así que **Consultas** y el **Constructor de plan** abrían con ella sin haber elegido a nadie (y el selector podía mostrar una paciente distinta a la de los datos).
+
+- `App`: `selectedPatientId` arranca vacío; se eliminó el módulo `demoContext` (ya no se usaba).
+- **Consultas**: si no hay paciente real elegido, muestra "Elige un paciente" y oculta las opciones de sesión y el historial (antes arrastraba el id demo y mostraba el historial de otra persona). El selector gana la opción "Selecciona…".
+- **Constructor de plan**: si no hay paciente, muestra "Elige un paciente" con el selector, en vez de cargar datos de Mariana.
+- **Expediente**: guarda contra `patientId` vacío (no dispara peticiones) y muestra una invitación a abrirlo desde Pacientes.
+
+**Verificado** con Chromium: al entrar a Consultas y al Constructor aparece "Elige un paciente"; al elegir uno, Consultas muestra sus opciones e historial; abrir el expediente desde Pacientes sigue funcionando (13 pestañas, paciente correcto). `npm run build` OK y `npm test` (48/48).
+
 ## Fase 74 — Cierre de los últimos puntos de las hojas (rama `fase-74-consultas-resto`)
 
 Completa el ~5% que faltaba del flujo de las dos hojas.
