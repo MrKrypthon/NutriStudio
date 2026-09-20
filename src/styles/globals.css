@@ -463,13 +463,11 @@ html{scroll-behavior:smooth}
 
 /* Expediente: textareas a ancho completo, frecuencia de alimentos y evaluación CESIVA */
 .generic-section .form-card .form-grid label:has(textarea){grid-column:1/-1}
-.frequency-table{border:1px solid var(--line);border-radius:9px;overflow:hidden}
-.frequency-head,.frequency-row{display:grid;grid-template-columns:1fr 130px;align-items:center;gap:12px;padding:0 14px}
-.frequency-head{height:34px;background:#fafafc;color:var(--muted);font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line)}
-.frequency-head b{text-align:right}
-.frequency-row{min-height:42px;border-top:1px solid var(--line);font-size:11px;color:#3d3e51}
-.frequency-row:first-of-type{border-top:0}
-.frequency-row input{width:70px;justify-self:end;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:11px 'DM Sans';color:#343647;background:#fbfcfc;text-align:center}
+.freq-hint{font:400 9px 'DM Sans';color:var(--muted);margin-left:4px}
+.frequency-chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.frequency-chip{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fbfcfc;font-size:11px;color:#3d3e51;min-width:0}
+.frequency-chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.frequency-chip input{width:48px;flex:0 0 auto;border:1px solid var(--line);border-radius:6px;padding:5px 6px;font:11px 'DM Sans';color:#343647;background:#fff;text-align:center}
 .cesiva-card{padding:20px 22px}
 .cesiva-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:16px}
 .cesiva-card-head h3{margin:0}
@@ -491,7 +489,8 @@ html{scroll-behavior:smooth}
 .cesiva-note{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:11px 'DM Sans';background:#fff;color:#343647}
 .post-complete>p{font-size:12px;color:#3d3e51;margin:0 0 14px}
 @media(max-width:900px){.cesiva-row{grid-template-columns:1fr}.cesiva-head{display:none}.cesiva-eval{max-width:340px}}
-@media(max-width:600px){.frequency-head,.frequency-row{grid-template-columns:1fr 90px}}
+@media(max-width:1000px){.frequency-chips{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.frequency-chips{grid-template-columns:1fr}}
 
 /* Agenda: horarios sugeridos y recordatorio de estudios en el modal de cita */
 .suggested-slots{display:flex;align-items:center;gap:10px;margin:2px 0 14px;flex-wrap:wrap}
