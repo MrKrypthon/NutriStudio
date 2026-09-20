@@ -474,3 +474,45 @@ html{scroll-behavior:smooth}
 .suggested-slot-list button:hover{border-color:var(--green);color:var(--green);background:var(--mint)}
 .suggested-slot-list button.selected{background:var(--green);border-color:var(--green);color:#fff}
 .studies-check{margin-top:10px}
+
+/* Recordatorio de 24 horas (Dietético) */
+.recall-builder{display:grid;gap:15px}
+.recall-head-card p{margin:0}
+.recall-meal textarea{width:100%;min-height:58px;resize:vertical;border:1px solid var(--line);border-radius:7px;padding:10px;background:#fbfcfc;font:11px 'DM Sans';color:#343647;margin-top:6px}
+.recall-meal-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.recall-meal-head h3{margin:0}
+.recall-time{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px}
+.recall-time input{border:1px solid var(--line);border-radius:6px;padding:6px 8px;background:#fbfcfc;font:11px 'DM Sans';color:#343647}
+.recall-items{margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.recall-item{display:grid;grid-template-columns:1fr 70px 14px 26px;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line)}
+.recall-item:first-child{border-top:0}
+.recall-item-name{font-size:11px;color:#3d3e51}
+.recall-item input{width:70px;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:11px 'DM Sans';text-align:center;background:#fbfcfc;color:#343647}
+.recall-item small{color:var(--muted);font-size:10px}
+.recall-item-remove{border:0;background:none;color:var(--muted);font-size:15px;cursor:pointer;border-radius:6px}
+.recall-item-remove:hover{color:#c0564f;background:#fbe6e2}
+.recall-add{margin-top:10px}
+.recall-picker{margin-top:10px;border:1px solid var(--line);border-radius:8px;padding:10px;background:#fbfcfc}
+.recall-picker input{width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:11px 'DM Sans';background:#fff;color:#343647}
+.recall-picker-empty{margin:8px 0;font-size:10px}
+.recall-pick{display:flex;justify-content:space-between;gap:10px;padding:8px 6px;border-radius:6px;cursor:pointer}
+.recall-pick:hover{background:var(--mint)}
+.recall-pick b{font-size:11px;color:var(--ink)}
+.recall-pick small{color:var(--muted);font-size:9px}
+.recall-summary-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:6px}
+.recall-group{margin-top:14px}
+.recall-group .eyebrow{margin:0 0 8px}
+.recall-adequacy{border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.recall-adequacy-head,.recall-adequacy-row{display:grid;grid-template-columns:1.4fr .9fr .9fr 1.1fr;align-items:center;gap:10px;padding:0 14px}
+.recall-adequacy-head{height:34px;background:#fafafc;color:var(--muted);font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line)}
+.recall-adequacy-head b{text-align:right}
+.recall-adequacy-row{min-height:40px;border-top:1px solid var(--line);font-size:11px;color:#3d3e51}
+.recall-adequacy-row:first-of-type{border-top:0}
+.recall-adequacy-row>b{text-align:right;font:600 11px 'DM Mono'}
+.recall-adequacy-row>span:first-child small{color:var(--muted);font-size:9px}
+.recall-status{text-align:right;font-size:10px;font-weight:600}
+.recall-status.normal{color:#2f9e6b}
+.recall-status.high{color:#c07a2f}
+.recall-status.low{color:#c0564f}
+.recall-status.none{color:var(--muted);font-weight:400}
+@media(max-width:600px){.recall-adequacy-head,.recall-adequacy-row{grid-template-columns:1.3fr .9fr 1.1fr}.recall-adequacy-head b:nth-child(3),.recall-adequacy-row>b:nth-child(3){display:none}}
