@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import FormCard from '../../components/FormCard.jsx'
+import RecallBuilder from '../../components/RecallBuilder.jsx'
 import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
@@ -25,6 +26,9 @@ function computeAge(birthDate) {
   return age
 }
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—')
+// Fechas de calendario (fecha de nacimiento) guardadas a medianoche UTC: se muestran con getters UTC
+// para que no se corran un día en husos negativos como el de México.
+const formatDateUTC = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—')
 const formatAppointmentTime = (iso) => { const d = new Date(iso); return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` }
 
 const DIAGNOSIS_DOMAINS = [
@@ -192,6 +196,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const payloadMirrorRef = useRef({})
 
   useEffect(() => {
+    if (!patientId) { setLoadState('ready'); return undefined }
     let cancelled = false
     async function load() {
       setLoadState('loading')
@@ -655,6 +660,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }, [measurements, chartMetric])
   const chartPointLine = chartPoints.map((p) => `${p.x},${p.y}`).join(' ')
 
+  if (!patientId) return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
+    <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Abre el expediente desde la lista de pacientes para registrar una consulta.</p><button className="primary" onClick={() => setActive('Pacientes')}>Ir a Pacientes</button></div>
+  </div></AppChrome>
+
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
@@ -787,11 +796,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <FormCard title="Patrón de alimentación" fields={['Núm. de comidas al día|', 'Horario habitual de comidas|', 'Apetito|', 'Hora a la que tiene más hambre|', 'Comidas o bebidas preferidas|', 'Alimentos que no le agradan o le causan malestar|*']} values={currentValues} onFieldChange={updateField} />
         <FormCard title="Consumo de agua" fields={['Vasos de agua al día|', 'Restricciones dietéticas|', 'Notas dietéticas|*']} values={currentValues} onFieldChange={updateField} />
         <FormCard title="Historial de consultas nutricionales" fields={['¿Ha asistido antes a consulta nutricional?|', 'Tipo de consulta previa|', 'Tiempo que llevó la dieta|', 'Motivo por el que la llevó|', 'Resultados obtenidos|', 'Qué tanto se apegó a la dieta|*']} values={currentValues} onFieldChange={updateField} />
-        <div className="form-card"><h3>Frecuencia de alimentos (días por semana)</h3><div className="frequency-table">
-          <div className="frequency-head"><span>Alimento</span><b>Días / semana</b></div>
-          {FOOD_FREQUENCY.map((food) => <div className="frequency-row" key={food}><span>{food}</span><input type="number" min="0" max="7" value={currentValues[`Frecuencia: ${food}`] ?? ''} onChange={(e) => updateField(`Frecuencia: ${food}`, e.target.value)} /></div>)}
+        <div className="form-card"><h3>Frecuencia de alimentos <small className="freq-hint">días por semana</small></h3><div className="frequency-chips">
+          {FOOD_FREQUENCY.map((food) => <label className="frequency-chip" key={food}><span>{food}</span><input type="number" min="0" max="7" value={currentValues[`Frecuencia: ${food}`] ?? ''} onChange={(e) => updateField(`Frecuencia: ${food}`, e.target.value)} /></label>)}
         </div></div>
         <FormCard title="Dieta habitual (alimentos, cantidades y horarios)" fields={['Desayuno|*', 'Colación matutina|*', 'Almuerzo o comida|*', 'Colación vespertina|*', 'Cena|*']} values={currentValues} onFieldChange={updateField} />
+        <RecallBuilder value={currentValues['Recordatorio 24 h']} onChange={(next) => updateField('Recordatorio 24 h', next)} age={computeAge(patient?.birthDate)} sex={patient?.sex} />
       </div>
 
       : tab === 'Estilo de vida' ? <div className="panel generic-section">
@@ -814,7 +823,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           : <div className="summary-card-actions"><button type="button" className="link-button" onClick={() => setPatientEdit(false)}>Cancelar</button><button type="button" className="link-button" disabled={patientSaveState === 'saving'} onClick={savePatientEdit}>{patientSaveState === 'saving' ? 'Guardando…' : 'Guardar'}</button></div>}</div><div className="form-grid three">
           <label>Nombre<input value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} readOnly /></label>
           <label>Sexo<input value={patient?.sex ? (SEX_LABELS[patient.sex] || patient.sex) : '—'} readOnly /></label>
-          <label>Fecha de nacimiento{patientEdit ? <input type="date" value={patientForm.birthDate} onChange={(e) => setPatientForm((prev) => ({ ...prev, birthDate: e.target.value }))} /> : <input value={patient?.birthDate ? formatDate(patient.birthDate) : '—'} readOnly />}</label>
+          <label>Fecha de nacimiento{patientEdit ? <input type="date" value={patientForm.birthDate} onChange={(e) => setPatientForm((prev) => ({ ...prev, birthDate: e.target.value }))} /> : <input value={patient?.birthDate ? formatDateUTC(patient.birthDate) : '—'} readOnly />}</label>
           <label>Edad<input value={computeAge(patient?.birthDate) != null ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label>
           <label>Ocupación{patientEdit ? <input value={patientForm.occupation} onChange={(e) => setPatientForm((prev) => ({ ...prev, occupation: e.target.value }))} placeholder="Ej. Diseñadora" /> : <input value={patient?.occupation || '—'} readOnly />}</label>
           <label>Contacto<input value={[patient?.phone, patient?.email].filter(Boolean).join(' · ') || '—'} readOnly /></label>
