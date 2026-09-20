@@ -332,6 +332,11 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const meals = MEAL_TYPES.map((m) => m.label)
 
+  if (!patientId) return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio">
+    <ModuleHeader eyebrow="PLANIFICACIÓN · CONSTRUCTOR" title="Constructor de plan" subtitle="Elige un paciente para armar y guardar su plan de alimentación." />
+    <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Selecciona a quién le vas a diseñar el plan para comenzar.</p><select value="" onChange={(e) => onSelectPatient?.(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></div>
+  </div></AppChrome>
+
   return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Borrador · Se guarda automáticamente</span></div></div><label className="patient-switch">Paciente<select value={patientId || ''} onChange={(e) => onSelectPatient?.(e.target.value)}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
 
     <div className="plan-body">

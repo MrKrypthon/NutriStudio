@@ -189,6 +189,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const payloadMirrorRef = useRef({})
 
   useEffect(() => {
+    if (!patientId) { setLoadState('ready'); return undefined }
     let cancelled = false
     async function load() {
       setLoadState('loading')
@@ -633,6 +634,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     return pts.map((p, i) => ({ ...p, x: 10 + (i / (pts.length - 1)) * 580, y: 118 - ((p.value - min) / range) * 96, value: Math.round(p.value * 10) / 10 }))
   }, [measurements, chartMetric])
   const chartPointLine = chartPoints.map((p) => `${p.x},${p.y}`).join(' ')
+
+  if (!patientId) return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
+    <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Abre el expediente desde la lista de pacientes para registrar una consulta.</p><button className="primary" onClick={() => setActive('Pacientes')}>Ir a Pacientes</button></div>
+  </div></AppChrome>
 
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
     <div className="patient-context">
