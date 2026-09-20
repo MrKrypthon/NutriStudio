@@ -445,3 +445,23 @@ html{scroll-behavior:smooth}
 .complete-methods button.selected{background:var(--mint);border-color:var(--green);color:var(--green);font-weight:600}
 .finance-fee-hint{color:var(--muted);font-size:10px;margin:14px 0 0;background:var(--surface-soft);border-radius:8px;padding:10px 12px}
 .finance-head{position:sticky;top:0;z-index:1}
+
+/* Expediente: textareas a ancho completo, frecuencia de alimentos y evaluación CESIVA */
+.generic-section .form-card .form-grid label:has(textarea){grid-column:1/-1}
+.frequency-table{border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.frequency-head,.frequency-row{display:grid;grid-template-columns:1fr 130px;align-items:center;gap:12px;padding:0 14px}
+.frequency-head{height:34px;background:#fafafc;color:var(--muted);font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line)}
+.frequency-head b{text-align:right}
+.frequency-row{min-height:42px;border-top:1px solid var(--line);font-size:11px;color:#3d3e51}
+.frequency-row:first-of-type{border-top:0}
+.frequency-row input{width:70px;justify-self:end;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:11px 'DM Sans';color:#343647;background:#fbfcfc;text-align:center}
+.cesiva-hint{margin:0 0 12px}
+.cesiva-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.cesiva-item{text-align:left;border:1px solid var(--line);background:#fff;border-radius:9px;padding:11px 13px;cursor:pointer;font:inherit}
+.cesiva-item b{display:block;font-size:11px;color:var(--ink)}
+.cesiva-item small{display:block;color:var(--muted);font-size:9px;margin-top:4px}
+.cesiva-item.active{border-color:var(--green);background:var(--mint)}
+.cesiva-item.active b{color:var(--green)}
+.post-complete>p{font-size:12px;color:#3d3e51;margin:0 0 14px}
+@media(max-width:1000px){.cesiva-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:600px){.cesiva-grid{grid-template-columns:1fr}.frequency-head,.frequency-row{grid-template-columns:1fr 90px}}

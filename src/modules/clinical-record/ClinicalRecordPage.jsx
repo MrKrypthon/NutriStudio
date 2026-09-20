@@ -11,6 +11,9 @@ const TRANSCRIPT_FIELD = 'Transcripción de la consulta'
 const SAVE_LABELS = { idle: '● Guardado', editing: '● Editando…', saving: '● Guardando…', saved: '● Guardado', error: '⚠ Error al guardar', conflict: '⚠ Se editó en otra sesión, recarga para ver el cambio' }
 const CONSULTATION_STATUS_LABELS = { DRAFT: 'Borrador', IN_PROGRESS: 'En curso', COMPLETED: 'Completada' }
 const APPOINTMENT_TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia', BLOCK: 'Bloqueo' }
+const FOLLOW_UP_TYPE_OPTIONS = [['FOLLOW_UP', 'Seguimiento'], ['INITIAL', 'Primera consulta'], ['QUICK_CONTROL', 'Control rápido'], ['EMERGENCY', 'Emergencia']]
+const FOLLOW_UP_DURATIONS = [60, 45, 30, 15]
+const defaultFollowUpDate = () => { const d = new Date(); const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 28); return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}` }
 
 const SEX_LABELS = { female: 'Femenino', male: 'Masculino', F: 'Femenino', M: 'Masculino' }
 function computeAge(birthDate) {
@@ -33,6 +36,9 @@ const DIAGNOSIS_DOMAINS = [
 
 const FAMILY_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'HTA', 'Dislipidemias', 'Nefropatías', 'Cáncer', 'Enf. cerebrovasculares', 'Otros']
 const RELATIVES = ['Mamá/Papá', 'Abuelos', 'Tíos']
+// Evaluación cualitativa del diagnóstico alimentario (CESIVA) y frecuencia de consumo por alimento.
+const CESIVA = [['Completa', 'Incluye todos los grupos de alimentos'], ['Equilibrada', 'Proporción adecuada entre grupos'], ['Suficiente', 'Cubre los requerimientos'], ['Inocua', 'Sin riesgo para la salud'], ['Variada', 'Alterna distintos alimentos'], ['Adecuada', 'Apta para el paciente']]
+const FOOD_FREQUENCY = ['Leche', 'Queso', 'Yogur', 'Carne de res', 'Carne de pollo', 'Pescado', 'Huevo', 'Tortilla', 'Pan', 'Arroz', 'Frijol', 'Verduras', 'Frutas', 'Refresco', 'Jugo', 'Café', 'Dulces o postres', 'Frituras']
 const SYMPTOMS = ['Diarrea', 'Estreñimiento', 'Náusea', 'Úlcera', 'Pirosis', 'Ceguera nocturna', 'Vómito', 'Gastritis', 'Poliuria', 'Polidipsia', 'Polifagia']
 const PHYSICAL_EXAM = [
   ['Piel y ojos', ['Petequias', 'Xerosis conjuntival', 'Piel seca', 'Dermatitis pelagrosa', 'Manchas de Bitot', 'Hiperqueratosis folicular', 'Edema', 'Queratomalacia', 'Conjuntivas pálidas', 'Cianosis', 'Xantelasma', 'Piel quebradiza y escamosa']],
@@ -159,6 +165,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [completeOpen, setCompleteOpen] = useState(false)
   const [completeForm, setCompleteForm] = useState({ method: 'CASH', amount: '' })
   const [completeError, setCompleteError] = useState('')
+  // Flujo de cierre: tras registrar el pago se ofrece agendar seguimiento y descargar el expediente.
+  const [postComplete, setPostComplete] = useState(false)
+  const [followUp, setFollowUp] = useState({ date: '', time: '09:00', type: 'FOLLOW_UP', duration: 60 })
+  const [followUpState, setFollowUpState] = useState('idle')
+  const [followUpError, setFollowUpError] = useState('')
   const [attachments, setAttachments] = useState([])
   const [uploadState, setUploadState] = useState('idle')
   const [uploadError, setUploadError] = useState('')
@@ -418,9 +429,47 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       setConsultation((prev) => (prev ? { ...prev, status: 'COMPLETED', completedAt: new Date().toISOString() } : prev))
       setCompletionState('idle')
       setCompleteOpen(false)
+      // Continúa el flujo: agendar la siguiente cita y descargar el expediente.
+      setFollowUp({ date: defaultFollowUpDate(), time: '09:00', type: 'FOLLOW_UP', duration: 60 })
+      setFollowUpState('idle')
+      setFollowUpError('')
+      setPostComplete(true)
     } catch (error) {
       setCompletionState('error')
       setCompleteError(error.message || 'No se pudo cerrar la consulta.')
+    }
+  }
+  const closePostComplete = () => { setPostComplete(false); setFollowUpState('idle'); setFollowUpError('') }
+  const createFollowUpAppointment = async () => {
+    if (!followUp.date || !followUp.time) { setFollowUpError('Elige fecha y hora de la cita.'); return }
+    setFollowUpState('saving')
+    setFollowUpError('')
+    try {
+      await appointmentsApi.create({ patientId, startAt: `${followUp.date}T${followUp.time}:00.000Z`, durationMinutes: followUp.duration, type: followUp.type, notifyVia: [], internalNote: 'Seguimiento agendado al terminar la consulta.' })
+      setFollowUpState('done')
+    } catch (error) {
+      setFollowUpState('idle')
+      setFollowUpError(error.message || 'No se pudo crear la cita.')
+    }
+  }
+  // Genera (si hace falta) y descarga el expediente completo en un solo paso para el cierre.
+  const downloadFullRecord = async () => {
+    if (!consultation) return
+    setExportState('working')
+    try {
+      const doc = exportDoc || await documentsApi.createForExport(consultation.id)
+      const generated = await documentsApi.generate(doc.id)
+      setExportDoc(generated)
+      const blob = await documentsApi.downloadBlob(generated.id)
+      const url = URL.createObjectURL(blob)
+      const link = window.document.createElement('a')
+      link.href = url
+      link.download = generated.storageKey
+      link.click()
+      URL.revokeObjectURL(url)
+      setExportState('idle')
+    } catch {
+      setExportState('error')
     }
   }
 
@@ -643,7 +692,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>
 
       : tab === 'Diagnóstico' ? <div className="panel diagnosis-panel">
-        <div className="section-heading"><div><p className="eyebrow">SECCIÓN 9 DE 13 · TND</p><h1>Diagnóstico nutricio</h1><p className="subtitle">Registra uno o más diagnósticos por dominio, en formato PES (problema, etiología, evidencia).</p></div><button className="secondary" onClick={() => openDiagnosisForm(DIAGNOSIS_DOMAINS[0][0])}>+ Nuevo diagnóstico</button></div>
+        <div className="section-heading"><div><p className="eyebrow">SECCIÓN 9 DE 13 · TND</p><h1>Diagnóstico nutricio</h1><p className="subtitle">Evalúa la alimentación (CESIVA), define el tipo de dieta y registra los diagnósticos PES por dominio.</p></div><button className="secondary" onClick={() => openDiagnosisForm(DIAGNOSIS_DOMAINS[0][0])}>+ Nuevo diagnóstico</button></div>
+        <div className="form-card"><h3>Evaluación CESIVA</h3><p className="muted cesiva-hint">Marca los criterios que cumple la alimentación actual de {patientName}.</p><div className="cesiva-grid">{CESIVA.map(([criterion, description]) => { const key = `CESIVA: ${criterion}`; const active = !!currentValues[key]; return <button type="button" key={criterion} className={active ? 'cesiva-item active' : 'cesiva-item'} onClick={() => updateField(key, !active)}><b>{active ? `${criterion} ✓` : criterion}</b><small>{description}</small></button> })}</div></div>
+        <FormCard title="Tipo de dieta y evaluación" fields={['Tipo de dieta|', 'Evaluación de la alimentación actual|*']} values={currentValues} onFieldChange={updateField} />
         <div className="diagnosis-domains">{DIAGNOSIS_DOMAINS.map(([title, desc, color]) => <div className={'domain-card ' + color} key={title} onClick={() => openDiagnosisForm(title)} style={{ cursor: 'pointer' }}><span>◉</span><b>{title}</b><small>{desc}</small><strong>{diagnoses.filter((d) => d.domain === title).length} seleccionados</strong></div>)}</div>
 
         {diagnosisForm && <div className="diagnosis-form panel">
@@ -678,7 +729,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>
 
       : tab === 'Clínico' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Clínico</h1><p className="subtitle">Revisión de síntomas y exploración física de {patientName}. Marca los que aplican.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Clínico</h1><p className="subtitle">Antecedentes, medicamentos, síntomas y exploración física de {patientName}. Marca los que aplican.</p>
+        <FormCard title="Antecedentes personales" fields={['Enfermedades actuales o previas|*', 'Cirugías realizadas|*']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Medicamentos y suplementos" fields={['Medicamentos que toma|*', 'Suplementos que toma|*', 'Interacciones con nutrientes|*']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Alergias e intolerancias" fields={['Alergias alimentarias|*', 'Intolerancias|*']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Consumo de sustancias" fields={['Tabaquismo (frecuencia)|', 'Consumo de alcohol (frecuencia)|']} values={currentValues} onFieldChange={updateField} />
         <h3 className="exam-subhead">Síntomas</h3>
         <div className="symptom-grid">{SYMPTOMS.map((symptom) => { const active = !!currentValues[symptom]; return <TogglePill key={symptom} active={active} label={symptom} onClick={() => updateField(symptom, !active)} /> })}</div>
         <h3 className="exam-subhead">Exploración física</h3>
@@ -701,16 +756,20 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
       : tab === 'Dietético' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Dietético</h1><p className="subtitle">Hábitos alimentarios de {patientName}.</p>
-        <FormCard title="Patrón de alimentación" fields={['Núm. de comidas al día|', 'Horario habitual|', 'Apetito|', 'Preferencias alimentarias|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Alergias e intolerancias" fields={['Alergias alimentarias|', 'Intolerancias|', 'Restricciones dietéticas|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Suplementos y consumo de agua" fields={['Suplementos que toma|', 'Consumo de agua habitual|', 'Notas dietéticas|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Patrón de alimentación" fields={['Núm. de comidas al día|', 'Horario habitual de comidas|', 'Apetito|', 'Hora a la que tiene más hambre|', 'Comidas o bebidas preferidas|', 'Alimentos que no le agradan o le causan malestar|*']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Consumo de agua" fields={['Vasos de agua al día|', 'Restricciones dietéticas|', 'Notas dietéticas|*']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Historial de consultas nutricionales" fields={['¿Ha asistido antes a consulta nutricional?|', 'Tipo de consulta previa|', 'Tiempo que llevó la dieta|', 'Motivo por el que la llevó|', 'Resultados obtenidos|', 'Qué tanto se apegó a la dieta|*']} values={currentValues} onFieldChange={updateField} />
+        <div className="form-card"><h3>Frecuencia de alimentos (días por semana)</h3><div className="frequency-table">
+          <div className="frequency-head"><span>Alimento</span><b>Días / semana</b></div>
+          {FOOD_FREQUENCY.map((food) => <div className="frequency-row" key={food}><span>{food}</span><input type="number" min="0" max="7" value={currentValues[`Frecuencia: ${food}`] ?? ''} onChange={(e) => updateField(`Frecuencia: ${food}`, e.target.value)} /></div>)}
+        </div></div>
+        <FormCard title="Dieta habitual (alimentos, cantidades y horarios)" fields={['Desayuno|*', 'Colación matutina|*', 'Almuerzo o comida|*', 'Colación vespertina|*', 'Cena|*']} values={currentValues} onFieldChange={updateField} />
       </div>
 
       : tab === 'Estilo de vida' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Estilo de vida</h1><p className="subtitle">Actividad física y hábitos de {patientName}.</p>
         <FormCard title="Actividad física" fields={['Tipo de ejercicio|', 'Frecuencia semanal|', 'Duración por sesión|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Descanso" fields={['Horas de sueño|', 'Calidad del sueño|', 'Nivel de estrés percibido|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Consumo de sustancias" fields={['Tabaquismo|', 'Consumo de alcohol|', 'Notas de estilo de vida|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Descanso y ánimo" fields={['Horas de sueño|', 'Calidad del sueño|', 'Nivel de estrés percibido|', 'Estado de ánimo|', 'Jornada laboral|', 'Otros|*']} values={currentValues} onFieldChange={updateField} />
       </div>
 
       : tab === 'Sociocultural' ? <div className="panel generic-section">
@@ -741,7 +800,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <FormCard title="Objetivos terapéuticos" fields={['Objetivo general|', 'Objetivos a corto plazo|', 'Objetivos a largo plazo|']} values={currentValues} onFieldChange={updateField} />
         <FormCard title="Recomendaciones" fields={['Recomendaciones generales|', 'Recomendaciones de alimentación|']} values={currentValues} onFieldChange={updateField} />
         <FormCard title="Educación nutricional" fields={['Temas de educación para el paciente|', 'Material educativo entregado|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Metas y acuerdos" fields={['Metas SMART|', 'Acuerdos con el paciente|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Metas y acuerdos" fields={['Metas SMART|', 'Barreras y soluciones|*', 'Acuerdos con el paciente|']} values={currentValues} onFieldChange={updateField} />
+        <FormCard title="Suplementos" fields={['Suplementos recomendados|*', 'Dosis e indicaciones|*']} values={currentValues} onFieldChange={updateField} />
         <FormCard title="Seguimiento" fields={['Próximos pasos|', 'Notas de tratamiento|']} values={currentValues} onFieldChange={updateField} />
       </div>
 
@@ -764,6 +824,23 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     <label>Método de pago<div className="complete-methods">{PAYMENT_METHODS.map(([value, label]) => <button type="button" key={value} className={completeForm.method === value ? 'selected' : ''} onClick={() => setCompleteForm((prev) => ({ ...prev, method: value }))}>{label}</button>)}</div></label>
     {completeError && <div className="form-error">⚠ {completeError}</div>}
     <div className="modal-actions"><button type="button" className="secondary" onClick={() => setCompleteOpen(false)}>Cancelar</button><button type="button" className="primary" disabled={completionState === 'saving'} onClick={submitCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar y registrar'} <span>→</span></button></div>
+  </div></div>}
+
+  {postComplete && <div className="modal-backdrop" onClick={closePostComplete}><div className="modal" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-head"><div><p className="eyebrow">CONSULTA TERMINADA</p><h2>{followUpState === 'done' ? 'Siguiente cita agendada' : 'Pago registrado'}</h2><span className="modal-subtitle">{followUpState === 'done' ? 'La cita ya aparece en tu agenda.' : 'El ingreso quedó guardado en Finanzas.'}</span></div><button onClick={closePostComplete}>×</button></div>
+    {(followUpState === 'done' || followUpState === 'skipped')
+      ? <div className="post-complete">
+          <p>Último paso: descarga el expediente completo de {patientName} para tu archivo.</p>
+          {exportState === 'error' && <div className="form-error">⚠ No se pudo generar el expediente.</div>}
+          <div className="modal-actions"><button type="button" className="secondary" onClick={closePostComplete}>Cerrar</button><button type="button" className="primary" disabled={exportState === 'working'} onClick={downloadFullRecord}>{exportState === 'working' ? 'Generando…' : 'Descargar expediente'} <span>→</span></button></div>
+        </div>
+      : <div className="post-complete">
+          <p>¿Quieres agendar la siguiente cita de {patientName}?</p>
+          <div className="form-row"><label>Fecha<input type="date" value={followUp.date} onChange={(event) => setFollowUp((prev) => ({ ...prev, date: event.target.value }))} /></label><label>Hora<input type="time" value={followUp.time} onChange={(event) => setFollowUp((prev) => ({ ...prev, time: event.target.value }))} /></label></div>
+          <div className="form-row"><label>Tipo de cita<select value={followUp.type} onChange={(event) => setFollowUp((prev) => ({ ...prev, type: event.target.value }))}>{FOLLOW_UP_TYPE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Duración<select value={followUp.duration} onChange={(event) => setFollowUp((prev) => ({ ...prev, duration: Number(event.target.value) }))}>{FOLLOW_UP_DURATIONS.map((duration) => <option value={duration} key={duration}>{duration} minutos</option>)}</select></label></div>
+          {followUpError && <div className="form-error">⚠ {followUpError}</div>}
+          <div className="modal-actions"><button type="button" className="secondary" onClick={() => setFollowUpState('skipped')}>Ahora no</button><button type="button" className="primary" disabled={followUpState === 'saving'} onClick={createFollowUpAppointment}>{followUpState === 'saving' ? 'Creando…' : 'Crear cita'} <span>→</span></button></div>
+        </div>}
   </div></div>}
   </AppChrome>
 }

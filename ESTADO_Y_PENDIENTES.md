@@ -702,3 +702,17 @@ Pedido de la usuaria: un módulo nuevo en el menú lateral, tipo dashboard, para
 ## Fase 69 — Expediente: scroll en las 13 pestañas (rama `fase-69-expediente-scroll`)
 
 Al rehacer el layout de altura completa (fase 65) el scroll interno quedó limitado a `.clinical-layout`, así que solo Antropométrico y Bioquímico scrolleaban bien: las demás pestañas (Resumen, General, Clínico, Dietético, Estilo de vida, Sociocultural, Diagnóstico, Tratamiento, Monitoreo, Notas y Transcripción) renderizan `.panel.generic-section` (o `.diagnosis-panel`) y quedaban recortadas sin scroll. Se agregaron `.generic-section` y `.diagnosis-panel` a la regla de cuerpo con scroll (y al reset de impresión). Verificado con Chromium: las 13 pestañas reportan `overflow-y: auto` y desplazamiento real sin recorte, con las pestañas y el footer fijos. `npm run build` OK y `npm test` (48/48).
+
+## Fase 70 — Flujo de la consulta según las hojas de requerimientos (rama `fase-70-flujo-consulta`)
+
+A partir de dos hojas manuscritas de la usuaria, se completaron las secciones del expediente y el cierre de la consulta. Se implementaron Dietético completo, Diagnóstico + CESIVA, Clínico completo y el flujo de cierre guiado (el recordatorio de 24 h con cálculo de macros/micros y % de adecuación quedó **explícitamente para después**, no se seleccionó).
+
+- **Dietético**: se agregaron hora de más hambre, comidas/bebidas preferidas, alimentos que no le agradan o le causan malestar, historial de consultas nutricionales previas (tipo, duración, motivo, resultados, apego), **tabla de frecuencia de alimentos** (18 alimentos × días/semana) y **dieta habitual** por tiempo de comida (desayuno, colaciones, comida, cena) con textareas.
+- **Diagnóstico**: nueva **evaluación CESIVA** (Completa, Equilibrada, Suficiente, Inocua, Variada, Adecuada) como tarjetas marcables, y "Tipo de dieta y evaluación". Se conserva el registro PES por dominios.
+- **Clínico**: antecedentes personales (enfermedades, cirugías), medicamentos y suplementos con interacciones con nutrientes, alergias e intolerancias, y consumo de sustancias (tabaco/alcohol). Se movieron ahí "Alergias alimentarias/Intolerancias" (antes en Dietético) y el "Consumo de sustancias" (antes en Estilo de vida) para no duplicar.
+- **Estilo de vida**: "Descanso y ánimo" se amplió con estado de ánimo, jornada laboral y otros.
+- **Tratamiento**: se agregaron barreras y soluciones, y una tarjeta de suplementos recomendados.
+- **Flujo de cierre guiado**: al "Terminar y registrar" el pago ya no cierra en seco; abre un modal que pregunta por la **siguiente cita** (fecha, hora, tipo y duración, con fecha sugerida a 4 semanas) y, al crearla o posponerla, ofrece **descargar el expediente completo**. La cita se crea en la Agenda con el paciente ya seleccionado.
+- **`FormCard`** ahora soporta campos de texto multilínea con la sintaxis `'Etiqueta|*'` (antes solo el último campo podía ser nota); los textareas ocupan el ancho completo de la tarjeta.
+
+**Verificado** con Chromium sobre una consulta de prueba (creada y eliminada al terminar): Dietético muestra las 5 tarjetas, 18 filas de frecuencia y 8 textareas; Diagnóstico muestra 6 criterios CESIVA + PES; Clínico y Tratamiento listan las tarjetas nuevas; el cierre registra el pago y muestra el modal de siguiente cita y, tras "Ahora no", el paso de descarga. `npm run build` OK y `npm test` (48/48).
