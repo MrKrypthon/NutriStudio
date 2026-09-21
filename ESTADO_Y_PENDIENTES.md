@@ -767,3 +767,13 @@ Completa el ~5% que faltaba del flujo de las dos hojas.
 Reporte de la usuaria: en el expediente/Constructor "hay que hacer mucho scroll y no se aprovecha toda la vista", y los botones "Sección anterior / Siguiente sección" son muy grandes. Se compactó el chrome del flujo en escritorio (dentro del layout de altura completa): padding del contenido 24/44 → 16, banner 12→8, pestañas 13→10, `section-heading` y `form-card` más ajustados, y el footer del wizard pasó de ~80px a ~40px (padding reducido y botones más pequeños). Los botones se acortaron a "← Anterior" y "Siguiente →". En una ventana de 800px de alto, el área de contenido subió de ~450 a ~490px.
 
 **Verificado** con Chromium (1440×800): footer de 40px, botones "← Anterior"/"Siguiente →" y más área útil. `npm run build` OK y `npm test` (48/48).
+
+## Fase 78 — Planes pendientes con avance en "Hoy" (rama `fase-78-planes-pendientes`)
+
+Pedido: al terminar la consulta poder ver los **planes pendientes** con su **% de avance** (del plan y de la consulta), que se guarden solos "como Google Docs" y aparezcan en el dashboard de Hoy.
+
+- **Backend**: `GET /dashboard/today` ahora devuelve `pendingPlans` (planes en `DRAFT`/`READY`, hasta 8, ordenados por actualización más reciente) con `patientName`, `updatedAt`, `progress` (pasos: Evaluación → Cálculo → Distribución → Semana → Entrega; 5 pasos, cada uno pesa 20%) y `nextStep` (el paso que falta), más `consultationProgress` (secciones del expediente con contenido ÷ 13).
+- **Frontend**: tarjeta **"Planes pendientes"** al final de "Hoy" con una fila por borrador: nombre, paso pendiente y antigüedad, y dos barras de avance (Plan / Consulta). Un clic abre el **Constructor de plan** con ese paciente.
+- El borrador ya se autoguarda (la distribución y las notas guardan solas; el cálculo con botón); esto solo muestra hasta dónde quedó y permite retomarlo.
+
+**Verificado** contra API aislada (puerto 3005) + Vite (5176) + Chromium: `pendingPlans` devuelve los 6 borradores reales con su avance; la tarjeta de "Hoy" muestra las filas con las dos barras y al hacer clic abre el Constructor con el paciente correcto. `npm run build` OK, `node --check server/index.js` OK y `npm test` (48/48).

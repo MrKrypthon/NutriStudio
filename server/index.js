@@ -938,7 +938,38 @@ app.get('/api/v1/dashboard/today', async (request) => {
   // Resumen financiero para el dashboard de "Hoy": el día, el saldo acumulado y la serie de 7 días
   // para la gráfica rápida.
   const finance = await buildFinanceSnapshot(practiceId, date)
-  return { date, stats: { appointments: appointments.length, pendingConfirmations, followUps, activePatients }, appointments, tasks, finance }
+  // Planes en borrador (no publicados) para retomarlos desde "Hoy", con su avance y el de la
+  // consulta asociada. El borrador ya se autoguarda (partial con cada edición), así que aquí solo
+  // se reporta hasta dónde quedó.
+  const plans = await prisma.nutritionPlan.findMany({
+    where: { patient: { practiceId }, status: { in: ['DRAFT', 'READY'] } },
+    include: { patient: true, mealSlots: { select: { dayOfWeek: true } }, consultation: { include: { sections: { select: { payload: true } } } } },
+    orderBy: { updatedAt: 'desc' },
+    take: 8,
+  })
+  const PLAN_STEPS = ['Evaluación', 'Cálculo', 'Distribución', 'Semana', 'Entrega']
+  const pendingPlans = plans.map((plan) => {
+    const days = new Set((plan.mealSlots || []).map((slot) => slot.dayOfWeek))
+    const steps = [
+      (plan.evaluation && typeof plan.evaluation === 'object' && Object.keys(plan.evaluation).length > 0) || !!plan.goal,
+      plan.targetKcal != null,
+      (plan.mealSlots || []).length > 0,
+      days.size >= 5,
+      plan.status === 'PUBLISHED',
+    ]
+    const sections = plan.consultation?.sections || []
+    const filled = sections.filter((section) => section.payload && Object.values(section.payload).some((value) => (Array.isArray(value) ? value.length > 0 : value !== '' && value != null))).length
+    return {
+      id: plan.id,
+      patientId: plan.patientId,
+      patientName: `${plan.patient.firstName} ${plan.patient.lastName}`.trim(),
+      updatedAt: plan.updatedAt,
+      progress: Math.round((steps.filter(Boolean).length / steps.length) * 100),
+      nextStep: PLAN_STEPS[steps.findIndex((done) => !done)] || 'Entrega',
+      consultationProgress: Math.min(100, Math.round((filled / 13) * 100)),
+    }
+  })
+  return { date, stats: { appointments: appointments.length, pendingConfirmations, followUps, activePatients }, appointments, tasks, finance, pendingPlans }
 })
 
 // Tarifas por tipo de cita (centavos). Cualquier valor ausente/negativo se normaliza a 0 para que

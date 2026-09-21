@@ -39,7 +39,7 @@ const greetingFor = (d) => {
   return 'Buenas noches'
 }
 
-export default function DashboardPage({ setActive, onStartConsultation, onNewAppointment, onOpenAgendaFiltered }) {
+export default function DashboardPage({ setActive, onStartConsultation, onNewAppointment, onOpenAgendaFiltered, onOpenPlan }) {
   const { user } = useAuth()
   const [data, setData] = useState({ stats: DEMO_STATS, appointments: DEMO_APPOINTMENTS, tasks: DEMO_TASKS })
   const [status, setStatus] = useState('loading')
@@ -64,6 +64,8 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
   const footLabel = isReal ? 'Actualizado desde tu API' : 'Datos de demostración'
   const emptyTotals = { incomeCents: 0, expenseCents: 0, balanceCents: 0 }
   const finance = data.finance || { today: emptyTotals, allTime: emptyTotals, last7: [] }
+  const pendingPlans = isReal ? (data.pendingPlans || []) : []
+  const updatedLabel = (iso) => { const d = new Date(iso); const days = Math.floor((Date.now() - d.getTime()) / 86400000); if (days <= 0) return `hoy · ${formatUTCTime(iso)}`; if (days === 1) return 'ayer'; return `hace ${days} días` }
 
   // Consistency with Agenda: a pending appointment can be confirmed with one click from Hoy too.
   const confirmAppointment = async (id) => {
@@ -93,5 +95,16 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
         <p className="finance-today-note">Últimos 7 días · los ingresos se registran solos al terminar cada consulta.</p>
       </section>
     </div>
+    {pendingPlans.length > 0 && <section className="panel pending-plans">
+      <div className="panel-title"><div><h2>Planes pendientes</h2><p>Borradores que se guardan solos: retómalos donde los dejaste</p></div><button className="link-button" onClick={() => setActive('Constructor de plan')}>Ir al constructor →</button></div>
+      <div className="pending-plan-list">{pendingPlans.map((plan) => <button type="button" className="pending-plan" key={plan.id} onClick={() => onOpenPlan ? onOpenPlan(plan.patientId) : setActive('Constructor de plan')}>
+        <div className="pending-plan-info"><b>{plan.patientName}</b><small>{plan.nextStep} pendiente · {updatedLabel(plan.updatedAt)}</small></div>
+        <div className="pending-plan-bars">
+          <div className="pp-row"><span>Plan</span><div className="pp-bar"><i style={{ width: `${plan.progress}%` }} /></div><b>{plan.progress}%</b></div>
+          <div className="pp-row"><span>Consulta</span><div className="pp-bar consult"><i style={{ width: `${plan.consultationProgress}%` }} /></div><b>{plan.consultationProgress}%</b></div>
+        </div>
+        <span className="row-arrow">→</span>
+      </button>)}</div>
+    </section>}
   </div></AppChrome>
 }

@@ -548,3 +548,19 @@ html{scroll-behavior:smooth}
 .recall-status.low{color:#c0564f}
 .recall-status.none{color:var(--muted);font-weight:400}
 @media(max-width:600px){.recall-adequacy-head,.recall-adequacy-row{grid-template-columns:1.3fr .9fr 1.1fr}.recall-adequacy-head b:nth-child(3),.recall-adequacy-row>b:nth-child(3){display:none}}
+
+/* Hoy: planes pendientes (borradores) con su avance */
+.pending-plans{margin-top:14px}
+.pending-plan-list{display:grid;gap:8px;margin-top:14px}
+.pending-plan{display:grid;grid-template-columns:1.2fr 1.4fr 24px;align-items:center;gap:16px;text-align:left;border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff;cursor:pointer;font:inherit;transition:border-color .15s,background-color .15s}
+.pending-plan:hover{border-color:var(--green);background:color-mix(in srgb,var(--green) 3%,#fff)}
+.pending-plan-info b{display:block;font-size:12px;color:var(--ink)}
+.pending-plan-info small{display:block;color:var(--muted);font-size:9px;margin-top:3px}
+.pending-plan-bars{display:grid;gap:7px}
+.pp-row{display:grid;grid-template-columns:64px 1fr 40px;align-items:center;gap:8px}
+.pp-row span{font-size:9px;color:var(--muted)}
+.pp-row b{font:600 10px 'DM Mono';color:#3d3e51;text-align:right}
+.pp-bar{height:6px;background:#eef0f4;border-radius:4px;overflow:hidden}
+.pp-bar i{display:block;height:100%;background:var(--green);border-radius:4px;transition:width .3s}
+.pp-bar.consult i{background:#6b9eaf}
+@media(max-width:680px){.pending-plan{grid-template-columns:1fr 24px}.pending-plan-bars{grid-column:1/-1}}
