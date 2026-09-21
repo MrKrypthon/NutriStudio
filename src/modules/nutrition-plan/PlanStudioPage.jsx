@@ -74,6 +74,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [plan, setPlan] = useState(null)
   const [recipes, setRecipes] = useState([])
   const [slots, setSlots] = useState({})
+  // Porciones (factor de ración) por tiempo de comida; se aplican a las 7 días y alimentan el
+  // cálculo de adecuación en vivo.
+  const [mealServings, setMealServings] = useState({ breakfast: 1, lunch: 1, snack: 1, dinner: 1 })
+  const mealServingsRef = useRef({ breakfast: 1, lunch: 1, snack: 1, dinner: 1 })
   const [saveState, setSaveState] = useState('idle')
   const [pickerTarget, setPickerTarget] = useState(null)
   const [pickerSearch, setPickerSearch] = useState('')
@@ -166,6 +170,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         weightKg: weightKg !== '' && weightKg != null ? String(weightKg) : '',
         heightCm: heightCm !== '' && heightCm != null ? String(heightCm) : '',
       }))
+      const nextServings = { breakfast: 1, lunch: 1, snack: 1, dinner: 1 }
+      for (const slot of activePlan?.mealSlots || []) if (slot.servings != null) nextServings[slot.mealType] = Number(slot.servings)
+      mealServingsRef.current = nextServings
+      setMealServings(nextServings)
       setPlan(activePlan)
       setRecipes(recipesResponse.items || [])
       setSlots(initialSlots)
@@ -297,6 +305,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         const nextSlots = {}
         for (const slot of full.mealSlots || []) nextSlots[slotKey(slot.dayOfWeek, slot.mealType)] = slot.recipeId
         const savedInputs = full.evaluation?.inputs || {}
+        const nextServings = { breakfast: 1, lunch: 1, snack: 1, dinner: 1 }
+        for (const slot of full.mealSlots || []) if (slot.servings != null) nextServings[slot.mealType] = Number(slot.servings)
+        mealServingsRef.current = nextServings
+        setMealServings(nextServings)
         setPlan(full)
         setSlots(nextSlots)
         setForm((prev) => ({
@@ -376,7 +388,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
           .filter(([, recipeId]) => recipeId && activeIds.has(recipeId))
           .map(([key, recipeId]) => {
             const [day, mealType] = key.split(':')
-            return { dayOfWeek: Number(day), mealType, recipeId, servings: 1 }
+            return { dayOfWeek: Number(day), mealType, recipeId, servings: mealServingsFor(mealType) }
           })
         try {
           const updated = await plansApi.saveDistribution(plan.id, payload)
@@ -453,11 +465,60 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     return () => { cancelled = true }
   }, [step, plan])
 
+  const mealServingsFor = (mealType) => mealServingsRef.current[mealType] ?? 1
   const averageKcalForMeal = (mealType) => {
     const assigned = DAYS.map((day) => recipeById(slots[slotKey(day.n, mealType)])).filter(Boolean)
     if (!assigned.length) return null
-    const total = assigned.reduce((sum, recipe) => sum + (recipe.nutrition?.kcal || 0), 0)
-    return Math.round(total / assigned.length)
+    const total = assigned.reduce((sum, recipe) => sum + (recipe.nutrition?.kcal || 0), 0) / assigned.length
+    return Math.round(total * mealServingsFor(mealType))
+  }
+
+  // Totales promedio por día del plan (recetas × porciones) para el panel de adecuación.
+  const planDaily = () => {
+    const keys = ['kcal', 'protein', 'carbs', 'fat']
+    const totals = Object.fromEntries(keys.map((key) => [key, 0]))
+    for (const meal of MEAL_TYPES) {
+      const servings = mealServingsFor(meal.key)
+      for (const day of DAYS) {
+        const recipe = recipeById(slots[slotKey(day.n, meal.key)])
+        if (!recipe) continue
+        for (const key of keys) totals[key] += Number(recipe.nutrition?.[key] || 0) * servings
+      }
+    }
+    for (const key of keys) totals[key] = totals[key] / 7
+    return totals
+  }
+
+  const changeServings = (mealType, delta) => {
+    const current = mealServingsRef.current[mealType] ?? 1
+    const next = Math.min(5, Math.max(0.5, Math.round((current + delta) * 2) / 2))
+    const nextServings = { ...mealServingsRef.current, [mealType]: next }
+    mealServingsRef.current = nextServings
+    setMealServings(nextServings)
+    persistSlots(slots)
+  }
+
+  // Panel de adecuación en vivo: kcal y macros del plan vs el requerimiento, rojo si se pasa.
+  const renderAdequacy = () => {
+    const daily = planDaily()
+    const targetKcal = plan?.targetKcal || null
+    const pct = targetKcal ? Math.round((daily.kcal / targetKcal) * 100) : null
+    const status = pct == null ? null : pct > 105 ? 'over' : pct < 95 ? 'low' : 'ok'
+    const macroRows = [['Carbohidratos', daily.carbs, plan?.carbsPercent, 4], ['Proteína', daily.protein, plan?.proteinPercent, 4], ['Grasas', daily.fat, plan?.fatPercent, 9]].map(([label, grams, percent, factor]) => {
+      const targetGrams = targetKcal && percent != null ? (targetKcal * Number(percent)) / 100 / factor : null
+      const gramsPct = targetGrams ? Math.round((grams / targetGrams) * 100) : null
+      const pctOfKcal = daily.kcal ? Math.round(((grams * factor) / daily.kcal) * 100) : null
+      return { label, grams: Math.round(grams), targetGrams: targetGrams ? Math.round(targetGrams) : null, gramsPct, pctOfKcal, targetPct: percent != null ? Number(percent) : null }
+    })
+    const hasPlan = daily.kcal > 0
+    return <section className="plan-adequacy panel">
+      <div className="pa-head"><p className="eyebrow">ADECUACIÓN DEL PLAN · PROMEDIO DIARIO</p>{targetKcal ? <span className={'pa-status ' + (status || '')}>{pct}% {status === 'over' ? '· por encima' : status === 'low' ? '· por debajo' : '· adecuado'}</span> : <span className="muted">Sin cálculo guardado (paso Plan alimentario)</span>}</div>
+      {!hasPlan && <p className="muted">Asigna recetas para ver el cálculo.</p>}
+      {hasPlan && <div className="pa-body">
+        <div className="pa-energy"><div className="pa-energy-top"><small>Energía</small><b className={status === 'over' ? 'over' : ''}>{Math.round(daily.kcal)} <em>kcal</em></b>{targetKcal && <span>/ {targetKcal} kcal</span>}</div><div className="pa-bar"><i className={status === 'over' ? 'over' : status === 'low' ? 'low' : ''} style={{ width: `${Math.min(pct || 0, 100)}%` }} /></div></div>
+        <div className="pa-macros">{macroRows.map((row) => <div className={'pa-macro' + (row.gramsPct != null && row.gramsPct > 105 ? ' over' : '')} key={row.label}><small>{row.label}</small><b>{row.grams} g</b><span>{row.pctOfKcal != null ? `${row.pctOfKcal}%` : '—'}{row.targetPct != null ? ` · obj. ${row.targetPct}%` : ''}{row.gramsPct != null ? ` · ${row.gramsPct}%` : ''}</span></div>)}</div>
+      </div>}
+    </section>
   }
 
   // Imported cookbook recipes have real photos (`imageFile`); handmade ones keep the color block.
@@ -601,11 +662,13 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando plan y recetas…</h3></div>}
       {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar el plan o el catálogo de recetas.</div>}
       {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea un plan para {patientName} antes de distribuir recetas.</p><button className="primary" disabled={createPlanState === 'creating'} onClick={createPlan}>{createPlanState === 'creating' ? 'Creando…' : 'Crear plan'}</button>{createPlanState === 'error' && <div className="form-error">⚠ No se pudo crear el plan.</div>}</div>}
+      {loadState === 'ready' && plan && renderAdequacy()}
       {loadState === 'ready' && plan && <div className="distribution">
         <div className="distribution-meals">{MEAL_TYPES.map((meal, mealIndex) => { const base = recipeById(slots[slotKey(1, meal.key)]); const kcal = averageKcalForMeal(meal.key); return <section className="distribution-meal panel" key={meal.key}>
           <div className="distribution-meal-head">
             {recipeThumb(base, mealIndex, 'distribution-meal-image')}
             <div className="distribution-meal-info"><span className="distribution-meal-label">{meal.label} · base de la semana</span><b>{base ? base.name : 'Sin receta base'}</b><small>{kcal != null ? `${kcal} kcal promedio al día` : 'Sin recetas asignadas'}</small></div>
+            <div className="portion-stepper"><small>Porciones</small><div><button type="button" onClick={() => changeServings(meal.key, -0.5)} aria-label="Menos porciones">−</button><b>{mealServingsFor(meal.key)}</b><button type="button" onClick={() => changeServings(meal.key, 0.5)} aria-label="Más porciones">+</button></div></div>
             <button type="button" className="secondary" onClick={() => openPicker(meal.key)}>{base ? 'Cambiar' : 'Elegir receta'}</button>
           </div>
           <div className="distribution-meal-days">{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <button type="button" className={'distribution-day' + (recipe ? '' : ' empty')} key={day.n} onClick={() => openPicker(meal.key, day.n)} title={recipe ? `${recipe.name} · ${day.label}` : `Elegir ${meal.label} del ${day.label}`}>
@@ -620,6 +683,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
     {step === 3 && <>
       <ModuleHeader eyebrow="DISTRIBUCIÓN SEMANAL" title="Así se verá tu plan" subtitle="Haz clic en cualquier celda para asignar o cambiar la receta de ese día." action={<span className={'sync-label ' + (saveState === 'saving' ? 'loading' : saveState === 'error' ? 'demo' : 'online')}>{saveState === 'saving' ? '● Guardando…' : saveState === 'error' ? '● Error al guardar' : '● Sincronizado'}</span>} />
+      {loadState === 'ready' && plan && renderAdequacy()}
       {loadState === 'ready' && plan && <div className="week-plan panel">
         <div className="week-head"><span>Tiempo</span>{DAYS.map((d) => <b key={d.n}>{d.label}</b>)}</div>
         {MEAL_TYPES.map((meal) => <div className="week-row" key={meal.key}><span>{meal.label}</span>{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <div className="week-meal" key={day.n} onClick={() => openPicker(meal.key, day.n)} style={{ cursor: 'pointer' }}>{recipe ? <>{recipeThumb(recipe, day.n, 'week-image')}<small>{recipe.name}</small></> : <small className="muted">+ Elegir</small>}{recipe && <button type="button" className="link-button" onClick={(e) => { e.stopPropagation(); clearSlot(meal.key, day.n) }}>Quitar</button>}</div> })}</div>)}
