@@ -631,3 +631,80 @@ html{scroll-behavior:smooth}
 .dist-day-cell{text-align:left;border:1px solid var(--line);border-radius:7px;background:#fff;padding:7px 9px;font-size:10px;color:#3d3e51;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dist-day-cell:hover{border-color:var(--green);color:var(--green);background:var(--mint)}
 @media(max-width:800px){.recipe-detail-nutrition{grid-template-columns:repeat(3,1fr)}.distribution-days{overflow-x:auto}.distribution-days-head,.distribution-days-row{min-width:520px}}
+
+/* Distribución: receta base con miniatura */
+.distribution-pick{display:flex;align-items:center;gap:8px;border:0;background:none;color:var(--green);font-size:11px;cursor:pointer;text-align:left;padding:6px 0;min-width:0}
+.distribution-pick:hover{text-decoration:underline}
+.distribution-pick>span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dist-thumb{width:30px;height:30px;border-radius:7px;overflow:hidden;display:grid;place-items:center;font-size:13px;flex:0 0 auto}
+.dist-thumb-sm{width:20px;height:20px;border-radius:5px;overflow:hidden;display:grid;place-items:center;font-size:10px;flex:0 0 auto}
+.dist-thumb.coral,.dist-thumb-sm.coral,.week-image.coral{background:linear-gradient(135deg,#db9e7d,#f0c5a7)}
+.dist-thumb.blue,.dist-thumb-sm.blue,.week-image.blue{background:linear-gradient(135deg,#77a3b1,#bed9d4)}
+.dist-thumb.yellow,.dist-thumb-sm.yellow,.week-image.yellow{background:linear-gradient(135deg,#d7ad56,#efdb9d)}
+.dist-thumb.purple,.dist-thumb-sm.purple,.week-image.purple{background:linear-gradient(135deg,#9d8abb,#d8c9dd)}
+.dist-thumb.has-photo img,.dist-thumb-sm.has-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.dist-day-cell{display:flex;align-items:center;gap:7px;min-width:0}
+.dist-day-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Semana: celdas con imagen más grande */
+.week-image{height:66px;border-radius:6px 6px 0 0;overflow:hidden}
+.week-meal small{padding:8px 8px 10px;font-size:9px;color:#5b6f66}
+
+/* Distribución rediseñada: una tarjeta por tiempo de comida */
+.distribution{display:grid;gap:14px;padding:0;overflow:visible}
+.distribution-meals{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.distribution-meal{padding:0;overflow:hidden}
+.distribution-meal-head{display:flex;align-items:center;gap:12px;padding:13px 15px}
+.distribution-meal-image{width:52px;height:52px;border-radius:10px;overflow:hidden;display:grid;place-items:center;font-size:22px;flex:0 0 auto;color:#fff}
+.distribution-meal-info{flex:1;min-width:0}
+.distribution-meal-label{display:block;font:600 9px 'DM Mono';color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.distribution-meal-info b{display:block;font-size:12px;color:var(--ink);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.distribution-meal-info small{display:block;color:var(--muted);font-size:9px;margin-top:3px}
+.distribution-meal-head .secondary{padding:8px 12px;font-size:10px;white-space:nowrap}
+.distribution-meal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.distribution-day{border:0;background:#fff;padding:9px 4px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;min-width:0}
+.distribution-day:hover{background:var(--mint)}
+.distribution-day small{font:600 8px 'DM Mono';color:var(--muted);text-transform:uppercase}
+.distribution-day>span:not(.muted){font-size:8px;color:#556;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.distribution-day-thumb{width:26px;height:26px;border-radius:6px;overflow:hidden;display:grid;place-items:center;font-size:11px;color:#fff}
+.distribution-meal-image.coral,.distribution-day-thumb.coral{background:linear-gradient(135deg,#db9e7d,#f0c5a7)}
+.distribution-meal-image.blue,.distribution-day-thumb.blue{background:linear-gradient(135deg,#77a3b1,#bed9d4)}
+.distribution-meal-image.yellow,.distribution-day-thumb.yellow{background:linear-gradient(135deg,#d7ad56,#efdb9d)}
+.distribution-meal-image.purple,.distribution-day-thumb.purple{background:linear-gradient(135deg,#9d8abb,#d8c9dd)}
+.distribution-meal-image.has-photo img,.distribution-day-thumb.has-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.distribution-note{font-size:9px;margin:0}
+@media(max-width:900px){.distribution-meals{grid-template-columns:1fr}}
+
+/* Adecuación en vivo del plan (porciones y kcal vs requerimiento) */
+.plan-adequacy{display:grid;gap:12px;margin-bottom:14px}
+.pa-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.pa-head .eyebrow{margin:0}
+.pa-status{font:600 10px 'DM Sans';color:var(--green);background:var(--mint);border-radius:20px;padding:5px 11px}
+.pa-status.over{color:#c0564f;background:#fbe6e2}
+.pa-status.low{color:#c07a2f;background:#fdf1dc}
+.pa-body{display:grid;grid-template-columns:1.1fr 1.7fr;gap:18px;align-items:center}
+.pa-energy{display:grid;gap:8px}
+.pa-energy-top{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.pa-energy-top small{font:600 9px 'DM Mono';color:var(--muted);text-transform:uppercase;width:100%}
+.pa-energy-top b{font:800 22px Manrope;color:var(--ink)}
+.pa-energy-top b.over{color:#c0564f}
+.pa-energy-top b em{font:400 11px 'DM Sans';color:var(--muted);font-style:normal}
+.pa-energy-top span{color:var(--muted);font-size:11px}
+.pa-bar{height:8px;background:#eef0f4;border-radius:5px;overflow:hidden}
+.pa-bar i{display:block;height:100%;background:var(--green);border-radius:5px;transition:width .25s}
+.pa-bar i.over{background:#c0564f}
+.pa-bar i.low{background:#cf9438}
+.pa-macros{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.pa-macro{border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:#fafafc}
+.pa-macro.over{border-color:#e3b0aa;background:#fdf3f1}
+.pa-macro small{display:block;color:var(--muted);font-size:9px}
+.pa-macro b{display:block;font:800 16px Manrope;color:var(--ink);margin-top:3px}
+.pa-macro.over b{color:#c0564f}
+.pa-macro span{display:block;color:var(--muted);font-size:9px;margin-top:2px}
+.portion-stepper{display:flex;flex-direction:column;align-items:center;gap:4px}
+.portion-stepper small{font:600 8px 'DM Mono';color:var(--muted);text-transform:uppercase}
+.portion-stepper>div{display:flex;align-items:center;gap:6px}
+.portion-stepper button{border:1px solid var(--line);background:#fff;border-radius:7px;width:26px;height:26px;font-size:15px;line-height:1;cursor:pointer;color:#555}
+.portion-stepper button:hover{border-color:var(--green);color:var(--green)}
+.portion-stepper b{min-width:22px;text-align:center;font:600 12px 'DM Mono';color:var(--ink)}
+@media(max-width:800px){.pa-body{grid-template-columns:1fr}.pa-macros{grid-template-columns:1fr 1fr}.distribution-meal-head{flex-wrap:wrap}}
