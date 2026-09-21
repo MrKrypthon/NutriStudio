@@ -799,3 +799,5 @@ Pedido: hacer más intuitiva la vista del Constructor con los **planes realizado
 - **Filtros**: además del buscador, un filtro por **restricción** (sin gluten, etc.) del catálogo.
 - **Variar por día desde Distribución**: una cuadrícula "Variar por día" (7 días × 4 tiempos) permite cambiar la receta de cada día sin salir del paso.
 El selector reutiliza `GET /recipes/:id/nutrition`. Pendiente (siguiente paso, más grande): **intercambio de ingredientes por equivalentes SMAE** dentro del plan (requiere overrides por slot en el modelo).
+
+**Mejora visual de Distribución y Semana.** La tabla de Distribución ahora muestra una **miniatura** de la receta (foto si la tiene, o bloque de color) en la "Receta base de la semana" y en cada celda de "Variar por día". En **Semana**, las celdas de comida pasan a tarjeta con la **imagen más grande** (66px) y el nombre debajo; se ven las **fotos reales** de las recetas que las traen (recetario importado) y, para las que no, un degradado consistente con el color de la receta. Nota: los planes de ejemplo usan recetas semilla sin foto, por eso muestran el degradado; las recetas importadas sí traen imagen.

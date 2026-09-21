@@ -631,3 +631,21 @@ html{scroll-behavior:smooth}
 .dist-day-cell{text-align:left;border:1px solid var(--line);border-radius:7px;background:#fff;padding:7px 9px;font-size:10px;color:#3d3e51;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dist-day-cell:hover{border-color:var(--green);color:var(--green);background:var(--mint)}
 @media(max-width:800px){.recipe-detail-nutrition{grid-template-columns:repeat(3,1fr)}.distribution-days{overflow-x:auto}.distribution-days-head,.distribution-days-row{min-width:520px}}
+
+/* Distribución: receta base con miniatura */
+.distribution-pick{display:flex;align-items:center;gap:8px;border:0;background:none;color:var(--green);font-size:11px;cursor:pointer;text-align:left;padding:6px 0;min-width:0}
+.distribution-pick:hover{text-decoration:underline}
+.distribution-pick>span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dist-thumb{width:30px;height:30px;border-radius:7px;overflow:hidden;display:grid;place-items:center;font-size:13px;flex:0 0 auto}
+.dist-thumb-sm{width:20px;height:20px;border-radius:5px;overflow:hidden;display:grid;place-items:center;font-size:10px;flex:0 0 auto}
+.dist-thumb.coral,.dist-thumb-sm.coral,.week-image.coral{background:linear-gradient(135deg,#db9e7d,#f0c5a7)}
+.dist-thumb.blue,.dist-thumb-sm.blue,.week-image.blue{background:linear-gradient(135deg,#77a3b1,#bed9d4)}
+.dist-thumb.yellow,.dist-thumb-sm.yellow,.week-image.yellow{background:linear-gradient(135deg,#d7ad56,#efdb9d)}
+.dist-thumb.purple,.dist-thumb-sm.purple,.week-image.purple{background:linear-gradient(135deg,#9d8abb,#d8c9dd)}
+.dist-thumb.has-photo img,.dist-thumb-sm.has-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.dist-day-cell{display:flex;align-items:center;gap:7px;min-width:0}
+.dist-day-name{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* Semana: celdas con imagen más grande */
+.week-image{height:66px;border-radius:6px 6px 0 0;overflow:hidden}
+.week-meal small{padding:8px 8px 10px;font-size:9px;color:#5b6f66}
