@@ -506,9 +506,11 @@ html{scroll-behavior:smooth}
 .summary-card-actions{display:flex;gap:12px}
 
 /* Recordatorio de 24 horas (Dietético) */
-.recall-builder{display:grid;gap:15px}
+.recall-builder{display:grid;gap:12px;align-items:start}
 .recall-head-card p{margin:0}
-.recall-meal textarea{width:100%;min-height:58px;resize:vertical;border:1px solid var(--line);border-radius:7px;padding:10px;background:#fbfcfc;font:11px 'DM Sans';color:#343647;margin-top:6px}
+.recall-meal textarea{width:100%;min-height:46px;resize:vertical;border:1px solid var(--line);border-radius:7px;padding:9px 10px;background:#fbfcfc;font:11px 'DM Sans';color:#343647;margin-top:6px}
+/* En pantallas anchas, los tiempos de comida van en 2 columnas para reducir el scroll. */
+@media(min-width:1240px){.recall-builder{grid-template-columns:1fr 1fr}.recall-head-card,.recall-summary{grid-column:1/-1}}
 .recall-meal-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .recall-meal-head h3{margin:0}
 .recall-time{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px}
