@@ -34,6 +34,24 @@ const DAYS = [
 const RECIPE_COLORS = ['coral', 'blue', 'yellow', 'purple']
 const slotKey = (day, mealType) => `${day}:${mealType}`
 
+const PLAN_STATUS_LABEL = { DRAFT: 'Borrador', READY: 'Listo', PUBLISHED: 'Publicado', SUPERSEDED: 'Reemplazado', CANCELLED: 'Cancelado' }
+const PLAN_STEP_LABELS = ['Evaluación', 'Cálculo', 'Distribución', 'Semana', 'Entrega']
+// Mismo cálculo de avance que el dashboard de Hoy: pasos Evaluación → Cálculo → Distribución →
+// Semana → Entrega, 20% cada uno.
+function planProgress(plan) {
+  const days = new Set((plan.mealSlots || []).map((slot) => slot.dayOfWeek))
+  const steps = [
+    (plan.evaluation && typeof plan.evaluation === 'object' && Object.keys(plan.evaluation).length > 0) || !!plan.goal,
+    plan.targetKcal != null,
+    (plan.mealSlots || []).length > 0,
+    days.size >= 5,
+    plan.status === 'PUBLISHED' || plan.status === 'SUPERSEDED',
+  ]
+  return { progress: Math.round((steps.filter(Boolean).length / steps.length) * 100), nextStep: PLAN_STEP_LABELS[steps.findIndex((done) => !done)] || 'Entrega' }
+}
+const planUpdatedLabel = (iso) => { const d = new Date(iso); const days = Math.floor((Date.now() - d.getTime()) / 86400000); if (days <= 0) return 'hoy'; if (days === 1) return 'ayer'; return `hace ${days} días` }
+const consultationReason = (plan) => plan?.consultation?.sections?.find((section) => section.sectionKey === 'summary')?.payload?.['Motivo de consulta'] || plan?.consultation?.sections?.find((section) => section.sectionKey === 'summary')?.payload?.reason || null
+
 export default function PlanStudioPage({ setActive, patientId, onSelectPatient, pendingRecipeName, onConsumeRecipeName }) {
   const { patient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
@@ -58,6 +76,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [evalSaveState, setEvalSaveState] = useState('idle')
   const [evalSaveError, setEvalSaveError] = useState('')
   const [createPlanState, setCreatePlanState] = useState('idle')
+  const [plans, setPlans] = useState([])
+  const [view, setView] = useState('list')
+  const [planActionState, setPlanActionState] = useState('idle')
+  const [previewPlan, setPreviewPlan] = useState(null)
   const [notesForm, setNotesForm] = useState({ hydrationNote: '', recommendations: '' })
   const [notesSaveState, setNotesSaveState] = useState('idle')
   const notesSaveTimer = useRef(null)
@@ -91,7 +113,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const loadPlanData = useCallback(async () => {
     try {
       const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientId), recipesApi.list(), patientsApi.consultations(patientId)])
-      const activePlan = (plansResponse.items || []).find((item) => item.status !== 'PUBLISHED') || null
+      const planItems = plansResponse.items || []
+      // El plan "activo" editable es el borrador (o listo); nunca un cancelado/publicado.
+      const activePlan = planItems.find((item) => item.status === 'DRAFT') || planItems.find((item) => item.status === 'READY') || null
+      setPlans(planItems)
       const initialSlots = {}
       const activeRecipeIds = new Set((recipesResponse.items || []).map((r) => r.id))
       // Drop slots that reference archived/unknown recipes so they don't linger as invisible rows.
@@ -118,10 +143,14 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       setPlan(activePlan)
       setRecipes(recipesResponse.items || [])
       setSlots(initialSlots)
+      // Si venimos de "Asignar al plan" (pendingRecipeName), abrir directo el paso Distribución;
+      // si no, mostrar primero el listado de planes por estado.
+      if (pendingRecipeName) { setView('wizard'); setStep(2) } else { setView('list') }
       setLoadState('ready')
     } catch {
       setLoadState('error')
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId])
 
   useEffect(() => { loadPlanData() }, [loadPlanData])
@@ -219,10 +248,55 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       const created = await plansApi.create(patientId, { consultationId: consultation.id })
       setPlan(created)
       setSlots({})
+      setView('wizard')
+      setStep(1)
       setCreatePlanState('idle')
     } catch {
       setCreatePlanState('error')
     }
+  }
+
+  // Abre un plan desde el listado: los borradores/listos continúan en el wizard; los
+  // publicados/reemplazados/cancelados se ven con el menú congelado (solo lectura).
+  const openPlan = async (item) => {
+    if (!item) return
+    setPlanActionState(item.id)
+    try {
+      const full = await plansApi.get(item.id)
+      if (full.status === 'DRAFT' || full.status === 'READY') {
+        const nextSlots = {}
+        for (const slot of full.mealSlots || []) nextSlots[slotKey(slot.dayOfWeek, slot.mealType)] = slot.recipeId
+        const savedInputs = full.evaluation?.inputs || {}
+        setPlan(full)
+        setSlots(nextSlots)
+        setForm((prev) => ({
+          ...prev,
+          sex: savedInputs.sex ?? prev.sex,
+          age: savedInputs.age != null ? String(savedInputs.age) : prev.age,
+          bodyFatPercent: savedInputs.bodyFatPercent != null ? String(savedInputs.bodyFatPercent) : prev.bodyFatPercent,
+          formula: full.formula ?? prev.formula,
+          goal: full.goal || prev.goal,
+          carbsPercent: full.carbsPercent != null ? String(full.carbsPercent) : prev.carbsPercent,
+          proteinPercent: full.proteinPercent != null ? String(full.proteinPercent) : prev.proteinPercent,
+          fatPercent: full.fatPercent != null ? String(full.fatPercent) : prev.fatPercent,
+          weightKg: savedInputs.weightKg != null ? String(savedInputs.weightKg) : prev.weightKg,
+          heightCm: savedInputs.heightCm != null ? String(savedInputs.heightCm) : prev.heightCm,
+        }))
+        setNotesForm({ hydrationNote: full.hydrationNote || '', recommendations: full.recommendations || '' })
+        setStep(0)
+        setView('wizard')
+      } else {
+        setPreviewPlan(full)
+      }
+    } catch { /* la lista queda como estaba */ } finally { setPlanActionState('idle') }
+  }
+
+  const changePlanStatus = async (item, action) => {
+    setPlanActionState(item.id)
+    try {
+      await (action === 'cancel' ? plansApi.cancel(item.id) : plansApi.reactivate(item.id))
+      await loadPlanData()
+    } catch { /* deja la lista */ } finally { setPlanActionState('idle') }
   }
 
   const persistSlots = (nextSlots) => {
@@ -332,14 +406,53 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const meals = MEAL_TYPES.map((m) => m.label)
 
+  const menuEntryFor = (source, day, meal) => (source || []).find((entry) => entry.dayOfWeek === day && entry.mealType === meal)
+  const renderMenuPreview = (sourcePlan) => {
+    const menu = sourcePlan.menuSnapshot?.length ? sourcePlan.menuSnapshot : sourcePlan.mealSlots || []
+    return <div className="menu-preview-table">
+      <div className="menu-preview-head"><span>Tiempo</span>{DAYS.map((day) => <b key={day.n}>{day.label.slice(0, 3)}</b>)}</div>
+      {MEAL_TYPES.map((meal) => <div className="menu-preview-row" key={meal.key}><span>{meal.label}</span>{DAYS.map((day) => { const entry = menuEntryFor(menu, day.n, meal.key); const name = entry?.recipeName || (entry?.recipeId ? recipeById(entry.recipeId)?.name : null); return <div className="menu-preview-cell" key={day.n}>{name ? <>{name}{entry?.kcal ? <small>{Math.round(entry.kcal)} kcal</small> : null}</> : <small className="muted">—</small>}</div> })}</div>)}
+    </div>
+  }
+
+  const renderPlansOverview = () => {
+    const groups = [
+      ['Pendientes', plans.filter((item) => item.status === 'DRAFT' || item.status === 'READY')],
+      ['Realizados', plans.filter((item) => item.status === 'PUBLISHED' || item.status === 'SUPERSEDED')],
+      ['Cancelados', plans.filter((item) => item.status === 'CANCELLED')],
+    ]
+    return <div className="plans-overview">
+      <div className="plans-overview-head"><div><p className="eyebrow">PLANIFICACIÓN · PLANES</p><h1>Planes de {patientName}</h1><p className="subtitle">Retoma un borrador donde lo dejaste o revisa los planes anteriores.</p></div><button className="primary" onClick={createPlan} disabled={createPlanState === 'creating'}><span>+</span> {createPlanState === 'creating' ? 'Creando…' : 'Nuevo plan'}</button></div>
+      {plans.length === 0 && <div className="result-empty panel"><span>◌</span><h3>Sin planes todavía</h3><p>Crea el primer plan de {patientName}.</p></div>}
+      {groups.map(([title, items]) => items.length > 0 && <section className="plans-group" key={title}>
+        <p className="eyebrow">{title.toUpperCase()} · {items.length}</p>
+        <div className="plan-cards">{items.map((item) => { const { progress, nextStep } = planProgress(item); const editable = item.status === 'DRAFT' || item.status === 'READY'; return <article className={'plan-card-item' + (editable ? ' editable' : '')} key={item.id}>
+          <div className="plan-card-info"><b>{PLAN_STATUS_LABEL[item.status] || item.status} · v{item.version}</b><small>{editable ? `${nextStep} pendiente · ` : ''}actualizado {planUpdatedLabel(item.updatedAt || item.createdAt)}</small></div>
+          <div className="plan-card-progress"><div className="pp-bar"><i style={{ width: `${progress}%` }} /></div><b>{progress}%</b></div>
+          <div className="plan-card-actions">
+            <button className="secondary" disabled={planActionState === item.id} onClick={() => openPlan(item)}>{editable ? 'Continuar' : 'Ver menú'}</button>
+            {editable && <button className="link-button" disabled={planActionState === item.id} onClick={() => changePlanStatus(item, 'cancel')}>Cancelar</button>}
+            {item.status === 'CANCELLED' && <button className="link-button" disabled={planActionState === item.id} onClick={() => changePlanStatus(item, 'reactivate')}>Reactivar</button>}
+          </div>
+        </article> })}</div>
+      </section>)}
+    </div>
+  }
+
   if (!patientId) return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio">
     <ModuleHeader eyebrow="PLANIFICACIÓN · CONSTRUCTOR" title="Constructor de plan" subtitle="Elige un paciente para armar y guardar su plan de alimentación." />
     <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Selecciona a quién le vas a diseñar el plan para comenzar.</p><select value="" onChange={(e) => onSelectPatient?.(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></div>
   </div></AppChrome>
 
-  return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Borrador · Se guarda automáticamente</span></div></div><label className="patient-switch">Paciente<select value={patientId || ''} onChange={(e) => onSelectPatient?.(e.target.value)}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
+  return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>{view === 'wizard' && <button className="back-button" onClick={() => setView('list')}>← Todos los planes</button>}<div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>{view === 'list' ? `${plans.length} plan(es) · el borrador se guarda solo` : 'Borrador · Se guarda automáticamente'}</span></div></div><label className="patient-switch">Paciente<select value={patientId || ''} onChange={(e) => onSelectPatient?.(e.target.value)}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>{view === 'list' ? renderPlansOverview() : <><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
 
     <div className="plan-body">
+
+    {plan?.consultation && (consultationReason(plan) || plan.consultation.diagnoses?.length > 0) && <div className="form-card plan-context-card">
+      <p className="eyebrow">DE LA CONSULTA · {plan.consultation.diagnoses?.length || 0} diagnóstico(s)</p>
+      {consultationReason(plan) && <p className="plan-context-reason"><b>Motivo:</b> {consultationReason(plan)}</p>}
+      {plan.consultation.diagnoses?.length > 0 && <div className="plan-context-diagnoses">{plan.consultation.diagnoses.map((diagnosis) => <span key={diagnosis.id}><b>{diagnosis.domain}</b> {diagnosis.problem}</span>)}</div>}
+    </div>}
 
     {step === 0 && <><ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="Resumen del expediente y del último cálculo guardado en el paso Plan alimentario." action={<button className="secondary" onClick={() => selectStep(1)}>Ir al cálculo →</button>} /><div className="plan-grid"><div className="plan-card panel"><h3>Datos antropométricos</h3><div className="form-grid three"><label>Sexo<input value={patient?.sex || '—'} readOnly /></label><label>Fecha nacimiento<input value={formatUTCDate(patient?.birthDate) || '—'} readOnly /></label><label>Edad<input value={computeAge(patient?.birthDate) ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label><label>Peso actual<input value={plan?.evaluation?.inputs?.weightKg ? `${plan.evaluation.inputs.weightKg} kg` : '—'} readOnly /></label><label>Talla<input value={plan?.evaluation?.inputs?.heightCm ? `${plan.evaluation.inputs.heightCm} cm` : '—'} readOnly /></label><label>IMC calculado<input value={plan?.evaluation?.bmi ?? '—'} readOnly /></label></div></div><div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3>{plan?.evaluation?.idealWeightRange ? <div className="ideal-number">{plan.evaluation.idealWeightRange.minKg} <small>– {plan.evaluation.idealWeightRange.maxKg} kg</small></div> : <p className="muted">Calcula el requerimiento en el paso "Plan alimentario" para ver el rango.</p>}<p className="muted">Rango estimado para su estatura</p></div><div className="plan-card panel full"><h3>Objetivo terapéutico</h3>{plan?.goal ? <p>{plan.goal}</p> : <p className="muted">Sin definir todavía — se guarda junto con el cálculo en el paso "Plan alimentario".</p>}</div></div></>}
 
@@ -391,5 +504,12 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     </div>
 
     <div className="wizard-footer"><button className="secondary" onClick={() => selectStep(Math.max(0, step - 1))}>← Anterior</button><span>{saveState === 'saving' ? 'Guardando…' : saveState === 'saved' ? 'Guardado automáticamente' : saveState === 'error' ? 'Error al guardar los últimos cambios' : 'Guardado automáticamente'}</span><button className="primary" onClick={() => step === 4 ? setActive('Documentos') : selectStep(Math.min(step + 1, 4))}>Siguiente <span>→</span></button></div>
-  </div></AppChrome>
+  </>}
+  </div>
+  {previewPlan && <div className="modal-backdrop" onClick={() => setPreviewPlan(null)}><div className="modal menu-preview-modal" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-head"><div><p className="eyebrow">{PLAN_STATUS_LABEL[previewPlan.status] || previewPlan.status} · v{previewPlan.version}</p><h2>Menú de {patientName}</h2><span className="modal-subtitle">{previewPlan.targetKcal ? `${previewPlan.targetKcal} kcal/día` : 'Sin cálculo guardado'}</span></div><button onClick={() => setPreviewPlan(null)}>×</button></div>
+    {renderMenuPreview(previewPlan)}
+    <div className="modal-actions"><button type="button" className="secondary" onClick={() => setPreviewPlan(null)}>Cerrar</button></div>
+  </div></div>}
+  </AppChrome>
 }

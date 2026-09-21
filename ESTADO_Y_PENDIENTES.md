@@ -777,3 +777,17 @@ Pedido: al terminar la consulta poder ver los **planes pendientes** con su **% d
 - El borrador ya se autoguarda (la distribución y las notas guardan solas; el cálculo con botón); esto solo muestra hasta dónde quedó y permite retomarlo.
 
 **Verificado** contra API aislada (puerto 3005) + Vite (5176) + Chromium: `pendingPlans` devuelve los 6 borradores reales con su avance; la tarjeta de "Hoy" muestra las filas con las dos barras y al hacer clic abre el Constructor con el paciente correcto. `npm run build` OK, `node --check server/index.js` OK y `npm test` (48/48).
+
+## Fase 79 — Constructor de plan: planes por estado (rama `fase-79-constructor-planes`)
+
+Pedido: hacer más intuitiva la vista del Constructor con los **planes realizados, pendientes y cancelados**, poder volver a verlos y **retomar** un plan (que se guarda solo), arrastrando cosas tomadas de la consulta del paciente.
+
+- **Estado nuevo `CANCELLED`** en `PlanStatus` (migración `ALTER TYPE "PlanStatus" ADD VALUE IF NOT EXISTS 'CANCELLED'` por `prisma db execute`; en un entorno nuevo `db push` lo crea desde el schema) + endpoints `POST /plans/:id/cancel` y `POST /plans/:id/reactivate`.
+- **Vista de planes** al entrar al Constructor: grupos **Pendientes** (DRAFT/READY), **Realizados** (PUBLISHED/SUPERSEDED) y **Cancelados** (CANCELLED), cada plan con su **% de avance** (mismos 5 pasos que "Hoy"), fecha de actualización y acciones.
+  - **Continuar** (borrador/listo) → abre el wizard editable.
+  - **Ver menú** (publicado/reemplazado/cancelado) → modal con el menú congelado (tiempos × días, receta + kcal).
+  - **Cancelar** / **Reactivar**.
+- **Contexto de la consulta dentro del plan**: al abrir un plan se muestra una tarjeta "DE LA CONSULTA" con el motivo y los diagnósticos de la consulta que lo originó (`GET /plans/:id` ahora incluye `consultation.diagnoses` y la sección `summary`).
+- El **borrador se sigue guardando solo** (distribución/notas con autoguardado); "Continuar" lo retoma donde quedó.
+
+**Verificado** contra API/Vite aislados + Chromium con datos reales: Jorge Castillo muestra Pendientes + Realizados; "Ver menú" abre el menú publicado (28 celdas); cancelar lo mueve a Cancelados y reactivar lo regresa a Pendientes (estado final en base restaurado a PUBLISHED + DRAFT); al continuar un borrador aparece la tarjeta con el motivo/diagnóstico de la consulta. `npm run build` OK, `node --check server/index.js` OK y `npm test` (48/48).

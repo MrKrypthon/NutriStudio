@@ -129,6 +129,8 @@ export const plansApi = {
   saveDistribution: (id, mealSlots) => apiRequest(`/plans/${id}/distribution`, { method: 'PUT', body: JSON.stringify({ mealSlots }) }),
   publish: (id) => apiRequest(`/plans/${id}/publish`, { method: 'POST' }),
   adequacy: (id) => apiRequest(`/plans/${id}/adequacy`),
+  cancel: (id) => apiRequest(`/plans/${id}/cancel`, { method: 'POST' }),
+  reactivate: (id) => apiRequest(`/plans/${id}/reactivate`, { method: 'POST' }),
 }
 
 export const clinicalApi = {

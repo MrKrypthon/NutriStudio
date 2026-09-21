@@ -564,3 +564,35 @@ html{scroll-behavior:smooth}
 .pp-bar i{display:block;height:100%;background:var(--green);border-radius:4px;transition:width .3s}
 .pp-bar.consult i{background:#6b9eaf}
 @media(max-width:680px){.pending-plan{grid-template-columns:1fr 24px}.pending-plan-bars{grid-column:1/-1}}
+
+/* Constructor de plan: planes por estado */
+.plans-overview-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.plans-overview-head h1{font:800 26px Manrope;letter-spacing:-1px;margin:0;color:var(--ink)}
+.plans-overview-head .subtitle{margin:6px 0 0}
+.plans-group{margin-bottom:18px}
+.plans-group .eyebrow{margin:0 0 10px}
+.plan-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.plan-card-item{border:1px solid var(--line);border-radius:11px;padding:14px 16px;background:#fff;display:grid;gap:12px;align-content:start}
+.plan-card-item.editable{border-left:3px solid var(--green)}
+.plan-card-info b{display:block;font-size:12px;color:var(--ink)}
+.plan-card-info small{display:block;color:var(--muted);font-size:9px;margin-top:4px}
+.plan-card-progress{display:grid;grid-template-columns:1fr 40px;align-items:center;gap:10px}
+.plan-card-progress .pp-bar{height:6px;background:#eef0f4;border-radius:4px;overflow:hidden}
+.plan-card-progress .pp-bar i{display:block;height:100%;background:var(--green);border-radius:4px}
+.plan-card-progress b{font:600 10px 'DM Mono';color:#3d3e51;text-align:right}
+.plan-card-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.plan-card-actions .secondary{padding:8px 13px;font-size:10px}
+.menu-preview-modal{width:min(880px,calc(100% - 32px))}
+.menu-preview-table{border:1px solid var(--line);border-radius:9px;overflow:hidden;display:grid;gap:1px;background:var(--line)}
+.menu-preview-head,.menu-preview-row{display:grid;grid-template-columns:90px repeat(7,1fr);align-items:stretch;gap:1px}
+.menu-preview-head span,.menu-preview-head b{background:#f3f2fb;padding:8px 6px;font:600 9px 'DM Mono';color:var(--muted);text-transform:uppercase;text-align:center}
+.menu-preview-head span{text-align:left}
+.menu-preview-row>span{background:#fafafc;padding:10px 8px;font-size:10px;color:#3d3e51}
+.menu-preview-cell{background:#fff;padding:9px 7px;font-size:10px;color:#3d3e51;display:flex;flex-direction:column;gap:3px}
+.menu-preview-cell small{color:var(--muted);font-size:9px}
+.plan-context-card{background:var(--surface-soft)}
+.plan-context-card .eyebrow{margin:0 0 8px}
+.plan-context-reason{font-size:11px;color:#3d3e51;margin:0 0 8px}
+.plan-context-diagnoses{display:flex;flex-wrap:wrap;gap:6px}
+.plan-context-diagnoses span{font-size:9px;background:var(--mint);color:var(--green);border-radius:6px;padding:6px 9px}
+@media(max-width:800px){.menu-preview-head,.menu-preview-row{grid-template-columns:70px repeat(7,1fr)}.menu-preview-table{overflow-x:auto}}
