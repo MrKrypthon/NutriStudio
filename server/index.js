@@ -1190,10 +1190,42 @@ app.post('/api/v1/patients/:patientId/plans', async (request, reply) => {
   return reply.code(201).send(plan)
 })
 
+// Todos los planes de la práctica (para el hub del Constructor, sin tener que elegir paciente).
+app.get('/api/v1/plans', async (request) => {
+  const { status } = request.query
+  const plans = await prisma.nutritionPlan.findMany({
+    where: { patient: { practiceId: request.practiceId }, ...(status ? { status } : {}) },
+    include: { patient: true, mealSlots: { select: { dayOfWeek: true } } },
+    orderBy: { updatedAt: 'desc' },
+    take: 200,
+  })
+  return { items: plans }
+})
+
 app.get('/api/v1/plans/:planId', async (request, reply) => {
-  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } }, include: { patient: true, mealSlots: true, documents: true } })
+  const plan = await prisma.nutritionPlan.findFirst({
+    where: { id: request.params.planId, patient: { practiceId: request.practiceId } },
+    // El plan arrastra contexto de la consulta que lo originó: motivo y diagnósticos.
+    include: { patient: true, mealSlots: true, documents: true, consultation: { include: { diagnoses: true, sections: { where: { sectionKey: 'summary' }, select: { payload: true } } } } },
+  })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   return plan
+})
+
+// Cancelar / reactivar un plan (para la vista por estado del Constructor). Publicados también se
+// pueden cancelar; al reactivar vuelve a borrador.
+app.post('/api/v1/plans/:planId/cancel', async (request, reply) => {
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
+  if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
+  if (plan.status === 'CANCELLED') return plan
+  return prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'CANCELLED' } })
+})
+
+app.post('/api/v1/plans/:planId/reactivate', async (request, reply) => {
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
+  if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
+  if (plan.status !== 'CANCELLED') return plan
+  return prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'DRAFT' } })
 })
 
 app.patch('/api/v1/plans/:planId', async (request, reply) => {
