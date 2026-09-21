@@ -60,6 +60,12 @@ enum PaymentMethod {
   TRANSFER
 }
 
+// Estado de la cuenta (tenant) del SaaS: una práctica suspendida no puede iniciar sesión.
+enum PracticeStatus {
+  ACTIVE
+  SUSPENDED
+}
+
 model Practice {
   id             String        @id @default(uuid())
   name           String
@@ -70,6 +76,11 @@ model Practice {
   businessHours  Json?
   // Tarifas por tipo de cita, en centavos: { INITIAL, FOLLOW_UP, QUICK_CONTROL, EMERGENCY }.
   fees           Json?
+  // Administración del SaaS (panel /admin).
+  status         PracticeStatus  @default(ACTIVE)
+  paymentMethod  PaymentMethod?
+  paidUntil      DateTime?
+  transactions   Transaction[]
   users          User[]
   patients       Patient[]
   appointments   Appointment[]
@@ -464,4 +475,27 @@ model AuditEvent {
   createdAt  DateTime @default(now())
 
   @@index([practiceId, entity, entityId])
+}
+
+// Pago recibido de una cuenta (práctica) del SaaS. Se registra desde el panel /admin.
+model Transaction {
+  id          String         @id @default(uuid())
+  practiceId  String
+  practice    Practice       @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  amountCents Int
+  method      PaymentMethod?
+  concept     String?
+  occurredAt  DateTime       @default(now())
+  createdAt   DateTime       @default(now())
+
+  @@index([practiceId, occurredAt])
+}
+
+// Cuenta de administrador del SaaS (independiente de los usuarios de cada práctica).
+model AdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
 }

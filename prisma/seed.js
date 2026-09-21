@@ -6,6 +6,8 @@ const practiceId = '00000000-0000-0000-0000-000000000001'
 
 // Dev-only seeded credential — log in with gabriela@nutristudio.local / nutristudio2026.
 const DEV_PASSWORD_HASH = bcrypt.hashSync('nutristudio2026', 10)
+// Administrador del SaaS (panel /admin) — admin@nutristudio.local / admin2026.
+const ADMIN_PASSWORD_HASH = bcrypt.hashSync('admin2026', 10)
 
 async function main() {
   const practice = await prisma.practice.upsert({
@@ -18,6 +20,12 @@ async function main() {
     where: { practiceId_email: { practiceId: practice.id, email: 'gabriela@nutristudio.local' } },
     update: { passwordHash: DEV_PASSWORD_HASH },
     create: { practiceId: practice.id, name: 'Gabriela Alonso', email: 'gabriela@nutristudio.local', role: 'OWNER', passwordHash: DEV_PASSWORD_HASH },
+  })
+
+  await prisma.adminUser.upsert({
+    where: { email: 'admin@nutristudio.local' },
+    update: { passwordHash: ADMIN_PASSWORD_HASH },
+    create: { email: 'admin@nutristudio.local', name: 'Administrador', passwordHash: ADMIN_PASSWORD_HASH },
   })
 
   const people = [
