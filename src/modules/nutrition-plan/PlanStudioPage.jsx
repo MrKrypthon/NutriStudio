@@ -361,6 +361,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const startNewPlanFor = (pid) => {
     setChooserOpen(false)
+    // Igual que al abrir un plan: evita que loadPlanData (al cambiar de paciente) reinicie la
+    // vista a la lista y pise el wizard que abre createPlan.
+    skipViewResetRef.current = true
+    setTimeout(() => { skipViewResetRef.current = false }, 2500)
     setActivePatientId(pid)
     setMode('patient')
     createPlan(pid)
