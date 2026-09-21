@@ -601,15 +601,19 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando plan y recetas…</h3></div>}
       {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar el plan o el catálogo de recetas.</div>}
       {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea un plan para {patientName} antes de distribuir recetas.</p><button className="primary" disabled={createPlanState === 'creating'} onClick={createPlan}>{createPlanState === 'creating' ? 'Creando…' : 'Crear plan'}</button>{createPlanState === 'error' && <div className="form-error">⚠ No se pudo crear el plan.</div>}</div>}
-      {loadState === 'ready' && plan && <div className="distribution panel">
-        <div className="distribution-head"><span>Tiempo de comida</span>{meals.map((x) => <b key={x}>{x}</b>)}</div>
-        <div className="distribution-row"><span>Receta base de la semana</span>{MEAL_TYPES.map((meal, mealIndex) => { const sample = recipeById(slots[slotKey(1, meal.key)]); return <button key={meal.key} type="button" className="distribution-pick" onClick={() => openPicker(meal.key)}>{sample ? <>{recipeThumb(sample, mealIndex, 'dist-thumb')}<span>{sample.name}</span></> : <span className="muted">+ Elegir receta</span>}</button> })}</div>
-        <div className="distribution-total"><span>Promedio por tiempo de comida (kcal)</span>{MEAL_TYPES.map((meal) => { const kcal = averageKcalForMeal(meal.key); return <b key={meal.key}>{kcal != null ? `${kcal} kcal` : '—'}</b> })}</div>
-        <div className="distribution-days"><p className="eyebrow">VARIAR POR DÍA</p>
-          <div className="distribution-days-head"><span>Día</span>{MEAL_TYPES.map((meal) => <b key={meal.key}>{meal.label}</b>)}</div>
-          {DAYS.map((day) => <div className="distribution-days-row" key={day.n}><span>{day.label.slice(0, 3)}</span>{MEAL_TYPES.map((meal) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <button type="button" className="dist-day-cell" key={meal.key} onClick={() => openPicker(meal.key, day.n)}>{recipe ? <>{recipeThumb(recipe, day.n, 'dist-thumb-sm')}<span className="dist-day-name">{recipe.name}</span></> : <span className="muted">+ Elegir</span>}</button> })}</div>)}
-        </div>
-        <p className="muted">El catálogo de ingredientes ya incluye el Sistema Mexicano de Equivalentes; la asignación de esta semana se sigue haciendo por receta, no por grupo de equivalentes directamente.</p>
+      {loadState === 'ready' && plan && <div className="distribution">
+        <div className="distribution-meals">{MEAL_TYPES.map((meal, mealIndex) => { const base = recipeById(slots[slotKey(1, meal.key)]); const kcal = averageKcalForMeal(meal.key); return <section className="distribution-meal panel" key={meal.key}>
+          <div className="distribution-meal-head">
+            {recipeThumb(base, mealIndex, 'distribution-meal-image')}
+            <div className="distribution-meal-info"><span className="distribution-meal-label">{meal.label} · base de la semana</span><b>{base ? base.name : 'Sin receta base'}</b><small>{kcal != null ? `${kcal} kcal promedio al día` : 'Sin recetas asignadas'}</small></div>
+            <button type="button" className="secondary" onClick={() => openPicker(meal.key)}>{base ? 'Cambiar' : 'Elegir receta'}</button>
+          </div>
+          <div className="distribution-meal-days">{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <button type="button" className={'distribution-day' + (recipe ? '' : ' empty')} key={day.n} onClick={() => openPicker(meal.key, day.n)} title={recipe ? `${recipe.name} · ${day.label}` : `Elegir ${meal.label} del ${day.label}`}>
+            <small>{day.label.slice(0, 3)}</small>
+            {recipe ? <>{recipeThumb(recipe, day.n, 'distribution-day-thumb')}<span>{recipe.name}</span></> : <span className="muted">+</span>}
+          </button> })}</div>
+        </section> })}</div>
+        <p className="distribution-note muted">El catálogo de ingredientes ya incluye el Sistema Mexicano de Equivalentes; la asignación de la semana se hace por receta. Toca un día para variarlo.</p>
       </div>}
       {renderPicker()}
     </>}

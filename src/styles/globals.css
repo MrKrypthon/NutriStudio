@@ -649,3 +649,28 @@ html{scroll-behavior:smooth}
 /* Semana: celdas con imagen más grande */
 .week-image{height:66px;border-radius:6px 6px 0 0;overflow:hidden}
 .week-meal small{padding:8px 8px 10px;font-size:9px;color:#5b6f66}
+
+/* Distribución rediseñada: una tarjeta por tiempo de comida */
+.distribution{display:grid;gap:14px;padding:0;overflow:visible}
+.distribution-meals{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.distribution-meal{padding:0;overflow:hidden}
+.distribution-meal-head{display:flex;align-items:center;gap:12px;padding:13px 15px}
+.distribution-meal-image{width:52px;height:52px;border-radius:10px;overflow:hidden;display:grid;place-items:center;font-size:22px;flex:0 0 auto;color:#fff}
+.distribution-meal-info{flex:1;min-width:0}
+.distribution-meal-label{display:block;font:600 9px 'DM Mono';color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.distribution-meal-info b{display:block;font-size:12px;color:var(--ink);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.distribution-meal-info small{display:block;color:var(--muted);font-size:9px;margin-top:3px}
+.distribution-meal-head .secondary{padding:8px 12px;font-size:10px;white-space:nowrap}
+.distribution-meal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.distribution-day{border:0;background:#fff;padding:9px 4px;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;min-width:0}
+.distribution-day:hover{background:var(--mint)}
+.distribution-day small{font:600 8px 'DM Mono';color:var(--muted);text-transform:uppercase}
+.distribution-day>span:not(.muted){font-size:8px;color:#556;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.distribution-day-thumb{width:26px;height:26px;border-radius:6px;overflow:hidden;display:grid;place-items:center;font-size:11px;color:#fff}
+.distribution-meal-image.coral,.distribution-day-thumb.coral{background:linear-gradient(135deg,#db9e7d,#f0c5a7)}
+.distribution-meal-image.blue,.distribution-day-thumb.blue{background:linear-gradient(135deg,#77a3b1,#bed9d4)}
+.distribution-meal-image.yellow,.distribution-day-thumb.yellow{background:linear-gradient(135deg,#d7ad56,#efdb9d)}
+.distribution-meal-image.purple,.distribution-day-thumb.purple{background:linear-gradient(135deg,#9d8abb,#d8c9dd)}
+.distribution-meal-image.has-photo img,.distribution-day-thumb.has-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.distribution-note{font-size:9px;margin:0}
+@media(max-width:900px){.distribution-meals{grid-template-columns:1fr}}
