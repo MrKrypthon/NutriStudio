@@ -605,3 +605,29 @@ html{scroll-behavior:smooth}
 .chooser-item:hover{border-color:var(--green);background:var(--mint)}
 .chooser-item b{font-size:11px;color:var(--ink)}
 @media(max-width:600px){.patient-chooser{grid-template-columns:1fr}}
+
+/* Selector de recetas (estilo AVENA): filtros, detalle y variación por día */
+.picker-filters{display:flex;gap:10px;margin-bottom:12px}
+.picker-filters .recipe-search{flex:1}
+.picker-filters select{border:1px solid var(--line);border-radius:7px;padding:9px 12px;font:11px 'DM Sans';background:#fff;color:#555}
+.recipe-detail{display:grid;gap:14px}
+.recipe-detail-back{justify-self:start}
+.recipe-detail-nutrition{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.recipe-detail-nutrition>div{border:1px solid var(--line);border-radius:8px;padding:10px 12px;background:#fafafc;text-align:center}
+.recipe-detail-nutrition small{display:block;color:var(--muted);font-size:9px}
+.recipe-detail-nutrition b{display:block;font:700 14px Manrope;color:var(--ink);margin-top:4px}
+.recipe-detail-nutrition b em{font:400 9px 'DM Sans';color:var(--muted);font-style:normal}
+.recipe-detail-ingredients{border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.recipe-detail-ingredients>div{display:flex;justify-content:space-between;gap:12px;padding:9px 14px;border-top:1px solid var(--line);font-size:11px;color:#3d3e51}
+.recipe-detail-ingredients>div:first-child{border-top:0}
+.recipe-detail-ingredients b{font:600 11px 'DM Mono';color:#555}
+.distribution-days{margin-top:14px}
+.distribution-days .eyebrow{margin:0 0 8px}
+.distribution-days-head,.distribution-days-row{display:grid;grid-template-columns:60px repeat(4,1fr);gap:8px;align-items:center}
+.distribution-days-head{margin-bottom:6px}
+.distribution-days-head span,.distribution-days-head b{font:600 9px 'DM Mono';color:var(--muted);text-transform:uppercase}
+.distribution-days-row{padding:5px 0;border-top:1px solid var(--line)}
+.distribution-days-row>span{font-size:10px;color:var(--muted)}
+.dist-day-cell{text-align:left;border:1px solid var(--line);border-radius:7px;background:#fff;padding:7px 9px;font-size:10px;color:#3d3e51;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dist-day-cell:hover{border-color:var(--green);color:var(--green);background:var(--mint)}
+@media(max-width:800px){.recipe-detail-nutrition{grid-template-columns:repeat(3,1fr)}.distribution-days{overflow-x:auto}.distribution-days-head,.distribution-days-row{min-width:520px}}

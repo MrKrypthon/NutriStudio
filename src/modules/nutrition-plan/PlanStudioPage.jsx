@@ -32,6 +32,7 @@ const DAYS = [
   { n: 7, label: 'Domingo' },
 ]
 const RECIPE_COLORS = ['coral', 'blue', 'yellow', 'purple']
+const NUTRIENT_CHIPS = [['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['carbs', 'Carbohidratos', 'g'], ['fat', 'Grasas', 'g'], ['fiber', 'Fibra', 'g']]
 const slotKey = (day, mealType) => `${day}:${mealType}`
 
 const PLAN_STATUS_LABEL = { DRAFT: 'Borrador', READY: 'Listo', PUBLISHED: 'Publicado', SUPERSEDED: 'Reemplazado', CANCELLED: 'Cancelado' }
@@ -76,6 +77,9 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [saveState, setSaveState] = useState('idle')
   const [pickerTarget, setPickerTarget] = useState(null)
   const [pickerSearch, setPickerSearch] = useState('')
+  const [pickerRestriction, setPickerRestriction] = useState('')
+  const [pickerDetail, setPickerDetail] = useState(null)
+  const [pickerNutrition, setPickerNutrition] = useState(null)
   const [adequacy, setAdequacy] = useState(null)
   const [adequacyState, setAdequacyState] = useState('idle')
   const [form, setForm] = useState({ sex: 'female', age: '', weightKg: '', heightCm: '', bodyFatPercent: '', formula: 'mifflin', activityFactor: '1.375', goal: '', carbsPercent: '50', proteinPercent: '25', fatPercent: '25' })
@@ -168,6 +172,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       // Si venimos de "Asignar al plan" (pendingRecipeName), abrir directo el paso Distribución;
       // si no, mostrar primero el listado de planes por estado.
       if (pendingRecipeName) { setView('wizard'); setStep(2) } else if (!skipViewResetRef.current) { setView('list') }
+      skipViewResetRef.current = false
       setLoadState('ready')
     } catch {
       setLoadState('error')
@@ -313,7 +318,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       } else {
         setPreviewPlan(full)
       }
-    } catch { /* la lista queda como estaba */ } finally { skipViewResetRef.current = false; setPlanActionState('idle') }
+    } catch { /* la lista queda como estaba */ } finally { setPlanActionState('idle') }
   }
 
   const changePlanStatus = async (item, action) => {
@@ -330,6 +335,9 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const openPlanFromHub = (item) => {
     if (item.status === 'DRAFT' || item.status === 'READY') {
       skipViewResetRef.current = true
+      // Seguridad por si el paciente ya era el activo (loadPlanData no se re-ejecutaría y el ref
+      // quedaría pegado). loadPlanData lo consume al terminar.
+      setTimeout(() => { skipViewResetRef.current = false }, 2500)
       setActivePatientId(item.patientId)
       setMode('patient')
       openPlan(item)
@@ -394,7 +402,19 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     setStep(next)
   }
 
-  const openPicker = (mealType, day = null) => { setPickerSearch(pendingRecipeName || ''); if (pendingRecipeName) onConsumeRecipeName?.(); setPickerTarget({ mealType, day }) }
+  const openPicker = (mealType, day = null) => { setPickerSearch(pendingRecipeName || ''); setPickerRestriction(''); setPickerDetail(null); if (pendingRecipeName) onConsumeRecipeName?.(); setPickerTarget({ mealType, day }) }
+  const closePicker = () => { setPickerTarget(null); setPickerDetail(null) }
+
+  // Al abrir el detalle de una receta se cargan sus ingredientes y la información nutrimental.
+  useEffect(() => {
+    if (!pickerDetail) { setPickerNutrition(null); return undefined }
+    let cancelled = false
+    setPickerNutrition({ state: 'loading' })
+    recipesApi.nutrition(pickerDetail.id)
+      .then((data) => { if (!cancelled) setPickerNutrition({ state: 'ready', ...data }) })
+      .catch(() => { if (!cancelled) setPickerNutrition({ state: 'error' }) })
+    return () => { cancelled = true }
+  }, [pickerDetail?.id])
 
   const chooseRecipe = (recipe) => {
     if (!pickerTarget) return
@@ -412,6 +432,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     else for (const day of DAYS) nextSlots[slotKey(day.n, pickerTarget.mealType)] = recipe.id
     setSlots(nextSlots)
     setPickerTarget(null)
+    setPickerDetail(null)
     persistSlots(nextSlots)
   }
 
@@ -448,8 +469,35 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const pickerRecipes = pickerTarget
     ? recipes
         .filter((recipe) => (recipe.mealTypes || []).length === 0 || recipe.mealTypes.includes(pickerTarget.mealType))
+        .filter((recipe) => !pickerRestriction || (recipe.restrictions || []).includes(pickerRestriction))
         .filter((recipe) => recipe.name.toLowerCase().includes(pickerSearch.toLowerCase()))
     : []
+  const availableRestrictions = [...new Set(recipes.flatMap((recipe) => recipe.restrictions || []))].sort()
+
+  // Selector de recetas con buscador, filtro por restricción y detalle (ingredientes + nutrición),
+  // al estilo AVENA. Se reutiliza en Distribución y Semana.
+  const renderPicker = () => pickerTarget ? <div className="recipe-overlay"><div className="recipe-modal panel">
+    <div className="modal-head"><div><p className="eyebrow">RECETAS PARA {MEAL_TYPES.find((m) => m.key === pickerTarget.mealType)?.label.toUpperCase()}{pickerTarget.day ? ` · ${DAYS.find((d) => d.n === pickerTarget.day)?.label}` : ' · TODA LA SEMANA'}</p><h2>{pickerDetail ? pickerDetail.name : 'Elige una preparación'}</h2></div><button onClick={closePicker}>×</button></div>
+    {pickerDetail
+      ? <div className="recipe-detail">
+          <button type="button" className="link-button recipe-detail-back" onClick={() => setPickerDetail(null)}>← Volver al catálogo</button>
+          <div className="recipe-detail-nutrition">{NUTRIENT_CHIPS.map(([key, label, unit]) => <div key={key}><small>{label}</small><b>{pickerDetail.nutrition?.[key] != null ? Math.round(Number(pickerDetail.nutrition[key]) * 10) / 10 : '—'} <em>{unit}</em></b></div>)}</div>
+          <p className="eyebrow">INGREDIENTES</p>
+          {pickerNutrition?.state === 'loading' && <p className="muted">Cargando ingredientes…</p>}
+          {pickerNutrition?.state === 'error' && <p className="muted">No se pudieron cargar los ingredientes.</p>}
+          {pickerNutrition?.state === 'ready' && (pickerNutrition.ingredients?.length
+            ? <div className="recipe-detail-ingredients">{pickerNutrition.ingredients.map((item, index) => <div key={index}><span>{item.name}</span><b>{item.quantity} {item.unit}</b></div>)}</div>
+            : <p className="muted">Esta receta es del recetario importado (lleva ingredientes en texto libre).</p>)}
+          <div className="modal-actions"><button type="button" className="secondary" onClick={() => setPickerDetail(null)}>Volver</button><button type="button" className="primary" onClick={() => chooseRecipe(pickerDetail)}>Elegir esta receta</button></div>
+        </div>
+      : <>
+          <div className="picker-filters">
+            <div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div>
+            <select value={pickerRestriction} onChange={(e) => setPickerRestriction(e.target.value)}><option value="">Todas las restricciones</option>{availableRestrictions.map((restriction) => <option value={restriction} key={restriction}>{restriction}</option>)}</select>
+          </div>
+          <div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas para este filtro.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => setPickerDetail(recipe)} key={recipe.id}>{recipeThumb(recipe, i)}<b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal · ver detalle</small></button>)}</div>
+        </>}
+  </div></div> : null
 
   const meals = MEAL_TYPES.map((m) => m.label)
 
@@ -557,9 +605,13 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         <div className="distribution-head"><span>Tiempo de comida</span>{meals.map((x) => <b key={x}>{x}</b>)}</div>
         <div className="distribution-row"><span>Receta base de la semana</span>{MEAL_TYPES.map((meal) => { const sample = recipeById(slots[slotKey(1, meal.key)]); return <button key={meal.key} type="button" className="text-button" onClick={() => openPicker(meal.key)}>{sample ? sample.name : '+ Elegir receta'}</button> })}</div>
         <div className="distribution-total"><span>Promedio por tiempo de comida (kcal)</span>{MEAL_TYPES.map((meal) => { const kcal = averageKcalForMeal(meal.key); return <b key={meal.key}>{kcal != null ? `${kcal} kcal` : '—'}</b> })}</div>
+        <div className="distribution-days"><p className="eyebrow">VARIAR POR DÍA</p>
+          <div className="distribution-days-head"><span>Día</span>{MEAL_TYPES.map((meal) => <b key={meal.key}>{meal.label}</b>)}</div>
+          {DAYS.map((day) => <div className="distribution-days-row" key={day.n}><span>{day.label.slice(0, 3)}</span>{MEAL_TYPES.map((meal) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <button type="button" className="dist-day-cell" key={meal.key} onClick={() => openPicker(meal.key, day.n)}>{recipe ? recipe.name : '+ Elegir'}</button> })}</div>)}
+        </div>
         <p className="muted">El catálogo de ingredientes ya incluye el Sistema Mexicano de Equivalentes; la asignación de esta semana se sigue haciendo por receta, no por grupo de equivalentes directamente.</p>
       </div>}
-      {pickerTarget && <div className="recipe-overlay"><div className="recipe-modal panel"><div className="modal-head"><div><p className="eyebrow">RECETAS PARA {MEAL_TYPES.find((m) => m.key === pickerTarget.mealType)?.label.toUpperCase()}{pickerTarget.day ? ` · ${DAYS.find((d) => d.n === pickerTarget.day)?.label}` : ' · TODA LA SEMANA'}</p><h2>Elige una preparación</h2></div><button onClick={() => setPickerTarget(null)}>×</button></div><div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div><div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas del catálogo para este tiempo de comida.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => chooseRecipe(recipe)} key={recipe.id}>{recipeThumb(recipe, i)}<b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal</small></button>)}</div></div></div>}
+      {renderPicker()}
     </>}
 
     {step === 3 && <>
@@ -586,7 +638,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         </>}
       </div>}
       <div className="recommendations panel"><h3>Indicaciones para {patientName}</h3><span className="saved">{notesSaveState === 'saving' ? '● Guardando…' : notesSaveState === 'editing' ? '● Editando…' : notesSaveState === 'error' ? '⚠ Error al guardar' : '● Guardado'}</span><div className="form-grid"><label>Consumo de agua<textarea placeholder="Ej. 8 vasos (2 L) al día" value={notesForm.hydrationNote} onChange={(e) => updateNotes('hydrationNote', e.target.value)} disabled={!plan} /></label><label>Recomendaciones generales<textarea placeholder="Añade recomendaciones, educación o suplementos..." value={notesForm.recommendations} onChange={(e) => updateNotes('recommendations', e.target.value)} disabled={!plan} /></label></div>{!plan && <p className="muted">Crea el plan (paso "Distribución") para poder guardar estas indicaciones.</p>}</div>
-      {pickerTarget && <div className="recipe-overlay"><div className="recipe-modal panel"><div className="modal-head"><div><p className="eyebrow">RECETAS PARA {MEAL_TYPES.find((m) => m.key === pickerTarget.mealType)?.label.toUpperCase()}{pickerTarget.day ? ` · ${DAYS.find((d) => d.n === pickerTarget.day)?.label}` : ''}</p><h2>Elige una preparación</h2></div><button onClick={() => setPickerTarget(null)}>×</button></div><div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div><div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas del catálogo para este tiempo de comida.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => chooseRecipe(recipe)} key={recipe.id}>{recipeThumb(recipe, i)}<b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal</small></button>)}</div></div></div>}
+      {renderPicker()}
     </>}
 
     {step === 4 && <DocumentPage setActive={setActive} patientId={activePatientId} embedded onPublished={loadPlanData} />}
