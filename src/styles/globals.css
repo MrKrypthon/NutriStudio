@@ -596,3 +596,12 @@ html{scroll-behavior:smooth}
 .plan-context-diagnoses{display:flex;flex-wrap:wrap;gap:6px}
 .plan-context-diagnoses span{font-size:9px;background:var(--mint);color:var(--green);border-radius:6px;padding:6px 9px}
 @media(max-width:800px){.menu-preview-head,.menu-preview-row{grid-template-columns:70px repeat(7,1fr)}.menu-preview-table{overflow-x:auto}}
+
+/* Constructor: hub de todos los planes */
+.hub-toolbar{display:flex;align-items:center;gap:12px;padding:12px;margin-bottom:16px}
+.hub-toolbar .search-field{flex:1}
+.patient-chooser{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:320px;overflow-y:auto}
+.chooser-item{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:#fff;cursor:pointer;font:inherit;text-align:left}
+.chooser-item:hover{border-color:var(--green);background:var(--mint)}
+.chooser-item b{font-size:11px;color:var(--ink)}
+@media(max-width:600px){.patient-chooser{grid-template-columns:1fr}}

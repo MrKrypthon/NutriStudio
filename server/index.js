@@ -1190,6 +1190,18 @@ app.post('/api/v1/patients/:patientId/plans', async (request, reply) => {
   return reply.code(201).send(plan)
 })
 
+// Todos los planes de la práctica (para el hub del Constructor, sin tener que elegir paciente).
+app.get('/api/v1/plans', async (request) => {
+  const { status } = request.query
+  const plans = await prisma.nutritionPlan.findMany({
+    where: { patient: { practiceId: request.practiceId }, ...(status ? { status } : {}) },
+    include: { patient: true, mealSlots: { select: { dayOfWeek: true } } },
+    orderBy: { updatedAt: 'desc' },
+    take: 200,
+  })
+  return { items: plans }
+})
+
 app.get('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({
     where: { id: request.params.planId, patient: { practiceId: request.practiceId } },

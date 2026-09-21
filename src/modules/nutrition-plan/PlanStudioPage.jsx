@@ -53,7 +53,16 @@ const planUpdatedLabel = (iso) => { const d = new Date(iso); const days = Math.f
 const consultationReason = (plan) => plan?.consultation?.sections?.find((section) => section.sectionKey === 'summary')?.payload?.['Motivo de consulta'] || plan?.consultation?.sections?.find((section) => section.sectionKey === 'summary')?.payload?.reason || null
 
 export default function PlanStudioPage({ setActive, patientId, onSelectPatient, pendingRecipeName, onConsumeRecipeName }) {
-  const { patient } = usePatient(patientId)
+  // Al entrar sin paciente se muestra el hub con TODOS los planes; el paciente se elige al abrir
+  // un plan o al crear uno nuevo. Si llega un patientId (desde el expediente / "Asignar al plan"),
+  // se abre directo ese paciente.
+  const [activePatientId, setActivePatientId] = useState(patientId || '')
+  const [mode, setMode] = useState(patientId ? 'patient' : 'hub')
+  const [hubPlans, setHubPlans] = useState([])
+  const [hubState, setHubState] = useState('loading')
+  const [hubQuery, setHubQuery] = useState('')
+  const [chooserOpen, setChooserOpen] = useState(false)
+  const { patient } = usePatient(activePatientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
   const [step, setStep] = useState(0)
@@ -90,8 +99,21 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const slotsInFlightRef = useRef(false)
   const slotsDirtyRef = useRef(null)
   const flushPromiseRef = useRef(null)
+  // Al abrir un plan desde el hub, la recarga de datos del paciente no debe reiniciar la vista a
+  // la lista (eso pisaba al wizard que abre openPlan). El ref lo evita mientras se abre.
+  const skipViewResetRef = useRef(false)
 
   useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+
+  // El hub lista todos los planes de la práctica (sin elegir paciente antes).
+  const loadHub = useCallback(() => {
+    setHubState('loading')
+    plansApi.list().then((response) => { setHubPlans(response.items || []); setHubState('ready') }).catch(() => setHubState('error'))
+  }, [])
+  useEffect(() => { loadHub() }, [loadHub])
+
+  // Si llega un patientId desde otra pantalla, abrir ese paciente.
+  useEffect(() => { if (patientId) { setActivePatientId(patientId); setMode('patient') } }, [patientId])
 
   useEffect(() => {
     if (!patient) return
@@ -112,7 +134,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const loadPlanData = useCallback(async () => {
     try {
-      const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientId), recipesApi.list(), patientsApi.consultations(patientId)])
+      const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(activePatientId), recipesApi.list(), patientsApi.consultations(activePatientId)])
       const planItems = plansResponse.items || []
       // El plan "activo" editable es el borrador (o listo); nunca un cancelado/publicado.
       const activePlan = planItems.find((item) => item.status === 'DRAFT') || planItems.find((item) => item.status === 'READY') || null
@@ -145,13 +167,13 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       setSlots(initialSlots)
       // Si venimos de "Asignar al plan" (pendingRecipeName), abrir directo el paso Distribución;
       // si no, mostrar primero el listado de planes por estado.
-      if (pendingRecipeName) { setView('wizard'); setStep(2) } else { setView('list') }
+      if (pendingRecipeName) { setView('wizard'); setStep(2) } else if (!skipViewResetRef.current) { setView('list') }
       setLoadState('ready')
     } catch {
       setLoadState('error')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientId])
+  }, [activePatientId])
 
   useEffect(() => { loadPlanData() }, [loadPlanData])
   // pendingRecipeName (from "Asignar al plan") prefills the recipe picker, but only gets consumed
@@ -238,19 +260,22 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     }, 800)
   }
 
-  const createPlan = async () => {
-    if (!patientId) return
+  const createPlan = async (pid) => {
+    const targetId = pid || activePatientId
+    if (!targetId) return
     setCreatePlanState('creating')
     try {
-      const consultationsResponse = await patientsApi.consultations(patientId)
+      const consultationsResponse = await patientsApi.consultations(targetId)
       let consultation = (consultationsResponse.items || []).find((item) => item.status === 'IN_PROGRESS')
-      if (!consultation) consultation = await clinicalApi.create(patientId, {})
-      const created = await plansApi.create(patientId, { consultationId: consultation.id })
+      if (!consultation) consultation = await clinicalApi.create(targetId, {})
+      const created = await plansApi.create(targetId, { consultationId: consultation.id })
       setPlan(created)
       setSlots({})
+      setMode('patient')
       setView('wizard')
       setStep(1)
       setCreatePlanState('idle')
+      loadHub()
     } catch {
       setCreatePlanState('error')
     }
@@ -288,7 +313,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       } else {
         setPreviewPlan(full)
       }
-    } catch { /* la lista queda como estaba */ } finally { setPlanActionState('idle') }
+    } catch { /* la lista queda como estaba */ } finally { skipViewResetRef.current = false; setPlanActionState('idle') }
   }
 
   const changePlanStatus = async (item, action) => {
@@ -296,7 +321,29 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     try {
       await (action === 'cancel' ? plansApi.cancel(item.id) : plansApi.reactivate(item.id))
       await loadPlanData()
+      loadHub()
     } catch { /* deja la lista */ } finally { setPlanActionState('idle') }
+  }
+
+  // Abrir un plan desde el hub: un borrador/listo pasa al wizard de ese paciente; un plan ya
+  // cerrado (publicado/cancelado) se ve en el modal del menú sin salir del hub.
+  const openPlanFromHub = (item) => {
+    if (item.status === 'DRAFT' || item.status === 'READY') {
+      skipViewResetRef.current = true
+      setActivePatientId(item.patientId)
+      setMode('patient')
+      openPlan(item)
+      return
+    }
+    setPlanActionState(item.id)
+    plansApi.get(item.id).then((full) => setPreviewPlan(full)).catch(() => {}).finally(() => setPlanActionState('idle'))
+  }
+
+  const startNewPlanFor = (pid) => {
+    setChooserOpen(false)
+    setActivePatientId(pid)
+    setMode('patient')
+    createPlan(pid)
   }
 
   const persistSlots = (nextSlots) => {
@@ -415,6 +462,49 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     </div>
   }
 
+  const renderHub = () => {
+    const query = hubQuery.trim().toLowerCase()
+    const filtered = hubPlans.filter((item) => !query || `${item.patient.firstName} ${item.patient.lastName}`.toLowerCase().includes(query))
+    const groups = [
+      ['Pendientes', filtered.filter((item) => item.status === 'DRAFT' || item.status === 'READY')],
+      ['Realizados', filtered.filter((item) => item.status === 'PUBLISHED' || item.status === 'SUPERSEDED')],
+      ['Cancelados', filtered.filter((item) => item.status === 'CANCELLED')],
+    ]
+    return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio">
+      <ModuleHeader eyebrow="PLANIFICACIÓN · CONSTRUCTOR" title="Planes alimenticios" subtitle="Todos los planes de tu consulta: retoma un borrador donde lo dejaste o revisa los anteriores." action={<button className="primary" onClick={() => setChooserOpen(true)}><span>+</span> Nuevo plan</button>} />
+      <div className="hub-toolbar panel"><div className="search-field">⌕ <input value={hubQuery} onChange={(event) => setHubQuery(event.target.value)} placeholder="Buscar por paciente..." /></div></div>
+      {hubState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando planes…</h3></div>}
+      {hubState === 'error' && <div className="form-error">⚠ No se pudieron cargar los planes.</div>}
+      {hubState === 'ready' && filtered.length === 0 && <div className="result-empty panel"><span>◌</span><h3>{query ? 'Sin planes de ese paciente' : 'Todavía no hay planes'}</h3><p>Crea el primero con "+ Nuevo plan".</p></div>}
+      {hubState === 'ready' && groups.map(([title, items]) => items.length > 0 && <section className="plans-group" key={title}>
+        <p className="eyebrow">{title.toUpperCase()} · {items.length}</p>
+        <div className="plan-cards">{items.map((item) => { const { progress, nextStep } = planProgress(item); const editable = item.status === 'DRAFT' || item.status === 'READY'; return <article className={'plan-card-item' + (editable ? ' editable' : '')} key={item.id}>
+          <div className="plan-card-info"><b>{item.patient.firstName} {item.patient.lastName}</b><small>{PLAN_STATUS_LABEL[item.status] || item.status} · v{item.version} · {editable ? `${nextStep} pendiente · ` : ''}actualizado {planUpdatedLabel(item.updatedAt || item.createdAt)}</small></div>
+          <div className="plan-card-progress"><div className="pp-bar"><i style={{ width: `${progress}%` }} /></div><b>{progress}%</b></div>
+          <div className="plan-card-actions">
+            <button className="secondary" disabled={planActionState === item.id} onClick={() => openPlanFromHub(item)}>{editable ? 'Continuar' : 'Ver menú'}</button>
+            {editable && <button className="link-button" disabled={planActionState === item.id} onClick={() => changePlanStatus(item, 'cancel')}>Cancelar</button>}
+            {item.status === 'CANCELLED' && <button className="link-button" disabled={planActionState === item.id} onClick={() => changePlanStatus(item, 'reactivate')}>Reactivar</button>}
+          </div>
+        </article> })}</div>
+      </section>)}
+      {chooserOpen && <div className="modal-backdrop" onClick={() => setChooserOpen(false)}><div className="modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-head"><div><p className="eyebrow">NUEVO PLAN</p><h2>¿Para quién es el plan?</h2><span className="modal-subtitle">Se crea un borrador y se guarda solo.</span></div><button onClick={() => setChooserOpen(false)}>×</button></div>
+        <div className="patient-chooser">{patients.map((p) => <button type="button" className="chooser-item" key={p.id} onClick={() => startNewPlanFor(p.id)}><span className="person-avatar coral">{`${p.firstName[0] || ''}${p.lastName[0] || ''}`}</span><b>{p.firstName} {p.lastName}</b></button>)}
+          {patients.length === 0 && <p className="muted">No hay pacientes activos.</p>}
+        </div>
+      </div></div>}
+    </div>{renderPreviewModal()}</AppChrome>
+  }
+
+  const renderPreviewModal = () => previewPlan ? <div className="modal-backdrop" onClick={() => setPreviewPlan(null)}><div className="modal menu-preview-modal" onClick={(event) => event.stopPropagation()}>
+    <div className="modal-head"><div><p className="eyebrow">{PLAN_STATUS_LABEL[previewPlan.status] || previewPlan.status} · v{previewPlan.version}</p><h2>Menú de {previewPlan.patient ? `${previewPlan.patient.firstName} ${previewPlan.patient.lastName}` : patientName}</h2><span className="modal-subtitle">{previewPlan.targetKcal ? `${previewPlan.targetKcal} kcal/día` : 'Sin cálculo guardado'}</span></div><button onClick={() => setPreviewPlan(null)}>×</button></div>
+    {renderMenuPreview(previewPlan)}
+    <div className="modal-actions"><button type="button" className="secondary" onClick={() => setPreviewPlan(null)}>Cerrar</button></div>
+  </div></div> : null
+
+  if (mode === 'hub') return renderHub()
+
   const renderPlansOverview = () => {
     const groups = [
       ['Pendientes', plans.filter((item) => item.status === 'DRAFT' || item.status === 'READY')],
@@ -439,12 +529,12 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     </div>
   }
 
-  if (!patientId) return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio">
+  if (!activePatientId) return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio">
     <ModuleHeader eyebrow="PLANIFICACIÓN · CONSTRUCTOR" title="Constructor de plan" subtitle="Elige un paciente para armar y guardar su plan de alimentación." />
     <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Selecciona a quién le vas a diseñar el plan para comenzar.</p><select value="" onChange={(e) => onSelectPatient?.(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></div>
   </div></AppChrome>
 
-  return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>{view === 'wizard' && <button className="back-button" onClick={() => setView('list')}>← Todos los planes</button>}<div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>{view === 'list' ? `${plans.length} plan(es) · el borrador se guarda solo` : 'Borrador · Se guarda automáticamente'}</span></div></div><label className="patient-switch">Paciente<select value={patientId || ''} onChange={(e) => onSelectPatient?.(e.target.value)}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>{view === 'list' ? renderPlansOverview() : <><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
+  return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><button className="back-button" onClick={() => { setMode('hub'); loadHub() }}>← Todos los planes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>{view === 'list' ? `${plans.length} plan(es) · el borrador se guarda solo` : 'Borrador · Se guarda automáticamente'}</span></div></div><label className="patient-switch">Paciente<select value={activePatientId || ''} onChange={(e) => { const nextId = e.target.value; if (!nextId) return; setActivePatientId(nextId); setMode('patient'); onSelectPatient?.(nextId) }}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>{view === 'list' ? renderPlansOverview() : <><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
 
     <div className="plan-body">
 
@@ -499,17 +589,13 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       {pickerTarget && <div className="recipe-overlay"><div className="recipe-modal panel"><div className="modal-head"><div><p className="eyebrow">RECETAS PARA {MEAL_TYPES.find((m) => m.key === pickerTarget.mealType)?.label.toUpperCase()}{pickerTarget.day ? ` · ${DAYS.find((d) => d.n === pickerTarget.day)?.label}` : ''}</p><h2>Elige una preparación</h2></div><button onClick={() => setPickerTarget(null)}>×</button></div><div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div><div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas del catálogo para este tiempo de comida.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => chooseRecipe(recipe)} key={recipe.id}>{recipeThumb(recipe, i)}<b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal</small></button>)}</div></div></div>}
     </>}
 
-    {step === 4 && <DocumentPage setActive={setActive} patientId={patientId} embedded onPublished={loadPlanData} />}
+    {step === 4 && <DocumentPage setActive={setActive} patientId={activePatientId} embedded onPublished={loadPlanData} />}
 
     </div>
 
     <div className="wizard-footer"><button className="secondary" onClick={() => selectStep(Math.max(0, step - 1))}>← Anterior</button><span>{saveState === 'saving' ? 'Guardando…' : saveState === 'saved' ? 'Guardado automáticamente' : saveState === 'error' ? 'Error al guardar los últimos cambios' : 'Guardado automáticamente'}</span><button className="primary" onClick={() => step === 4 ? setActive('Documentos') : selectStep(Math.min(step + 1, 4))}>Siguiente <span>→</span></button></div>
   </>}
   </div>
-  {previewPlan && <div className="modal-backdrop" onClick={() => setPreviewPlan(null)}><div className="modal menu-preview-modal" onClick={(event) => event.stopPropagation()}>
-    <div className="modal-head"><div><p className="eyebrow">{PLAN_STATUS_LABEL[previewPlan.status] || previewPlan.status} · v{previewPlan.version}</p><h2>Menú de {patientName}</h2><span className="modal-subtitle">{previewPlan.targetKcal ? `${previewPlan.targetKcal} kcal/día` : 'Sin cálculo guardado'}</span></div><button onClick={() => setPreviewPlan(null)}>×</button></div>
-    {renderMenuPreview(previewPlan)}
-    <div className="modal-actions"><button type="button" className="secondary" onClick={() => setPreviewPlan(null)}>Cerrar</button></div>
-  </div></div>}
+  {renderPreviewModal()}
   </AppChrome>
 }

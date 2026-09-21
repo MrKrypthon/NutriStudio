@@ -122,6 +122,7 @@ export const nutritionApi = {
 }
 
 export const plansApi = {
+  list: () => apiRequest('/plans'),
   create: (patientId, payload) => apiRequest(`/patients/${patientId}/plans`, { method: 'POST', body: JSON.stringify(payload) }),
   get: (id) => apiRequest(`/plans/${id}`),
   update: (id, payload) => apiRequest(`/plans/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
