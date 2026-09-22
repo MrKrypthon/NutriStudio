@@ -806,6 +806,16 @@ El selector reutiliza `GET /recipes/:id/nutrition`. Pendiente (siguiente paso, m
 
 **Adecuación en vivo con porciones (según hoja 19–20 del PDF, pantalla "Porciones" de AVENA).** En Distribución y Semana se agregó un panel **"Adecuación del plan · promedio diario"**: energía del plan vs el requerimiento (`targetKcal` del cálculo clínico) con barra y **%** (verde adecuado, ámbar por debajo, **rojo al pasarse**) y carbohidratos/proteína/grasas en gramos, % del aporte y % respecto al objetivo, en rojo si exceden. Además, cada tiempo de comida tiene un **control de porciones (−/+, pasos de 0.5)** que reescala esa comida y actualiza el cálculo y el color en vivo; las porciones se guardan con la distribución (`servings` por slot).
 
+## Fase 81 — Módulo antropométrico nuevo en la consulta (rama `fase-81-antropometrico`)
+
+A partir de las capturas de la carpeta `MEDICIONES`, la pestaña **Antropométrico** del expediente ahora es un módulo con **menú superior** (Mediciones · Cálculos · Calorías · Somatocarta · Notas · Fotos) y **submenú lateral por tipo**, al estilo de las imágenes.
+
+- **Mediciones** funcional: **Peso/Estatua** (estatura, peso, embarazo y **barra de IMC** por color con marcador y categoría), **Bioimpedancia** (grasa total con kg derivado, grasa superior/inferior, visceral, masa libre de grasa, masa muscular con % derivado, peso óseo, agua corporal, edad metabólica), **Pliegues** (10), **Perímetros** (14) y **Diámetros** (12).
+- Cada campo se guarda con el autoguardado del expediente (sección `anthropometric`); se conservan las claves previas (Peso/Talla/Cintura/Cadera/pliegues base) para no perder datos. Botón "Registrar medición de hoy" integrado.
+- Se mantiene el gráfico "Evolución de métricas" debajo del módulo.
+- Las pestañas **Cálculos / Calorías / Somatocarta / Notas / Fotos** quedan con aviso de "próxima entrega".
+
+**Verificado** con Chromium sobre una paciente de prueba (creada y eliminada al terminar): 6 pestañas, 5 tipos, IMC 26.4 · Sobrepeso con marcador en 62.35%, y los campos de Perímetros (14) y Pliegues (10); sin errores de consola. `npm run build` OK y `npm test` (48/48).
 ## Fase 80 — Panel de administración del SaaS (`/admin`) (rama `fase-80-panel-admin`)
 
 Pedido: un panel de administrador para habilitar/deshabilitar cuentas del SaaS, ver las cuentas habilitadas, poner el método de pago y hasta cuándo cubre, y ver el total recaudado y la lista de transacciones.
@@ -817,3 +827,5 @@ Pedido: un panel de administrador para habilitar/deshabilitar cuentas del SaaS, 
 - **UI**: topbar oscuro, tarjetas de totales (recaudado, cuentas activas/suspendidas), tarjeta por cuenta con estado, cobertura (rojo si vencida/próxima) y acciones (Registrar pago / Suscripción / Suspender-Habilitar), y tabla de transacciones.
 
 **Verificado** con Chromium + API aislados: login de admin; suspender la cuenta → el login de la práctica responde 403 y al habilitarla 200; registrar un pago de $1,500 extendió la cobertura a +31 días y apareció en la tabla con el total actualizado. Datos de prueba (transacción y cobertura) borrados y la práctica restaurada a `ACTIVE`, `paymentMethod: null`, `paidUntil: null`. `npm run build` OK, `node --check server/index.js` OK y `npm test` (48/48).
+
+**Guías ilustradas del antropométrico (mismo commit de fase 81).** Se agregó la **guía por medición** que faltaba respecto a las capturas: al enfocar cada pliegue/perímetro/diámetro aparece a la derecha una **silueta humana animada** (marcador pulsante en la ubicación aproximada) con el nombre y una **descripción** de cómo tomarse. La medición activa se resalta en verde. Coordenadas y textos para todas las mediciones de Pliegues, Perímetros y Diámetros.

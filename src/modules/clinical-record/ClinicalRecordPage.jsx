@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
+import Anthropometry from '../../components/Anthropometry.jsx'
 import FormCard from '../../components/FormCard.jsx'
+import Icon from '../../components/Icon.jsx'
 import RecallBuilder from '../../components/RecallBuilder.jsx'
 import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
@@ -667,34 +669,24 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
-      <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Consulta nutricional · {CONSULTATION_STATUS_LABELS[consultation?.status] || 'en curso'}</span></div></div>
-      <div className="clinical-actions"><button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}<button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
+      <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><div className="clinical-person-head"><h2>{patientName}</h2><button type="button" className="record-button" title="Grabar consulta" aria-label="Grabar consulta" onClick={() => setTab('Transcripción')}><Icon>record</Icon></button></div><span>Consulta nutricional · {CONSULTATION_STATUS_LABELS[consultation?.status] || 'en curso'}</span></div></div>
+      <div className="clinical-actions">{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}<button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}<button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
     </div>
     {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
     {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
     {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
     <div className="record-tabs">{TABS.map((x) => <button className={tab === x ? 'active' : ''} onClick={() => setTab(x)} key={x}>{x}</button>)}</div>
-    <div className="record-banner"><span className="spark">✦</span><div><b>{consultation?.status === 'COMPLETED' ? 'Consulta completada' : 'Consulta en curso'}</b><small>{consultation?.status === 'COMPLETED' ? `Sesión cerrada · ${formatDate(consultation.completedAt || consultation.startedAt)}` : `Los cambios se guardan automáticamente · ${saveLabel}`}</small></div><button className="secondary" onClick={() => setTab('Transcripción')}>Grabar consulta</button>{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}</div>
 
     {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando expediente…</h3></div>}
     {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar ni crear la consulta de {patientName}.</div>}
 
     {loadState === 'ready' && <>
-      {tab === 'Antropométrico' ? <div className="clinical-layout">
-        <section className="record-main panel">
-          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 3 DE 13</p><h1>Antropométrico</h1><p className="subtitle">Registra medidas y observa la evolución de {patientName}.</p></div><span className="saved">{saveLabel}</span></div>
-          <div className="progress-chart">
-            <div className="chart-title"><b>Evolución de métricas</b><select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}><option>Peso</option><option>IMC</option><option>% grasa corporal</option></select></div>
-            {chartPoints.length >= 2
-              ? <div className="chart-lines"><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points={chartPointLine} fill="none" stroke="var(--green)" strokeWidth="3" />{chartPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" fill="var(--green)" />)}</svg><div className="chart-labels">{chartPoints.map((p, i) => <span key={i}><b>{p.value}</b><br />{`${new Date(p.date).getUTCDate()}/${String(new Date(p.date).getUTCMonth() + 1).padStart(2, '0')}`}</span>)}</div></div>
-              : <p className="muted" style={{ padding: '42px 0', textAlign: 'center' }}>Registra al menos dos mediciones para ver la evolución.</p>}
-          </div>
-          <FormCard title="Peso y talla" fields={['Peso (kg)|', 'Talla (cm)|', 'IMC calculado|', 'Análisis de peso y talla|']} values={currentValues} onFieldChange={updateAnthropometric} />
-          <FormCard title="Circunferencias" fields={['Cintura (cm)|', 'Cadera (cm)|', 'Abdomen (cm)|', 'Brazo (cm)|', 'ICC calculado|']} values={currentValues} onFieldChange={updateField} />
-          <FormCard title="Composición corporal" fields={['% Grasa corporal|', 'Kg de grasa|', 'Kg de músculo|', '% Músculo|']} values={currentValues} onFieldChange={updateField} />
-          <FormCard title="Pliegues cutáneos" fields={['Tricipital (mm)|', 'Bicipital (mm)|', 'Subescapular (mm)|', 'Suprailiaco (mm)|']} values={currentValues} onFieldChange={updateField} />
-        </section>
-        <aside className="record-aside panel"><p className="eyebrow">RESUMEN DE HOY</p><div className="measure-highlight"><small>Peso actual</small><b>{currentValues['Peso (kg)'] || '—'} kg</b></div><div className="measure-highlight">{currentValues['% Grasa corporal'] ? <><small>% grasa corporal</small><b>{currentValues['% Grasa corporal']}%</b></> : <><small>% grasa corporal</small><b>—</b><span className="muted">Aún no capturado</span></>}</div><button className="link-button" disabled={measurementState === 'saving' || (!anthro['Peso (kg)'] && !anthro['Talla (cm)'])} onClick={registerMeasurement}>{measurementState === 'saving' ? 'Registrando…' : todayMeasured ? 'Actualizar medición de hoy →' : 'Registrar medición de hoy →'}</button></aside>
+      {tab === 'Antropométrico' ? <div className="anthro-tab-wrap">
+        <Anthropometry values={currentValues} onFieldChange={updateAnthropometric} registerMeasurement={registerMeasurement} measurementState={measurementState} todayMeasured={todayMeasured} patientSex={patient?.sex} patientAge={computeAge(patient?.birthDate)} />
+        {chartPoints.length >= 2 && <div className="panel progress-chart">
+          <div className="chart-title"><b>Evolución de métricas</b><select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}><option>Peso</option><option>IMC</option><option>% grasa corporal</option></select></div>
+          <div className="chart-lines"><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points={chartPointLine} fill="none" stroke="var(--green)" strokeWidth="3" />{chartPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" fill="var(--green)" />)}</svg><div className="chart-labels">{chartPoints.map((p, i) => <span key={i}><b>{p.value}</b><br />{`${new Date(p.date).getUTCDate()}/${String(new Date(p.date).getUTCMonth() + 1).padStart(2, '0')}`}</span>)}</div></div>
+        </div>}
       </div>
 
       : tab === 'Bioquímico' ? <div className="clinical-layout">
