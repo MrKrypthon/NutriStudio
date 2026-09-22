@@ -730,7 +730,7 @@ html{scroll-behavior:smooth}
 .anthro-title{display:flex;align-items:center;gap:9px;font:700 16px Manrope;color:var(--ink);margin:0 0 20px;padding-bottom:14px;border-bottom:1px solid var(--line)}
 .anthro-title .icon{font-size:18px;color:var(--green)}
 .anthro-fields{display:grid;gap:0;max-width:680px}
-.anthro-field{display:grid;grid-template-columns:minmax(120px,210px) 108px 44px minmax(0,1fr);align-items:center;gap:12px;min-height:40px;padding:2px 0}
+.anthro-field{display:grid;grid-template-columns:210px 108px 44px auto;justify-content:start;align-items:center;gap:12px;min-height:40px;padding:2px 0}
 .anthro-field-label{font-size:11px;color:#3d3e51}
 .anthro-field-input,.anthro-unit,.anthro-derived{border:1px solid var(--line);border-radius:7px;background:#fbfcfc;font:12px 'DM Sans';color:#343444}
 .anthro-field-input{width:100%;min-width:0;padding:8px 10px;text-align:right}
