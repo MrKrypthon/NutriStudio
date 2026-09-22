@@ -861,7 +861,7 @@ html{scroll-behavior:smooth}
 .somato-metric{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:7px;font-size:11px;color:#3d3e51}
 .somato-metric b{font:600 12px 'DM Mono';color:var(--green)}
 .somato-link{display:block;color:var(--green);font-size:10px;margin:10px 0 0;padding:0 10px;cursor:pointer}
-.somato-chart{border:1px solid var(--line);border-radius:10px;background:var(--surface-soft);padding:10px;max-width:430px}
+.somato-chart{border:1px solid var(--line);border-radius:10px;background:var(--surface-soft);padding:10px;max-width:400px}
 .somato-chart svg{width:100%;height:auto;display:block}
 .somato-vertex{font:600 10px 'DM Sans';fill:var(--ink)}
 .anthro-panel{padding:16px 22px}
@@ -881,3 +881,58 @@ html{scroll-behavior:smooth}
 .photo-grid button{position:absolute;top:6px;right:6px;width:24px;height:24px;border:0;border-radius:50%;background:#1c232fbb;color:#fff;font-size:15px;cursor:pointer;line-height:1}
 .anthro-empty{padding:44px 20px}
 @media(max-width:800px){.calc-components{grid-template-columns:1fr}.anthro-note-grid{grid-template-columns:1fr}.calc-table-head,.calc-table-row{grid-template-columns:1fr 100px}}
+
+/* Compactación por altura: el módulo debe caber sin scroll en pantallas bajas. */
+@media(max-height:830px){
+  .anthro-field{min-height:25px}
+  .anthro-field-input,.anthro-unit,.anthro-derived{padding:3px 9px}
+  .anthro-main{padding:10px 18px}
+  .anthro-title{margin:0 0 7px;padding-bottom:5px}
+  .anthro-tab{padding:7px 12px}
+  .anthro-note{margin:7px 0 0}
+  .anthro-guide-media,.anthro-figure{height:200px;max-width:190px}
+  .imc-block{margin-top:10px;padding:12px 16px 10px}
+  .calc-table-head,.calc-table-row{padding:5px 12px}
+  .calc-donut{width:132px;height:132px}.calc-donut:before{inset:25px}
+  .somato-chart{max-width:360px;padding:8px}
+  .anthro-textarea{min-height:86px}
+  .anthro-panel{padding:14px 20px}
+  .photo-grid img{height:116px}
+}
+@media(max-height:700px){
+  .anthro-field{min-height:22px}
+  .anthro-field-input,.anthro-unit,.anthro-derived{padding:2px 8px;font-size:11px}
+  .calc-table-head,.calc-table-row{padding:3px 10px}
+  .anthro-hint{margin:0 0 6px;font-size:10px}
+  .anthro-main{padding:8px 16px}
+  .anthro-title{margin:0 0 5px;padding-bottom:4px;font-size:14px}
+  .anthro-tab{padding:6px 10px;font-size:10px}
+  .anthro-guide-media,.anthro-figure{height:160px;max-width:150px}
+  .anthro-guide-desc{font-size:9px;line-height:1.4;margin:7px 0 0}
+  .anthro-guide-formula{font-size:9px;margin:6px 0 0}
+  .anthro-note{display:none}
+  .anthro-panel-head{padding-bottom:8px;margin-bottom:10px}
+  .anthro-textarea{min-height:70px}
+  .anthro-note-grid textarea{min-height:52px}
+  .somato-chart{max-width:310px}
+  .photo-grid img{height:104px}
+}
+@media(max-height:660px){
+  .anthro-title{margin:0 0 4px;padding-bottom:3px}
+  .anthro-hint{margin:0 0 4px}
+}
+@media(max-height:620px){
+  .anthro-field{min-height:18px}
+  .anthro-field-input,.anthro-unit,.anthro-derived{padding:1px 7px}
+  .anthro-main{padding:5px 12px}
+  .anthro-title{margin:0 0 3px;padding-bottom:2px;font-size:13px}
+  .anthro-hint{margin:0 0 3px;font-size:9px}
+  .anthro-guide-media,.anthro-figure{height:140px;max-width:140px}
+  .calc-table-head,.calc-table-row{padding:1px 8px}
+  .calc-table-name{font-size:10px}
+  .calc-table-value{font-size:10px}
+  .imc-block{margin-top:8px;padding:10px 14px 8px}
+  .anthro-textarea{min-height:60px}
+  .anthro-note-grid textarea{min-height:44px}
+  .somato-chart{max-width:270px}
+}
