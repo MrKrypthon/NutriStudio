@@ -33,6 +33,18 @@ const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login'])
 // PDFs/emails — so these routes are public by design, scoped by unguessable ids/file names.
 const PUBLIC_ROUTE_PATTERNS = [/^\/api\/v1\/practice\/[^/]+\/logo$/, /^\/api\/v1\/recipes\/images\/[^/]+$/]
 
+// Estado de cada práctica (tenant) del SaaS, cacheado 30 s para no consultar en cada petición.
+const practiceStatusCache = new Map()
+async function isPracticeActive(practiceId) {
+  if (!practiceId) return true
+  const cached = practiceStatusCache.get(practiceId)
+  if (cached && cached.expires > Date.now()) return cached.active
+  const practice = await prisma.practice.findUnique({ where: { id: practiceId }, select: { status: true } }).catch(() => null)
+  const active = !practice || practice.status === 'ACTIVE'
+  practiceStatusCache.set(practiceId, { active, expires: Date.now() + 30000 })
+  return active
+}
+
 // @fastify/cors defaults `methods` to 'GET,HEAD,POST' only (the CORS-spec "simple methods"),
 // so without this every PUT here has silently failed preflight for any cross-origin caller
 // (e.g. `npm run dev:all`, or the SPA and API on separate domains in production) — it only
@@ -44,12 +56,27 @@ app.addHook('onRequest', async (request, reply) => {
   if (request.method === 'OPTIONS' || PUBLIC_ROUTES.has(pathname) || PUBLIC_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname))) return
   if (!request.url.startsWith('/api/v1/')) return
   const header = request.headers.authorization
+  // Panel de administración del SaaS: usa su propio token (payload.admin) y solo sirve rutas /admin.
+  if (pathname.startsWith('/api/v1/admin/')) {
+    if (pathname === '/api/v1/admin/auth/login') return
+    if (!header?.startsWith('Bearer ')) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Inicia sesión como administrador.', fields: {} })
+    try {
+      const payload = jwt.verify(header.slice(7), JWT_SECRET)
+      if (!payload.admin) throw new Error('not admin')
+      request.adminId = payload.sub
+    } catch {
+      return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Sesión de administrador inválida.', fields: {} })
+    }
+    return
+  }
   if (!header?.startsWith('Bearer ')) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Inicia sesión para continuar.', fields: {} })
   try {
     const payload = jwt.verify(header.slice(7), JWT_SECRET)
     request.userId = payload.sub
     request.practiceId = payload.practiceId
     request.userRole = payload.role
+    // Una cuenta suspendida no puede operar (se cachea para no consultar en cada petición).
+    if (!(await isPracticeActive(request.practiceId))) return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
   } catch {
     return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Tu sesión expiró o no es válida. Inicia sesión de nuevo.', fields: {} })
   }
@@ -77,6 +104,7 @@ app.post('/api/v1/auth/login', async (request, reply) => {
   const user = await prisma.user.findFirst({ where: { email, status: 'ACTIVE' }, include: { practice: true } })
   const valid = user ? await bcrypt.compare(password, user.passwordHash) : false
   if (!user || !valid) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Email o contraseña incorrectos.', fields: {} })
+  if (user.practice.status === 'SUSPENDED') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
   const token = jwt.sign({ sub: user.id, practiceId: user.practiceId, role: user.role }, JWT_SECRET, { expiresIn: SESSION_TTL })
   return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, practice: { id: user.practice.id, name: user.practice.name, timeZone: user.practice.timeZone } }
 })
@@ -122,6 +150,84 @@ app.put('/api/v1/practice', async (request, reply) => {
 app.put('/api/v1/practice/fees', async (request) => {
   const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { fees: normalizeFees(request.body?.fees) } })
   return { fees: practice.fees }
+})
+
+// ── Panel de administración del SaaS (/admin) ────────────────────────────────
+app.post('/api/v1/admin/auth/login', async (request, reply) => {
+  const { email, password } = request.body || {}
+  if (!email || !password) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Email y contraseña son obligatorios.', fields: {} })
+  const admin = await prisma.adminUser.findUnique({ where: { email } })
+  const valid = admin ? await bcrypt.compare(password, admin.passwordHash) : false
+  if (!admin || !valid) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Credenciales de administrador incorrectas.', fields: {} })
+  const token = jwt.sign({ sub: admin.id, admin: true }, JWT_SECRET, { expiresIn: '12h' })
+  return { token, admin: { id: admin.id, name: admin.name, email: admin.email } }
+})
+
+app.get('/api/v1/admin/practices', async () => {
+  const practices = await prisma.practice.findMany({
+    include: { _count: { select: { patients: true, users: true } }, transactions: { select: { amountCents: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+  return {
+    items: practices.map((practice) => ({
+      id: practice.id,
+      name: practice.name,
+      status: practice.status,
+      paymentMethod: practice.paymentMethod,
+      paidUntil: practice.paidUntil,
+      createdAt: practice.createdAt,
+      patients: practice._count.patients,
+      users: practice._count.users,
+      collectedCents: practice.transactions.reduce((sum, item) => sum + item.amountCents, 0),
+      transactionCount: practice.transactions.length,
+    })),
+  }
+})
+
+app.patch('/api/v1/admin/practices/:practiceId', async (request, reply) => {
+  const { status, paymentMethod, paidUntil } = request.body || {}
+  const practice = await prisma.practice.findUnique({ where: { id: request.params.practiceId } })
+  if (!practice) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Cuenta no encontrada.', fields: {} })
+  const updated = await prisma.practice.update({
+    where: { id: practice.id },
+    data: {
+      ...(['ACTIVE', 'SUSPENDED'].includes(status) ? { status } : {}),
+      ...(paymentMethod !== undefined ? { paymentMethod: PAYMENT_METHODS.includes(paymentMethod) ? paymentMethod : null } : {}),
+      ...(paidUntil !== undefined ? { paidUntil: paidUntil ? new Date(paidUntil) : null } : {}),
+    },
+  })
+  practiceStatusCache.delete(practice.id)
+  return updated
+})
+
+app.get('/api/v1/admin/transactions', async () => {
+  const [items, aggregate] = await prisma.$transaction([
+    prisma.transaction.findMany({ include: { practice: { select: { id: true, name: true } } }, orderBy: { occurredAt: 'desc' }, take: 200 }),
+    prisma.transaction.aggregate({ _sum: { amountCents: true }, _count: true }),
+  ])
+  return { items, totalCents: aggregate._sum.amountCents || 0, count: aggregate._count || 0 }
+})
+
+app.post('/api/v1/admin/transactions', async (request, reply) => {
+  const { practiceId, amountCents, method, concept, occurredAt, extendMonths } = request.body || {}
+  const amount = normalizeCents(amountCents)
+  if (amount <= 0) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto debe ser mayor a cero.', fields: { amountCents: true } })
+  const practice = await prisma.practice.findUnique({ where: { id: practiceId } })
+  if (!practice) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Cuenta no encontrada.', fields: {} })
+  const when = occurredAt ? new Date(occurredAt) : new Date()
+  if (Number.isNaN(when.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha inválida.', fields: { occurredAt: true } })
+  const validMethod = PAYMENT_METHODS.includes(method) ? method : null
+  const created = await prisma.transaction.create({ data: { practiceId: practice.id, amountCents: amount, method: validMethod, concept: concept?.trim() || null, occurredAt: when } })
+  // "Registrar pago" puede extender la cobertura: suma meses a paidUntil (desde hoy o desde la
+  // cobertura vigente) y guarda el método de pago usado.
+  const months = Number(extendMonths) || 0
+  if (months > 0) {
+    const base = practice.paidUntil && practice.paidUntil > new Date() ? new Date(practice.paidUntil) : new Date()
+    const next = new Date(base)
+    next.setMonth(next.getMonth() + months)
+    await prisma.practice.update({ where: { id: practice.id }, data: { paidUntil: next, ...(validMethod ? { paymentMethod: validMethod } : {}) } })
+  }
+  return reply.code(201).send(created)
 })
 
 app.post('/api/v1/auth/change-password', async (request, reply) => {
