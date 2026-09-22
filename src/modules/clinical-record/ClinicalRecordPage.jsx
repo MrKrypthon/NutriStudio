@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import Anthropometry from '../../components/Anthropometry.jsx'
 import FormCard from '../../components/FormCard.jsx'
+import Icon from '../../components/Icon.jsx'
 import RecallBuilder from '../../components/RecallBuilder.jsx'
 import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
@@ -668,14 +669,14 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
-      <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>Consulta nutricional · {CONSULTATION_STATUS_LABELS[consultation?.status] || 'en curso'}</span></div></div>
+      <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><div className="clinical-person-head"><h2>{patientName}</h2><button type="button" className="record-button" title="Grabar consulta" aria-label="Grabar consulta" onClick={() => setTab('Transcripción')}><Icon>record</Icon></button></div><span>Consulta nutricional · {CONSULTATION_STATUS_LABELS[consultation?.status] || 'en curso'}</span></div></div>
       <div className="clinical-actions"><button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}<button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
     </div>
     {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
     {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
     {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
     <div className="record-tabs">{TABS.map((x) => <button className={tab === x ? 'active' : ''} onClick={() => setTab(x)} key={x}>{x}</button>)}</div>
-    <div className="record-banner"><span className="spark">✦</span><div><b>{consultation?.status === 'COMPLETED' ? 'Consulta completada' : 'Consulta en curso'}</b><small>{consultation?.status === 'COMPLETED' ? `Sesión cerrada · ${formatDate(consultation.completedAt || consultation.startedAt)}` : `Los cambios se guardan automáticamente · ${saveLabel}`}</small></div><button className="secondary" onClick={() => setTab('Transcripción')}>Grabar consulta</button>{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}</div>
+    <div className="record-banner"><span className="spark">✦</span><div><b>{consultation?.status === 'COMPLETED' ? 'Consulta completada' : 'Consulta en curso'}</b><small>{consultation?.status === 'COMPLETED' ? `Sesión cerrada · ${formatDate(consultation.completedAt || consultation.startedAt)}` : `Los cambios se guardan automáticamente · ${saveLabel}`}</small></div>{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}</div>
 
     {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando expediente…</h3></div>}
     {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar ni crear la consulta de {patientName}.</div>}

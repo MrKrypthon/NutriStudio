@@ -24,6 +24,7 @@ const ICONS = {
   camera: <><path d="M4 8.5h3l1.5-2h7L17 8.5h3a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5Z" /><circle cx="12" cy="13.5" r="3.2" /></>,
   note: <><path d="M6 3.5h9l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19V5A1.5 1.5 0 0 1 6.5 3.5Z" /><path d="M15 3.5v4h4M8.5 12h7M8.5 15.5h7" /></>,
   scan: <><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" /><path d="M8 12h8" /></>,
+  record: <><circle cx="12" cy="12" r="8.5" /><circle cx="12" cy="12" r="3.6" fill="currentColor" stroke="none" /></>,
 }
 
 export default function Icon({ children }) {
