@@ -682,7 +682,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
     {loadState === 'ready' && <>
       {tab === 'Antropométrico' ? <div className="anthro-tab-wrap">
-        <Anthropometry values={currentValues} onFieldChange={updateAnthropometric} registerMeasurement={registerMeasurement} measurementState={measurementState} todayMeasured={todayMeasured} />
+        <Anthropometry values={currentValues} onFieldChange={updateAnthropometric} registerMeasurement={registerMeasurement} measurementState={measurementState} todayMeasured={todayMeasured} patientSex={patient?.sex} patientAge={computeAge(patient?.birthDate)} />
         <div className="panel progress-chart">
           <div className="chart-title"><b>Evolución de métricas</b><select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}><option>Peso</option><option>IMC</option><option>% grasa corporal</option></select></div>
           {chartPoints.length >= 2

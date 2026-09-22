@@ -713,8 +713,8 @@ html{scroll-behavior:smooth}
 /* Módulo antropométrico (menú superior + tipos + IMC) */
 .anthro-tab-wrap{display:grid;gap:14px}
 .anthro-module{display:grid;gap:14px}
-.anthro-tabs{display:flex;gap:4px;flex-wrap:wrap;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px}
-.anthro-tab{display:inline-flex;align-items:center;gap:7px;border:0;background:none;color:var(--muted);font:500 11px 'DM Sans';padding:9px 14px;border-radius:8px;cursor:pointer}
+.anthro-tabs{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;background:#fff;border:1px solid var(--line);border-radius:10px;padding:4px}
+.anthro-tab{display:inline-flex;align-items:center;gap:7px;border:0;background:none;color:var(--muted);font:500 11px 'DM Sans';padding:9px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;flex:0 0 auto}
 .anthro-tab .icon{font-size:15px}
 .anthro-tab:hover{background:#f4f5f8;color:var(--ink)}
 .anthro-tab.active{background:var(--mint);color:var(--green);font-weight:600}
@@ -824,3 +824,63 @@ html{scroll-behavior:smooth}
 .anthro-field.active .anthro-field-label{color:var(--green);font-weight:600}
 .anthro-field.active .anthro-field-input{border-color:var(--green)}
 @media(max-width:900px){.anthro-with-guide{grid-template-columns:1fr}.anthro-guide{position:static}}
+
+/* Cálculos, Calorías, Somatocarta, Notas y Fotos del módulo antropométrico */
+.anthro-hint{font-size:11px;color:var(--muted);margin:0 0 14px}
+.calc-table{border:1px solid var(--line);border-radius:10px;overflow:hidden;max-width:620px}
+.calc-table-head,.calc-table-row{display:grid;grid-template-columns:1fr 150px;align-items:center;gap:12px;padding:11px 16px}
+.calc-table-head{background:#fafafc;color:var(--muted);font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--line)}
+.calc-table-row{border-top:1px solid var(--line)}
+.calc-table-row:first-child{border-top:0}
+.calc-table-row.total{background:var(--surface-soft);font-weight:600}
+.calc-table-row.selected{background:var(--mint)}
+.calc-table.three .calc-table-head,.calc-table.three .calc-table-row{grid-template-columns:1fr 110px 110px}
+.calc-table-head span:nth-child(n+2),.calc-table-row .calc-table-value{text-align:right}
+.calc-table-name{font-size:11px;color:#343647}
+.calc-table-name small{display:block;color:var(--muted);font-size:9px;font-weight:400;margin-top:3px}
+.calc-table-value{font:600 11px 'DM Mono';color:var(--green);position:relative}
+.calc-table-value i{display:block;height:4px;border-radius:3px;background:var(--green);opacity:.35;margin-top:6px;margin-left:auto}
+.calc-table .calc-table-name+.calc-table-value:last-child{color:var(--ink)}
+.calc-dot{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:middle}
+.calc-tag{font:600 9px 'DM Mono';border-radius:5px;padding:4px 8px;justify-self:end;color:var(--muted);background:#f1f2f5}
+.calc-tag.ok{color:var(--green);background:var(--mint)}
+.calc-tag.low{color:#3f6fa8;background:#e6eef8}
+.calc-tag.high{color:#b3702f;background:#fbeeda}
+.calc-components{display:grid;grid-template-columns:minmax(0,1fr) 220px;gap:28px;align-items:center}
+.calc-chart{display:grid;place-items:center}
+.calc-donut{width:170px;height:170px;border-radius:50%;display:grid;place-items:center;position:relative}
+.calc-donut:before{content:'';position:absolute;inset:33px;background:#fff;border-radius:50%}
+.calc-donut span{position:relative;font:800 16px Manrope;color:var(--ink)}
+.calc-sliders{max-width:640px;display:grid;gap:8px}
+.calc-slider-row{display:grid;grid-template-columns:90px minmax(0,1fr) 76px 46px;align-items:center;gap:14px;padding:6px 0}
+.calc-slider-label{font-size:11px;color:#343647}
+.calc-slider-row input[type=range]{accent-color:var(--green);width:100%}
+.calc-slider-input{border:1px solid var(--line);border-radius:7px;background:#fbfcfc;padding:8px 10px;font:12px 'DM Sans';color:#343444;text-align:right;width:100%}
+.calc-slider-unit{font-size:10px;color:var(--muted);text-align:center}
+.calc-result-strip{display:flex;align-items:center;justify-content:space-between;gap:16px;border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-top:18px;max-width:640px}
+.calc-result-strip small{display:block;color:var(--muted);font-size:9px}
+.calc-result-strip b{display:block;font:800 24px Manrope;color:var(--green);margin:5px 0}
+.calc-result-strip span{font-size:10px;color:var(--muted)}
+.somato-metric{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-radius:7px;font-size:11px;color:#3d3e51}
+.somato-metric b{font:600 12px 'DM Mono';color:var(--green)}
+.somato-link{display:block;color:var(--green);font-size:10px;margin:10px 0 0;padding:0 10px;cursor:pointer}
+.somato-chart{border:1px solid var(--line);border-radius:10px;background:var(--surface-soft);padding:18px;max-width:520px}
+.somato-chart svg{width:100%;height:auto;display:block}
+.somato-vertex{font:600 10px 'DM Sans';fill:var(--ink)}
+.anthro-panel{padding:22px 26px}
+.anthro-panel-head{display:flex;justify-content:space-between;align-items:center;gap:12px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:18px}
+.anthro-panel-head h2{display:flex;align-items:center;gap:9px;font:700 16px Manrope;color:var(--ink);margin:0}
+.anthro-panel-head h2 .icon{font-size:18px;color:var(--green)}
+.anthro-upload{cursor:pointer}
+.anthro-textarea{display:block;width:100%;min-height:150px;border:1px solid var(--line);border-radius:10px;background:#fbfcfc;padding:14px;font:12px 'DM Sans';color:#343444;resize:vertical}
+.anthro-note-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+.anthro-note-grid label{font-size:10px;color:var(--muted)}
+.anthro-note-grid textarea{display:block;width:100%;min-height:80px;border:1px solid var(--line);border-radius:9px;background:#fbfcfc;margin-top:6px;padding:11px;font:11px 'DM Sans';color:#343444;resize:vertical}
+.anthro-inline-field{display:flex;align-items:center;gap:12px;font-size:11px;color:#343647;margin-bottom:16px;max-width:280px}
+.anthro-inline-field input{flex:1;border:1px solid var(--line);border-radius:7px;background:#fbfcfc;padding:8px 10px;font:12px 'DM Sans';color:#343444}
+.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.photo-grid figure{margin:0;position:relative;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--surface-soft)}
+.photo-grid img{display:block;width:100%;height:170px;object-fit:cover}
+.photo-grid button{position:absolute;top:6px;right:6px;width:24px;height:24px;border:0;border-radius:50%;background:#1c232fbb;color:#fff;font-size:15px;cursor:pointer;line-height:1}
+.anthro-empty{padding:44px 20px}
+@media(max-width:800px){.calc-components{grid-template-columns:1fr}.anthro-note-grid{grid-template-columns:1fr}.calc-table-head,.calc-table-row{grid-template-columns:1fr 100px}}

@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import Icon from './Icon.jsx'
+import { bodyComposition, bodyFatEstimates, energyFromMacros, somatotype, theoreticalWeights } from '../lib/anthropometry.js'
 
 // Módulo antropométrico con el menú superior y el submenú de tipos al estilo de las capturas
 // (Mediciones / Cálculos / Calorías / Somatocarta / Notas / Fotos). En esta fase sólo Mediciones
@@ -12,6 +13,22 @@ const TYPES = [
   ['pliegues', 'Pliegues', 'ruler'],
   ['perimetros', 'Perímetros', 'ruler'],
   ['diametros', 'Diámetros', 'ruler'],
+]
+
+const CALC_TYPES = [
+  ['peso-teorico', 'Peso teórico', 'ruler'],
+  ['grasa', 'Porcentaje de grasa', 'calculator'],
+  ['componentes', 'Componentes corporales', 'layout'],
+  ['frisancho', 'Indicadores de Frisancho', 'grid'],
+  ['imc-embarazo', 'IMC embarazo', 'flame'],
+]
+
+const BALANCES = [['normo', 'Normocalórico'], ['deficit', 'Déficit'], ['superavit', 'Superávit']]
+const EMBARAZO_GAIN = [
+  { label: 'Bajo peso', to: 18.5, range: '12.5 – 18 kg' },
+  { label: 'Normal', to: 25, range: '11.5 – 16 kg' },
+  { label: 'Sobrepeso', to: 30, range: '7 – 11.5 kg' },
+  { label: 'Obesidad', to: 99, range: '5 – 9 kg' },
 ]
 
 const F = (label, key, unit = '') => ({ label, key, unit })
@@ -59,6 +76,20 @@ const IMC_ZONES = [
 const imcCategory = (imc) => IMC_ZONES.find((zone) => imc < zone.to) || { label: 'Obesidad III', color: '#9e3d37' }
 
 const num = (value) => { const n = Number(value); return Number.isFinite(n) && n > 0 ? n : null }
+
+// Indicadores de Frisancho (apoyo): clasifica los valores frente a rangos de referencia adulto.
+const frisanchoRows = (values, sex) => {
+  const female = String(sex || '').toLowerCase().startsWith('fem')
+  const fold = (a, b) => (num(values[a]) && num(values[b]) ? num(values[a]) + num(values[b]) : null)
+  const classify = (value, low, high) => value == null ? ['—', ''] : value < low ? ['Bajo', 'low'] : value > high ? ['Alto', 'high'] : ['Normal', 'ok']
+  const mk = (label, raw, low, high, unit) => { const [band, tone] = classify(raw, low, high); return { label, value: raw != null ? `${Math.round(raw * 10) / 10} ${unit}` : null, band, tone } }
+  return [
+    mk('Porcentaje de grasa corporal', num(values['% Grasa corporal']), female ? 20 : 12, female ? 32 : 22, '%'),
+    mk('Pliegue del tríceps', num(values['Tricipital (mm)']), female ? 16 : 8, female ? 32 : 22, 'mm'),
+    mk('Sumatoria tríceps + subescapular', fold('Tricipital (mm)', 'Subescapular (mm)'), female ? 30 : 18, female ? 60 : 40, 'mm'),
+    mk('Perímetro del brazo', num(values['Brazo relajado (cm)']), female ? 24 : 27, female ? 34 : 36, 'cm'),
+  ]
+}
 
 // Guía ilustrada por medición: punto aproximado sobre la silueta (coordenadas 0-100 × 0-160) y una
 // descripción corta. La silueta se anima (marcador pulsante) al seleccionar cada campo.
@@ -121,10 +152,16 @@ function BodyFigure({ x, y }) {
   </svg>
 }
 
-export default function Anthropometry({ values = {}, onFieldChange, registerMeasurement, measurementState = 'idle', todayMeasured = false }) {
+export default function Anthropometry({ values = {}, onFieldChange, registerMeasurement, measurementState = 'idle', todayMeasured = false, patientSex = '', patientAge = null }) {
   const [tab, setTab] = useState('Mediciones')
   const [type, setType] = useState('peso')
   const [activeField, setActiveField] = useState(GROUP_FIELDS.pliegues[0].key)
+  const [calcType, setCalcType] = useState('grasa')
+  const [balance, setBalance] = useState('superavit')
+  const [perKg, setPerKg] = useState(true)
+  const [macros, setMacros] = useState({ carbs: 4, protein: 3.1, fat: 3 })
+  const [gestWeek, setGestWeek] = useState('28')
+  const [photoError, setPhotoError] = useState('')
   const selectType = (key) => { setType(key); const first = GROUP_FIELDS[key]?.[0]; if (first) setActiveField(first.key) }
 
   const peso = num(values['Peso (kg)'])
@@ -159,7 +196,181 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   }
   const renderMeasureGroup = (fields) => <div className="anthro-with-guide"><div className="anthro-fields">{fields.map(renderField)}</div>{renderGuide(fields)}</div>
 
-  const renderPlaceholder = (label) => <div className="result-empty panel anthro-placeholder"><span>◌</span><h3>{label}</h3><p>Esta sección llega en la siguiente entrega del módulo antropométrico.</p></div>
+  const downscaleImage = (file) => new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        const max = 900
+        const scale = Math.min(1, max / Math.max(img.width, img.height))
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.round(img.width * scale)
+        canvas.height = Math.round(img.height * scale)
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+        resolve(canvas.toDataURL('image/jpeg', 0.72))
+      }
+      img.onerror = () => resolve(null)
+      img.src = reader.result
+    }
+    reader.onerror = () => resolve(null)
+    reader.readAsDataURL(file)
+  })
+  const photos = Array.isArray(values['Fotos antropométricas']) ? values['Fotos antropométricas'] : []
+  const addPhotos = async (fileList) => {
+    const incoming = []
+    for (const file of Array.from(fileList || [])) {
+      if (!file.type.startsWith('image/')) continue
+      if (file.size > 6 * 1024 * 1024) { setPhotoError('Una imagen supera 6 MB y no se agregó.'); continue }
+      const dataUrl = await downscaleImage(file)
+      if (dataUrl) incoming.push(dataUrl)
+    }
+    if (incoming.length) { setPhotoError(''); onFieldChange?.('Fotos antropométricas', [...photos, ...incoming]) }
+  }
+
+  const renderCalculations = () => {
+    const fat = bodyFatEstimates(values, { sex: patientSex })
+    const composition = bodyComposition(values, { sex: patientSex, fatPercent: fat.average })
+    const weights = theoreticalWeights(values['Talla (cm)'], patientSex)
+    const maxFat = Math.max(1, ...fat.rows.filter((r) => r.value != null).map((r) => r.value))
+    const totalPct = composition.parts.reduce((a, p) => a + (p.pct || 0), 0) || 1
+    let acc = 0
+    const stops = composition.parts.filter((p) => p.pct).map((p) => { const from = acc; acc += (p.pct / totalPct) * 100; return `${p.color} ${from}% ${acc}%` })
+    const gest = peso && talla ? peso / ((talla / 100) ** 2) : null
+    const gestZone = gest ? EMBARAZO_GAIN.find((z) => gest < z.to) : null
+    return <div className="anthro-layout panel">
+      <aside className="anthro-types"><p className="eyebrow">Tipo</p>{CALC_TYPES.map(([key, label, icon]) => <button type="button" className={'anthro-type' + (calcType === key ? ' active' : '')} key={key} onClick={() => setCalcType(key)}><Icon>{icon}</Icon>{label}</button>)}</aside>
+      <section className="anthro-main">
+        <h2 className="anthro-title"><Icon>{CALC_TYPES.find((t) => t[0] === calcType)?.[2]}</Icon>{CALC_TYPES.find((t) => t[0] === calcType)?.[1]}</h2>
+
+        {calcType === 'grasa' && <>
+          <p className="anthro-hint">Estimaciones a partir de los pliegues capturados en Mediciones. El promedio reúne las fórmulas con datos disponibles.</p>
+          <div className="calc-table">
+            <div className="calc-table-head"><span>Autor</span><span>Resultado</span></div>
+            {fat.rows.map((r) => <div className="calc-table-row" key={r.label}>
+              <span className="calc-table-name">{r.label}<small>{r.detail}</small></span>
+              <span className="calc-table-value">{r.value != null ? `${r.value} %` : '—'}{r.value != null && <i style={{ width: `${Math.min(100, (r.value / maxFat) * 100)}%` }} />}</span>
+            </div>)}
+            <div className="calc-table-row total"><span className="calc-table-name"><b>Promedio</b></span><span className="calc-table-value"><b>{fat.average != null ? `${fat.average} %` : '—'}</b></span></div>
+          </div>
+        </>}
+
+        {calcType === 'componentes' && <div className="calc-components">
+          <div className="calc-table three">
+            <div className="calc-table-head"><span>Componente</span><span>Kg</span><span>%</span></div>
+            {composition.parts.map((p) => <div className="calc-table-row" key={p.label}>
+              <span className="calc-table-name"><i className="calc-dot" style={{ background: p.color }} />{p.label}</span>
+              <span className="calc-table-value">{p.kg != null ? p.kg : '—'}</span>
+              <span className="calc-table-value">{p.pct != null ? `${p.pct} %` : '—'}</span>
+            </div>)}
+          </div>
+          <div className="calc-chart"><div className="calc-donut" style={{ background: stops.length ? `conic-gradient(${stops.join(',')})` : '#eef0f4' }}><span>{composition.weight ? `${composition.weight} kg` : '—'}</span></div></div>
+        </div>}
+
+        {calcType === 'peso-teorico' && <div className="calc-table">
+          <div className="calc-table-head"><span>Fórmula</span><span>Peso ideal</span></div>
+          {weights.length ? weights.map((w) => <div className="calc-table-row" key={w.label}><span className="calc-table-name">{w.label}</span><span className="calc-table-value">{w.value} kg</span></div>) : <p className="anthro-hint">Captura la estatura en Mediciones.</p>}
+          {talla && <div className="calc-table-row total"><span className="calc-table-name"><b>Rango saludable (IMC 18.5–24.9)</b></span><span className="calc-table-value"><b>{(18.5 * (talla / 100) ** 2).toFixed(1)}–{(24.9 * (talla / 100) ** 2).toFixed(1)} kg</b></span></div>}
+        </div>}
+
+        {calcType === 'frisancho' && <div className="calc-table three">
+          <div className="calc-table-head"><span>Indicador</span><span>Valor</span><span>Referencia</span></div>
+          {frisanchoRows(values, patientSex).map((row) => <div className="calc-table-row" key={row.label}>
+            <span className="calc-table-name">{row.label}</span>
+            <span className="calc-table-value">{row.value || '—'}</span>
+            <span className={'calc-tag ' + row.tone}>{row.band}</span>
+          </div>)}
+        </div>}
+
+        {calcType === 'imc-embarazo' && <>
+          <label className="anthro-inline-field">Semana de gestación<input type="number" min="1" max="42" value={gestWeek} onChange={(event) => setGestWeek(event.target.value)} /></label>
+          <div className="calc-table">
+            <div className="calc-table-head"><span>Categoría (IMC previo)</span><span>Ganancia total</span></div>
+            {EMBARAZO_GAIN.map((z) => <div className={'calc-table-row' + (gestZone === z ? ' selected' : '')} key={z.label}><span className="calc-table-name">{z.label}</span><span className="calc-table-value">{z.range}</span></div>)}
+          </div>
+          <p className="anthro-hint">{gest ? `IMC con el peso actual: ${gest.toFixed(1)}${gestZone ? ` · ${gestZone.label} (semana ${gestWeek})` : ''}.` : 'Captura peso y estatura para ubicar la categoría.'}</p>
+        </>}
+      </section>
+    </div>
+  }
+
+  const renderCalories = () => {
+    const target = energyFromMacros(values['Peso (kg)'], macros, perKg)
+    const setMacro = (key, value) => setMacros((prev) => ({ ...prev, [key]: value }))
+    const balanceLabel = BALANCES.find(([k]) => k === balance)?.[1] || ''
+    const rows = [['Hidratos', 'carbs', 0, 10, 0.1], ['Proteína', 'protein', 0, 5, 0.1], ['Lípidos', 'fat', 0, 3, 0.1]]
+    return <div className="anthro-layout panel">
+      <aside className="anthro-types"><p className="eyebrow">Balance energético</p>{BALANCES.map(([key, label]) => <button type="button" className={'anthro-type' + (balance === key ? ' active' : '')} key={key} onClick={() => setBalance(key)}><Icon>flame</Icon>{label}</button>)}</aside>
+      <section className="anthro-main">
+        <h2 className="anthro-title"><Icon>flame</Icon>Cálculo para {balanceLabel.toLowerCase()} calórico</h2>
+        <p className="anthro-hint">Frecuentemente utilizado en pacientes para el aumento de masa muscular o la reducción de grasa.</p>
+        <div className="calc-sliders">
+          {rows.map(([label, key, min, max, step]) => <div className="calc-slider-row" key={key}>
+            <span className="calc-slider-label">{label}</span>
+            <input type="range" min={min} max={max} step={step} value={macros[key]} onChange={(event) => setMacro(key, Number(event.target.value))} />
+            <input className="calc-slider-input" type="number" min={min} max={max} step={step} value={macros[key]} onChange={(event) => setMacro(key, Number(event.target.value))} />
+            <span className="calc-slider-unit">{perKg ? 'g/kg' : 'g'}</span>
+          </div>)}
+          <label className="anthro-check"><input type="checkbox" checked={perKg} onChange={(event) => setPerKg(event.target.checked)} /> Gramos por kilos</label>
+        </div>
+        <div className="calc-result-strip">
+          <div><small>Objetivo energético</small><b>{target.kcal.toLocaleString()} kcal</b><span>{balanceLabel} calórico · {target.carbs} g H · {target.protein} g P · {target.fat} g G</span></div>
+          <button type="button" className="primary" onClick={() => onFieldChange?.('Objetivo calórico (kcal)', String(target.kcal))}>Guardar como objetivo</button>
+        </div>
+        <p className="anthro-note">Las calorías seleccionadas aparecen como Objetivo en la sección de Dietas.</p>
+      </section>
+    </div>
+  }
+
+  const renderSomatocarta = () => {
+    const s = somatotype(values)
+    const total = (s.endo || 0) + (s.meso || 0) + (s.ecto || 0)
+    const V = { endo: [46, 214], meso: [150, 36], ecto: [254, 214] }
+    const C = [150, 154.7]
+    let point = null
+    if (total > 0) {
+      const we = (s.endo || 0) / total, wm = (s.meso || 0) / total, wx = (s.ecto || 0) / total
+      point = [we * V.endo[0] + wm * V.meso[0] + wx * V.ecto[0], we * V.endo[1] + wm * V.meso[1] + wx * V.ecto[1]]
+    }
+    const metrics = [['Endomorfo', s.endo], ['Mesomorfo', s.meso], ['Ectomorfo', s.ecto], ['Eje X', s.x], ['Eje Y', s.y]]
+    return <div className="anthro-layout panel">
+      <aside className="anthro-types"><p className="eyebrow">Tipo</p>
+        {metrics.map(([label, value]) => <div className="somato-metric" key={label}><span>{label}</span><b>{value ?? '—'}</b></div>)}
+        <span className="somato-link">¿Qué es la somatocarta?</span>
+      </aside>
+      <section className="anthro-main">
+        <h2 className="anthro-title"><Icon>triangle</Icon>Somatocarta (Heath-Carter)</h2>
+        <div className="somato-chart">
+          <svg viewBox="0 0 300 260" role="img" aria-label="Somatocarta">
+            <polygon points={`${C[0]},${C[1]} ${V.endo[0]},${V.endo[1]} ${V.meso[0]},${V.meso[1]}`} fill="#e0583f" opacity="0.78" />
+            <polygon points={`${C[0]},${C[1]} ${V.meso[0]},${V.meso[1]} ${V.ecto[0]},${V.ecto[1]}`} fill="#3fa46a" opacity="0.78" />
+            <polygon points={`${C[0]},${C[1]} ${V.ecto[0]},${V.ecto[1]} ${V.endo[0]},${V.endo[1]}`} fill="#d7ad56" opacity="0.78" />
+            <polygon points="150,36 46,214 254,214" fill="none" stroke="var(--line)" />
+            <text x="150" y="26" textAnchor="middle" className="somato-vertex">Mesomorfo</text>
+            <text x="40" y="234" textAnchor="middle" className="somato-vertex">Endomorfo</text>
+            <text x="260" y="234" textAnchor="middle" className="somato-vertex">Ectomorfo</text>
+            {point && <circle cx={point[0]} cy={point[1]} r="6.5" fill="var(--green)" stroke="#fff" strokeWidth="2.5" />}
+          </svg>
+        </div>
+        <p className="anthro-hint">{total > 0 ? `Predominio ${s.meso >= s.endo && s.meso >= s.ecto ? 'mesomorfo' : s.endo >= s.ecto ? 'endomorfo' : 'ectomorfo'} · valores calculados de pliegues, perímetros y diámetros.` : 'Captura pliegues, perímetros y diámetros en Mediciones para calcular el somatotipo.'}</p>
+      </section>
+    </div>
+  }
+
+  const renderNotes = () => <div className="panel anthro-panel">
+    <div className="anthro-panel-head"><h2><Icon>note</Icon>Notas de antropometría</h2><span className="muted">Se guarda automáticamente</span></div>
+    <textarea className="anthro-textarea" value={values['Notas antropométricas'] ?? ''} onChange={(event) => onFieldChange?.('Notas antropométricas', event.target.value)} placeholder="Observaciones sobre la medición, condiciones del paciente, incidencias…" />
+    <div className="anthro-note-grid">
+      <label>Indicaciones<textarea value={values['Indicaciones antropométricas'] ?? ''} onChange={(event) => onFieldChange?.('Indicaciones antropométricas', event.target.value)} placeholder="Recomendaciones derivadas de la evaluación" /></label>
+      <label>Próxima medición<textarea value={values['Próxima medición (nota)'] ?? ''} onChange={(event) => onFieldChange?.('Próxima medición (nota)', event.target.value)} placeholder="Cuándo repetir la medición" /></label>
+    </div>
+  </div>
+
+  const renderPhotos = () => <div className="panel anthro-panel">
+    <div className="anthro-panel-head"><h2><Icon>camera</Icon>Fotos de progreso</h2><label className="secondary anthro-upload">+ Agregar fotos<input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={(event) => { addPhotos(event.target.files); event.target.value = '' }} /></label></div>
+    {photoError && <p className="form-error">⚠ {photoError}</p>}
+    {photos.length ? <div className="photo-grid">{photos.map((src, i) => <figure key={`${i}-${src.slice(-12)}`}><img src={src} alt={`Foto ${i + 1}`} /><button type="button" onClick={() => onFieldChange?.('Fotos antropométricas', photos.filter((_, index) => index !== i))}>×</button></figure>)}</div>
+      : <div className="result-empty anthro-empty"><span>◌</span><h3>Sin fotos todavía</h3><p>Agrega fotos frontales, laterales o de progreso para dar seguimiento visual.</p></div>}
+  </div>
 
   return <div className="anthro-module">
     <div className="anthro-tabs">{TABS.map(([label, icon]) => <button type="button" className={'anthro-tab' + (tab === label ? ' active' : '')} key={label} onClick={() => setTab(label)}><Icon>{icon}</Icon>{label}</button>)}</div>
@@ -193,6 +404,10 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
         <p className="anthro-note">No es necesario completar todos los campos; sin embargo, entre más datos captures, más óptima será la evaluación de tu paciente.</p>
       </section>
     </div>
-      : renderPlaceholder(tab)}
+      : tab === 'Cálculos' ? renderCalculations()
+      : tab === 'Calorías' ? renderCalories()
+      : tab === 'Somatocarta' ? renderSomatocarta()
+      : tab === 'Notas' ? renderNotes()
+      : renderPhotos()}
   </div>
 }
