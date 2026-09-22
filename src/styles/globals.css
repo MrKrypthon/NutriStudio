@@ -728,27 +728,30 @@ html{scroll-behavior:smooth}
 .anthro-main{padding:22px 26px;min-width:0}
 .anthro-title{display:flex;align-items:center;gap:9px;font:700 16px Manrope;color:var(--ink);margin:0 0 20px;padding-bottom:14px;border-bottom:1px solid var(--line)}
 .anthro-title .icon{font-size:18px;color:var(--green)}
-.anthro-fields{display:grid;gap:2px;max-width:560px}
-.anthro-field{display:grid;grid-template-columns:1fr 150px 80px;align-items:center;gap:12px;min-height:44px}
+.anthro-fields{display:grid;gap:0;max-width:680px}
+.anthro-field{display:grid;grid-template-columns:minmax(120px,210px) 108px 44px minmax(0,1fr);align-items:center;gap:12px;min-height:40px;padding:2px 0}
 .anthro-field-label{font-size:11px;color:#3d3e51}
-.anthro-field-input{display:flex;align-items:center;border:1px solid var(--line);border-radius:7px;background:#fbfcfc;overflow:hidden}
-.anthro-field-input input{border:0;background:none;width:100%;padding:9px 10px;font:12px 'DM Sans';color:#343444;text-align:right}
-.anthro-unit{font-size:10px;color:var(--muted);padding:0 10px;border-left:1px solid var(--line);min-width:34px;text-align:center}
-.anthro-derived{font:600 10px 'DM Mono';color:var(--green)}
+.anthro-field-input,.anthro-unit,.anthro-derived{border:1px solid var(--line);border-radius:7px;background:#fbfcfc;font:12px 'DM Sans';color:#343444}
+.anthro-field-input{width:100%;min-width:0;padding:8px 10px;text-align:right}
+.anthro-unit{display:flex;align-items:center;justify-content:center;min-width:44px;padding:8px 6px;font-size:10px;color:var(--muted)}
+.anthro-derived{display:flex;align-items:center;justify-content:center;min-width:52px;padding:8px 6px;font:600 10px 'DM Mono';color:var(--green)}
+.anthro-derived:empty{border:0;background:none}
 .anthro-check{display:flex;align-items:center;gap:8px;font-size:11px;color:#3d3e51;margin-top:8px}
 .anthro-note{color:var(--muted);font-size:10px;margin:22px 0 0}
-.imc-block{margin-top:22px;border:1px solid var(--line);border-radius:10px;padding:18px}
-.imc-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:16px}
-.imc-head b{font:700 14px Manrope;color:var(--ink)}
-.imc-value{font:600 11px 'DM Mono'}
+.imc-block{margin-top:24px;border:1px solid var(--line);border-radius:10px;padding:20px 22px 18px}
+.imc-head{text-align:center;margin-bottom:20px}
+.imc-head b{display:block;font:700 14px Manrope;color:var(--ink)}
+.imc-value{display:block;margin-top:4px;font:600 11px 'DM Mono';color:var(--muted)}
+.imc-row{display:grid;grid-template-columns:40px minmax(0,1fr);align-items:center}
+.imc-row-label{font:700 11px Manrope;color:var(--ink);text-align:center}
 .imc-scale{position:relative;height:14px}
 .imc-bar{display:flex;height:14px;border-radius:7px;overflow:hidden}
 .imc-bar span{height:100%}
-.imc-marker{position:absolute;top:-7px;transform:translateX(-50%)}
-.imc-marker i{display:block;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid var(--ink)}
-.imc-ticks{display:flex;justify-content:space-between;margin-top:8px;color:var(--muted);font:9px 'DM Mono'}
+.imc-marker{position:absolute;top:100%;transform:translateX(-50%)}
+.imc-marker i{display:block;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:10px solid var(--ink)}
+.imc-ticks{display:flex;justify-content:space-between;margin:20px 0 0 40px;color:var(--muted);font:9px 'DM Mono'}
 .anthro-actions{display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:22px;border-top:1px solid var(--line);padding-top:18px}
-@media(max-width:800px){.anthro-layout{grid-template-columns:1fr}.anthro-types{border-right:0;border-bottom:1px solid var(--line);flex-direction:row;overflow-x:auto}.anthro-type{white-space:nowrap}.anthro-field{grid-template-columns:1fr 120px 56px}}
+@media(max-width:800px){.anthro-layout{grid-template-columns:1fr}.anthro-types{border-right:0;border-bottom:1px solid var(--line);flex-direction:row;overflow-x:auto}.anthro-type{white-space:nowrap}.anthro-field{grid-template-columns:minmax(80px,1fr) 96px 40px}.anthro-derived{grid-column:2/4;justify-content:flex-end;border:0;background:none}}
 /* Panel de administración del SaaS (/admin) */
 .admin-shell{min-height:100vh;background:#f4f5f8}
 .admin-login-shell{display:grid;place-items:center;padding:24px}
@@ -800,12 +803,14 @@ html{scroll-behavior:smooth}
 @media(max-width:800px){.admin-stats{grid-template-columns:1fr}.admin-practice{flex-direction:column;align-items:stretch}.admin-practice-actions{flex-wrap:wrap}.admin-row{grid-template-columns:90px 1fr 90px}.admin-row span:nth-child(3),.admin-row span:nth-child(4){display:none}}
 
 /* Guía ilustrada por medición (silueta animada) */
-.anthro-with-guide{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:26px;align-items:start}
-.anthro-guide{border:1px solid var(--line);border-radius:10px;padding:16px;background:var(--surface-soft);text-align:center;position:sticky;top:0}
-.anthro-guide-title{display:block;font:700 13px Manrope;color:var(--ink);margin-bottom:6px}
-.anthro-guide-desc{font-size:10px;color:#5b5d6b;line-height:1.55;margin:12px 0 0;text-align:left}
-.anthro-figure{width:100%;height:220px;display:block}
-.anthro-guide-media{width:100%;max-width:220px;height:264px;object-fit:contain;display:block;margin:0 auto;border-radius:8px}
+.anthro-with-guide{display:grid;grid-template-columns:minmax(0,1fr) 288px;gap:30px;align-items:start}
+.anthro-guide{border:1px solid var(--line);border-radius:12px;padding:18px;background:#fff;text-align:center;position:sticky;top:0}
+.anthro-guide-title{display:block;font:700 13px Manrope;color:var(--ink);margin-bottom:12px}
+.anthro-guide-frame{border:1px solid var(--line);border-radius:10px;background:var(--surface-soft);padding:10px;display:flex;justify-content:center}
+.anthro-guide-media{width:100%;max-width:240px;height:288px;object-fit:contain;display:block;border-radius:8px}
+.anthro-figure{width:100%;max-width:240px;height:288px;display:block}
+.anthro-guide-desc{font-size:11px;color:#5b5d6b;line-height:1.6;margin:14px 0 0;text-align:left}
+.anthro-guide-formula{font-size:10px;font-weight:600;color:var(--ink);line-height:1.5;margin:10px 0 0;text-align:left}
 .anthro-figure-head{fill:#f3d3c6}
 .anthro-figure-body{fill:#f3d3c6;stroke:#e0b7a7;stroke-width:1}
 .anthro-pulse{fill:var(--green);opacity:.35;transform-box:fill-box;transform-origin:center;animation:anthro-pulse 1.6s ease-out infinite;transition:cx .25s ease,cy .25s ease}

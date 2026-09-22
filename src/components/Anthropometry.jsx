@@ -107,6 +107,8 @@ const guideFor = (key) => GUIDE[key] || { x: 50, y: 50, desc: 'Sigue el protocol
 const GUIDE_IMAGES = import.meta.glob('../assets/mediciones/*.webp', { eager: true, query: '?url', import: 'default' })
 const slug = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
 const guideImage = (key) => GUIDE_IMAGES[`../assets/mediciones/${slug(key)}.webp`] || null
+const PLIEGUES = new Set(GROUP_FIELDS.pliegues.map((field) => field.key))
+const SKIN_FOLD_NOTE = 'Se usan en fórmulas de: Siri, Brozek, Faulkner, Ledesma y cálculo del somatotipo.'
 
 function BodyFigure({ x, y }) {
   return <svg className="anthro-figure" viewBox="0 0 100 160" role="img" aria-label="Guía de medición">
@@ -138,10 +140,8 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
     if (field.derived === 'musclePct' && peso && num(value)) derived = `${((Number(value) / peso) * 100).toFixed(0)} %`
     return <div className={'anthro-field' + (activeField === field.key ? ' active' : '')} key={field.key + index}>
       <span className="anthro-field-label">{field.label}</span>
-      <div className="anthro-field-input">
-        <input type="number" step="0.1" value={value} onFocus={() => setActiveField(field.key)} onChange={(event) => onFieldChange?.(field.key, event.target.value)} />
-        <span className="anthro-unit">{field.unit}</span>
-      </div>
+      <input className="anthro-field-input" type="number" step="0.1" value={value} onFocus={() => setActiveField(field.key)} onChange={(event) => onFieldChange?.(field.key, event.target.value)} />
+      <span className="anthro-unit">{field.unit}</span>
       <span className="anthro-derived">{derived || ''}</span>
     </div>
   }
@@ -152,8 +152,9 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
     const image = guideImage(active.key)
     return <aside className="anthro-guide">
       <b className="anthro-guide-title">{active.label}</b>
-      {image ? <img className="anthro-guide-media" src={image} alt={`Guía de medición: ${active.label}`} /> : <BodyFigure x={guide.x} y={guide.y} />}
+      <div className="anthro-guide-frame">{image ? <img className="anthro-guide-media" src={image} alt={`Guía de medición: ${active.label}`} /> : <BodyFigure x={guide.x} y={guide.y} />}</div>
       <p className="anthro-guide-desc">{guide.desc}</p>
+      {PLIEGUES.has(active.key) && <p className="anthro-guide-formula">{SKIN_FOLD_NOTE}</p>}
     </aside>
   }
   const renderMeasureGroup = (fields) => <div className="anthro-with-guide"><div className="anthro-fields">{fields.map(renderField)}</div>{renderGuide(fields)}</div>
@@ -171,10 +172,13 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
         {type === 'peso' && <>
           <div className="anthro-fields">{GROUP_FIELDS.peso.map(renderField)}<label className="anthro-check"><input type="checkbox" checked={Boolean(values['Embarazo (antropometría)'])} onChange={(event) => onFieldChange?.('Embarazo (antropometría)', event.target.checked)} /> Embarazo</label></div>
           <div className="imc-block">
-            <div className="imc-head"><b>Índice de masa corporal</b>{imc && <span className="imc-value" style={{ color: category.color }}>IMC {imc.toFixed(1)} · {category.label}</span>}</div>
-            <div className="imc-scale">
-              <div className="imc-bar">{IMC_ZONES.map((zone) => <span key={zone.to} style={{ width: `${((zone.to - (IMC_ZONES[IMC_ZONES.indexOf(zone) - 1]?.to || 4)) / 36) * 100}%`, background: zone.color }} />)}</div>
-              {imc && <div className="imc-marker" style={{ left: `${markerPct}%` }}><i /></div>}
+            <div className="imc-head"><b>Índice de masa corporal</b><span className="imc-value" style={{ color: imc ? category.color : undefined }}>{imc ? `IMC=${imc.toFixed(1)} · ${category.label}` : 'Ingresa peso y estatura'}</span></div>
+            <div className="imc-row">
+              <span className="imc-row-label">IMC</span>
+              <div className="imc-scale">
+                <div className="imc-bar">{IMC_ZONES.map((zone) => <span key={zone.to} style={{ width: `${((zone.to - (IMC_ZONES[IMC_ZONES.indexOf(zone) - 1]?.to || 4)) / 36) * 100}%`, background: zone.color }} />)}</div>
+                {imc && <div className="imc-marker" style={{ left: `${markerPct}%` }}><i /></div>}
+              </div>
             </div>
             <div className="imc-ticks">{[4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40].map((tick) => <span key={tick}>{tick}</span>)}</div>
           </div>
@@ -186,7 +190,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
         {type === 'perimetros' && renderMeasureGroup(GROUP_FIELDS.perimetros)}
         {type === 'diametros' && renderMeasureGroup(GROUP_FIELDS.diametros)}
 
-        <p className="anthro-note">No es necesario completar todos los campos; entre más datos captures, más completa será la evaluación.</p>
+        <p className="anthro-note">No es necesario completar todos los campos; sin embargo, entre más datos captures, más óptima será la evaluación de tu paciente.</p>
       </section>
     </div>
       : renderPlaceholder(tab)}
