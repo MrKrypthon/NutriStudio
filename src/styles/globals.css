@@ -346,6 +346,7 @@ html{scroll-behavior:smooth}
   .content > .clinical-layout,
   .content > .generic-section,
   .content > .diagnosis-panel,
+  .content > .anthro-tab-wrap,
   .content > .plan-body{flex:1 1 auto;min-height:0;overflow:auto}
   /* En páginas con footer, el footer queda fijo y el cuerpo (aunque no sea el último hijo) scrollea. */
   .content > .wizard-footer{flex:0 0 auto;overflow:visible}
