@@ -718,8 +718,8 @@ html{scroll-behavior:smooth}
 .anthro-tab .icon{font-size:15px}
 .anthro-tab:hover{background:#f4f5f8;color:var(--ink)}
 .anthro-tab.active{background:var(--mint);color:var(--green);font-weight:600}
-.anthro-layout{display:grid;grid-template-columns:210px 1fr;gap:0;padding:0;overflow:hidden}
-.anthro-types{border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:4px}
+.anthro-layout{display:grid;grid-template-columns:210px 1fr;gap:0;padding:0;overflow:hidden;overflow:clip}
+.anthro-types{border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;align-self:start}
 .anthro-types .eyebrow{margin:0 0 8px;padding-left:8px}
 .anthro-type{display:flex;align-items:center;gap:9px;border:0;background:none;color:#5b5d6b;font:500 11px 'DM Sans';padding:10px 12px;border-radius:8px;cursor:pointer;text-align:left}
 .anthro-type .icon{font-size:15px;color:#98a2b3}
@@ -804,7 +804,11 @@ html{scroll-behavior:smooth}
 @media(max-width:800px){.admin-stats{grid-template-columns:1fr}.admin-practice{flex-direction:column;align-items:stretch}.admin-practice-actions{flex-wrap:wrap}.admin-row{grid-template-columns:90px 1fr 90px}.admin-row span:nth-child(3),.admin-row span:nth-child(4){display:none}}
 
 /* Guía ilustrada por medición (silueta animada) */
-.anthro-with-guide{display:grid;grid-template-columns:minmax(0,1fr) 288px;gap:30px;align-items:start}
+.anthro-with-guide{display:grid;grid-template-columns:minmax(0,1fr) 288px;gap:30px;align-items:start;min-height:calc(100vh - 360px)}
+.anthro-with-guide .anthro-fields{max-height:calc(100vh - 430px);min-height:200px;overflow-y:auto;padding-right:14px;scrollbar-width:thin;scrollbar-color:#cbd1dc transparent}
+.anthro-with-guide .anthro-fields::-webkit-scrollbar{width:6px}
+.anthro-with-guide .anthro-fields::-webkit-scrollbar-thumb{background:#cbd1dc;border-radius:6px}
+.anthro-with-guide .anthro-fields::-webkit-scrollbar-track{background:transparent}
 .anthro-guide{border:1px solid var(--line);border-radius:12px;padding:18px;background:#fff;text-align:center;position:sticky;top:0}
 .anthro-guide-title{display:block;font:700 13px Manrope;color:var(--ink);margin-bottom:12px}
 .anthro-guide-frame{border:1px solid var(--line);border-radius:10px;background:var(--surface-soft);padding:10px;display:flex;justify-content:center}
