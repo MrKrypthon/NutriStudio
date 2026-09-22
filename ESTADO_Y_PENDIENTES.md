@@ -816,3 +816,14 @@ A partir de las capturas de la carpeta `MEDICIONES`, la pestaña **Antropométri
 - Las pestañas **Cálculos / Calorías / Somatocarta / Notas / Fotos** quedan con aviso de "próxima entrega".
 
 **Verificado** con Chromium sobre una paciente de prueba (creada y eliminada al terminar): 6 pestañas, 5 tipos, IMC 26.4 · Sobrepeso con marcador en 62.35%, y los campos de Perímetros (14) y Pliegues (10); sin errores de consola. `npm run build` OK y `npm test` (48/48).
+## Fase 80 — Panel de administración del SaaS (`/admin`) (rama `fase-80-panel-admin`)
+
+Pedido: un panel de administrador para habilitar/deshabilitar cuentas del SaaS, ver las cuentas habilitadas, poner el método de pago y hasta cuándo cubre, y ver el total recaudado y la lista de transacciones.
+
+- **Ruta alterna `/admin`**, separada del chrome de la app: `main.jsx` monta `<AdminApp/>` (con su propio login) si la ruta empieza con `/admin`, y no el `App` normal.
+- **Autenticación propia del admin**: nuevo modelo `AdminUser` (sembrado `admin@nutristudio.local` / `admin2026`), login `POST /admin/auth/login` con un JWT marcado `admin:true`. El hook de auth distingue tokens de admin (solo rutas `/api/v1/admin/*`) de tokens de práctica.
+- **Cuentas (practices)**: `Practice.status` (`ACTIVE`/`SUSPENDED`), `paymentMethod` y `paidUntil`. `GET /admin/practices` lista con usuarios, pacientes, recaudado y transacciones; `PATCH /admin/practices/:id` cambia estado/método/cobertura. **Una práctica suspendida no puede iniciar sesión** (403 `ACCOUNT_SUSPENDED`, también bloqueado en el hook con caché de 30 s).
+- **Transacciones**: modelo `Transaction`; `GET /admin/transactions` (lista + total + conteo) y `POST /admin/transactions` registra un pago (monto/método/concepto/fecha) y opcionalmente **extiende la cobertura** (`extendMonths` suma a `paidUntil` desde hoy o desde la cobertura vigente).
+- **UI**: topbar oscuro, tarjetas de totales (recaudado, cuentas activas/suspendidas), tarjeta por cuenta con estado, cobertura (rojo si vencida/próxima) y acciones (Registrar pago / Suscripción / Suspender-Habilitar), y tabla de transacciones.
+
+**Verificado** con Chromium + API aislados: login de admin; suspender la cuenta → el login de la práctica responde 403 y al habilitarla 200; registrar un pago de $1,500 extendió la cobertura a +31 días y apareció en la tabla con el total actualizado. Datos de prueba (transacción y cobertura) borrados y la práctica restaurada a `ACTIVE`, `paymentMethod: null`, `paidUntil: null`. `npm run build` OK, `node --check server/index.js` OK y `npm test` (48/48).
