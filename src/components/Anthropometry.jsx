@@ -102,6 +102,12 @@ const GUIDE = {
 }
 const guideFor = (key) => GUIDE[key] || { x: 50, y: 50, desc: 'Sigue el protocolo ISAK para tomar esta medición.' }
 
+// Guías 3D animadas (WebP con giro 360° y marcador pulsante por medición). El nombre del archivo
+// se deriva de la clave del campo (misma normalización usada al generarlas con Blender).
+const GUIDE_IMAGES = import.meta.glob('../assets/mediciones/*.webp', { eager: true, query: '?url', import: 'default' })
+const slug = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
+const guideImage = (key) => GUIDE_IMAGES[`../assets/mediciones/${slug(key)}.webp`] || null
+
 function BodyFigure({ x, y }) {
   return <svg className="anthro-figure" viewBox="0 0 100 160" role="img" aria-label="Guía de medición">
     <circle className="anthro-figure-head" cx="50" cy="15" r="10" />
@@ -143,9 +149,10 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   const renderGuide = (fields) => {
     const active = fields.find((field) => field.key === activeField) || fields[0]
     const guide = guideFor(active.key)
+    const image = guideImage(active.key)
     return <aside className="anthro-guide">
       <b className="anthro-guide-title">{active.label}</b>
-      <BodyFigure x={guide.x} y={guide.y} />
+      {image ? <img className="anthro-guide-media" src={image} alt={`Guía de medición: ${active.label}`} /> : <BodyFigure x={guide.x} y={guide.y} />}
       <p className="anthro-guide-desc">{guide.desc}</p>
     </aside>
   }

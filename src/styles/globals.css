@@ -805,6 +805,7 @@ html{scroll-behavior:smooth}
 .anthro-guide-title{display:block;font:700 13px Manrope;color:var(--ink);margin-bottom:6px}
 .anthro-guide-desc{font-size:10px;color:#5b5d6b;line-height:1.55;margin:12px 0 0;text-align:left}
 .anthro-figure{width:100%;height:220px;display:block}
+.anthro-guide-media{width:100%;max-width:220px;height:264px;object-fit:contain;display:block;margin:0 auto;border-radius:8px}
 .anthro-figure-head{fill:#f3d3c6}
 .anthro-figure-body{fill:#f3d3c6;stroke:#e0b7a7;stroke-width:1}
 .anthro-pulse{fill:var(--green);opacity:.35;transform-box:fill-box;transform-origin:center;animation:anthro-pulse 1.6s ease-out infinite;transition:cx .25s ease,cy .25s ease}
