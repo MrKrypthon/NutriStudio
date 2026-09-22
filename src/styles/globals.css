@@ -511,7 +511,8 @@ html{scroll-behavior:smooth}
 .recall-head-card p{margin:0}
 .recall-meal textarea{width:100%;min-height:46px;resize:vertical;border:1px solid var(--line);border-radius:7px;padding:9px 10px;background:#fbfcfc;font:11px 'DM Sans';color:#343647;margin-top:6px}
 /* En pantallas anchas, los tiempos de comida van en 2 columnas para reducir el scroll. */
-@media(min-width:1240px){.recall-builder{grid-template-columns:1fr 1fr}.recall-head-card,.recall-summary{grid-column:1/-1}}
+@media(min-width:1000px){.recall-builder{grid-template-columns:1fr 1fr}.recall-head-card,.recall-summary{grid-column:1/-1}}
+@media(min-width:1120px){.recall-builder{grid-template-columns:repeat(3,1fr)}}
 .recall-meal-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
 .recall-meal-head h3{margin:0}
 .recall-time{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:10px}
@@ -921,7 +922,7 @@ html{scroll-behavior:smooth}
   .anthro-title{margin:0 0 4px;padding-bottom:3px}
   .anthro-hint{margin:0 0 4px}
 }
-@media(max-height:620px){
+@media(max-height:670px){
   .anthro-field{min-height:18px}
   .anthro-field-input,.anthro-unit,.anthro-derived{padding:1px 7px}
   .anthro-main{padding:5px 12px}
@@ -935,4 +936,97 @@ html{scroll-behavior:smooth}
   .anthro-textarea{min-height:60px}
   .anthro-note-grid textarea{min-height:44px}
   .somato-chart{max-width:270px}
+}
+
+/* Subsecciones internas del expediente (para no hacer scroll) */
+.sub-tabs{display:flex;gap:4px;flex-wrap:nowrap;overflow-x:auto;background:#f5f7f8;border-radius:9px;padding:4px;margin-bottom:14px}
+.sub-tab{border:0;background:none;border-radius:7px;padding:8px 12px;color:var(--muted);font:500 11px 'DM Sans';cursor:pointer;white-space:nowrap;flex:0 0 auto}
+.sub-tab:hover{color:var(--green)}
+.sub-tab.active{background:#fff;color:var(--green);font-weight:600;box-shadow:0 1px 3px #2424470d}
+.sub-body{min-height:0}
+.sub-stack{display:grid;gap:12px;align-content:start}
+@media(max-height:830px){
+  .generic-section h1,.diagnosis-panel h1{font-size:20px}
+  .generic-section>.subtitle,.diagnosis-panel>.subtitle{font-size:10px;margin:4px 0 0}
+  .generic-section>.eyebrow,.diagnosis-panel>.eyebrow{margin:0 0 4px}
+  .sub-tabs{margin-bottom:10px}
+  .sub-tab{padding:6px 10px;font-size:10px}
+  .form-card{padding:12px;margin-bottom:8px}
+  .form-card h3,.plan-card h3{font-size:12px;margin:0 0 10px}
+  .form-grid{gap:10px}
+  .form-grid input,.form-grid textarea,.form-grid select,.plan-card input,.plan-card select{padding:8px;margin-top:4px}
+  .form-grid textarea{min-height:0;height:46px}
+  .section-heading{padding-bottom:10px;margin-bottom:10px}
+  .heredo-row{padding:6px 12px}
+  .toggle-pill{padding:6px 10px;font-size:10px}
+  .lab-row{padding:8px 12px}
+  .lab-empty{padding:16px;margin-bottom:8px}
+  .diagnosis-domains{gap:8px}
+  .domain-card{padding:12px;min-height:auto}
+  .record-main{min-height:0}
+  .cesiva-card{padding:12px 14px}
+  .cesiva-card-head{margin-bottom:10px}
+  .cesiva-hint{display:none}
+  .cesiva-row{padding:6px 12px}
+  .cesiva-opt{padding:5px 6px;font-size:9px}
+  .cesiva-note{padding:6px 8px}
+  .recall-builder{gap:10px}
+  .recall-head-card{display:none}
+  .recall-summary{padding:8px}
+  .recall-meal{padding:9px}
+  .recall-meal textarea{min-height:0;height:40px}
+  .recall-add{margin-top:6px}
+  .heredo-head,.heredo-row{padding:5px 12px;grid-template-columns:1.3fr repeat(3,76px)}
+  .frequency-chips{gap:6px}
+}
+@media(max-height:700px){
+  .generic-section h1,.diagnosis-panel h1{font-size:17px}
+  .sub-tab{padding:5px 9px}
+  .form-card{padding:10px;margin-bottom:6px}
+  .form-grid input,.form-grid textarea,.form-grid select,.plan-card input,.plan-card select{padding:6px;margin-top:3px}
+  .form-grid textarea{min-height:0;height:38px}
+  .toggle-pill{padding:5px 9px;font-size:9px}
+  .diagnosis-panel{padding:14px 16px}
+  .lab-score{font-size:24px;margin:8px 0 3px}
+  .cesiva-row{padding:3px 10px}
+  .cesiva-criterion small{display:none}
+  .cesiva-opt{padding:4px 5px}
+  .cesiva-note{padding:4px 7px}
+  .sub-stack{gap:8px}
+  .record-aside{padding:14px}
+  .heredo-head,.heredo-row{padding:4px 10px}
+  .generic-section>.subtitle,.diagnosis-panel>.subtitle{display:none}
+  .generic-section .form-grid{grid-template-columns:repeat(3,1fr)}
+  .generic-section>.eyebrow,.diagnosis-panel>.eyebrow{margin:0 0 2px}
+  .symptom-grid{gap:6px;margin-bottom:10px}
+  .toggle-pill{padding:4px 8px;font-size:9px}
+  .heredo-row .toggle-pill{width:28px;height:24px}
+  .exam-group-title{font-size:10px}
+  .exam-subhead{font-size:11px;margin:8px 0 6px}
+  .frequency-chips{gap:5px}
+  .frequency-chip input{width:38px;padding:4px}
+  .recall-builder{gap:7px}
+  .recall-meal{padding:7px}
+  .recall-meal textarea{min-height:0;height:30px}
+  .recall-summary{padding:5px}
+  .recall-adequacy-row{min-height:26px}
+  .recall-item{padding:6px 10px}
+  .lab-row{padding:6px 10px}
+}
+@media(max-height:670px){
+  .generic-section h1,.diagnosis-panel h1{font-size:15px}
+  .form-card{padding:8px;margin-bottom:5px}
+  .form-card h3,.plan-card h3{font-size:11px;margin:0 0 7px}
+  .form-grid{gap:7px}
+  .form-grid input,.form-grid textarea,.form-grid select,.plan-card input,.plan-card select{padding:5px;margin-top:2px}
+  .form-grid textarea{min-height:0;height:30px}
+  .sub-tab{padding:4px 8px}
+  .sub-tabs{margin-bottom:8px}
+  .generic-section h1,.diagnosis-panel h1{font-size:14px}
+  .form-grid textarea{min-height:0;height:26px}
+  .symptom-grid{gap:5px}
+  .toggle-pill{padding:3px 7px;font-size:8px}
+  .heredo-row .toggle-pill{width:24px;height:21px}
+  .recall-meal textarea{min-height:0;height:24px}
+  .section-heading{padding-bottom:6px;margin-bottom:6px}
 }
