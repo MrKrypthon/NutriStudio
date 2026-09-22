@@ -17,6 +17,13 @@ const ICONS = {
   settings: <><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1" /><circle cx="15" cy="6" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="17" cy="18" r="2" /></>,
   menu: <><path d="M4 7h16M4 12h16M4 17h16" /></>,
   wallet: <><path d="M4 7.5A2.5 2.5 0 0 1 6.5 5H17a2 2 0 0 1 2 2v1.5" /><rect x="3" y="8.5" width="18" height="11" rx="2.5" /><path d="M16 14h2" /></>,
+  ruler: <><path d="M3.5 14.5 14.5 3.5a2 2 0 0 1 2.8 0l3.2 3.2a2 2 0 0 1 0 2.8L9.5 20.5a2 2 0 0 1-2.8 0l-3.2-3.2a2 2 0 0 1 0-2.8Z" /><path d="M7 11l2 2M10 8l2 2M13 5l2 2" /></>,
+  calculator: <><rect x="5" y="3" width="14" height="18" rx="2.5" /><path d="M8.5 7h7M8.5 11h1M12 11h1M15.5 11h.01M8.5 14.5h1M12 14.5h1M15.5 14.5h.01M8.5 18h1M12 18h1M15.5 18h.01" /></>,
+  flame: <><path d="M12 3s5 4.5 5 9a5 5 0 0 1-10 0c0-1.8 1-3.4 2-4.5" /><path d="M12 20a3 3 0 0 0 3-3c0-2-3-4-3-4s-3 2-3 4a3 3 0 0 0 3 3Z" /></>,
+  triangle: <><path d="M12 4 21 19H3Z" /><circle cx="12" cy="12" r="1.4" /></>,
+  camera: <><path d="M4 8.5h3l1.5-2h7L17 8.5h3a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H4A1.5 1.5 0 0 1 2.5 18v-8A1.5 1.5 0 0 1 4 8.5Z" /><circle cx="12" cy="13.5" r="3.2" /></>,
+  note: <><path d="M6 3.5h9l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 5 19V5A1.5 1.5 0 0 1 6.5 3.5Z" /><path d="M15 3.5v4h4M8.5 12h7M8.5 15.5h7" /></>,
+  scan: <><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2" /><path d="M8 12h8" /></>,
 }
 
 export default function Icon({ children }) {

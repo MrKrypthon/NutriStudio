@@ -805,3 +805,14 @@ El selector reutiliza `GET /recipes/:id/nutrition`. Pendiente (siguiente paso, m
 **Rediseño de la vista de Distribución.** Se veía apretada como tabla; ahora es una **tarjeta por tiempo de comida** (Desayuno / Comida / Colación / Cena) en cuadrícula 2×2: imagen grande de la receta base, nombre, `kcal promedio al día`, botón "Cambiar" y, debajo, una **tira de 7 días** (Lun–Dom) con la miniatura y el nombre de la receta de cada día; clic en un día abre el selector para variarlo. Más claro y visual.
 
 **Adecuación en vivo con porciones (según hoja 19–20 del PDF, pantalla "Porciones" de AVENA).** En Distribución y Semana se agregó un panel **"Adecuación del plan · promedio diario"**: energía del plan vs el requerimiento (`targetKcal` del cálculo clínico) con barra y **%** (verde adecuado, ámbar por debajo, **rojo al pasarse**) y carbohidratos/proteína/grasas en gramos, % del aporte y % respecto al objetivo, en rojo si exceden. Además, cada tiempo de comida tiene un **control de porciones (−/+, pasos de 0.5)** que reescala esa comida y actualiza el cálculo y el color en vivo; las porciones se guardan con la distribución (`servings` por slot).
+
+## Fase 81 — Módulo antropométrico nuevo en la consulta (rama `fase-81-antropometrico`)
+
+A partir de las capturas de la carpeta `MEDICIONES`, la pestaña **Antropométrico** del expediente ahora es un módulo con **menú superior** (Mediciones · Cálculos · Calorías · Somatocarta · Notas · Fotos) y **submenú lateral por tipo**, al estilo de las imágenes.
+
+- **Mediciones** funcional: **Peso/Estatua** (estatura, peso, embarazo y **barra de IMC** por color con marcador y categoría), **Bioimpedancia** (grasa total con kg derivado, grasa superior/inferior, visceral, masa libre de grasa, masa muscular con % derivado, peso óseo, agua corporal, edad metabólica), **Pliegues** (10), **Perímetros** (14) y **Diámetros** (12).
+- Cada campo se guarda con el autoguardado del expediente (sección `anthropometric`); se conservan las claves previas (Peso/Talla/Cintura/Cadera/pliegues base) para no perder datos. Botón "Registrar medición de hoy" integrado.
+- Se mantiene el gráfico "Evolución de métricas" debajo del módulo.
+- Las pestañas **Cálculos / Calorías / Somatocarta / Notas / Fotos** quedan con aviso de "próxima entrega".
+
+**Verificado** con Chromium sobre una paciente de prueba (creada y eliminada al terminar): 6 pestañas, 5 tipos, IMC 26.4 · Sobrepeso con marcador en 62.35%, y los campos de Perímetros (14) y Pliegues (10); sin errores de consola. `npm run build` OK y `npm test` (48/48).
