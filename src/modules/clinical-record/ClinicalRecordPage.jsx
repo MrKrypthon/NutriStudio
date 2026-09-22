@@ -58,6 +58,17 @@ function TogglePill({ active, label, onClick }) {
   return <button type="button" className={active ? 'toggle-pill active' : 'toggle-pill'} onClick={onClick}>{label}</button>
 }
 
+// Subsecciones internas: cada bloque de una sección larga se muestra por separado para no tener
+// que hacer scroll dentro del expediente.
+function SubTabs({ tabs, value, onChange }) {
+  return <div className="sub-tabs">{tabs.map(([key, label]) => <button type="button" key={key} className={'sub-tab' + (value === key ? ' active' : '')} onClick={() => onChange(key)}>{label}</button>)}</div>
+}
+
+function Subsection({ groups, value, onChange }) {
+  const active = groups.some((g) => g[0] === value) ? value : groups[0][0]
+  return <><SubTabs tabs={groups.map((g) => [g[0], g[1]])} value={active} onChange={onChange} /><div className="sub-body">{groups.find((g) => g[0] === active)?.[2]}</div></>
+}
+
 // Transcribes live via the browser's own Web Speech API (Chrome/Edge only) — no audio file is
 // ever recorded or uploaded, so this doesn't depend on the file-storage decision the project
 // still has pending. The transcript is plain text the nutritionist reviews and edits herself;
@@ -151,6 +162,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
 
   const [tab, setTab] = useState('Antropométrico')
+  const [sub, setSub] = useState('')
   const [loadState, setLoadState] = useState('loading')
   const [consultation, setConsultation] = useState(null)
   const [historyCount, setHistoryCount] = useState(0)
@@ -675,7 +687,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
     {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
     {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
-    <div className="record-tabs">{TABS.map((x) => <button className={tab === x ? 'active' : ''} onClick={() => setTab(x)} key={x}>{x}</button>)}</div>
+    <div className="record-tabs">{TABS.map((x) => <button className={tab === x ? 'active' : ''} onClick={() => { setTab(x); setSub('') }} key={x}>{x}</button>)}</div>
 
     {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando expediente…</h3></div>}
     {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar ni crear la consulta de {patientName}.</div>}
@@ -691,150 +703,170 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
       : tab === 'Bioquímico' ? <div className="clinical-layout">
         <section className="record-main panel">
-          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 4 DE 13</p><h1>Bioquímico</h1><p className="subtitle">Los estudios son opcionales en la primera consulta: se sugieren y suelen traerse en la segunda. Registra los valores que traiga el paciente.</p></div><button className="primary" onClick={openLabForm}>+ Agregar estudio</button></div>
-          <FormCard title="Solicitud de estudios" fields={['Estudios solicitados (se traen en la 2ª consulta)|*', 'Notas de bioquímico|*']} values={currentValues} onFieldChange={updateField} />
-          {!labs.length && <div className="lab-empty"><span>▧</span><b>Sin estudios adjuntos</b><small>Registra los resultados manualmente con "+ Agregar estudio".</small></div>}
-          {labForm && <div className="diagnosis-form panel">
-            <p className="eyebrow">NUEVO ESTUDIO</p>
-            <div className="form-grid three">
-              <label>Estudio<input value={labForm.name} onChange={(e) => updateLabForm('name', e.target.value)} placeholder="Ej. Glucosa" /></label>
-              <label>Valor<input value={labForm.value} onChange={(e) => updateLabForm('value', e.target.value)} placeholder="Ej. 92" /></label>
-              <label>Unidad<input value={labForm.unit} onChange={(e) => updateLabForm('unit', e.target.value)} placeholder="Ej. mg/dL" /></label>
-              <label>Rango de referencia<input value={labForm.range} onChange={(e) => updateLabForm('range', e.target.value)} placeholder="Ej. 70-100" /></label>
-              <label>Estado<select value={labForm.status} onChange={(e) => updateLabForm('status', e.target.value)}><option>Normal</option><option>Elevado</option><option>Bajo</option><option>Pendiente</option></select></label>
-            </div>
-            <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name || !labForm.value} onClick={saveLab}>Guardar estudio</button></div>
-          </div>}
-          {labs.length > 0 && <div className="lab-list">{labs.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
-
-          <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName} y captura sus valores arriba a mano; todavía no hay lectura automática.</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
-          {uploadState === 'error' && <div className="form-error">⚠ {uploadError}</div>}
-          {!attachments.length && <div className="lab-empty"><span>▤</span><b>Sin PDF adjuntos</b><small>Sube el estudio en PDF que te compartió el paciente.</small></div>}
-          {attachments.length > 0 && <div className="lab-list">{attachments.map((attachment) => <div className="lab-row attachment-row" key={attachment.id}><div><b>{attachment.fileName}</b><small>{(attachment.fileSize / 1024).toFixed(0)} KB · subido por {attachment.uploadedBy?.name || '—'}</small></div><button type="button" className="link-button" onClick={() => downloadLabAttachment(attachment)}>Ver</button><button type="button" className="link-button" onClick={() => removeLabAttachment(attachment.id)}>Quitar</button></div>)}</div>}
+          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 4 DE 13</p><h1>Bioquímico</h1><p className="subtitle">Los estudios son opcionales en la primera consulta: se sugieren y suelen traerse en la segunda. Registra los valores que traiga el paciente.</p></div><button className="primary" onClick={() => { setSub('estudios'); openLabForm() }}>+ Agregar estudio</button></div>
+          <Subsection value={sub} onChange={setSub} groups={[
+            ['estudios', 'Solicitud y estudios', <div className="sub-stack" key="est">
+              <FormCard title="Solicitud de estudios" fields={['Estudios solicitados (se traen en la 2ª consulta)|*', 'Notas de bioquímico|*']} values={currentValues} onFieldChange={updateField} />
+              {!labs.length && <div className="lab-empty"><span>▧</span><b>Sin estudios adjuntos</b><small>Registra los resultados manualmente con "+ Agregar estudio".</small></div>}
+              {labForm && <div className="diagnosis-form panel">
+                <p className="eyebrow">NUEVO ESTUDIO</p>
+                <div className="form-grid three">
+                  <label>Estudio<input value={labForm.name} onChange={(e) => updateLabForm('name', e.target.value)} placeholder="Ej. Glucosa" /></label>
+                  <label>Valor<input value={labForm.value} onChange={(e) => updateLabForm('value', e.target.value)} placeholder="Ej. 92" /></label>
+                  <label>Unidad<input value={labForm.unit} onChange={(e) => updateLabForm('unit', e.target.value)} placeholder="Ej. mg/dL" /></label>
+                  <label>Rango de referencia<input value={labForm.range} onChange={(e) => updateLabForm('range', e.target.value)} placeholder="Ej. 70-100" /></label>
+                  <label>Estado<select value={labForm.status} onChange={(e) => updateLabForm('status', e.target.value)}><option>Normal</option><option>Elevado</option><option>Bajo</option><option>Pendiente</option></select></label>
+                </div>
+                <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name || !labForm.value} onClick={saveLab}>Guardar estudio</button></div>
+              </div>}
+              {labs.length > 0 && <div className="lab-list">{labs.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
+            </div>],
+            ['adjuntos', 'Adjuntos PDF', <div className="sub-stack" key="adj">
+              <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName} y captura sus valores arriba a mano; todavía no hay lectura automática.</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
+              {uploadState === 'error' && <div className="form-error">⚠ {uploadError}</div>}
+              {!attachments.length && <div className="lab-empty"><span>▤</span><b>Sin PDF adjuntos</b><small>Sube el estudio en PDF que te compartió el paciente.</small></div>}
+              {attachments.length > 0 && <div className="lab-list">{attachments.map((attachment) => <div className="lab-row attachment-row" key={attachment.id}><div><b>{attachment.fileName}</b><small>{(attachment.fileSize / 1024).toFixed(0)} KB · subido por {attachment.uploadedBy?.name || '—'}</small></div><button type="button" className="link-button" onClick={() => downloadLabAttachment(attachment)}>Ver</button><button type="button" className="link-button" onClick={() => removeLabAttachment(attachment.id)}>Quitar</button></div>)}</div>}
+            </div>],
+          ]} />
         </section>
         <aside className="record-aside panel"><p className="eyebrow">LECTURA RÁPIDA</p><div className="lab-score">{labs.filter((l) => l.status === 'Normal').length}<span>/{labs.length}</span></div><b>Resultados normales</b>{labs.some((l) => l.status === 'Elevado' || l.status === 'Bajo') ? <p className="muted">Hay hallazgos fuera de rango que requieren seguimiento en el tratamiento.</p> : <p className="muted">{labs.length ? 'Todos los estudios registrados están en rango normal.' : 'Todavía no hay estudios registrados.'}</p>}<div className="tag-row">{labs.filter((l) => l.status === 'Elevado' || l.status === 'Bajo').map((l) => <span key={l.id}>{l.name} {l.status.toLowerCase()}</span>)}</div></aside>
       </div>
 
       : tab === 'Diagnóstico' ? <div className="panel diagnosis-panel">
-        <div className="section-heading"><div><p className="eyebrow">SECCIÓN 9 DE 13 · TND</p><h1>Diagnóstico nutricio</h1><p className="subtitle">Evalúa la alimentación (CESIVA), define el tipo de dieta y registra los diagnósticos PES por dominio.</p></div><button className="secondary" onClick={() => openDiagnosisForm(DIAGNOSIS_DOMAINS[0][0])}>+ Nuevo diagnóstico</button></div>
-        <div className="form-card cesiva-card"><div className="cesiva-card-head"><div><h3>Evaluación CESIVA</h3><p className="muted cesiva-hint">Evalúa cada criterio de la alimentación actual de {patientName}.</p></div><span className="cesiva-score">{CESIVA.filter(([c]) => { const v = currentValues[`CESIVA: ${c}`]; return v === true || v === 'Cumple' }).length} de {CESIVA.length} cumplen</span></div>
-          <div className="cesiva-table">
-            <div className="cesiva-row cesiva-head"><span>Criterio</span><b>Evaluación</b><b>Comentario</b></div>
-            {CESIVA.map(([criterion, description]) => { const key = `CESIVA: ${criterion}`; const raw = currentValues[key]; const value = raw === true ? 'Cumple' : (typeof raw === 'string' ? raw : ''); const noteKey = `CESIVA: ${criterion} (comentario)`; return <div className={'cesiva-row' + (value ? ' rated' : '')} key={criterion}><span className="cesiva-criterion"><b>{criterion}</b><small>{description}</small></span><div className="cesiva-eval">{[['Cumple', 'cumple'], ['Parcial', 'parcial'], ['No cumple', 'nocumple']].map(([label, tone]) => <button type="button" key={label} className={'cesiva-opt ' + tone + (value === label ? ' selected' : '')} onClick={() => updateField(key, value === label ? '' : label)}>{label}</button>)}</div><input className="cesiva-note" value={currentValues[noteKey] ?? ''} onChange={(e) => updateField(noteKey, e.target.value)} placeholder="Comentario" /></div> })}
-          </div>
-        </div>
-        <FormCard title="Tipo de dieta y evaluación" fields={['Tipo de dieta|', 'Evaluación de la alimentación actual|*']} values={currentValues} onFieldChange={updateField} />
-        <div className="diagnosis-domains">{DIAGNOSIS_DOMAINS.map(([title, desc, color]) => <div className={'domain-card ' + color} key={title} onClick={() => openDiagnosisForm(title)} style={{ cursor: 'pointer' }}><span>◉</span><b>{title}</b><small>{desc}</small><strong>{diagnoses.filter((d) => d.domain === title).length} seleccionados</strong></div>)}</div>
-
-        {diagnosisForm && <div className="diagnosis-form panel">
-          <p className="eyebrow">{diagnosisForm._editingId ? 'EDITAR DIAGNÓSTICO' : 'NUEVO DIAGNÓSTICO'} · {diagnosisForm.domain}</p>
-          <label>Problema<input value={diagnosisForm.problem} onChange={(e) => updateDiagnosisForm('problem', e.target.value)} placeholder="Ej. Ingesta excesiva de energía" /></label>
-          <label>Etiología (relacionado con…)<textarea value={diagnosisForm.etiology} onChange={(e) => updateDiagnosisForm('etiology', e.target.value)} placeholder="Causa o factores contribuyentes..." /></label>
-          <label>Evidencia (evidenciado por…)<textarea value={diagnosisForm.evidence} onChange={(e) => updateDiagnosisForm('evidence', e.target.value)} placeholder="Signos, síntomas o datos que lo sustentan..." /></label>
-          {diagnosisSaveState === 'error' && <div className="form-error">⚠ No se pudo guardar el diagnóstico.</div>}
-          <div className="modal-actions"><button type="button" className="secondary" onClick={closeDiagnosisForm}>Cancelar</button><button className="primary" disabled={!diagnosisForm.problem || diagnosisSaveState === 'saving'} onClick={saveDiagnosis}>{diagnosisSaveState === 'saving' ? 'Guardando…' : diagnosisForm._editingId ? 'Guardar cambios' : 'Guardar diagnóstico'}</button></div>
-        </div>}
-
-        <div className="diagnosis-selected">
-          <p className="eyebrow">DIAGNÓSTICOS SELECCIONADOS</p>
-          {!diagnoses.length && <p className="muted">Todavía no hay diagnósticos registrados para esta consulta.</p>}
-          {diagnoses.map((d) => <div className="diagnosis-entry" key={d.id}>
-            <div><b>{d.domain}</b><span>{d.problem}</span>{d.etiology && <small>Relacionado con: {d.etiology}</small>}{d.evidence && <small>Evidenciado por: {d.evidence}</small>}</div>
-            <div className="diagnosis-actions"><button type="button" className="link-button" onClick={() => editDiagnosis(d)}>Editar</button><button type="button" className="link-button" onClick={() => removeDiagnosis(d.id)}>Quitar</button></div>
-          </div>)}
-        </div>
+        <div className="section-heading"><div><p className="eyebrow">SECCIÓN 9 DE 13 · TND</p><h1>Diagnóstico nutricio</h1><p className="subtitle">Evalúa la alimentación (CESIVA), define el tipo de dieta y registra los diagnósticos PES por dominio.</p></div><button className="secondary" onClick={() => { setSub('registrados'); openDiagnosisForm(DIAGNOSIS_DOMAINS[0][0]) }}>+ Nuevo diagnóstico</button></div>
+        <Subsection value={sub} onChange={setSub} groups={[
+          ['cesiva', 'CESIVA', <div className="form-card cesiva-card" key="ce"><div className="cesiva-card-head"><div><h3>Evaluación CESIVA</h3><p className="muted cesiva-hint">Evalúa cada criterio de la alimentación actual de {patientName}.</p></div><span className="cesiva-score">{CESIVA.filter(([c]) => { const v = currentValues[`CESIVA: ${c}`]; return v === true || v === 'Cumple' }).length} de {CESIVA.length} cumplen</span></div>
+            <div className="cesiva-table">
+              <div className="cesiva-row cesiva-head"><span>Criterio</span><b>Evaluación</b><b>Comentario</b></div>
+              {CESIVA.map(([criterion, description]) => { const key = `CESIVA: ${criterion}`; const raw = currentValues[key]; const value = raw === true ? 'Cumple' : (typeof raw === 'string' ? raw : ''); const noteKey = `CESIVA: ${criterion} (comentario)`; return <div className={'cesiva-row' + (value ? ' rated' : '')} key={criterion}><span className="cesiva-criterion"><b>{criterion}</b><small>{description}</small></span><div className="cesiva-eval">{[['Cumple', 'cumple'], ['Parcial', 'parcial'], ['No cumple', 'nocumple']].map(([label, tone]) => <button type="button" key={label} className={'cesiva-opt ' + tone + (value === label ? ' selected' : '')} onClick={() => updateField(key, value === label ? '' : label)}>{label}</button>)}</div><input className="cesiva-note" value={currentValues[noteKey] ?? ''} onChange={(e) => updateField(noteKey, e.target.value)} placeholder="Comentario" /></div> })}
+            </div>
+          </div>],
+          ['dieta', 'Tipo de dieta', <FormCard key="td" title="Tipo de dieta y evaluación" fields={['Tipo de dieta|', 'Evaluación de la alimentación actual|*']} values={currentValues} onFieldChange={updateField} />],
+          ['dominios', 'Dominios PES', <div className="diagnosis-domains" key="dm">{DIAGNOSIS_DOMAINS.map(([title, desc, color]) => <div className={'domain-card ' + color} key={title} onClick={() => { setSub('registrados'); openDiagnosisForm(title) }} style={{ cursor: 'pointer' }}><span>◉</span><b>{title}</b><small>{desc}</small><strong>{diagnoses.filter((d) => d.domain === title).length} seleccionados</strong></div>)}</div>],
+          ['registrados', 'Diagnósticos', <div className="sub-stack" key="rg">
+            {diagnosisForm && <div className="diagnosis-form panel">
+              <p className="eyebrow">{diagnosisForm._editingId ? 'EDITAR DIAGNÓSTICO' : 'NUEVO DIAGNÓSTICO'} · {diagnosisForm.domain}</p>
+              <label>Problema<input value={diagnosisForm.problem} onChange={(e) => updateDiagnosisForm('problem', e.target.value)} placeholder="Ej. Ingesta excesiva de energía" /></label>
+              <label>Etiología (relacionado con…)<textarea value={diagnosisForm.etiology} onChange={(e) => updateDiagnosisForm('etiology', e.target.value)} placeholder="Causa o factores contribuyentes..." /></label>
+              <label>Evidencia (evidenciado por…)<textarea value={diagnosisForm.evidence} onChange={(e) => updateDiagnosisForm('evidence', e.target.value)} placeholder="Signos, síntomas o datos que lo sustentan..." /></label>
+              {diagnosisSaveState === 'error' && <div className="form-error">⚠ No se pudo guardar el diagnóstico.</div>}
+              <div className="modal-actions"><button type="button" className="secondary" onClick={closeDiagnosisForm}>Cancelar</button><button className="primary" disabled={!diagnosisForm.problem || diagnosisSaveState === 'saving'} onClick={saveDiagnosis}>{diagnosisSaveState === 'saving' ? 'Guardando…' : diagnosisForm._editingId ? 'Guardar cambios' : 'Guardar diagnóstico'}</button></div>
+            </div>}
+            <div className="diagnosis-selected">
+              <p className="eyebrow">DIAGNÓSTICOS SELECCIONADOS</p>
+              {!diagnoses.length && <p className="muted">Todavía no hay diagnósticos registrados para esta consulta.</p>}
+              {diagnoses.map((d) => <div className="diagnosis-entry" key={d.id}>
+                <div><b>{d.domain}</b><span>{d.problem}</span>{d.etiology && <small>Relacionado con: {d.etiology}</small>}{d.evidence && <small>Evidenciado por: {d.evidence}</small>}</div>
+                <div className="diagnosis-actions"><button type="button" className="link-button" onClick={() => editDiagnosis(d)}>Editar</button><button type="button" className="link-button" onClick={() => removeDiagnosis(d.id)}>Quitar</button></div>
+              </div>)}
+            </div>
+          </div>],
+        ]} />
       </div>
 
       : tab === 'General' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>General</h1><p className="subtitle">Antecedentes heredofamiliares de {patientName}.</p>
-        <div className="heredo-table">
-          <div className="heredo-head"><span>Enfermedad</span>{RELATIVES.map((rel) => <b key={rel}>{rel}</b>)}</div>
-          {FAMILY_DISEASES.map((disease) => <div className="heredo-row" key={disease}>
-            <span>{disease}</span>
-            {RELATIVES.map((rel) => { const key = `${disease}__${rel}`; const active = !!currentValues[key]; return <TogglePill key={rel} active={active} label={active ? '✓' : ''} onClick={() => updateField(key, !active)} /> })}
-          </div>)}
-        </div>
-        <FormCard title="Notas adicionales" fields={['Notas de antecedentes|']} values={currentValues} onFieldChange={updateField} />
+        <Subsection value={sub} onChange={setSub} groups={[
+          ['heredo', 'Heredofamiliares', <div className="heredo-table" key="heredo">
+            <div className="heredo-head"><span>Enfermedad</span>{RELATIVES.map((rel) => <b key={rel}>{rel}</b>)}</div>
+            {FAMILY_DISEASES.map((disease) => <div className="heredo-row" key={disease}>
+              <span>{disease}</span>
+              {RELATIVES.map((rel) => { const key = `${disease}__${rel}`; const active = !!currentValues[key]; return <TogglePill key={rel} active={active} label={active ? '✓' : ''} onClick={() => updateField(key, !active)} /> })}
+            </div>)}
+          </div>],
+          ['notas', 'Notas', <FormCard key="notas" title="Notas adicionales" fields={['Notas de antecedentes|']} values={currentValues} onFieldChange={updateField} />],
+        ]} />
       </div>
 
       : tab === 'Clínico' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Clínico</h1><p className="subtitle">Antecedentes, medicamentos, síntomas y exploración física de {patientName}. Marca los que aplican.</p>
-        <FormCard title="Antecedentes personales" fields={['Enfermedades actuales o previas|*', 'Cirugías realizadas|*']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Medicamentos y suplementos" fields={['Medicamentos que toma|*', 'Suplementos que toma|*', 'Interacciones con nutrientes|*']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Alergias e intolerancias" fields={['Alergias alimentarias|*', 'Intolerancias|*']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Consumo de sustancias" fields={['Tabaquismo (frecuencia)|', 'Consumo de alcohol (frecuencia)|']} values={currentValues} onFieldChange={updateField} />
-        <h3 className="exam-subhead">Síntomas</h3>
-        <div className="symptom-grid">{SYMPTOMS.map((symptom) => { const active = !!currentValues[symptom]; return <TogglePill key={symptom} active={active} label={symptom} onClick={() => updateField(symptom, !active)} /> })}</div>
-        <h3 className="exam-subhead">Exploración física</h3>
-        {PHYSICAL_EXAM.map(([group, findings]) => <div key={group} className="exam-group">
-          <b className="exam-group-title">{group}</b>
-          <div className="symptom-grid">{findings.map((finding) => { const key = `Exploración: ${finding}`; const active = !!currentValues[key]; return <TogglePill key={finding} active={active} label={finding} onClick={() => updateField(key, !active)} /> })}</div>
-        </div>)}
-        <FormCard title="Notas adicionales" fields={['Notas clínicas|']} values={currentValues} onFieldChange={updateField} />
+        <Subsection value={sub} onChange={setSub} groups={[
+          ['antecedentes', 'Antecedentes', <FormCard key="a" title="Antecedentes personales" fields={['Enfermedades actuales o previas|*', 'Cirugías realizadas|*']} values={currentValues} onFieldChange={updateField} />],
+          ['medicamentos', 'Medicamentos', <FormCard key="m" title="Medicamentos y suplementos" fields={['Medicamentos que toma|*', 'Suplementos que toma|*', 'Interacciones con nutrientes|*']} values={currentValues} onFieldChange={updateField} />],
+          ['alergias', 'Alergias y sustancias', <div key="al" className="sub-stack"><FormCard title="Alergias e intolerancias" fields={['Alergias alimentarias|*', 'Intolerancias|*']} values={currentValues} onFieldChange={updateField} /><FormCard title="Consumo de sustancias" fields={['Tabaquismo (frecuencia)|', 'Consumo de alcohol (frecuencia)|']} values={currentValues} onFieldChange={updateField} /></div>],
+          ['sintomas', 'Síntomas', <div key="s" className="symptom-grid">{SYMPTOMS.map((symptom) => { const active = !!currentValues[symptom]; return <TogglePill key={symptom} active={active} label={symptom} onClick={() => updateField(symptom, !active)} /> })}</div>],
+          ['exploracion', 'Exploración física', <div key="e">{PHYSICAL_EXAM.map(([group, findings]) => <div key={group} className="exam-group">
+            <b className="exam-group-title">{group}</b>
+            <div className="symptom-grid">{findings.map((finding) => { const key = `Exploración: ${finding}`; const active = !!currentValues[key]; return <TogglePill key={finding} active={active} label={finding} onClick={() => updateField(key, !active)} /> })}</div>
+          </div>)}</div>],
+          ['notas', 'Notas', <FormCard key="n" title="Notas adicionales" fields={['Notas clínicas|']} values={currentValues} onFieldChange={updateField} />],
+        ]} />
       </div>
 
       : tab === 'Monitoreo' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Monitoreo</h1><p className="subtitle">Seguimiento entre consultas de {patientName}: apego, síntomas y ajustes al plan.</p>
-        <FormCard title="Apego a macros reportado" fields={['% Carbohidratos consumidos|', '% Proteína consumida|', '% Lípidos consumidos|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Seguimiento subjetivo" fields={['Estado de ánimo|', 'Apego al plan|', 'Antojos|', 'Hambre|', 'Consumo de agua|', 'Ejercicio|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Síntomas" fields={['Diarrea o estreñimiento|', 'Inflamación|', 'Cefalea|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Evaluación de la consulta" fields={['Calidad de preparación de comidas|', 'Modificaciones al plan|', 'Tema para la próxima consulta|', 'Observaciones|']} values={currentValues} onFieldChange={updateField} />
+        <Subsection value={sub} onChange={setSub} groups={[
+          ['apego', 'Apego a macros', <FormCard key="ap" title="Apego a macros reportado" fields={['% Carbohidratos consumidos|', '% Proteína consumida|', '% Lípidos consumidos|']} values={currentValues} onFieldChange={updateField} />],
+          ['subjetivo', 'Seguimiento', <FormCard key="sb" title="Seguimiento subjetivo" fields={['Estado de ánimo|', 'Apego al plan|', 'Antojos|', 'Hambre|', 'Consumo de agua|', 'Ejercicio|']} values={currentValues} onFieldChange={updateField} />],
+          ['sintomas', 'Síntomas', <FormCard key="sn" title="Síntomas" fields={['Diarrea o estreñimiento|', 'Inflamación|', 'Cefalea|']} values={currentValues} onFieldChange={updateField} />],
+          ['evaluacion', 'Evaluación', <FormCard key="ev" title="Evaluación de la consulta" fields={['Calidad de preparación de comidas|', 'Modificaciones al plan|', 'Tema para la próxima consulta|', 'Observaciones|']} values={currentValues} onFieldChange={updateField} />],
+        ]} />
       </div>
 
       : tab === 'Transcripción' ? <TranscriptionTab values={currentValues} updateField={updateField} updateFields={updateFields} appendField={appendField} patientName={patientName} />
 
       : tab === 'Dietético' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Dietético</h1><p className="subtitle">Hábitos alimentarios de {patientName}.</p>
-        <FormCard title="Patrón de alimentación" fields={['Núm. de comidas al día|', 'Horario habitual de comidas|', 'Apetito|', 'Hora a la que tiene más hambre|', 'Comidas o bebidas preferidas|', 'Alimentos que no le agradan o le causan malestar|*']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Consumo de agua" fields={['Vasos de agua al día|', 'Restricciones dietéticas|', 'Notas dietéticas|*']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Historial de consultas nutricionales" fields={['¿Ha asistido antes a consulta nutricional?|', 'Tipo de consulta previa|', 'Tiempo que llevó la dieta|', 'Motivo por el que la llevó|', 'Resultados obtenidos|', 'Qué tanto se apegó a la dieta|*']} values={currentValues} onFieldChange={updateField} />
-        <div className="form-card"><h3>Frecuencia de alimentos <small className="freq-hint">días por semana</small></h3><div className="frequency-chips">
-          {FOOD_FREQUENCY.map((food) => <label className="frequency-chip" key={food}><span>{food}</span><input type="number" min="0" max="7" value={currentValues[`Frecuencia: ${food}`] ?? ''} onChange={(e) => updateField(`Frecuencia: ${food}`, e.target.value)} /></label>)}
-        </div></div>
-        <FormCard title="Dieta habitual (alimentos, cantidades y horarios)" fields={['Desayuno|*', 'Colación matutina|*', 'Almuerzo o comida|*', 'Colación vespertina|*', 'Cena|*']} values={currentValues} onFieldChange={updateField} />
-        <RecallBuilder value={currentValues['Recordatorio 24 h']} onChange={(next) => updateField('Recordatorio 24 h', next)} age={computeAge(patient?.birthDate)} sex={patient?.sex} />
+        <Subsection value={sub} onChange={setSub} groups={[
+          ['patron', 'Patrón de alimentación', <FormCard key="pt" title="Patrón de alimentación" fields={['Núm. de comidas al día|', 'Horario habitual de comidas|', 'Apetito|', 'Hora a la que tiene más hambre|', 'Comidas o bebidas preferidas|', 'Alimentos que no le agradan o le causan malestar|*']} values={currentValues} onFieldChange={updateField} />],
+          ['agua', 'Consumo de agua', <FormCard key="ag" title="Consumo de agua" fields={['Vasos de agua al día|', 'Restricciones dietéticas|', 'Notas dietéticas|*']} values={currentValues} onFieldChange={updateField} />],
+          ['historial', 'Historial', <FormCard key="hi" title="Historial de consultas nutricionales" fields={['¿Ha asistido antes a consulta nutricional?|', 'Tipo de consulta previa|', 'Tiempo que llevó la dieta|', 'Motivo por el que la llevó|', 'Resultados obtenidos|', 'Qué tanto se apegó a la dieta|*']} values={currentValues} onFieldChange={updateField} />],
+          ['frecuencia', 'Frecuencia de alimentos', <div className="form-card" key="fr"><h3>Frecuencia de alimentos <small className="freq-hint">días por semana</small></h3><div className="frequency-chips">
+            {FOOD_FREQUENCY.map((food) => <label className="frequency-chip" key={food}><span>{food}</span><input type="number" min="0" max="7" value={currentValues[`Frecuencia: ${food}`] ?? ''} onChange={(e) => updateField(`Frecuencia: ${food}`, e.target.value)} /></label>)}
+          </div></div>],
+          ['dieta', 'Dieta habitual', <FormCard key="dh" title="Dieta habitual (alimentos, cantidades y horarios)" fields={['Desayuno|*', 'Colación matutina|*', 'Almuerzo o comida|*', 'Colación vespertina|*', 'Cena|*']} values={currentValues} onFieldChange={updateField} />],
+          ['recordatorio', 'Recordatorio 24 h', <RecallBuilder key="r24" value={currentValues['Recordatorio 24 h']} onChange={(next) => updateField('Recordatorio 24 h', next)} age={computeAge(patient?.birthDate)} sex={patient?.sex} />],
+        ]} />
       </div>
 
       : tab === 'Estilo de vida' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Estilo de vida</h1><p className="subtitle">Actividad física y hábitos de {patientName}.</p>
-        <FormCard title="Actividad física" fields={['Tipo de ejercicio|', 'Frecuencia semanal|', 'Duración por sesión|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Descanso y ánimo" fields={['Horas de sueño|', 'Calidad del sueño|', 'Nivel de estrés percibido|', 'Estado de ánimo|', 'Jornada laboral|', 'Otros|*']} values={currentValues} onFieldChange={updateField} />
+        <Subsection value={sub} onChange={setSub} groups={[
+          ['actividad', 'Actividad física', <FormCard key="af" title="Actividad física" fields={['Tipo de ejercicio|', 'Frecuencia semanal|', 'Duración por sesión|']} values={currentValues} onFieldChange={updateField} />],
+          ['descanso', 'Descanso y ánimo', <FormCard key="da" title="Descanso y ánimo" fields={['Horas de sueño|', 'Calidad del sueño|', 'Nivel de estrés percibido|', 'Estado de ánimo|', 'Jornada laboral|', 'Otros|*']} values={currentValues} onFieldChange={updateField} />],
+        ]} />
       </div>
 
       : tab === 'Sociocultural' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Sociocultural</h1><p className="subtitle">Contexto socioeconómico y cultural de {patientName}.</p>
-        <FormCard title="Contexto socioeconómico" fields={['Ocupación|', 'Barreras económicas para el plan (presupuesto)|*', 'Acceso a alimentos|', 'Entorno familiar|*']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Cultura y creencias" fields={['Restricciones religiosas o culturales|', 'Creencias sobre alimentación|', 'Notas socioculturales|*']} values={currentValues} onFieldChange={updateField} />
+        <Subsection value={sub} onChange={setSub} groups={[
+          ['contexto', 'Contexto', <FormCard key="cx" title="Contexto socioeconómico" fields={['Ocupación|', 'Barreras económicas para el plan (presupuesto)|*', 'Acceso a alimentos|', 'Entorno familiar|*']} values={currentValues} onFieldChange={updateField} />],
+          ['cultura', 'Cultura y creencias', <FormCard key="cu" title="Cultura y creencias" fields={['Restricciones religiosas o culturales|', 'Creencias sobre alimentación|', 'Notas socioculturales|*']} values={currentValues} onFieldChange={updateField} />],
+        ]} />
       </div>
 
       : tab === 'Resumen' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Resumen</h1><p className="subtitle">Motivo de consulta, datos generales y contexto de {patientName}.</p>
-        <FormCard title="Motivo de consulta y objetivo" fields={['Motivo de consulta|*', 'Objetivo|*']} values={currentValues} onFieldChange={updateField} />
-        <div className="summary-card form-card"><div className="summary-card-head"><h3>Datos del paciente</h3>{!patientEdit
-          ? <button type="button" className="link-button" onClick={startPatientEdit}>Editar fecha de nacimiento y ocupación</button>
-          : <div className="summary-card-actions"><button type="button" className="link-button" onClick={() => setPatientEdit(false)}>Cancelar</button><button type="button" className="link-button" disabled={patientSaveState === 'saving'} onClick={savePatientEdit}>{patientSaveState === 'saving' ? 'Guardando…' : 'Guardar'}</button></div>}</div><div className="form-grid three">
-          <label>Nombre<input value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} readOnly /></label>
-          <label>Sexo<input value={patient?.sex ? (SEX_LABELS[patient.sex] || patient.sex) : '—'} readOnly /></label>
-          <label>Fecha de nacimiento{patientEdit ? <input type="date" value={patientForm.birthDate} onChange={(e) => setPatientForm((prev) => ({ ...prev, birthDate: e.target.value }))} /> : <input value={patient?.birthDate ? formatDateUTC(patient.birthDate) : '—'} readOnly />}</label>
-          <label>Edad<input value={computeAge(patient?.birthDate) != null ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label>
-          <label>Ocupación{patientEdit ? <input value={patientForm.occupation} onChange={(e) => setPatientForm((prev) => ({ ...prev, occupation: e.target.value }))} placeholder="Ej. Diseñadora" /> : <input value={patient?.occupation || '—'} readOnly />}</label>
-          <label>Contacto<input value={[patient?.phone, patient?.email].filter(Boolean).join(' · ') || '—'} readOnly /></label>
-        </div>{patientSaveState === 'error' && <div className="form-error">⚠ No se pudieron guardar los datos.</div>}</div>
-        <div className="summary-card form-card"><h3>Historial y agenda</h3><div className="form-grid">
-          <label>Consultas registradas<input value={`${historyCount}`} readOnly /></label>
-          <label>Consulta actual<input value={consultation ? (consultation.status === 'IN_PROGRESS' ? 'En curso' : consultation.status) : '—'} readOnly /></label>
-          <label>Próxima cita<input value={patient?.nextAppointmentAt ? `${formatDate(patient.nextAppointmentAt)} · ${formatAppointmentTime(patient.nextAppointmentAt)} · ${APPOINTMENT_TYPE_LABELS[patient.nextAppointmentType] || 'Cita'}` : 'Sin cita próxima'} readOnly /></label>
-        </div></div>
+        <Subsection value={sub} onChange={setSub} groups={[
+          ['motivo', 'Motivo de consulta', <FormCard key="mo" title="Motivo de consulta y objetivo" fields={['Motivo de consulta|*', 'Objetivo|*']} values={currentValues} onFieldChange={updateField} />],
+          ['datos', 'Datos del paciente', <div className="summary-card form-card" key="dp"><div className="summary-card-head"><h3>Datos del paciente</h3>{!patientEdit
+            ? <button type="button" className="link-button" onClick={startPatientEdit}>Editar fecha de nacimiento y ocupación</button>
+            : <div className="summary-card-actions"><button type="button" className="link-button" onClick={() => setPatientEdit(false)}>Cancelar</button><button type="button" className="link-button" disabled={patientSaveState === 'saving'} onClick={savePatientEdit}>{patientSaveState === 'saving' ? 'Guardando…' : 'Guardar'}</button></div>}</div><div className="form-grid three">
+            <label>Nombre<input value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} readOnly /></label>
+            <label>Sexo<input value={patient?.sex ? (SEX_LABELS[patient.sex] || patient.sex) : '—'} readOnly /></label>
+            <label>Fecha de nacimiento{patientEdit ? <input type="date" value={patientForm.birthDate} onChange={(e) => setPatientForm((prev) => ({ ...prev, birthDate: e.target.value }))} /> : <input value={patient?.birthDate ? formatDateUTC(patient.birthDate) : '—'} readOnly />}</label>
+            <label>Edad<input value={computeAge(patient?.birthDate) != null ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label>
+            <label>Ocupación{patientEdit ? <input value={patientForm.occupation} onChange={(e) => setPatientForm((prev) => ({ ...prev, occupation: e.target.value }))} placeholder="Ej. Diseñadora" /> : <input value={patient?.occupation || '—'} readOnly />}</label>
+            <label>Contacto<input value={[patient?.phone, patient?.email].filter(Boolean).join(' · ') || '—'} readOnly /></label>
+          </div>{patientSaveState === 'error' && <div className="form-error">⚠ No se pudieron guardar los datos.</div>}</div>],
+          ['historial', 'Historial y agenda', <div className="summary-card form-card" key="ha"><h3>Historial y agenda</h3><div className="form-grid">
+            <label>Consultas registradas<input value={`${historyCount}`} readOnly /></label>
+            <label>Consulta actual<input value={consultation ? (consultation.status === 'IN_PROGRESS' ? 'En curso' : consultation.status) : '—'} readOnly /></label>
+            <label>Próxima cita<input value={patient?.nextAppointmentAt ? `${formatDate(patient.nextAppointmentAt)} · ${formatAppointmentTime(patient.nextAppointmentAt)} · ${APPOINTMENT_TYPE_LABELS[patient.nextAppointmentType] || 'Cita'}` : 'Sin cita próxima'} readOnly /></label>
+          </div></div>],
+        ]} />
       </div>
 
       : tab === 'Tratamiento' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Tratamiento</h1><p className="subtitle">Plan de intervención acordado con {patientName}: objetivos, educación y seguimiento.</p>
-        <FormCard title="Objetivos terapéuticos" fields={['Objetivo general|', 'Objetivos a corto plazo|', 'Objetivos a largo plazo|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Recomendaciones" fields={['Recomendaciones generales|', 'Recomendaciones de alimentación|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Educación nutricional" fields={['Temas de educación para el paciente|', 'Material educativo entregado|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Metas y acuerdos" fields={['Metas SMART|', 'Barreras y soluciones|*', 'Acuerdos con el paciente|']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Suplementos" fields={['Suplementos recomendados|*', 'Dosis e indicaciones|*']} values={currentValues} onFieldChange={updateField} />
-        <FormCard title="Seguimiento" fields={['Próximos pasos|', 'Notas de tratamiento|']} values={currentValues} onFieldChange={updateField} />
+        <Subsection value={sub} onChange={setSub} groups={[
+          ['objetivos', 'Objetivos', <FormCard key="ob" title="Objetivos terapéuticos" fields={['Objetivo general|', 'Objetivos a corto plazo|', 'Objetivos a largo plazo|']} values={currentValues} onFieldChange={updateField} />],
+          ['recomendaciones', 'Recomendaciones', <FormCard key="rc" title="Recomendaciones" fields={['Recomendaciones generales|', 'Recomendaciones de alimentación|']} values={currentValues} onFieldChange={updateField} />],
+          ['educacion', 'Educación', <FormCard key="ed" title="Educación nutricional" fields={['Temas de educación para el paciente|', 'Material educativo entregado|']} values={currentValues} onFieldChange={updateField} />],
+          ['metas', 'Metas y acuerdos', <FormCard key="mt" title="Metas y acuerdos" fields={['Metas SMART|', 'Barreras y soluciones|*', 'Acuerdos con el paciente|']} values={currentValues} onFieldChange={updateField} />],
+          ['suplementos', 'Suplementos', <FormCard key="sp" title="Suplementos" fields={['Suplementos recomendados|*', 'Dosis e indicaciones|*']} values={currentValues} onFieldChange={updateField} />],
+          ['seguimiento', 'Seguimiento', <FormCard key="sg" title="Seguimiento" fields={['Próximos pasos|', 'Notas de tratamiento|']} values={currentValues} onFieldChange={updateField} />],
+        ]} />
       </div>
 
       : tab === 'Notas' ? <div className="panel generic-section">
