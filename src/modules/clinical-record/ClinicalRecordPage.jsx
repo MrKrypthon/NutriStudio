@@ -206,6 +206,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [reportState, setReportState] = useState('idle')
   const [exportDoc, setExportDoc] = useState(null)
   const [exportState, setExportState] = useState('idle')
+  const [clinicalReport, setClinicalReport] = useState(null)
+  const [clinicalReportState, setClinicalReportState] = useState('idle')
   const [completionState, setCompletionState] = useState('idle')
   const [completeOpen, setCompleteOpen] = useState(false)
   const [completeForm, setCompleteForm] = useState({ method: 'CASH', amount: '' })
@@ -328,6 +330,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       .catch(() => {})
     documentsApi.list(`?patientId=${patientId}&type=consultation_export`)
       .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); if (existing) setExportDoc(existing) } })
+      .catch(() => {})
+    documentsApi.list(`?patientId=${patientId}&type=consultation_clinical`)
+      .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); if (existing) setClinicalReport(existing) } })
       .catch(() => {})
     return () => { cancelled = true }
   }, [consultation, patientId])
@@ -691,6 +696,37 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     }
   }
 
+  // Informe clínico profesional (derivación): tablas de laboratorio, recordatorio y secciones.
+  const generateClinicalReport = async () => {
+    if (!consultation) return
+    setClinicalReportState('working')
+    try {
+      const doc = clinicalReport || await documentsApi.createForClinicalReport(consultation.id)
+      const generated = await documentsApi.generate(doc.id)
+      setClinicalReport(generated)
+      setClinicalReportState('idle')
+    } catch {
+      setClinicalReportState('error')
+    }
+  }
+
+  const downloadClinicalReport = async () => {
+    if (!clinicalReport?.storageKey) return
+    setClinicalReportState('working')
+    try {
+      const blob = await documentsApi.downloadBlob(clinicalReport.id)
+      const url = URL.createObjectURL(blob)
+      const link = window.document.createElement('a')
+      link.href = url
+      link.download = clinicalReport.storageKey
+      link.click()
+      URL.revokeObjectURL(url)
+      setClinicalReportState('idle')
+    } catch {
+      setClinicalReportState('error')
+    }
+  }
+
   // Real evolution chart for Antropométrico: plots the patient's actual measurements (last 8),
   // for the selected metric. Before this, the chart was a hardcoded SVG line with fake dates.
   const chartPoints = useMemo(() => {
@@ -747,7 +783,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
       <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><div className="clinical-person-head"><h2>{patientName}</h2><button type="button" className="record-button" title="Grabar consulta" aria-label="Grabar consulta" onClick={() => setTab('Transcripción')}><Icon>record</Icon></button></div><span>Consulta nutricional · {CONSULTATION_STATUS_LABELS[consultation?.status] || 'en curso'}</span></div></div>
-      <div className="clinical-actions">{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}<button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}<button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
+      <div className="clinical-actions">{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}<button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}{clinicalReport?.storageKey && <button className="secondary" disabled={clinicalReportState === 'working'} onClick={downloadClinicalReport}>{clinicalReportState === 'working' ? '…' : 'Descargar informe clínico'}</button>}<button className="secondary" disabled={clinicalReportState === 'working'} onClick={generateClinicalReport}>{clinicalReportState === 'working' ? 'Generando…' : clinicalReport?.storageKey ? 'Actualizar informe clínico' : 'Informe clínico'}</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
     </div>
     {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
     {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
