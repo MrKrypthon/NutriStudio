@@ -53,6 +53,46 @@ function planProgress(plan) {
 const planUpdatedLabel = (iso) => { const d = new Date(iso); const days = Math.floor((Date.now() - d.getTime()) / 86400000); if (days <= 0) return 'hoy'; if (days === 1) return 'ayer'; return `hace ${days} días` }
 const consultationReason = (plan) => plan?.consultation?.sections?.find((section) => section.sectionKey === 'summary')?.payload?.['Motivo de consulta'] || plan?.consultation?.sections?.find((section) => section.sectionKey === 'summary')?.payload?.reason || null
 
+// Resumen del expediente para el plan: reúne diagnóstico, padecimientos, alergias, preferencias y
+// hallazgos de laboratorio, y arma un objetivo/recomendaciones editables a partir de ellos.
+const sectionPayload = (plan, key) => plan?.consultation?.sections?.find((section) => section.sectionKey === key)?.payload || {}
+const readExpediente = (plan) => {
+  const summary = sectionPayload(plan, 'summary')
+  // Los antecedentes familiares vivieron en la sección 'general' antes de fusionarse en Clínico.
+  const clinical = { ...sectionPayload(plan, 'general'), ...sectionPayload(plan, 'clinical') }
+  const biochemical = sectionPayload(plan, 'biochemical')
+  const dietary = sectionPayload(plan, 'dietary')
+  const labs = Array.isArray(biochemical['Estudios']) ? biochemical['Estudios'] : []
+  return {
+    reason: summary['Motivo de consulta'] || summary.reason || null,
+    subjectiveGoal: summary.Objetivo || summary.goal || null,
+    diagnoses: plan?.consultation?.diagnoses || [],
+    conditions: Object.keys(clinical).filter((key) => clinical[key] === true && !key.startsWith('Exploración:')).map((key) => key.replace(/__/g, ' · ')),
+    allergies: ['Alergias alimentarias', 'Intolerancias'].map((key) => clinical[key]).filter(Boolean),
+    avoid: ['Alimentos que no le agradan o le causan malestar', 'Restricciones dietéticas'].map((key) => dietary[key]).filter(Boolean),
+    prefers: dietary['Comidas o bebidas preferidas'] || null,
+    outOfRange: labs.filter((lab) => lab.status && lab.status !== 'Normal'),
+  }
+}
+const buildExpedienteGoal = (plan) => {
+  const ex = readExpediente(plan)
+  const parts = []
+  if (ex.subjectiveGoal) parts.push(ex.subjectiveGoal)
+  if (ex.diagnoses.length) parts.push(`Manejo de ${ex.diagnoses.map((d) => d.problem).join(', ')}`)
+  if (ex.allergies.length) parts.push(`Considerar alergias/intolerancias (${ex.allergies.join(', ')})`)
+  return parts.join('. ')
+}
+const buildExpedienteRecommendations = (plan) => {
+  const ex = readExpediente(plan)
+  const lines = []
+  if (ex.allergies.length) lines.push(`Evitar alérgenos/intolerancias: ${ex.allergies.join(', ')}.`)
+  if (ex.avoid.length) lines.push(`Alimentos que causan malestar o restricciones: ${ex.avoid.join(', ')}.`)
+  if (ex.prefers) lines.push(`Preferencias del paciente: ${ex.prefers}.`)
+  if (ex.outOfRange.length) lines.push(`Vigilar hallazgos de laboratorio: ${ex.outOfRange.map((lab) => `${lab.name} (${String(lab.status).toLowerCase()})`).join(', ')}.`)
+  lines.push('Individualizar la dieta según tolerancia y adherencia.')
+  return lines.join(' ')
+}
+
 export default function PlanStudioPage({ setActive, patientId, onSelectPatient, pendingRecipeName, onConsumeRecipeName }) {
   // Al entrar sin paciente se muestra el hub con TODOS los planes; el paciente se elige al abrir
   // un plan o al crear uno nuevo. Si llega un patientId (desde el expediente / "Asignar al plan"),
@@ -174,7 +214,11 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       for (const slot of activePlan?.mealSlots || []) if (slot.servings != null) nextServings[slot.mealType] = Number(slot.servings)
       mealServingsRef.current = nextServings
       setMealServings(nextServings)
-      setPlan(activePlan)
+      // El listado de planes no incluye la consulta; se trae el plan completo para tener las
+      // secciones del expediente (resumen del expediente → plan).
+      let fullPlan = activePlan
+      if (activePlan?.id) { try { fullPlan = await plansApi.get(activePlan.id) } catch { fullPlan = activePlan } }
+      setPlan(fullPlan)
       setRecipes(recipesResponse.items || [])
       setSlots(initialSlots)
       // Si venimos de "Asignar al plan" (pendingRecipeName), abrir directo el paso Distribución;
@@ -651,11 +695,23 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
     <div className="plan-body">
 
-    {plan?.consultation && (consultationReason(plan) || plan.consultation.diagnoses?.length > 0) && <div className="form-card plan-context-card">
-      <p className="eyebrow">DE LA CONSULTA · {plan.consultation.diagnoses?.length || 0} diagnóstico(s)</p>
-      {consultationReason(plan) && <p className="plan-context-reason"><b>Motivo:</b> {consultationReason(plan)}</p>}
-      {plan.consultation.diagnoses?.length > 0 && <div className="plan-context-diagnoses">{plan.consultation.diagnoses.map((diagnosis) => <span key={diagnosis.id}><b>{diagnosis.domain}</b> {diagnosis.problem}</span>)}</div>}
-    </div>}
+    {plan?.consultation && (() => {
+      const ex = readExpediente(plan)
+      const hasData = ex.reason || ex.diagnoses.length || ex.conditions.length || ex.allergies.length || ex.avoid.length || ex.prefers || ex.outOfRange.length
+      if (!hasData) return null
+      return <div className="form-card plan-context-card">
+        <div className="plan-context-head"><div><p className="eyebrow">RESUMEN DEL EXPEDIENTE</p><b>Datos que alimentan este plan</b></div><button type="button" className="secondary" onClick={() => { const goal = buildExpedienteGoal(plan); if (goal) updateForm('goal', goal); updateNotes('recommendations', buildExpedienteRecommendations(plan)) }}>Aplicar al objetivo y recomendaciones</button></div>
+        {ex.reason && <p className="plan-context-reason"><b>Motivo:</b> {ex.reason}</p>}
+        {ex.diagnoses.length > 0 && <div className="plan-context-diagnoses">{ex.diagnoses.map((diagnosis) => <span key={diagnosis.id}><b>{diagnosis.domain}</b> {diagnosis.problem}</span>)}</div>}
+        <div className="plan-context-grid">
+          {ex.conditions.length > 0 && <div><small>Padecimientos</small><p>{ex.conditions.join(' · ')}</p></div>}
+          {ex.allergies.length > 0 && <div><small>Alergias / intolerancias</small><p>{ex.allergies.join(' · ')}</p></div>}
+          {ex.avoid.length > 0 && <div><small>Alimentos a evitar</small><p>{ex.avoid.join(' · ')}</p></div>}
+          {ex.prefers && <div><small>Preferencias</small><p>{ex.prefers}</p></div>}
+          {ex.outOfRange.length > 0 && <div><small>Laboratorio a vigilar</small><p>{ex.outOfRange.map((lab) => `${lab.name} ${lab.value ?? ''} ${lab.unit || ''} (${String(lab.status).toLowerCase()})`).join(' · ')}</p></div>}
+        </div>
+      </div>
+    })()}
 
     {step === 0 && <><ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="Resumen del expediente y del último cálculo guardado en el paso Plan alimentario." action={<button className="secondary" onClick={() => selectStep(1)}>Ir al cálculo →</button>} /><div className="plan-grid"><div className="plan-card panel"><h3>Datos antropométricos</h3><div className="form-grid three"><label>Sexo<input value={patient?.sex || '—'} readOnly /></label><label>Fecha nacimiento<input value={formatUTCDate(patient?.birthDate) || '—'} readOnly /></label><label>Edad<input value={computeAge(patient?.birthDate) ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label><label>Peso actual<input value={plan?.evaluation?.inputs?.weightKg ? `${plan.evaluation.inputs.weightKg} kg` : '—'} readOnly /></label><label>Talla<input value={plan?.evaluation?.inputs?.heightCm ? `${plan.evaluation.inputs.heightCm} cm` : '—'} readOnly /></label><label>IMC calculado<input value={plan?.evaluation?.bmi ?? '—'} readOnly /></label></div></div><div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3>{plan?.evaluation?.idealWeightRange ? <div className="ideal-number">{plan.evaluation.idealWeightRange.minKg} <small>– {plan.evaluation.idealWeightRange.maxKg} kg</small></div> : <p className="muted">Calcula el requerimiento en el paso "Plan alimentario" para ver el rango.</p>}<p className="muted">Rango estimado para su estatura</p></div><div className="plan-card panel full"><h3>Objetivo terapéutico</h3>{plan?.goal ? <p>{plan.goal}</p> : <p className="muted">Sin definir todavía — se guarda junto con el cálculo en el paso "Plan alimentario".</p>}</div></div></>}
 
@@ -709,7 +765,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
           </div>)}</div>
         </>}
       </div>}
-      <div className="recommendations panel"><h3>Indicaciones para {patientName}</h3><span className="saved">{notesSaveState === 'saving' ? '● Guardando…' : notesSaveState === 'editing' ? '● Editando…' : notesSaveState === 'error' ? '⚠ Error al guardar' : '● Guardado'}</span><div className="form-grid"><label>Consumo de agua<textarea placeholder="Ej. 8 vasos (2 L) al día" value={notesForm.hydrationNote} onChange={(e) => updateNotes('hydrationNote', e.target.value)} disabled={!plan} /></label><label>Recomendaciones generales<textarea placeholder="Añade recomendaciones, educación o suplementos..." value={notesForm.recommendations} onChange={(e) => updateNotes('recommendations', e.target.value)} disabled={!plan} /></label></div>{!plan && <p className="muted">Crea el plan (paso "Distribución") para poder guardar estas indicaciones.</p>}</div>
+      <div className="recommendations panel"><h3>Indicaciones para {patientName}</h3><span className="saved">{notesSaveState === 'saving' ? '● Guardando…' : notesSaveState === 'editing' ? '● Editando…' : notesSaveState === 'error' ? '⚠ Error al guardar' : '● Guardado'}</span><button type="button" className="secondary" disabled={!plan} onClick={() => updateNotes('recommendations', buildExpedienteRecommendations(plan))}>Tomar del expediente</button><div className="form-grid"><label>Consumo de agua<textarea placeholder="Ej. 8 vasos (2 L) al día" value={notesForm.hydrationNote} onChange={(e) => updateNotes('hydrationNote', e.target.value)} disabled={!plan} /></label><label>Recomendaciones generales<textarea placeholder="Añade recomendaciones, educación o suplementos..." value={notesForm.recommendations} onChange={(e) => updateNotes('recommendations', e.target.value)} disabled={!plan} /></label></div>{!plan && <p className="muted">Crea el plan (paso "Distribución") para poder guardar estas indicaciones.</p>}</div>
       {renderPicker()}
     </>}
 

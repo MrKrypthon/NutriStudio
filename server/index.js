@@ -1311,8 +1311,9 @@ app.get('/api/v1/plans', async (request) => {
 app.get('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({
     where: { id: request.params.planId, patient: { practiceId: request.practiceId } },
-    // El plan arrastra contexto de la consulta que lo originó: motivo y diagnósticos.
-    include: { patient: true, mealSlots: true, documents: true, consultation: { include: { diagnoses: true, sections: { where: { sectionKey: 'summary' }, select: { payload: true } } } } },
+    // El plan arrastra contexto de la consulta que lo originó: motivo, diagnósticos y todas las
+    // secciones del expediente (antropometría, clínico, dietético…) para alimentar el plan.
+    include: { patient: true, mealSlots: true, documents: true, consultation: { include: { diagnoses: true, sections: { select: { sectionKey: true, payload: true } } } } },
   })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   return plan

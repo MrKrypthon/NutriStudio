@@ -1059,3 +1059,10 @@ html{scroll-behavior:smooth}
 .exam-ref{margin:0;text-align:center;border:1px solid var(--line);border-radius:10px;background:#fff;padding:8px}
 .exam-ref .exam-art{width:64px;height:64px;display:block;margin:0 auto}
 .exam-ref figcaption{font-size:9px;color:#3d3e51;margin-top:6px;line-height:1.3}
+
+.plan-context-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:8px}
+.plan-context-head b{display:block;font:600 11px 'DM Sans';color:#343647;margin-top:2px}
+.plan-context-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:10px}
+.plan-context-grid>div{border-top:1px solid var(--line);padding-top:8px}
+.plan-context-grid small{display:block;font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px}
+.plan-context-grid p{margin:0;font-size:11px;color:#3d3e51;line-height:1.4}
