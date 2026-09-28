@@ -69,6 +69,27 @@ function Subsection({ groups, value, onChange }) {
   return <><SubTabs tabs={groups.map((g) => [g[0], g[1]])} value={active} onChange={onChange} /><div className="sub-body">{groups.find((g) => g[0] === active)?.[2]}</div></>
 }
 
+// Interpretación de un estudio frente a su rango de referencia: admite "70-100", "<200" o ">40".
+function interpretLab(value, range) {
+  const v = Number(String(value ?? '').replace(',', '.'))
+  if (!Number.isFinite(v) || v === 0 && String(value).trim() === '') return null
+  const r = String(range || '').trim()
+  let m = r.match(/^([<>])\s*(-?\d+(?:[.,]\d+)?)/)
+  if (m) {
+    const bound = Number(m[2].replace(',', '.'))
+    return m[1] === '<' ? (v < bound ? 'Normal' : 'Elevado') : (v > bound ? 'Normal' : 'Bajo')
+  }
+  m = r.match(/(-?\d+(?:[.,]\d+)?)\s*(?:-|–|a )\s*(-?\d+(?:[.,]\d+)?)/i)
+  if (m) {
+    const min = Number(m[1].replace(',', '.'))
+    const max = Number(m[2].replace(',', '.'))
+    if (v < min) return 'Bajo'
+    if (v > max) return 'Elevado'
+    return 'Normal'
+  }
+  return null
+}
+
 // Transcribes live via the browser's own Web Speech API (Chrome/Edge only) — no audio file is
 // ever recorded or uploaded, so this doesn't depend on the file-storage decision the project
 // still has pending. The transcript is plain text the nutritionist reviews and edits herself;
@@ -536,16 +557,20 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }
 
   const labs = currentValues['Estudios'] || []
+  // El estado se interpreta automáticamente del rango de referencia cuando es posible; si no,
+  // se respeta el que se haya elegido a mano.
+  const labStatus = (lab) => (lab.range ? interpretLab(lab.value, lab.range) : null) || lab.status
+  const labsEvaluated = labs.map((lab) => ({ ...lab, status: labStatus(lab) }))
   const openLabForm = () => setLabForm({ name: '', value: '', unit: '', range: '', status: 'Normal' })
   const closeLabForm = () => setLabForm(null)
   const updateLabForm = (key, value) => setLabForm((prev) => ({ ...prev, [key]: value }))
   const saveLab = () => {
     if (!labForm?.name || !labForm?.value) return
-    updateField('Estudios', [...labs, { ...labForm, id: `${Date.now()}` }])
+    updateField('Estudios', [...labs, { ...labForm, status: interpretLab(labForm.value, labForm.range) || labForm.status, id: `${Date.now()}` }])
     setLabForm(null)
   }
   const removeLab = (id) => updateField('Estudios', labs.filter((lab) => lab.id !== id))
-  const updateLabValue = (id, value) => updateField('Estudios', labs.map((lab) => (lab.id === id ? { ...lab, value } : lab)))
+  const updateLabValue = (id, value) => updateField('Estudios', labs.map((lab) => (lab.id === id ? { ...lab, value, status: (lab.range ? interpretLab(value, lab.range) : null) || lab.status } : lab)))
 
   const uploadLabAttachment = async (file) => {
     if (!consultation || !file) return
@@ -717,9 +742,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
                   <label>Rango de referencia<input value={labForm.range} onChange={(e) => updateLabForm('range', e.target.value)} placeholder="Ej. 70-100" /></label>
                   <label>Estado<select value={labForm.status} onChange={(e) => updateLabForm('status', e.target.value)}><option>Normal</option><option>Elevado</option><option>Bajo</option><option>Pendiente</option></select></label>
                 </div>
+                {interpretLab(labForm.value, labForm.range) && <p className="lab-hint">Interpretación automática según el rango: <b>{interpretLab(labForm.value, labForm.range)}</b>. Puedes cambiarla en “Estado”.</p>}
                 <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name || !labForm.value} onClick={saveLab}>Guardar estudio</button></div>
               </div>}
-              {labs.length > 0 && <div className="lab-list">{labs.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
+              {labsEvaluated.length > 0 && <div className="lab-list">{labsEvaluated.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
             </div>],
             ['adjuntos', 'Adjuntos PDF', <div className="sub-stack" key="adj">
               <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName} y captura sus valores arriba a mano; todavía no hay lectura automática.</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
@@ -729,7 +755,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             </div>],
           ]} />
         </section>
-        <aside className="record-aside panel"><p className="eyebrow">LECTURA RÁPIDA</p><div className="lab-score">{labs.filter((l) => l.status === 'Normal').length}<span>/{labs.length}</span></div><b>Resultados normales</b>{labs.some((l) => l.status === 'Elevado' || l.status === 'Bajo') ? <p className="muted">Hay hallazgos fuera de rango que requieren seguimiento en el tratamiento.</p> : <p className="muted">{labs.length ? 'Todos los estudios registrados están en rango normal.' : 'Todavía no hay estudios registrados.'}</p>}<div className="tag-row">{labs.filter((l) => l.status === 'Elevado' || l.status === 'Bajo').map((l) => <span key={l.id}>{l.name} {l.status.toLowerCase()}</span>)}</div></aside>
+        <aside className="record-aside panel"><p className="eyebrow">LECTURA RÁPIDA</p><div className="lab-score">{labsEvaluated.filter((l) => l.status === 'Normal').length}<span>/{labsEvaluated.length}</span></div><b>Resultados normales</b>{labsEvaluated.some((l) => l.status === 'Elevado' || l.status === 'Bajo') ? <p className="muted">Hay hallazgos fuera de rango que requieren seguimiento en el tratamiento.</p> : <p className="muted">{labsEvaluated.length ? 'Todos los estudios registrados están en rango normal.' : 'Todavía no hay estudios registrados.'}</p>}<div className="tag-row">{labsEvaluated.filter((l) => l.status === 'Elevado' || l.status === 'Bajo').map((l) => <span key={l.id}>{l.name} {l.status.toLowerCase()}</span>)}</div></aside>
       </div>
 
       : tab === 'Diagnóstico' ? <div className="panel diagnosis-panel">

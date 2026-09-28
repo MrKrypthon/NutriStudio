@@ -1030,3 +1030,6 @@ html{scroll-behavior:smooth}
   .recall-meal textarea{min-height:0;height:24px}
   .section-heading{padding-bottom:6px;margin-bottom:6px}
 }
+
+.lab-hint{font-size:10px;color:var(--muted);margin:10px 0 0}
+.lab-hint b{color:var(--green)}
