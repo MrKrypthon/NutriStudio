@@ -46,7 +46,7 @@ const FAMILY_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'HTA', 'Dislip
 const RELATIVES = ['Mamá/Papá', 'Abuelos', 'Tíos']
 // Evaluación cualitativa del diagnóstico alimentario (CESIVA) y frecuencia de consumo por alimento.
 const CESIVA = [['Completa', 'Incluye todos los grupos de alimentos'], ['Equilibrada', 'Proporción adecuada entre grupos'], ['Suficiente', 'Cubre los requerimientos'], ['Inocua', 'Sin riesgo para la salud'], ['Variada', 'Alterna distintos alimentos'], ['Adecuada', 'Apta para el paciente']]
-const FOOD_FREQUENCY = ['Leche', 'Queso', 'Yogur', 'Carne de res', 'Carne de pollo', 'Pescado', 'Huevo', 'Tortilla', 'Pan', 'Arroz', 'Frijol', 'Verduras', 'Frutas', 'Refresco', 'Jugo', 'Café', 'Dulces o postres', 'Frituras']
+const FOOD_FREQUENCY = ['Leche', 'Queso', 'Yogur', 'Avena', 'Carne de res', 'Carne de pollo', 'Pescado', 'Huevo', 'Tortilla', 'Pan', 'Arroz', 'Frijol', 'Verduras', 'Frutas', 'Refresco', 'Jugo', 'Café', 'Dulces o postres', 'Frituras']
 const SYMPTOMS = ['Diarrea', 'Estreñimiento', 'Náusea', 'Úlcera', 'Pirosis', 'Ceguera nocturna', 'Vómito', 'Gastritis', 'Poliuria', 'Polidipsia', 'Polifagia']
 const PHYSICAL_EXAM = [
   ['Piel y ojos', ['Petequias', 'Xerosis conjuntival', 'Piel seca', 'Dermatitis pelagrosa', 'Manchas de Bitot', 'Hiperqueratosis folicular', 'Edema', 'Queratomalacia', 'Conjuntivas pálidas', 'Cianosis', 'Xantelasma', 'Piel quebradiza y escamosa']],
@@ -859,7 +859,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       : tab === 'Sociocultural' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Sociocultural</h1><p className="subtitle">Contexto socioeconómico y cultural de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
-          ['contexto', 'Contexto', <FormCard key="cx" title="Contexto socioeconómico" fields={['Ocupación|', 'Barreras económicas para el plan (presupuesto)|*', 'Acceso a alimentos|', 'Entorno familiar|*']} values={currentValues} onFieldChange={updateField} />],
+          ['contexto', 'Contexto', <FormCard key="cx" title="Contexto socioeconómico" fields={['Ocupación|', 'Entorno familiar|', 'Entorno laboral|', 'Presupuesto destinado a la alimentación|', 'Barreras económicas para el plan (presupuesto)|*', 'Acceso a alimentos|*']} values={currentValues} onFieldChange={updateField} />],
           ['cultura', 'Cultura y creencias', <FormCard key="cu" title="Cultura y creencias" fields={['Restricciones religiosas o culturales|', 'Creencias sobre alimentación|', 'Notas socioculturales|*']} values={currentValues} onFieldChange={updateField} />],
         ]} />
       </div>
@@ -889,7 +889,13 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       : tab === 'Tratamiento' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Tratamiento</h1><p className="subtitle">Plan de intervención acordado con {patientName}: objetivos, educación y seguimiento.</p>
         <Subsection value={sub} onChange={setSub} groups={[
-          ['objetivos', 'Objetivos', <FormCard key="ob" title="Objetivos terapéuticos" fields={['Objetivo general|', 'Objetivos a corto plazo|', 'Objetivos a largo plazo|']} values={currentValues} onFieldChange={updateField} />],
+          ['objetivos', 'Objetivos', <div key="ob" className="sub-stack">
+            <div className="form-card reference-card"><h3>Base del diagnóstico</h3>
+              {currentValues['Objetivo'] && <p className="reference-line"><b>Objetivo general (Resumen):</b> {currentValues['Objetivo']}</p>}
+              {diagnoses.length ? <div className="reference-list">{diagnoses.map((d) => <div className="reference-row" key={d.id}><b>{d.domain}</b><span>{d.problem}</span></div>)}</div> : <p className="muted">Aún no hay diagnósticos; regístralos en la sección Diagnóstico para basar aquí los objetivos.</p>}
+            </div>
+            <FormCard title="Objetivos terapéuticos" fields={['Objetivo general|', 'Objetivos a corto plazo|', 'Objetivos a largo plazo|']} values={currentValues} onFieldChange={updateField} />
+          </div>],
           ['recomendaciones', 'Recomendaciones', <FormCard key="rc" title="Recomendaciones" fields={['Recomendaciones generales|', 'Recomendaciones de alimentación|']} values={currentValues} onFieldChange={updateField} />],
           ['educacion', 'Educación', <FormCard key="ed" title="Educación nutricional" fields={['Temas de educación para el paciente|', 'Material educativo entregado|']} values={currentValues} onFieldChange={updateField} />],
           ['metas', 'Metas y acuerdos', <FormCard key="mt" title="Metas y acuerdos" fields={['Metas SMART|', 'Barreras y soluciones|*', 'Acuerdos con el paciente|']} values={currentValues} onFieldChange={updateField} />],
