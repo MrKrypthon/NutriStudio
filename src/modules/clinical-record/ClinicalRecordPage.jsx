@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import Anthropometry from '../../components/Anthropometry.jsx'
+import ExamArt from '../../components/ExamArt.jsx'
 import FormCard from '../../components/FormCard.jsx'
 import Icon from '../../components/Icon.jsx'
 import RecallBuilder from '../../components/RecallBuilder.jsx'
@@ -735,6 +736,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     updateFields(patch)
   }
 
+  // Hallazgos de exploración seleccionados, para mostrar su imagen de referencia.
+  const examSelected = PHYSICAL_EXAM.flatMap(([, findings]) => findings).filter((finding) => !!currentValues[`Exploración: ${finding}`])
+
   if (!patientId) return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
     <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Abre el expediente desde la lista de pacientes para registrar una consulta.</p><button className="primary" onClick={() => setActive('Pacientes')}>Ir a Pacientes</button></div>
   </div></AppChrome>
@@ -854,7 +858,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           ['exploracion', 'Exploración física', <div key="e">{PHYSICAL_EXAM.map(([group, findings]) => <div key={group} className="exam-group">
             <b className="exam-group-title">{group}</b>
             <div className="symptom-grid">{findings.map((finding) => { const key = `Exploración: ${finding}`; const active = !!currentValues[key]; return <TogglePill key={finding} active={active} label={finding} onClick={() => updateField(key, !active)} /> })}</div>
-          </div>)}</div>],
+          </div>)}
+            {examSelected.length > 0
+              ? <div className="exam-reference"><p className="eyebrow">REFERENCIA VISUAL DE LOS HALLAZGOS</p><div className="exam-ref-grid">{examSelected.map((finding) => <figure className="exam-ref" key={finding}><ExamArt finding={finding} /><figcaption>{finding}</figcaption></figure>)}</div></div>
+              : <p className="anthro-hint">Selecciona un hallazgo y aquí aparecerá una imagen de referencia.</p>}
+          </div>],
           ['notas', 'Notas', <div key="n" className="sub-stack"><FormCard title="Notas clínicas" fields={['Notas clínicas|']} values={currentValues} onFieldChange={updateField} /><FormCard title="Notas de antecedentes" fields={['Notas de antecedentes|']} values={currentValues} onFieldChange={updateField} /></div>],
         ]} />
       </div>

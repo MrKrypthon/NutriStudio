@@ -1053,3 +1053,9 @@ html{scroll-behavior:smooth}
 .reference-list{display:grid;gap:6px}
 .reference-row{display:flex;gap:10px;align-items:baseline;font-size:11px;color:#343647;border-top:1px solid var(--line);padding-top:6px}
 .reference-row b{color:var(--green);font-size:10px;min-width:130px}
+
+.exam-reference{margin-top:14px;border-top:1px solid var(--line);padding-top:12px}
+.exam-ref-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:10px;margin-top:8px}
+.exam-ref{margin:0;text-align:center;border:1px solid var(--line);border-radius:10px;background:#fff;padding:8px}
+.exam-ref .exam-art{width:64px;height:64px;display:block;margin:0 auto}
+.exam-ref figcaption{font-size:9px;color:#3d3e51;margin-top:6px;line-height:1.3}
