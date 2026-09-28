@@ -94,16 +94,16 @@ const frisanchoRows = (values, sex) => {
 // Guía ilustrada por medición: punto aproximado sobre la silueta (coordenadas 0-100 × 0-160) y una
 // descripción corta. La silueta se anima (marcador pulsante) al seleccionar cada campo.
 const GUIDE = {
-  'Subescapular (mm)': { x: 62, y: 34, desc: 'A dos centímetros del ángulo inferior de la escápula, en dirección oblicua hacia abajo y afuera (45°).' },
-  'Tricipital (mm)': { x: 26, y: 44, desc: 'En la cara posterior del brazo, a mitad de camino entre el acromion y el olécranon.' },
-  'Bicipital (mm)': { x: 30, y: 42, desc: 'En la cara anterior del brazo, al nivel del punto medio entre acromion y olécranon.' },
-  'Cresta ilíaca (mm)': { x: 56, y: 62, desc: 'En la línea axilar media, justo por encima de la cresta ilíaca.' },
-  'Supraespinal (mm)': { x: 60, y: 56, desc: 'En la intersección de la línea axilar media con la cresta ilíaca, hacia arriba y atrás.' },
-  'Abdominal (mm)': { x: 54, y: 66, desc: 'A cinco centímetros a la derecha del ombligo, en pliegue vertical.' },
-  'Muslo frontal (mm)': { x: 46, y: 102, desc: 'En la cara anterior del muslo, a mitad de camino entre el pliegue inguinal y el borde proximal de la rótula.' },
-  'Pantorrilla medial (mm)': { x: 40, y: 124, desc: 'En la cara medial de la pantorrilla, al nivel de la máxima circunferencia.' },
-  'Axilar medial (mm)': { x: 62, y: 50, desc: 'En la línea axilar media, a la altura del apéndice xifoides.' },
-  'Pectoral (mm)': { x: 60, y: 44, desc: 'En el borde inferior de la axila, sobre el músculo pectoral.' },
+  'Subescapular (mm)': { x: 62, y: 34, desc: 'Dos centímetros por debajo del ángulo inferior de la escápula. Pliegue oblicuo, hacia abajo y afuera, a unos 45°.' },
+  'Tricipital (mm)': { x: 26, y: 44, desc: 'Cara posterior del brazo, en el punto medio entre acromion y olécranon, con el brazo relajado. Pliegue vertical, paralelo al eje del brazo.' },
+  'Bicipital (mm)': { x: 30, y: 42, desc: 'Cara anterior del brazo, al mismo nivel que el pliegue tricipital. Pliegue vertical.' },
+  'Cresta ilíaca (mm)': { x: 56, y: 62, desc: 'Sobre la línea axilar media, justo por encima de la cresta ilíaca, con el brazo derecho abducido. Pliegue casi horizontal, ligeramente inclinado hacia abajo y adelante.' },
+  'Supraespinal (mm)': { x: 60, y: 56, desc: 'Donde la línea del ilioespinal al borde axilar anterior cruza la horizontal de la cresta ilíaca. Pliegue oblicuo hacia abajo y adentro (45°).' },
+  'Abdominal (mm)': { x: 54, y: 66, desc: 'Cinco centímetros a la derecha del ombligo, en pliegue vertical (ISAK). Lohman lo toma horizontal, 3 cm lateral y 1 cm por debajo del ombligo.' },
+  'Muslo frontal (mm)': { x: 46, y: 102, desc: 'Cara anterior del muslo, a media distancia entre el pliegue inguinal y el borde superior de la rótula, con la rodilla flexionada a 90°. Pliegue vertical.' },
+  'Pantorrilla medial (mm)': { x: 40, y: 124, desc: 'Cara medial de la pantorrilla, al nivel de su perímetro máximo, con la rodilla flexionada a 90°. Pliegue vertical.' },
+  'Axilar medial (mm)': { x: 62, y: 50, desc: 'Sobre la línea axilar media, a la altura del apéndice xifoides, con el brazo abducido. Pliegue vertical.' },
+  'Pectoral (mm)': { x: 60, y: 44, desc: 'Un centímetro por debajo del punto más alto del pliegue axilar anterior. Pliegue oblicuo, dirigido hacia el pezón.' },
   'Cefálico (cm)': { x: 50, y: 14, desc: 'Perímetro máximo de la cabeza, por encima de las cejas y de las orejas.' },
   'Cuello (cm)': { x: 50, y: 26, desc: 'Perímetro del cuello, por debajo de la laringe.' },
   'Brazo relajado (cm)': { x: 28, y: 46, desc: 'Punto medio entre acromion y olécranon, con el brazo relajado.' },
@@ -139,6 +139,8 @@ const GUIDE_IMAGES = import.meta.glob('../assets/mediciones/*.webp', { eager: tr
 const slug = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
 const guideImage = (key) => GUIDE_IMAGES[`../assets/mediciones/${slug(key)}.webp`] || null
 const PLIEGUES = new Set(GROUP_FIELDS.pliegues.map((field) => field.key))
+// Técnica común a todos los pliegues (ISAK / Lohman): es lo que muestra la animación de la guía.
+const SKIN_FOLD_TECHNIQUE = 'Técnica: toma el pliegue con pulgar e índice sobre el sitio marcado, aplica el plicómetro perpendicular al pliegue, a 1 cm de los dedos y a media altura, y lee a los 2 segundos sin soltar. Siempre del lado derecho.'
 const SKIN_FOLD_NOTE = 'Se usan en fórmulas de: Siri, Brozek, Faulkner, Ledesma y cálculo del somatotipo.'
 
 function BodyFigure({ x, y }) {
@@ -191,6 +193,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
       <b className="anthro-guide-title">{active.label}</b>
       <div className="anthro-guide-frame">{image ? <img className="anthro-guide-media" src={image} alt={`Guía de medición: ${active.label}`} /> : <BodyFigure x={guide.x} y={guide.y} />}</div>
       <p className="anthro-guide-desc">{guide.desc}</p>
+      {PLIEGUES.has(active.key) && <p className="anthro-guide-desc">{SKIN_FOLD_TECHNIQUE}</p>}
       {PLIEGUES.has(active.key) && <p className="anthro-guide-formula">{SKIN_FOLD_NOTE}</p>}
     </aside>
   }
