@@ -1492,6 +1492,12 @@ const stringifyEntry = (value) => {
   return value
 }
 const diagnosisLine = (d) => [`${d.code || ''}`, `(${d.domain}) — ${d.problem}`, d.etiology ? `Causa: ${d.etiology}` : null, d.evidence ? `Evidencia: ${d.evidence}` : null].filter(Boolean).join(' ').trim()
+// Renderiza un payload como un solo párrafo "clave: valor · clave: valor". Evita una línea por
+// campo (que llenaba páginas enteras) y omite los toggle en false, mostrando sólo los activos.
+const compactPayload = (payload, skip = []) => Object.entries(payload || {})
+  .filter(([key, value]) => value !== undefined && value !== null && value !== '' && value !== false && !skip.includes(key))
+  .map(([key, value]) => (value === true ? key.replace(/__/g, ' · ') : `${key}: ${stringifyEntry(value)}`))
+  .join('  ·  ')
 const signatureFor = (user, practice) => [user?.name || practice?.name || 'Nutri Studio', user?.specialty || null].filter(Boolean).join(' · ')
 
 function drawConsultationReport(file, document, practice, user, logoBuffer) {
@@ -1513,41 +1519,41 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   const summary = payloadOf('summary')
   const reason = summary?.reason || summary?.['Motivo de consulta']
   const goal = summary?.goal || summary?.Objetivo
-  file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
-  file.fillColor('#7267ef').fontSize(11).text('Resumen de la consulta', 62, file.y + 14)
+  const boxTop = file.y
+  file.roundedRect(48, boxTop, 516, 58, 6).fill('#eeecfd')
+  file.fillColor('#7267ef').fontSize(11).text('Resumen de la consulta', 62, boxTop + 12)
   const summaryLine = reason || goal
     ? [reason && `Motivo: ${reason}`, goal && `Objetivo: ${goal}`].filter(Boolean).join('   ·   ')
     : 'Documento generado desde la valoración clínica de Nutri Studio.'
-  file.fillColor('#4c4e5b').fontSize(9).text(summaryLine, 62, file.y + 33, { width: 480 })
-  file.y += 95
+  file.fillColor('#4c4e5b').fontSize(9).text(summaryLine, 62, boxTop + 31, { width: 480 })
+  file.y = boxTop + 72
 
   let sectionIndex = 0
-  const drawTitle = (title) => { sectionIndex += 1; file.fillColor('#7267ef').fontSize(13).text(`${sectionIndex}. ${title}`); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#ddd6fa').stroke(); file.moveDown() }
-  const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, { width: 480 })
-  const drawEntries = (payload) => { const entries = Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== '') ; if (!entries.length) return false; for (const [key, value] of entries) drawLine(`${key}: ${stringifyEntry(value)}`); return true }
+  const drawTitle = (title) => { sectionIndex += 1; file.moveDown(0.5); file.fillColor('#7267ef').fontSize(13).text(`${sectionIndex}. ${title}`, 48, file.y, { width: 516 }); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#ddd6fa').stroke(); file.moveDown(0.4) }
+  const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, 48, file.y, { width: 516 })
 
-  drawTitle('Datos generales')
-  if (!drawEntries(payloadOf('general'))) drawLine('Sin datos generales registrados.')
-  file.moveDown(1.5)
+  drawTitle('Antecedentes y clínico')
+  const clinicalText = compactPayload({ ...payloadOf('general'), ...payloadOf('clinical') }, ['Notas clínicas', 'Notas de antecedentes'])
+  drawLine(clinicalText || 'Sin antecedentes registrados.')
 
+  file.moveDown(0.6)
   drawTitle('Antropometría')
   if (measurement) {
-    drawLine(`Peso: ${measurement.weightKg ?? '—'} kg · Talla: ${measurement.heightCm ?? '—'} cm`)
-    if (measurement.waistCm) drawLine(`Cintura: ${measurement.waistCm} cm`)
-    if (measurement.hipCm) drawLine(`Cadera: ${measurement.hipCm} cm`)
-    if (measurement.bodyFatPercent) drawLine(`% grasa corporal: ${measurement.bodyFatPercent}%`)
-    if (measurement.method) drawLine(`Método: ${measurement.method}`)
-  } else drawLine('Sin mediciones registradas.')
-  file.moveDown(1.5)
+    drawLine(`Peso: ${measurement.weightKg ?? '—'} kg · Talla: ${measurement.heightCm ?? '—'} cm · Cintura: ${measurement.waistCm ?? '—'} cm · Cadera: ${measurement.hipCm ?? '—'} cm · % grasa: ${measurement.bodyFatPercent ?? '—'}%`)
+  }
+  const anthroText = compactPayload(payloadOf('anthropometric'), ['Peso (kg)', 'Talla (cm)', 'IMC calculado'])
+  if (anthroText) drawLine(anthroText)
+  else if (!measurement) drawLine('Sin mediciones registradas.')
 
+  file.moveDown(0.6)
   drawTitle('Diagnóstico nutricio')
   if (diagnoses.length) for (const d of diagnoses) drawLine(diagnosisLine(d))
   else drawLine('Sin diagnóstico registrado.')
-  file.moveDown(1.5)
 
+  file.moveDown(0.6)
   drawTitle('Tratamiento')
-  if (!drawEntries(payloadOf('treatment'))) drawLine('Sin recomendaciones registradas.')
-  file.moveDown(1.5)
+  drawLine(compactPayload(payloadOf('treatment')) || 'Sin recomendaciones registradas.')
+  file.moveDown(0.8)
 
   // Explicit width: pdfkit persists the last text() box, so a bare { align: 'center' } would pin
   // the footer to whatever width/x the previous line used (see the menu footer fix).
@@ -1584,31 +1590,18 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
   const summary = payloadOf('summary')
   const reason = summary?.reason || summary?.['Motivo de consulta']
   const goal = summary?.goal || summary?.Objetivo
-  file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
-  file.fillColor('#7267ef').fontSize(11).text('Expediente completo', 62, file.y + 14)
+  const boxTop = file.y
+  file.roundedRect(48, boxTop, 516, 58, 6).fill('#eeecfd')
+  file.fillColor('#7267ef').fontSize(11).text('Expediente completo', 62, boxTop + 12)
   const summaryLine = reason || goal
     ? [reason && `Motivo: ${reason}`, goal && `Objetivo: ${goal}`].filter(Boolean).join('   ·   ')
     : 'Todas las secciones del expediente clínico de esta consulta, tal como quedaron registradas.'
-  file.fillColor('#4c4e5b').fontSize(9).text(summaryLine, 62, file.y + 33, { width: 480 })
-  file.y += 95
+  file.fillColor('#4c4e5b').fontSize(9).text(summaryLine, 62, boxTop + 31, { width: 480 })
+  file.y = boxTop + 72
 
   let sectionIndex = 0
-  const drawTitle = (title) => { sectionIndex += 1; file.fillColor('#7267ef').fontSize(13).text(`${sectionIndex}. ${title}`); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#ddd6fa').stroke(); file.moveDown() }
-  const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, { width: 480 })
-
-  // Toggle pills (heredofamiliares, síntomas, exploración física) are stored as `"Label": true`;
-  // draw those as a clean list of the active labels instead of `Label: true`, and skip the
-  // inactive ones. Everything else prints `Label: value`.
-  const drawEntries = (payload) => {
-    const entries = Object.entries(payload).filter(([, value]) => value !== undefined && value !== null && value !== '' && value !== false)
-    if (!entries.length) return false
-    for (const [key, value] of entries) {
-      if (value === true) drawLine(key.replace(/__/g, ' · '))
-      else if (Array.isArray(value) || (value && typeof value === 'object')) drawLine(`${key}: ${stringifyEntry(value)}`)
-      else drawLine(`${key}: ${value}`)
-    }
-    return true
-  }
+  const drawTitle = (title) => { sectionIndex += 1; file.moveDown(0.5); file.fillColor('#7267ef').fontSize(13).text(`${sectionIndex}. ${title}`, 48, file.y, { width: 516 }); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#ddd6fa').stroke(); file.moveDown(0.4) }
+  const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, 48, file.y, { width: 516 })
 
   for (const [key, label] of EXPORT_SECTION_KEYS) {
     drawTitle(label)
@@ -1623,18 +1616,25 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
         measurement?.muscleMassKg != null && `Masa muscular: ${measurement.muscleMassKg} kg`,
         measurement?.method && `Método: ${measurement.method}`,
       ].filter(Boolean)
-      if (parts.length) { for (const part of parts) drawLine(part) }
-      else drawLine('Sin mediciones registradas.')
-      drawEntries(payloadOf('anthropometric'))
-      file.moveDown(1)
+      if (parts.length) drawLine(parts.join(' · '))
+      const anthroText = compactPayload(payloadOf('anthropometric'), ['Peso (kg)', 'Talla (cm)', 'IMC calculado'])
+      if (anthroText) drawLine(anthroText)
+      if (!parts.length && !anthroText) drawLine('Sin mediciones registradas.')
+    } else if (key === 'biochemical') {
+      const labs = Array.isArray(payloadOf('biochemical')['Estudios']) ? payloadOf('biochemical')['Estudios'] : []
+      for (const lab of labs) drawLine(`${lab.name}: ${lab.value ?? '—'} ${lab.unit || ''}${lab.range ? ` (ref. ${lab.range})` : ''}${lab.status ? ` · ${lab.status}` : ''}`)
+      const bioText = compactPayload(payloadOf('biochemical'), ['Estudios'])
+      if (bioText) drawLine(bioText)
+      if (!labs.length && !bioText) drawLine('Sin estudios registrados.')
     } else if (key === 'diagnosis') {
       if (diagnoses.length) for (const d of diagnoses) drawLine(diagnosisLine(d))
       else drawLine('Sin diagnóstico registrado.')
-      file.moveDown(1)
+      const diagText = compactPayload(payloadOf(key))
+      if (diagText) drawLine(diagText)
     } else {
-      if (!drawEntries(payloadOf(key))) drawLine('Sin datos registrados.')
-      file.moveDown(1)
+      drawLine(compactPayload(payloadOf(key)) || 'Sin datos registrados.')
     }
+    file.moveDown(0.6)
   }
   file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
 }
@@ -1678,7 +1678,6 @@ function drawClinicalReport(file, document, practice, user, logoBuffer) {
   const consultation = document.consultation
   const sections = consultation?.sections || []
   const payloadOf = (key) => sections.find((section) => section.sectionKey === key)?.payload || {}
-  const allPayload = (key) => sections.filter((section) => section.sectionKey === key).flatMap((section) => Object.entries(section.payload || {}))
   const measurement = [...(consultation?.measurements || [])].sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
   const diagnoses = consultation?.diagnoses || []
 
@@ -1693,7 +1692,6 @@ function drawClinicalReport(file, document, practice, user, logoBuffer) {
   let index = 0
   const title = (text) => { index += 1; file.moveDown(0.6); file.fillColor('#7267ef').fontSize(12).text(`${index}. ${text}`, 48, file.y, { width: 516 }); file.moveTo(48, file.y + 3).lineTo(564, file.y + 3).strokeColor('#ddd6fa').stroke(); file.moveDown(0.5) }
   const line = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, 48, file.y, { width: 516 })
-  const entries = (payload) => Object.entries(payload || {}).filter(([key, value]) => truthyEntry([key, value]) && key !== 'Estudios')
 
   title('Identificación del paciente')
   line(`Nombre: ${patient.firstName} ${patient.lastName}`)
@@ -1715,52 +1713,42 @@ function drawClinicalReport(file, document, practice, user, logoBuffer) {
     const extra = [measurement.waistCm != null && `Cintura: ${measurement.waistCm} cm`, measurement.hipCm != null && `Cadera: ${measurement.hipCm} cm`, measurement.abdomenCm != null && `Abdomen: ${measurement.abdomenCm} cm`, measurement.bodyFatPercent != null && `% grasa: ${measurement.bodyFatPercent}%`, measurement.muscleMassKg != null && `Masa muscular: ${measurement.muscleMassKg} kg`].filter(Boolean)
     if (extra.length) line(extra.join(' · '))
   } else line('Sin mediciones registradas.')
-  const anthro = entries(payloadOf('anthropometric'))
-  if (anthro.length) line(anthro.map(([key, value]) => `${key}: ${stringifyEntry(value)}`).join('  |  '))
+  const anthroText = compactPayload(payloadOf('anthropometric'), ['Peso (kg)', 'Talla (cm)', 'IMC calculado'])
+  if (anthroText) line(anthroText)
 
   const labs = Array.isArray(payloadOf('biochemical')['Estudios']) ? payloadOf('biochemical')['Estudios'] : []
   title('Bioquímico')
   if (labs.length) {
     drawLabTable(file, labs)
   } else line('Sin estudios de laboratorio registrados.')
-  const bioNotes = entries(payloadOf('biochemical'))
-  if (bioNotes.length) line(bioNotes.map(([key, value]) => `${key}: ${stringifyEntry(value)}`).join('  |  '))
+  const bioNotes = compactPayload(payloadOf('biochemical'), ['Estudios'])
+  if (bioNotes) line(bioNotes)
 
   title('Clínico')
-  const clinical = entries(payloadOf('clinical'))
-  if (clinical.length) for (const [key, value] of clinical) line(`${key.replace(/__/g, ' · ')}: ${value === true ? 'Sí' : stringifyEntry(value)}`)
-  else line('Sin datos clínicos registrados.')
+  line(compactPayload(payloadOf('clinical')) || 'Sin datos clínicos registrados.')
 
   title('Dietético')
-  const dietary = entries(payloadOf('dietary')).filter(([key]) => key !== 'Recordatorio 24 h')
-  if (dietary.length) for (const [key, value] of dietary) line(`${key}: ${stringifyEntry(value)}`)
+  const dietaryText = compactPayload(payloadOf('dietary'), ['Recordatorio 24 h'])
+  if (dietaryText) line(dietaryText)
   const recall = payloadOf('dietary')['Recordatorio 24 h']
   if (recall?.meals?.length) { file.moveDown(0.3); file.fillColor('#1c232f').fontSize(10).text('Recordatorio de 24 horas', 48, file.y, { width: 516 }); drawRecallTable(file, recall) }
-  else if (!dietary.length) line('Sin datos dietéticos registrados.')
+  else if (!dietaryText) line('Sin datos dietéticos registrados.')
 
   title('Estilo de vida')
-  const lifestyle = entries(payloadOf('lifestyle'))
-  if (lifestyle.length) for (const [key, value] of lifestyle) line(`${key}: ${stringifyEntry(value)}`)
-  else line('Sin datos registrados.')
+  line(compactPayload(payloadOf('lifestyle')) || 'Sin datos registrados.')
 
   title('Sociocultural')
-  const socio = entries(payloadOf('sociocultural'))
-  if (socio.length) for (const [key, value] of socio) line(`${key}: ${stringifyEntry(value)}`)
-  else line('Sin datos registrados.')
+  line(compactPayload(payloadOf('sociocultural')) || 'Sin datos registrados.')
 
   title('Diagnóstico nutricio')
   if (diagnoses.length) for (const d of diagnoses) line(diagnosisLine(d))
   else line('Sin diagnóstico registrado.')
 
   title('Tratamiento e intervención')
-  const treatment = entries(payloadOf('treatment'))
-  if (treatment.length) for (const [key, value] of treatment) line(`${key}: ${stringifyEntry(value)}`)
-  else line('Sin recomendaciones registradas.')
+  line(compactPayload(payloadOf('treatment')) || 'Sin recomendaciones registradas.')
 
   title('Monitoreo y notas')
-  const monitoring = [...entries(payloadOf('monitoring')), ...entries(payloadOf('notes'))]
-  if (monitoring.length) for (const [key, value] of monitoring) line(`${key}: ${stringifyEntry(value)}`)
-  else line('Sin datos registrados.')
+  line(compactPayload({ ...payloadOf('monitoring'), ...payloadOf('notes') }) || 'Sin datos registrados.')
 
   file.moveDown(1)
   file.fillColor('#8e8f9a').fontSize(9).text(`Elaboró: ${signatureFor(user, practice)}`, 48, file.y, { width: 516, align: 'center' })
