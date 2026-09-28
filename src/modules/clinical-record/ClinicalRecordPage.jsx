@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import Anthropometry from '../../components/Anthropometry.jsx'
+import ExamArt from '../../components/ExamArt.jsx'
 import FormCard from '../../components/FormCard.jsx'
 import Icon from '../../components/Icon.jsx'
 import RecallBuilder from '../../components/RecallBuilder.jsx'
@@ -44,9 +45,11 @@ const DIAGNOSIS_DOMAINS = [
 
 const FAMILY_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'HTA', 'Dislipidemias', 'Nefropatías', 'Cáncer', 'Enf. cerebrovasculares', 'Otros']
 const RELATIVES = ['Mamá/Papá', 'Abuelos', 'Tíos']
+// Sugerencias para "agregar padecimiento" en antecedentes familiares.
+const SUGGESTED_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'Hipertensión arterial', 'Dislipidemias', 'Nefropatías', 'Cáncer', 'Enfermedad cerebrovascular', 'Hipotiroidismo', 'Hipertiroidismo', 'Asma', 'Alergias', 'Anemia', 'Artritis', 'Osteoporosis', 'Depresión', 'Ansiedad', 'Alzheimer', 'Celiaquía', 'Colitis', 'Gastritis', 'Cálculos renales', 'Trombosis', 'Epilepsia']
 // Evaluación cualitativa del diagnóstico alimentario (CESIVA) y frecuencia de consumo por alimento.
 const CESIVA = [['Completa', 'Incluye todos los grupos de alimentos'], ['Equilibrada', 'Proporción adecuada entre grupos'], ['Suficiente', 'Cubre los requerimientos'], ['Inocua', 'Sin riesgo para la salud'], ['Variada', 'Alterna distintos alimentos'], ['Adecuada', 'Apta para el paciente']]
-const FOOD_FREQUENCY = ['Leche', 'Queso', 'Yogur', 'Carne de res', 'Carne de pollo', 'Pescado', 'Huevo', 'Tortilla', 'Pan', 'Arroz', 'Frijol', 'Verduras', 'Frutas', 'Refresco', 'Jugo', 'Café', 'Dulces o postres', 'Frituras']
+const FOOD_FREQUENCY = ['Leche', 'Queso', 'Yogur', 'Avena', 'Carne de res', 'Carne de pollo', 'Pescado', 'Huevo', 'Tortilla', 'Pan', 'Arroz', 'Frijol', 'Verduras', 'Frutas', 'Refresco', 'Jugo', 'Café', 'Dulces o postres', 'Frituras']
 const SYMPTOMS = ['Diarrea', 'Estreñimiento', 'Náusea', 'Úlcera', 'Pirosis', 'Ceguera nocturna', 'Vómito', 'Gastritis', 'Poliuria', 'Polidipsia', 'Polifagia']
 const PHYSICAL_EXAM = [
   ['Piel y ojos', ['Petequias', 'Xerosis conjuntival', 'Piel seca', 'Dermatitis pelagrosa', 'Manchas de Bitot', 'Hiperqueratosis folicular', 'Edema', 'Queratomalacia', 'Conjuntivas pálidas', 'Cianosis', 'Xantelasma', 'Piel quebradiza y escamosa']],
@@ -186,6 +189,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
   const [tab, setTab] = useState('Antropométrico')
   const [sub, setSub] = useState('')
+  const [newDisease, setNewDisease] = useState('')
   const [loadState, setLoadState] = useState('loading')
   const [consultation, setConsultation] = useState(null)
   const [historyCount, setHistoryCount] = useState(0)
@@ -202,6 +206,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [reportState, setReportState] = useState('idle')
   const [exportDoc, setExportDoc] = useState(null)
   const [exportState, setExportState] = useState('idle')
+  const [clinicalReport, setClinicalReport] = useState(null)
+  const [clinicalReportState, setClinicalReportState] = useState('idle')
   const [completionState, setCompletionState] = useState('idle')
   const [completeOpen, setCompleteOpen] = useState(false)
   const [completeForm, setCompleteForm] = useState({ method: 'CASH', amount: '' })
@@ -324,6 +330,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       .catch(() => {})
     documentsApi.list(`?patientId=${patientId}&type=consultation_export`)
       .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); if (existing) setExportDoc(existing) } })
+      .catch(() => {})
+    documentsApi.list(`?patientId=${patientId}&type=consultation_clinical`)
+      .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); if (existing) setClinicalReport(existing) } })
       .catch(() => {})
     return () => { cancelled = true }
   }, [consultation, patientId])
@@ -687,6 +696,37 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     }
   }
 
+  // Informe clínico profesional (derivación): tablas de laboratorio, recordatorio y secciones.
+  const generateClinicalReport = async () => {
+    if (!consultation) return
+    setClinicalReportState('working')
+    try {
+      const doc = clinicalReport || await documentsApi.createForClinicalReport(consultation.id)
+      const generated = await documentsApi.generate(doc.id)
+      setClinicalReport(generated)
+      setClinicalReportState('idle')
+    } catch {
+      setClinicalReportState('error')
+    }
+  }
+
+  const downloadClinicalReport = async () => {
+    if (!clinicalReport?.storageKey) return
+    setClinicalReportState('working')
+    try {
+      const blob = await documentsApi.downloadBlob(clinicalReport.id)
+      const url = URL.createObjectURL(blob)
+      const link = window.document.createElement('a')
+      link.href = url
+      link.download = clinicalReport.storageKey
+      link.click()
+      URL.revokeObjectURL(url)
+      setClinicalReportState('idle')
+    } catch {
+      setClinicalReportState('error')
+    }
+  }
+
   // Real evolution chart for Antropométrico: plots the patient's actual measurements (last 8),
   // for the selected metric. Before this, the chart was a hardcoded SVG line with fake dates.
   const chartPoints = useMemo(() => {
@@ -709,6 +749,32 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }, [measurements, chartMetric])
   const chartPointLine = chartPoints.map((p) => `${p.x},${p.y}`).join(' ')
 
+  // Antecedentes familiares: "Ninguno/No" por padecimiento y padecimientos agregados por el usuario.
+  const customFamilyDiseases = Array.isArray(currentValues['Padecimientos familiares agregados']) ? currentValues['Padecimientos familiares agregados'] : []
+  const familyDiseases = [...FAMILY_DISEASES, ...customFamilyDiseases]
+  const setFamilyNone = (disease) => {
+    const none = !currentValues[`${disease}__Ninguno`]
+    const patch = { [`${disease}__Ninguno`]: none }
+    RELATIVES.forEach((rel) => { patch[`${disease}__${rel}`] = false })
+    updateFields(patch)
+  }
+  const toggleFamilyRelative = (disease, rel, active) => updateFields({ [`${disease}__${rel}`]: !active, [`${disease}__Ninguno`]: false })
+  const addFamilyDisease = () => {
+    const name = newDisease.trim()
+    if (!name) return
+    if (!FAMILY_DISEASES.includes(name) && !customFamilyDiseases.includes(name)) updateField('Padecimientos familiares agregados', [...customFamilyDiseases, name])
+    setNewDisease('')
+  }
+  const removeFamilyDisease = (name) => {
+    updateField('Padecimientos familiares agregados', customFamilyDiseases.filter((disease) => disease !== name))
+    const patch = { [`${name}__Ninguno`]: '' }
+    RELATIVES.forEach((rel) => { patch[`${name}__${rel}`] = '' })
+    updateFields(patch)
+  }
+
+  // Hallazgos de exploración seleccionados, para mostrar su imagen de referencia.
+  const examSelected = PHYSICAL_EXAM.flatMap(([, findings]) => findings).filter((finding) => !!currentValues[`Exploración: ${finding}`])
+
   if (!patientId) return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
     <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Abre el expediente desde la lista de pacientes para registrar una consulta.</p><button className="primary" onClick={() => setActive('Pacientes')}>Ir a Pacientes</button></div>
   </div></AppChrome>
@@ -717,7 +783,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
       <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><div className="clinical-person-head"><h2>{patientName}</h2><button type="button" className="record-button" title="Grabar consulta" aria-label="Grabar consulta" onClick={() => setTab('Transcripción')}><Icon>record</Icon></button></div><span>Consulta nutricional · {CONSULTATION_STATUS_LABELS[consultation?.status] || 'en curso'}</span></div></div>
-      <div className="clinical-actions">{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}<button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}<button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
+      <div className="clinical-actions">{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}<button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}{clinicalReport?.storageKey && <button className="secondary" disabled={clinicalReportState === 'working'} onClick={downloadClinicalReport}>{clinicalReportState === 'working' ? '…' : 'Descargar informe clínico'}</button>}<button className="secondary" disabled={clinicalReportState === 'working'} onClick={generateClinicalReport}>{clinicalReportState === 'working' ? 'Generando…' : clinicalReport?.storageKey ? 'Actualizar informe clínico' : 'Informe clínico'}</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
     </div>
     {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
     {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
@@ -803,12 +869,23 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       : tab === 'Clínico' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Clínico</h1><p className="subtitle">Antecedentes familiares y personales, medicamentos, síntomas y exploración física de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
-          ['familiares', 'Familiares', <div className="heredo-table" key="fam">
-            <div className="heredo-head"><span>Enfermedad</span>{RELATIVES.map((rel) => <b key={rel}>{rel}</b>)}</div>
-            {FAMILY_DISEASES.map((disease) => <div className="heredo-row" key={disease}>
-              <span>{disease}</span>
-              {RELATIVES.map((rel) => { const key = `${disease}__${rel}`; const active = !!currentValues[key]; return <TogglePill key={rel} active={active} label={active ? '✓' : ''} onClick={() => updateField(key, !active)} /> })}
-            </div>)}
+          ['familiares', 'Familiares', <div key="fam">
+            <div className="heredo-table">
+              <div className="heredo-head"><span>Enfermedad</span>{RELATIVES.map((rel) => <b key={rel}>{rel}</b>)}<b>Ninguno</b></div>
+              {familyDiseases.map((disease) => {
+                const none = !!currentValues[`${disease}__Ninguno`]
+                return <div className="heredo-row" key={disease}>
+                  <span>{disease}{customFamilyDiseases.includes(disease) && <button type="button" className="heredo-remove" title="Quitar padecimiento" onClick={() => removeFamilyDisease(disease)}>×</button>}</span>
+                  {RELATIVES.map((rel) => { const active = !!currentValues[`${disease}__${rel}`]; return <TogglePill key={rel} active={active} label={active ? '✓' : ''} onClick={() => toggleFamilyRelative(disease, rel, active)} /> })}
+                  <TogglePill active={none} label="No" onClick={() => setFamilyNone(disease)} />
+                </div>
+              })}
+            </div>
+            <div className="heredo-add">
+              <input list="family-disease-suggestions" value={newDisease} onChange={(event) => setNewDisease(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addFamilyDisease() } }} placeholder="Agregar padecimiento…" />
+              <datalist id="family-disease-suggestions">{SUGGESTED_DISEASES.map((disease) => <option key={disease} value={disease} />)}</datalist>
+              <button type="button" className="secondary" disabled={!newDisease.trim()} onClick={addFamilyDisease}>+ Agregar</button>
+            </div>
           </div>],
           ['antecedentes', 'Antecedentes', <FormCard key="a" title="Antecedentes personales" fields={['Enfermedades actuales o previas|*', 'Cirugías realizadas|*']} values={currentValues} onFieldChange={updateField} />],
           ['medicamentos', 'Medicamentos', <FormCard key="m" title="Medicamentos y suplementos" fields={['Medicamentos que toma|*', 'Suplementos que toma|*', 'Interacciones con nutrientes|*']} values={currentValues} onFieldChange={updateField} />],
@@ -817,7 +894,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           ['exploracion', 'Exploración física', <div key="e">{PHYSICAL_EXAM.map(([group, findings]) => <div key={group} className="exam-group">
             <b className="exam-group-title">{group}</b>
             <div className="symptom-grid">{findings.map((finding) => { const key = `Exploración: ${finding}`; const active = !!currentValues[key]; return <TogglePill key={finding} active={active} label={finding} onClick={() => updateField(key, !active)} /> })}</div>
-          </div>)}</div>],
+          </div>)}
+            {examSelected.length > 0
+              ? <div className="exam-reference"><p className="eyebrow">REFERENCIA VISUAL DE LOS HALLAZGOS</p><div className="exam-ref-grid">{examSelected.map((finding) => <figure className="exam-ref" key={finding}><ExamArt finding={finding} /><figcaption>{finding}</figcaption></figure>)}</div></div>
+              : <p className="anthro-hint">Selecciona un hallazgo y aquí aparecerá una imagen de referencia.</p>}
+          </div>],
           ['notas', 'Notas', <div key="n" className="sub-stack"><FormCard title="Notas clínicas" fields={['Notas clínicas|']} values={currentValues} onFieldChange={updateField} /><FormCard title="Notas de antecedentes" fields={['Notas de antecedentes|']} values={currentValues} onFieldChange={updateField} /></div>],
         ]} />
       </div>
@@ -859,7 +940,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       : tab === 'Sociocultural' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Sociocultural</h1><p className="subtitle">Contexto socioeconómico y cultural de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
-          ['contexto', 'Contexto', <FormCard key="cx" title="Contexto socioeconómico" fields={['Ocupación|', 'Barreras económicas para el plan (presupuesto)|*', 'Acceso a alimentos|', 'Entorno familiar|*']} values={currentValues} onFieldChange={updateField} />],
+          ['contexto', 'Contexto', <FormCard key="cx" title="Contexto socioeconómico" fields={['Ocupación|', 'Entorno familiar|', 'Entorno laboral|', 'Presupuesto destinado a la alimentación|', 'Barreras económicas para el plan (presupuesto)|*', 'Acceso a alimentos|*']} values={currentValues} onFieldChange={updateField} />],
           ['cultura', 'Cultura y creencias', <FormCard key="cu" title="Cultura y creencias" fields={['Restricciones religiosas o culturales|', 'Creencias sobre alimentación|', 'Notas socioculturales|*']} values={currentValues} onFieldChange={updateField} />],
         ]} />
       </div>
@@ -889,7 +970,13 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       : tab === 'Tratamiento' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Tratamiento</h1><p className="subtitle">Plan de intervención acordado con {patientName}: objetivos, educación y seguimiento.</p>
         <Subsection value={sub} onChange={setSub} groups={[
-          ['objetivos', 'Objetivos', <FormCard key="ob" title="Objetivos terapéuticos" fields={['Objetivo general|', 'Objetivos a corto plazo|', 'Objetivos a largo plazo|']} values={currentValues} onFieldChange={updateField} />],
+          ['objetivos', 'Objetivos', <div key="ob" className="sub-stack">
+            <div className="form-card reference-card"><h3>Base del diagnóstico</h3>
+              {currentValues['Objetivo'] && <p className="reference-line"><b>Objetivo general (Resumen):</b> {currentValues['Objetivo']}</p>}
+              {diagnoses.length ? <div className="reference-list">{diagnoses.map((d) => <div className="reference-row" key={d.id}><b>{d.domain}</b><span>{d.problem}</span></div>)}</div> : <p className="muted">Aún no hay diagnósticos; regístralos en la sección Diagnóstico para basar aquí los objetivos.</p>}
+            </div>
+            <FormCard title="Objetivos terapéuticos" fields={['Objetivo general|', 'Objetivos a corto plazo|', 'Objetivos a largo plazo|']} values={currentValues} onFieldChange={updateField} />
+          </div>],
           ['recomendaciones', 'Recomendaciones', <FormCard key="rc" title="Recomendaciones" fields={['Recomendaciones generales|', 'Recomendaciones de alimentación|']} values={currentValues} onFieldChange={updateField} />],
           ['educacion', 'Educación', <FormCard key="ed" title="Educación nutricional" fields={['Temas de educación para el paciente|', 'Material educativo entregado|']} values={currentValues} onFieldChange={updateField} />],
           ['metas', 'Metas y acuerdos', <FormCard key="mt" title="Metas y acuerdos" fields={['Metas SMART|', 'Barreras y soluciones|*', 'Acuerdos con el paciente|']} values={currentValues} onFieldChange={updateField} />],

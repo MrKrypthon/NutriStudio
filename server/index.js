@@ -1311,8 +1311,9 @@ app.get('/api/v1/plans', async (request) => {
 app.get('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({
     where: { id: request.params.planId, patient: { practiceId: request.practiceId } },
-    // El plan arrastra contexto de la consulta que lo originó: motivo y diagnósticos.
-    include: { patient: true, mealSlots: true, documents: true, consultation: { include: { diagnoses: true, sections: { where: { sectionKey: 'summary' }, select: { payload: true } } } } },
+    // El plan arrastra contexto de la consulta que lo originó: motivo, diagnósticos y todas las
+    // secciones del expediente (antropometría, clínico, dietético…) para alimentar el plan.
+    include: { patient: true, mealSlots: true, documents: true, consultation: { include: { diagnoses: true, sections: { select: { sectionKey: true, payload: true } } } } },
   })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   return plan
@@ -1451,6 +1452,17 @@ app.post('/api/v1/documents/consultation-export', async (request, reply) => {
   return reply.code(201).send(document)
 })
 
+// Informe clínico para derivación: mismos datos del expediente, con tablas interpretables por
+// otros profesionales (laboratorio con resultado/referencia/interpretación, recordatorio 24 h).
+app.post('/api/v1/documents/consultation-clinical', async (request, reply) => {
+  const { consultationId } = request.body || {}
+  if (!consultationId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'consultationId es obligatorio.', fields: { consultationId: 'required' } })
+  const consultation = await prisma.consultation.findFirst({ where: { id: consultationId, patient: { practiceId: request.practiceId } } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const document = await prisma.document.create({ data: { patientId: consultation.patientId, consultationId: consultation.id, type: 'consultation_clinical', sections: { clinicalReport: true }, version: 0 } })
+  return reply.code(201).send(document)
+})
+
 app.get('/api/v1/documents', async (request) => {
   const { patientId, type } = request.query
   const documents = await prisma.document.findMany({ where: { patientId: patientId || undefined, type: type || undefined, patient: { practiceId: request.practiceId } }, include: { patient: true, plan: true }, orderBy: { createdAt: 'desc' }, take: 100 })
@@ -1544,7 +1556,6 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
 
 const EXPORT_SECTION_KEYS = [
   ['summary', 'Resumen'],
-  ['general', 'General y antecedentes'],
   ['anthropometric', 'Antropometría'],
   ['biochemical', 'Bioquímico'],
   ['clinical', 'Clínico'],
@@ -1626,6 +1637,168 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
     }
   }
   file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
+}
+
+// ── Informe clínico (profesional) ────────────────────────────────────────────────────────────
+// Presenta los datos del expediente con formato interpretable por otros profesionales: tablas de
+// laboratorio (resultado/unidad/referencia/interpretación), recordatorio 24 h con totales y las
+// secciones clínicas. No sustituye al informe del paciente; es el documento de derivación.
+const computeAgeFromBirthDate = (birthDate) => {
+  if (!birthDate) return null
+  const dob = new Date(birthDate); const now = new Date()
+  let age = now.getUTCFullYear() - dob.getUTCFullYear()
+  if (now.getUTCMonth() < dob.getUTCMonth() || (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate())) age -= 1
+  return age
+}
+const SEX_TEXT = { female: 'Femenino', male: 'Masculino', F: 'Femenino', M: 'Masculino' }
+const truthyEntry = ([, value]) => value !== undefined && value !== null && value !== '' && value !== false
+
+function collectRecall(recall) {
+  const totals = {}
+  const meals = []
+  for (const meal of recall?.meals || []) {
+    let kcal = 0
+    for (const item of meal.items || []) {
+      const factor = (Number(item.grams) || 0) / 100
+      for (const [key, value] of Object.entries(item.nutrition || {})) {
+        if (typeof value !== 'number') continue
+        totals[key] = (totals[key] || 0) + value * factor
+        if (key === 'kcal') kcal += value * factor
+      }
+    }
+    meals.push({ label: meal.label, note: meal.note, kcal: Math.round(kcal), items: (meal.items || []).map((item) => ({ name: item.name, grams: item.grams })) })
+  }
+  for (const key of Object.keys(totals)) totals[key] = Math.round(totals[key] * 10) / 10
+  return { meals, totals }
+}
+
+function drawClinicalReport(file, document, practice, user, logoBuffer) {
+  drawDocumentBrand(file, 'INFORME CLÍNICO NUTRICIO', practice, logoBuffer)
+  const patient = document.patient
+  const consultation = document.consultation
+  const sections = consultation?.sections || []
+  const payloadOf = (key) => sections.find((section) => section.sectionKey === key)?.payload || {}
+  const allPayload = (key) => sections.filter((section) => section.sectionKey === key).flatMap((section) => Object.entries(section.payload || {}))
+  const measurement = [...(consultation?.measurements || [])].sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
+  const diagnoses = consultation?.diagnoses || []
+
+  file.fontSize(18).fillColor('#1c232f').text('Informe clínico nutricio', 48, file.y, { width: 516 })
+  const age = computeAgeFromBirthDate(patient.birthDate)
+  file.fontSize(9).fillColor('#6e6e73').text(`Paciente: ${patient.firstName} ${patient.lastName}${age != null ? ` · ${age} años` : ''}${patient.sex ? ` · ${SEX_TEXT[patient.sex] || patient.sex}` : ''}`, 48, file.y, { width: 516 })
+  file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`, 48, file.y, { width: 516 })
+
+  // x explícito: pdfkit conserva la última x/width usadas (p. ej. la columna "Interpretación" de
+  // la tabla de laboratorio), así que sin esto el texto siguiente se dibujaría en una columna
+  // angosta a la derecha.
+  let index = 0
+  const title = (text) => { index += 1; file.moveDown(0.6); file.fillColor('#7267ef').fontSize(12).text(`${index}. ${text}`, 48, file.y, { width: 516 }); file.moveTo(48, file.y + 3).lineTo(564, file.y + 3).strokeColor('#ddd6fa').stroke(); file.moveDown(0.5) }
+  const line = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, 48, file.y, { width: 516 })
+  const entries = (payload) => Object.entries(payload || {}).filter(([key, value]) => truthyEntry([key, value]) && key !== 'Estudios')
+
+  title('Identificación del paciente')
+  line(`Nombre: ${patient.firstName} ${patient.lastName}`)
+  if (patient.birthDate) line(`Fecha de nacimiento: ${new Date(patient.birthDate).toLocaleDateString('es-MX', { timeZone: 'UTC' })}`)
+  if (age != null) line(`Edad: ${age} años`)
+  if (patient.sex) line(`Sexo: ${SEX_TEXT[patient.sex] || patient.sex}`)
+  if (patient.occupation) line(`Ocupación: ${patient.occupation}`)
+  if (patient.phone || patient.email) line(`Contacto: ${[patient.phone, patient.email].filter(Boolean).join(' · ')}`)
+
+  const summary = payloadOf('summary')
+  title('Motivo y objetivo')
+  line(`Motivo de consulta: ${summary['Motivo de consulta'] || '—'}`)
+  line(`Objetivo: ${summary.Objetivo || '—'}`)
+
+  title('Antropometría')
+  if (measurement) {
+    const bmi = measurement.weightKg && measurement.heightCm ? measurement.weightKg / ((measurement.heightCm / 100) ** 2) : null
+    line(`Peso: ${measurement.weightKg ?? '—'} kg · Talla: ${measurement.heightCm ?? '—'} cm${bmi ? ` · IMC: ${bmi.toFixed(1)}` : ''}`)
+    const extra = [measurement.waistCm != null && `Cintura: ${measurement.waistCm} cm`, measurement.hipCm != null && `Cadera: ${measurement.hipCm} cm`, measurement.abdomenCm != null && `Abdomen: ${measurement.abdomenCm} cm`, measurement.bodyFatPercent != null && `% grasa: ${measurement.bodyFatPercent}%`, measurement.muscleMassKg != null && `Masa muscular: ${measurement.muscleMassKg} kg`].filter(Boolean)
+    if (extra.length) line(extra.join(' · '))
+  } else line('Sin mediciones registradas.')
+  const anthro = entries(payloadOf('anthropometric'))
+  if (anthro.length) line(anthro.map(([key, value]) => `${key}: ${stringifyEntry(value)}`).join('  |  '))
+
+  const labs = Array.isArray(payloadOf('biochemical')['Estudios']) ? payloadOf('biochemical')['Estudios'] : []
+  title('Bioquímico')
+  if (labs.length) {
+    drawLabTable(file, labs)
+  } else line('Sin estudios de laboratorio registrados.')
+  const bioNotes = entries(payloadOf('biochemical'))
+  if (bioNotes.length) line(bioNotes.map(([key, value]) => `${key}: ${stringifyEntry(value)}`).join('  |  '))
+
+  title('Clínico')
+  const clinical = entries(payloadOf('clinical'))
+  if (clinical.length) for (const [key, value] of clinical) line(`${key.replace(/__/g, ' · ')}: ${value === true ? 'Sí' : stringifyEntry(value)}`)
+  else line('Sin datos clínicos registrados.')
+
+  title('Dietético')
+  const dietary = entries(payloadOf('dietary')).filter(([key]) => key !== 'Recordatorio 24 h')
+  if (dietary.length) for (const [key, value] of dietary) line(`${key}: ${stringifyEntry(value)}`)
+  const recall = payloadOf('dietary')['Recordatorio 24 h']
+  if (recall?.meals?.length) { file.moveDown(0.3); file.fillColor('#1c232f').fontSize(10).text('Recordatorio de 24 horas', 48, file.y, { width: 516 }); drawRecallTable(file, recall) }
+  else if (!dietary.length) line('Sin datos dietéticos registrados.')
+
+  title('Estilo de vida')
+  const lifestyle = entries(payloadOf('lifestyle'))
+  if (lifestyle.length) for (const [key, value] of lifestyle) line(`${key}: ${stringifyEntry(value)}`)
+  else line('Sin datos registrados.')
+
+  title('Sociocultural')
+  const socio = entries(payloadOf('sociocultural'))
+  if (socio.length) for (const [key, value] of socio) line(`${key}: ${stringifyEntry(value)}`)
+  else line('Sin datos registrados.')
+
+  title('Diagnóstico nutricio')
+  if (diagnoses.length) for (const d of diagnoses) line(diagnosisLine(d))
+  else line('Sin diagnóstico registrado.')
+
+  title('Tratamiento e intervención')
+  const treatment = entries(payloadOf('treatment'))
+  if (treatment.length) for (const [key, value] of treatment) line(`${key}: ${stringifyEntry(value)}`)
+  else line('Sin recomendaciones registradas.')
+
+  title('Monitoreo y notas')
+  const monitoring = [...entries(payloadOf('monitoring')), ...entries(payloadOf('notes'))]
+  if (monitoring.length) for (const [key, value] of monitoring) line(`${key}: ${stringifyEntry(value)}`)
+  else line('Sin datos registrados.')
+
+  file.moveDown(1)
+  file.fillColor('#8e8f9a').fontSize(9).text(`Elaboró: ${signatureFor(user, practice)}`, 48, file.y, { width: 516, align: 'center' })
+  file.fillColor('#b0b1ba').fontSize(7).text('Documento clínico de apoyo. Las estimaciones antropométricas son orientativas y no sustituyen al juicio profesional.', 48, file.y, { width: 516, align: 'center' })
+}
+
+function drawLabTable(file, labs) {
+  const x = { name: 48, value: 220, unit: 305, range: 370, status: 460 }
+  file.fontSize(8).fillColor('#8b8d9c')
+  file.text('Estudio', x.name, file.y, { width: 165 })
+  file.text('Resultado', x.value, file.y, { width: 80 })
+  file.text('Unidad', x.unit, file.y, { width: 60 })
+  file.text('Referencia', x.range, file.y, { width: 85 })
+  file.text('Interpretación', x.status, file.y, { width: 100 })
+  file.moveDown(0.5)
+  for (const lab of labs) {
+    const y = file.y
+    const tone = lab.status === 'Normal' ? '#2b9674' : lab.status === 'Elevado' || lab.status === 'Bajo' ? '#c0564f' : '#8b8d9c'
+    file.fontSize(9).fillColor('#4c4e5b')
+    file.text(String(lab.name || '—'), x.name, y, { width: 165 })
+    file.text(String(lab.value ?? '—'), x.value, y, { width: 80 })
+    file.text(String(lab.unit || ''), x.unit, y, { width: 60 })
+    file.text(String(lab.range || '—'), x.range, y, { width: 85 })
+    file.fillColor(tone).text(String(lab.status || '—'), x.status, y, { width: 100 })
+    file.moveDown(1)
+    file.moveTo(48, file.y - 4).lineTo(564, file.y - 4).strokeColor('#eeeeee').stroke()
+  }
+}
+
+function drawRecallTable(file, recall) {
+  const { meals, totals } = collectRecall(recall)
+  for (const meal of meals) {
+    file.fontSize(9).fillColor('#1c232f').text(`${meal.label}${meal.items.length ? ` · ${meal.kcal} kcal` : ''}`, 48, file.y, { width: 516 })
+    if (meal.note) file.fontSize(8).fillColor('#6e6e73').text(meal.note, 56, file.y, { width: 508 })
+    for (const item of meal.items) file.fontSize(8).fillColor('#4c4e5b').text(`• ${item.name}: ${item.grams} g`, 56, file.y, { width: 508 })
+    file.moveDown(0.3)
+  }
+  if (totals.kcal != null) file.fontSize(9).fillColor('#7267ef').text(`Totales del día: ${totals.kcal} kcal · Proteína ${totals.protein ?? 0} g · Carbohidratos ${totals.carbs ?? 0} g · Grasas ${totals.fat ?? 0} g`, 48, file.y, { width: 516 })
 }
 
 function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
@@ -1752,6 +1925,7 @@ app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
     file.on('error', reject)
     if (document.type === 'nutrition_plan') drawNutritionPlanMenu(file, document, practice, user, logoBuffer)
     else if (document.type === 'consultation_export') drawConsultationExport(file, document, practice, user, logoBuffer)
+    else if (document.type === 'consultation_clinical') drawClinicalReport(file, document, practice, user, logoBuffer)
     else drawConsultationReport(file, document, practice, user, logoBuffer)
     file.end()
   })
