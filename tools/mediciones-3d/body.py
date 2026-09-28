@@ -88,6 +88,27 @@ def _abduct(points, pivot, degrees):
     return moved
 
 
+def right_arm_point(point, degrees):
+    """Dónde acaba un punto del brazo derecho cuando el brazo se abduce `degrees`.
+
+    Las especificaciones de los sitios están escritas sobre el cuerpo en reposo. Si el sitio está en
+    el brazo y la pose lo abduce, hay que mover también el punto: si no, el rayo de búsqueda apunta
+    a donde el brazo ya no está y no encuentra piel.
+    """
+    if not degrees:
+        return Vector(point)
+    shoulder = Vector((-ARM_JOINTS[0][0], ARM_JOINTS[0][1], ARM_JOINTS[0][2]))
+    return _abduct([(Vector(point), 0.0)], shoulder, -degrees)[0][0]
+
+
+def right_arm_vector(vector, degrees):
+    """La misma abducción aplicada a una dirección (sin trasladar), para girar los rayos."""
+    from math import radians as _rad
+    if not degrees:
+        return Vector(vector)
+    return Matrix.Rotation(_rad(-degrees), 4, 'Y') @ Vector(vector)
+
+
 def build_body(name='Cuerpo', resolution=0.009, right_arm_abduction=0.0):
     mball = bpy.data.metaballs.new(name)
     mball.resolution = resolution

@@ -104,32 +104,32 @@ const GUIDE = {
   'Pantorrilla medial (mm)': { x: 40, y: 124, desc: 'Cara medial de la pantorrilla, al nivel de su perímetro máximo, con la rodilla flexionada a 90°. Pliegue vertical.' },
   'Axilar medial (mm)': { x: 62, y: 50, desc: 'Sobre la línea axilar media, a la altura del apéndice xifoides, con el brazo abducido. Pliegue vertical.' },
   'Pectoral (mm)': { x: 60, y: 44, desc: 'Un centímetro por debajo del punto más alto del pliegue axilar anterior. Pliegue oblicuo, dirigido hacia el pezón.' },
-  'Cefálico (cm)': { x: 50, y: 14, desc: 'Perímetro máximo de la cabeza, por encima de las cejas y de las orejas.' },
-  'Cuello (cm)': { x: 50, y: 26, desc: 'Perímetro del cuello, por debajo de la laringe.' },
-  'Brazo relajado (cm)': { x: 28, y: 46, desc: 'Punto medio entre acromion y olécranon, con el brazo relajado.' },
-  'Brazo contraído (cm)': { x: 28, y: 44, desc: 'Máximo perímetro del brazo con el codo flexionado y el bíceps contraído.' },
-  'Antebrazo (cm)': { x: 20, y: 62, desc: 'Máximo perímetro del antebrazo, distal al codo.' },
-  'Muñeca (cm)': { x: 16, y: 76, desc: 'Perímetro mínimo de la muñeca, distal a la apófisis estiloides.' },
-  'Mesoesternal (cm)': { x: 50, y: 46, desc: 'Perímetro del tórax a la altura del mesoesternón.' },
-  'Umbilical (cm)': { x: 50, y: 64, desc: 'Perímetro del abdomen a la altura del ombligo.' },
-  'Cintura (cm)': { x: 50, y: 60, desc: 'Perímetro mínimo entre la última costilla y la cresta ilíaca.' },
-  'Cadera (cm)': { x: 50, y: 70, desc: 'Perímetro máximo de las nalgas a la altura del trocánter mayor.' },
-  'Muslo (cm)': { x: 44, y: 100, desc: 'A un centímetro por debajo del pliegue glúteo.' },
-  'Muslo medio (cm)': { x: 44, y: 106, desc: 'A mitad de camino entre pliegue glúteo y rodilla.' },
-  'Pantorrilla (cm)': { x: 42, y: 124, desc: 'Máximo perímetro de la pantorrilla.' },
-  'Tobillo (cm)': { x: 42, y: 138, desc: 'Perímetro mínimo del tobillo, proximal a los maléolos.' },
-  'Blacromial (cm)': { x: 50, y: 32, desc: 'Distancia entre los bordes externos de ambos acromion.' },
-  'Billeocrestal (cm)': { x: 50, y: 68, desc: 'Distancia entre los puntos ileocrestales izquierdo y derecho.' },
-  'Longitud del pie (cm)': { x: 46, y: 150, desc: 'De la parte posterior del talón a la punta del dedo más largo.' },
-  'Transverso tórax (cm)': { x: 50, y: 48, desc: 'Diámetro transverso del tórax a la altura mesoesternal.' },
-  'Anteroposterior tórax (cm)': { x: 50, y: 46, desc: 'Diámetro anteroposterior del tórax.' },
-  'Húmero (cm)': { x: 26, y: 40, desc: 'Distancia entre los bordes medial y lateral del húmero a la altura del epicóndilo.' },
-  'Biestiloideo (cm)': { x: 16, y: 76, desc: 'Distancia entre las apófisis estiloides del radio y del cúbito.' },
-  'Fémur (cm)': { x: 46, y: 96, desc: 'Distancia entre el borde medial y lateral del fémur.' },
-  'Bimaleolar (cm)': { x: 42, y: 140, desc: 'Distancia entre los maléolos medial y lateral.' },
-  'Transverso pie (cm)': { x: 46, y: 150, desc: 'Distancia entre la cabeza del primer y del quinto metatarsiano.' },
-  'Longitud mano (cm)': { x: 16, y: 86, desc: 'Del pliegue de la muñeca a la punta del dedo medio.' },
-  'Transverso mano (cm)': { x: 16, y: 80, desc: 'Ancho de la mano a la altura de los nudillos.' },
+  'Cefálico (cm)': { x: 50, y: 14, desc: 'Perímetro máximo de la cabeza, por encima de las cejas y de las orejas, en el plano de Frankfort.' },
+  'Cuello (cm)': { x: 50, y: 26, desc: 'Perímetro del cuello por debajo del cartílago tiroides (la nuez), con la cinta horizontal.' },
+  'Brazo relajado (cm)': { x: 28, y: 46, desc: 'Punto medio entre acromion y olécranon, con el brazo relajado colgando al costado. La cinta queda perpendicular al eje del brazo.' },
+  'Brazo contraído (cm)': { x: 28, y: 44, desc: 'Perímetro máximo del brazo con el codo flexionado a 90° y el bíceps en contracción máxima.' },
+  'Antebrazo (cm)': { x: 20, y: 62, desc: 'Perímetro máximo del antebrazo, unos centímetros por debajo del codo, con el brazo relajado y la palma hacia arriba.' },
+  'Muñeca (cm)': { x: 16, y: 76, desc: 'Perímetro mínimo de la muñeca, justo por debajo de las apófisis estiloides del radio y el cúbito.' },
+  'Mesoesternal (cm)': { x: 50, y: 46, desc: 'Perímetro del tórax a la altura de la articulación mesoesternal, al final de una espiración normal.' },
+  'Umbilical (cm)': { x: 50, y: 64, desc: 'Perímetro del abdomen a la altura del ombligo, con la cinta horizontal y sin comprimir la piel.' },
+  'Cintura (cm)': { x: 50, y: 60, desc: 'Perímetro mínimo del abdomen, entre la última costilla y la cresta ilíaca, al final de una espiración normal.' },
+  'Cadera (cm)': { x: 50, y: 70, desc: 'Perímetro máximo de los glúteos, a la altura del trocánter mayor, con los pies juntos.' },
+  'Muslo (cm)': { x: 44, y: 100, desc: 'Perímetro del muslo un centímetro por debajo del pliegue glúteo, con el peso repartido en ambos pies.' },
+  'Muslo medio (cm)': { x: 44, y: 106, desc: 'Perímetro del muslo a media distancia entre el pliegue inguinal y el borde superior de la rótula.' },
+  'Pantorrilla (cm)': { x: 42, y: 124, desc: 'Perímetro máximo de la pantorrilla, con el peso repartido en ambos pies.' },
+  'Tobillo (cm)': { x: 42, y: 138, desc: 'Perímetro mínimo del tobillo, justo por encima de los maléolos.' },
+  'Blacromial (cm)': { x: 50, y: 32, desc: 'Distancia entre los bordes más externos de ambos acromion, con el antropómetro apoyado por detrás y los hombros relajados.' },
+  'Billeocrestal (cm)': { x: 50, y: 68, desc: 'Distancia entre los puntos ileocrestales, es decir los bordes más externos de ambas crestas ilíacas.' },
+  'Longitud del pie (cm)': { x: 46, y: 150, desc: 'Del punto más posterior del talón al extremo del dedo más largo, con el pie apoyado y el peso repartido.' },
+  'Transverso tórax (cm)': { x: 50, y: 48, desc: 'Ancho del tórax a la altura mesoesternal, al final de una espiración normal.' },
+  'Anteroposterior tórax (cm)': { x: 50, y: 46, desc: 'Profundidad del tórax entre el mesoesternón y la apófisis espinosa correspondiente, al final de una espiración normal.' },
+  'Húmero (cm)': { x: 26, y: 40, desc: 'Distancia entre los epicóndilos medial y lateral del húmero, con el codo flexionado a 90°.' },
+  'Biestiloideo (cm)': { x: 16, y: 76, desc: 'Distancia entre las apófisis estiloides del radio y del cúbito, con la muñeca en ligera flexión.' },
+  'Fémur (cm)': { x: 46, y: 96, desc: 'Distancia entre los cóndilos medial y lateral del fémur, con la rodilla flexionada a 90°.' },
+  'Bimaleolar (cm)': { x: 42, y: 140, desc: 'Distancia entre los maléolos medial (tibia) y lateral (peroné), con el pie apoyado.' },
+  'Transverso pie (cm)': { x: 46, y: 150, desc: 'Ancho del pie entre las cabezas del primer y del quinto metatarsiano.' },
+  'Longitud mano (cm)': { x: 16, y: 86, desc: 'Del pliegue de la muñeca a la punta del dedo medio, con la mano extendida y los dedos juntos.' },
+  'Transverso mano (cm)': { x: 16, y: 80, desc: 'Ancho de la mano a la altura de las cabezas del segundo al quinto metacarpiano.' },
 }
 const guideFor = (key) => GUIDE[key] || { x: 50, y: 50, desc: 'Sigue el protocolo ISAK para tomar esta medición.' }
 
@@ -139,8 +139,16 @@ const GUIDE_IMAGES = import.meta.glob('../assets/mediciones/*.webp', { eager: tr
 const slug = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
 const guideImage = (key) => GUIDE_IMAGES[`../assets/mediciones/${slug(key)}.webp`] || null
 const PLIEGUES = new Set(GROUP_FIELDS.pliegues.map((field) => field.key))
-// Técnica común a todos los pliegues (ISAK / Lohman): es lo que muestra la animación de la guía.
+const PERIMETROS = new Set(GROUP_FIELDS.perimetros.map((field) => field.key))
+const DIAMETROS = new Set(GROUP_FIELDS.diametros.map((field) => field.key))
+// Técnica común a cada grupo (ISAK / Lohman): es lo que muestra la animación de la guía.
 const SKIN_FOLD_TECHNIQUE = 'Técnica: toma el pliegue con pulgar e índice sobre el sitio marcado, aplica el plicómetro perpendicular al pliegue, a 1 cm de los dedos y a media altura, y lee a los 2 segundos sin soltar. Siempre del lado derecho.'
+const GIRTH_TECHNIQUE = 'Técnica: rodea el segmento con la cinta perpendicular a su eje, ciñe sin comprimir la piel (la cinta debe apoyar en todo el contorno) y lee con el cero enfrentado a la escala, sin mover la cinta. Siempre del lado derecho.'
+const BREADTH_TECHNIQUE = 'Técnica: sujeta el antropómetro con los índices sobre las ramas y los pulgares por debajo, apoya las puntas sobre los dos accidentes óseos y presiona con firmeza para desplazar el tejido blando antes de leer. Siempre del lado derecho.'
+const techniqueFor = (key) => (PLIEGUES.has(key) && SKIN_FOLD_TECHNIQUE)
+  || (PERIMETROS.has(key) && GIRTH_TECHNIQUE)
+  || (DIAMETROS.has(key) && BREADTH_TECHNIQUE)
+  || null
 const SKIN_FOLD_NOTE = 'Se usan en fórmulas de: Siri, Brozek, Faulkner, Ledesma y cálculo del somatotipo.'
 
 function BodyFigure({ x, y }) {
@@ -193,7 +201,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
       <b className="anthro-guide-title">{active.label}</b>
       <div className="anthro-guide-frame">{image ? <img className="anthro-guide-media" src={image} alt={`Guía de medición: ${active.label}`} /> : <BodyFigure x={guide.x} y={guide.y} />}</div>
       <p className="anthro-guide-desc">{guide.desc}</p>
-      {PLIEGUES.has(active.key) && <p className="anthro-guide-desc">{SKIN_FOLD_TECHNIQUE}</p>}
+      {techniqueFor(active.key) && <p className="anthro-guide-desc">{techniqueFor(active.key)}</p>}
       {PLIEGUES.has(active.key) && <p className="anthro-guide-formula">{SKIN_FOLD_NOTE}</p>}
     </aside>
   }
