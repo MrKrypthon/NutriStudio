@@ -44,6 +44,8 @@ const DIAGNOSIS_DOMAINS = [
 
 const FAMILY_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'HTA', 'Dislipidemias', 'Nefropatías', 'Cáncer', 'Enf. cerebrovasculares', 'Otros']
 const RELATIVES = ['Mamá/Papá', 'Abuelos', 'Tíos']
+// Sugerencias para "agregar padecimiento" en antecedentes familiares.
+const SUGGESTED_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'Hipertensión arterial', 'Dislipidemias', 'Nefropatías', 'Cáncer', 'Enfermedad cerebrovascular', 'Hipotiroidismo', 'Hipertiroidismo', 'Asma', 'Alergias', 'Anemia', 'Artritis', 'Osteoporosis', 'Depresión', 'Ansiedad', 'Alzheimer', 'Celiaquía', 'Colitis', 'Gastritis', 'Cálculos renales', 'Trombosis', 'Epilepsia']
 // Evaluación cualitativa del diagnóstico alimentario (CESIVA) y frecuencia de consumo por alimento.
 const CESIVA = [['Completa', 'Incluye todos los grupos de alimentos'], ['Equilibrada', 'Proporción adecuada entre grupos'], ['Suficiente', 'Cubre los requerimientos'], ['Inocua', 'Sin riesgo para la salud'], ['Variada', 'Alterna distintos alimentos'], ['Adecuada', 'Apta para el paciente']]
 const FOOD_FREQUENCY = ['Leche', 'Queso', 'Yogur', 'Avena', 'Carne de res', 'Carne de pollo', 'Pescado', 'Huevo', 'Tortilla', 'Pan', 'Arroz', 'Frijol', 'Verduras', 'Frutas', 'Refresco', 'Jugo', 'Café', 'Dulces o postres', 'Frituras']
@@ -186,6 +188,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
   const [tab, setTab] = useState('Antropométrico')
   const [sub, setSub] = useState('')
+  const [newDisease, setNewDisease] = useState('')
   const [loadState, setLoadState] = useState('loading')
   const [consultation, setConsultation] = useState(null)
   const [historyCount, setHistoryCount] = useState(0)
@@ -709,6 +712,29 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }, [measurements, chartMetric])
   const chartPointLine = chartPoints.map((p) => `${p.x},${p.y}`).join(' ')
 
+  // Antecedentes familiares: "Ninguno/No" por padecimiento y padecimientos agregados por el usuario.
+  const customFamilyDiseases = Array.isArray(currentValues['Padecimientos familiares agregados']) ? currentValues['Padecimientos familiares agregados'] : []
+  const familyDiseases = [...FAMILY_DISEASES, ...customFamilyDiseases]
+  const setFamilyNone = (disease) => {
+    const none = !currentValues[`${disease}__Ninguno`]
+    const patch = { [`${disease}__Ninguno`]: none }
+    RELATIVES.forEach((rel) => { patch[`${disease}__${rel}`] = false })
+    updateFields(patch)
+  }
+  const toggleFamilyRelative = (disease, rel, active) => updateFields({ [`${disease}__${rel}`]: !active, [`${disease}__Ninguno`]: false })
+  const addFamilyDisease = () => {
+    const name = newDisease.trim()
+    if (!name) return
+    if (!FAMILY_DISEASES.includes(name) && !customFamilyDiseases.includes(name)) updateField('Padecimientos familiares agregados', [...customFamilyDiseases, name])
+    setNewDisease('')
+  }
+  const removeFamilyDisease = (name) => {
+    updateField('Padecimientos familiares agregados', customFamilyDiseases.filter((disease) => disease !== name))
+    const patch = { [`${name}__Ninguno`]: '' }
+    RELATIVES.forEach((rel) => { patch[`${name}__${rel}`] = '' })
+    updateFields(patch)
+  }
+
   if (!patientId) return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
     <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Abre el expediente desde la lista de pacientes para registrar una consulta.</p><button className="primary" onClick={() => setActive('Pacientes')}>Ir a Pacientes</button></div>
   </div></AppChrome>
@@ -803,12 +829,23 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       : tab === 'Clínico' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Clínico</h1><p className="subtitle">Antecedentes familiares y personales, medicamentos, síntomas y exploración física de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
-          ['familiares', 'Familiares', <div className="heredo-table" key="fam">
-            <div className="heredo-head"><span>Enfermedad</span>{RELATIVES.map((rel) => <b key={rel}>{rel}</b>)}</div>
-            {FAMILY_DISEASES.map((disease) => <div className="heredo-row" key={disease}>
-              <span>{disease}</span>
-              {RELATIVES.map((rel) => { const key = `${disease}__${rel}`; const active = !!currentValues[key]; return <TogglePill key={rel} active={active} label={active ? '✓' : ''} onClick={() => updateField(key, !active)} /> })}
-            </div>)}
+          ['familiares', 'Familiares', <div key="fam">
+            <div className="heredo-table">
+              <div className="heredo-head"><span>Enfermedad</span>{RELATIVES.map((rel) => <b key={rel}>{rel}</b>)}<b>Ninguno</b></div>
+              {familyDiseases.map((disease) => {
+                const none = !!currentValues[`${disease}__Ninguno`]
+                return <div className="heredo-row" key={disease}>
+                  <span>{disease}{customFamilyDiseases.includes(disease) && <button type="button" className="heredo-remove" title="Quitar padecimiento" onClick={() => removeFamilyDisease(disease)}>×</button>}</span>
+                  {RELATIVES.map((rel) => { const active = !!currentValues[`${disease}__${rel}`]; return <TogglePill key={rel} active={active} label={active ? '✓' : ''} onClick={() => toggleFamilyRelative(disease, rel, active)} /> })}
+                  <TogglePill active={none} label="No" onClick={() => setFamilyNone(disease)} />
+                </div>
+              })}
+            </div>
+            <div className="heredo-add">
+              <input list="family-disease-suggestions" value={newDisease} onChange={(event) => setNewDisease(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addFamilyDisease() } }} placeholder="Agregar padecimiento…" />
+              <datalist id="family-disease-suggestions">{SUGGESTED_DISEASES.map((disease) => <option key={disease} value={disease} />)}</datalist>
+              <button type="button" className="secondary" disabled={!newDisease.trim()} onClick={addFamilyDisease}>+ Agregar</button>
+            </div>
           </div>],
           ['antecedentes', 'Antecedentes', <FormCard key="a" title="Antecedentes personales" fields={['Enfermedades actuales o previas|*', 'Cirugías realizadas|*']} values={currentValues} onFieldChange={updateField} />],
           ['medicamentos', 'Medicamentos', <FormCard key="m" title="Medicamentos y suplementos" fields={['Medicamentos que toma|*', 'Suplementos que toma|*', 'Interacciones con nutrientes|*']} values={currentValues} onFieldChange={updateField} />],
