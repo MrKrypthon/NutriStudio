@@ -8,8 +8,10 @@ import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
 
-const TABS = ['Resumen', 'General', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
-const SECTION_KEYS = { Resumen: 'summary', General: 'general', Antropométrico: 'anthropometric', Bioquímico: 'biochemical', Clínico: 'clinical', Dietético: 'dietary', 'Estilo de vida': 'lifestyle', Sociocultural: 'sociocultural', Diagnóstico: 'diagnosis', Tratamiento: 'treatment', Monitoreo: 'monitoring', Notas: 'notes', Transcripción: 'transcription' }
+const TABS = ['Resumen', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
+// Los antecedentes familiares viven ahora en Clínico (ver flujo-consulta-nutricional.md), así que
+// el payload histórico de la antigua sección "general" se fusiona en "clinical" al cargar.
+const SECTION_KEYS = { Resumen: 'summary', Antropométrico: 'anthropometric', Bioquímico: 'biochemical', Clínico: 'clinical', Dietético: 'dietary', 'Estilo de vida': 'lifestyle', Sociocultural: 'sociocultural', Diagnóstico: 'diagnosis', Tratamiento: 'treatment', Monitoreo: 'monitoring', Notas: 'notes', Transcripción: 'transcription' }
 const TRANSCRIPT_FIELD = 'Transcripción de la consulta'
 const SAVE_LABELS = { idle: '● Guardado', editing: '● Editando…', saving: '● Guardando…', saved: '● Guardado', error: '⚠ Error al guardar', conflict: '⚠ Se editó en otra sesión, recarga para ver el cambio' }
 const CONSULTATION_STATUS_LABELS = { DRAFT: 'Borrador', IN_PROGRESS: 'En curso', COMPLETED: 'Completada' }
@@ -151,7 +153,7 @@ function TranscriptionTab({ values, updateField, updateFields, appendField, pati
   }
 
   return <div className="panel generic-section">
-    <p className="eyebrow">SECCIÓN {TABS.indexOf('Transcripción') + 1} DE 13</p>
+    <p className="eyebrow">SECCIÓN {TABS.indexOf('Transcripción') + 1} DE 12</p>
     <h1>Transcripción</h1>
     <p className="subtitle">Graba la consulta de {patientName} y transcribe en vivo. El texto queda como borrador para que lo revises y copies a mano a las demás secciones — no se guarda como dato clínico oficial por sí solo.</p>
 
@@ -284,6 +286,14 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           bySectionKey[section.sectionKey] = section
           payloadMirrorRef.current[section.sectionKey] = section.payload || {}
           lastSavedAtRef.current[section.sectionKey] = section.lastSavedAt
+        }
+        if (bySectionKey.general) {
+          const clinical = bySectionKey.clinical || { sectionKey: 'clinical', payload: {} }
+          clinical.payload = { ...bySectionKey.general.payload, ...(clinical.payload || {}) }
+          bySectionKey.clinical = clinical
+          payloadMirrorRef.current.clinical = clinical.payload
+          delete bySectionKey.general
+          delete payloadMirrorRef.current.general
         }
         setSections(bySectionKey)
         setDiagnoses(full.diagnoses || [])
@@ -728,7 +738,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
       : tab === 'Bioquímico' ? <div className="clinical-layout">
         <section className="record-main panel">
-          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 4 DE 13</p><h1>Bioquímico</h1><p className="subtitle">Los estudios son opcionales en la primera consulta: se sugieren y suelen traerse en la segunda. Registra los valores que traiga el paciente.</p></div><button className="primary" onClick={() => { setSub('estudios'); openLabForm() }}>+ Agregar estudio</button></div>
+          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 3 DE 12</p><h1>Bioquímico</h1><p className="subtitle">Los estudios son opcionales en la primera consulta: se sugieren y suelen traerse en la segunda. Registra los valores que traiga el paciente.</p></div><button className="primary" onClick={() => { setSub('estudios'); openLabForm() }}>+ Agregar estudio</button></div>
           <Subsection value={sub} onChange={setSub} groups={[
             ['estudios', 'Solicitud y estudios', <div className="sub-stack" key="est">
               <FormCard title="Solicitud de estudios" fields={['Estudios solicitados (se traen en la 2ª consulta)|*', 'Notas de bioquímico|*']} values={currentValues} onFieldChange={updateField} />
@@ -759,7 +769,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>
 
       : tab === 'Diagnóstico' ? <div className="panel diagnosis-panel">
-        <div className="section-heading"><div><p className="eyebrow">SECCIÓN 9 DE 13 · TND</p><h1>Diagnóstico nutricio</h1><p className="subtitle">Evalúa la alimentación (CESIVA), define el tipo de dieta y registra los diagnósticos PES por dominio.</p></div><button className="secondary" onClick={() => { setSub('registrados'); openDiagnosisForm(DIAGNOSIS_DOMAINS[0][0]) }}>+ Nuevo diagnóstico</button></div>
+        <div className="section-heading"><div><p className="eyebrow">SECCIÓN 8 DE 12 · TND</p><h1>Diagnóstico nutricio</h1><p className="subtitle">Evalúa la alimentación (CESIVA), define el tipo de dieta y registra los diagnósticos PES por dominio.</p></div><button className="secondary" onClick={() => { setSub('registrados'); openDiagnosisForm(DIAGNOSIS_DOMAINS[0][0]) }}>+ Nuevo diagnóstico</button></div>
         <Subsection value={sub} onChange={setSub} groups={[
           ['cesiva', 'CESIVA', <div className="form-card cesiva-card" key="ce"><div className="cesiva-card-head"><div><h3>Evaluación CESIVA</h3><p className="muted cesiva-hint">Evalúa cada criterio de la alimentación actual de {patientName}.</p></div><span className="cesiva-score">{CESIVA.filter(([c]) => { const v = currentValues[`CESIVA: ${c}`]; return v === true || v === 'Cumple' }).length} de {CESIVA.length} cumplen</span></div>
             <div className="cesiva-table">
@@ -790,23 +800,16 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         ]} />
       </div>
 
-      : tab === 'General' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>General</h1><p className="subtitle">Antecedentes heredofamiliares de {patientName}.</p>
+      : tab === 'Clínico' ? <div className="panel generic-section">
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Clínico</h1><p className="subtitle">Antecedentes familiares y personales, medicamentos, síntomas y exploración física de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
-          ['heredo', 'Heredofamiliares', <div className="heredo-table" key="heredo">
+          ['familiares', 'Familiares', <div className="heredo-table" key="fam">
             <div className="heredo-head"><span>Enfermedad</span>{RELATIVES.map((rel) => <b key={rel}>{rel}</b>)}</div>
             {FAMILY_DISEASES.map((disease) => <div className="heredo-row" key={disease}>
               <span>{disease}</span>
               {RELATIVES.map((rel) => { const key = `${disease}__${rel}`; const active = !!currentValues[key]; return <TogglePill key={rel} active={active} label={active ? '✓' : ''} onClick={() => updateField(key, !active)} /> })}
             </div>)}
           </div>],
-          ['notas', 'Notas', <FormCard key="notas" title="Notas adicionales" fields={['Notas de antecedentes|']} values={currentValues} onFieldChange={updateField} />],
-        ]} />
-      </div>
-
-      : tab === 'Clínico' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Clínico</h1><p className="subtitle">Antecedentes, medicamentos, síntomas y exploración física de {patientName}. Marca los que aplican.</p>
-        <Subsection value={sub} onChange={setSub} groups={[
           ['antecedentes', 'Antecedentes', <FormCard key="a" title="Antecedentes personales" fields={['Enfermedades actuales o previas|*', 'Cirugías realizadas|*']} values={currentValues} onFieldChange={updateField} />],
           ['medicamentos', 'Medicamentos', <FormCard key="m" title="Medicamentos y suplementos" fields={['Medicamentos que toma|*', 'Suplementos que toma|*', 'Interacciones con nutrientes|*']} values={currentValues} onFieldChange={updateField} />],
           ['alergias', 'Alergias y sustancias', <div key="al" className="sub-stack"><FormCard title="Alergias e intolerancias" fields={['Alergias alimentarias|*', 'Intolerancias|*']} values={currentValues} onFieldChange={updateField} /><FormCard title="Consumo de sustancias" fields={['Tabaquismo (frecuencia)|', 'Consumo de alcohol (frecuencia)|']} values={currentValues} onFieldChange={updateField} /></div>],
@@ -815,12 +818,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             <b className="exam-group-title">{group}</b>
             <div className="symptom-grid">{findings.map((finding) => { const key = `Exploración: ${finding}`; const active = !!currentValues[key]; return <TogglePill key={finding} active={active} label={finding} onClick={() => updateField(key, !active)} /> })}</div>
           </div>)}</div>],
-          ['notas', 'Notas', <FormCard key="n" title="Notas adicionales" fields={['Notas clínicas|']} values={currentValues} onFieldChange={updateField} />],
+          ['notas', 'Notas', <div key="n" className="sub-stack"><FormCard title="Notas clínicas" fields={['Notas clínicas|']} values={currentValues} onFieldChange={updateField} /><FormCard title="Notas de antecedentes" fields={['Notas de antecedentes|']} values={currentValues} onFieldChange={updateField} /></div>],
         ]} />
       </div>
 
       : tab === 'Monitoreo' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Monitoreo</h1><p className="subtitle">Seguimiento entre consultas de {patientName}: apego, síntomas y ajustes al plan.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Monitoreo</h1><p className="subtitle">Seguimiento entre consultas de {patientName}: apego, síntomas y ajustes al plan.</p>
         <Subsection value={sub} onChange={setSub} groups={[
           ['apego', 'Apego a macros', <FormCard key="ap" title="Apego a macros reportado" fields={['% Carbohidratos consumidos|', '% Proteína consumida|', '% Lípidos consumidos|']} values={currentValues} onFieldChange={updateField} />],
           ['subjetivo', 'Seguimiento', <FormCard key="sb" title="Seguimiento subjetivo" fields={['Estado de ánimo|', 'Apego al plan|', 'Antojos|', 'Hambre|', 'Consumo de agua|', 'Ejercicio|']} values={currentValues} onFieldChange={updateField} />],
@@ -832,7 +835,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       : tab === 'Transcripción' ? <TranscriptionTab values={currentValues} updateField={updateField} updateFields={updateFields} appendField={appendField} patientName={patientName} />
 
       : tab === 'Dietético' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Dietético</h1><p className="subtitle">Hábitos alimentarios de {patientName}.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Dietético</h1><p className="subtitle">Hábitos alimentarios de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
           ['patron', 'Patrón de alimentación', <FormCard key="pt" title="Patrón de alimentación" fields={['Núm. de comidas al día|', 'Horario habitual de comidas|', 'Apetito|', 'Hora a la que tiene más hambre|', 'Comidas o bebidas preferidas|', 'Alimentos que no le agradan o le causan malestar|*']} values={currentValues} onFieldChange={updateField} />],
           ['agua', 'Consumo de agua', <FormCard key="ag" title="Consumo de agua" fields={['Vasos de agua al día|', 'Restricciones dietéticas|', 'Notas dietéticas|*']} values={currentValues} onFieldChange={updateField} />],
@@ -846,7 +849,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>
 
       : tab === 'Estilo de vida' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Estilo de vida</h1><p className="subtitle">Actividad física y hábitos de {patientName}.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Estilo de vida</h1><p className="subtitle">Actividad física y hábitos de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
           ['actividad', 'Actividad física', <FormCard key="af" title="Actividad física" fields={['Tipo de ejercicio|', 'Frecuencia semanal|', 'Duración por sesión|']} values={currentValues} onFieldChange={updateField} />],
           ['descanso', 'Descanso y ánimo', <FormCard key="da" title="Descanso y ánimo" fields={['Horas de sueño|', 'Calidad del sueño|', 'Nivel de estrés percibido|', 'Estado de ánimo|', 'Jornada laboral|', 'Otros|*']} values={currentValues} onFieldChange={updateField} />],
@@ -854,7 +857,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>
 
       : tab === 'Sociocultural' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Sociocultural</h1><p className="subtitle">Contexto socioeconómico y cultural de {patientName}.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Sociocultural</h1><p className="subtitle">Contexto socioeconómico y cultural de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
           ['contexto', 'Contexto', <FormCard key="cx" title="Contexto socioeconómico" fields={['Ocupación|', 'Barreras económicas para el plan (presupuesto)|*', 'Acceso a alimentos|', 'Entorno familiar|*']} values={currentValues} onFieldChange={updateField} />],
           ['cultura', 'Cultura y creencias', <FormCard key="cu" title="Cultura y creencias" fields={['Restricciones religiosas o culturales|', 'Creencias sobre alimentación|', 'Notas socioculturales|*']} values={currentValues} onFieldChange={updateField} />],
@@ -862,7 +865,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>
 
       : tab === 'Resumen' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Resumen</h1><p className="subtitle">Motivo de consulta, datos generales y contexto de {patientName}.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Resumen</h1><p className="subtitle">Motivo de consulta, datos generales y contexto de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
           ['motivo', 'Motivo de consulta', <FormCard key="mo" title="Motivo de consulta y objetivo" fields={['Motivo de consulta|*', 'Objetivo|*']} values={currentValues} onFieldChange={updateField} />],
           ['datos', 'Datos del paciente', <div className="summary-card form-card" key="dp"><div className="summary-card-head"><h3>Datos del paciente</h3>{!patientEdit
@@ -884,7 +887,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>
 
       : tab === 'Tratamiento' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Tratamiento</h1><p className="subtitle">Plan de intervención acordado con {patientName}: objetivos, educación y seguimiento.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Tratamiento</h1><p className="subtitle">Plan de intervención acordado con {patientName}: objetivos, educación y seguimiento.</p>
         <Subsection value={sub} onChange={setSub} groups={[
           ['objetivos', 'Objetivos', <FormCard key="ob" title="Objetivos terapéuticos" fields={['Objetivo general|', 'Objetivos a corto plazo|', 'Objetivos a largo plazo|']} values={currentValues} onFieldChange={updateField} />],
           ['recomendaciones', 'Recomendaciones', <FormCard key="rc" title="Recomendaciones" fields={['Recomendaciones generales|', 'Recomendaciones de alimentación|']} values={currentValues} onFieldChange={updateField} />],
@@ -896,12 +899,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>
 
       : tab === 'Notas' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>Notas</h1><p className="subtitle">Información adicional de {patientName} no clasificada en las demás secciones.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Notas</h1><p className="subtitle">Información adicional de {patientName} no clasificada en las demás secciones.</p>
         <FormCard title="Notas de consulta" fields={['Notas de consulta|']} values={currentValues} onFieldChange={updateField} />
       </div>
 
       : <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 13</p><h1>{tab}</h1><p className="subtitle">Registra los datos de {tab.toLowerCase()} de {patientName}.</p>
+        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>{tab}</h1><p className="subtitle">Registra los datos de {tab.toLowerCase()} de {patientName}.</p>
         <FormCard title={tab} fields={['Registro clínico|', 'Notas adicionales|']} values={currentValues} onFieldChange={updateField} />
       </div>}
 
