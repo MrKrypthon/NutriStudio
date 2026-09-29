@@ -175,12 +175,18 @@ Seis pasos, del más dañino al más cosmético. Cada uno es verificable por sep
   no pierde nada y un enlace directo abre exactamente esa visita.
 - ✅ La migaja de pan dice "Expediente" en vez de "Pacientes" cuando estás dentro de uno.
 
-### Paso 6 — Datos del paciente que no se retecleen
+### Paso 6 — Datos del paciente que no se retecleen ✅
 
-- Distinguir lo **permanente** (antecedentes familiares, alergias, cirugías, intolerancias) de lo
-  **de la visita** (peso, síntomas de hoy, dieta actual).
-- Lo permanente pasa a vivir en el paciente; la consulta lo muestra y lo edita, pero no lo duplica.
-- Migración que consolide lo ya capturado tomando el valor más reciente de cada paciente.
+- ✅ Lo permanente (antecedentes familiares, enfermedades previas, cirugías, alergias,
+  intolerancias, restricciones religiosas o culturales) vive en `PatientSection`; la consulta lo
+  muestra y lo edita, pero no lo duplica. Lo de la visita (medicamentos, consumo de sustancias,
+  síntomas, exploración física) se queda en la consulta.
+- ✅ Migración `npm run db:migrate-patient-sections` (simulación por defecto, `--write` para
+  aplicar). La tabla de antecedentes familiares se toma entera de la consulta más reciente que
+  tenga alguna casilla marcada, no campo a campo: una casilla desmarcada y una nunca tocada valen
+  las dos `false`, así que campo a campo un "no" reciente perdería frente a un "sí" viejo.
+- ✅ Aplicada sobre la base de trabajo, con respaldo previo: 2 pacientes con datos permanentes,
+  13 campos consolidados.
 
 ---
 
@@ -195,14 +201,17 @@ Seis pasos, del más dañino al más cosmético. Cada uno es verificable por sep
 | 5 | medio | no | Cambia el enrutado de toda la app |
 | 6 | **alto** | migración | El más valioso y el más invasivo; al final y con respaldo |
 
-Los pasos 1 a 5 están entregados en esta rama. El 6 merece su propia fase, con respaldo de la base
-antes de migrar.
+Los seis pasos están entregados en esta rama.
 
 ---
 
 ## 6. Qué queda
 
-- **Paso 6**, el de separar el dato permanente del paciente del dato de la visita. Es el más valioso
-  para el trabajo diario y el único que necesita migración.
 - **Las 6 consultas vacías** que dejó el comportamiento anterior. Las 11 sesiones rancias se sanean
   solas al abrir cada expediente, pero borrar las vacías es destructivo y espera tu visto bueno.
+- **Decidir si más campos son permanentes.** Medicamentos y suplementos son los candidatos más
+  claros: cambian, pero menos de lo que cuesta reescribirlos. Se movería añadiéndolos a
+  `PATIENT_LEVEL` en `src/lib/patientFields.js` y volviendo a correr la migración.
+- **Lo permanente se ve con su valor de hoy también al abrir una consulta antigua.** Es lo buscado
+  (un antecedente familiar es verdad actual, no una foto de aquel día), pero conviene tenerlo
+  presente al leer el PDF de una visita pasada.
