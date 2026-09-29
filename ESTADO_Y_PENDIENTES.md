@@ -871,3 +871,42 @@ encuadre de una sola medición sin tocar las demás.
 
 **Verificado** con Chromium sobre el expediente real: los 10 campos cargan su animación (260×260) y
 el texto nuevo, sin errores de consola. `npm run build` OK y `npm test` (48/48).
+
+## Fase 82 — segunda tanda: manos en todas las guías, y perímetros y diámetros en 3D
+
+Las diez guías de pliegues ya se veían bien, pero faltaba lo que de verdad enseña la técnica: **la
+mano que hace el movimiento**. Y los otros dos grupos (14 perímetros y 12 diámetros) seguían con las
+ilustraciones viejas. Ahora los 36 campos tienen animación propia, con el mismo modelo.
+
+**La mano.** Se modela con mallas normales y no con metaballs: a los radios que necesita un dedo, los
+vecinos se funden y la mano sale como un mitón. Tiene dos poses — pinza de pulgar e índice para los
+pliegues, y garra para empuñar la cinta o el antropómetro — y el pulgar es un objeto aparte con el
+origen en el nudillo, para abrir y cerrar la pinza girándolo sin rehacer la malla en cada cuadro.
+
+**Los instrumentos nuevos.** La cinta métrica no es un círculo: se lanza un rayo por cada ángulo y se
+toma el impacto en la piel, así que sigue la silueta verdadera (un torso no es un cilindro) y se ciñe
+y se afloja en el ciclo. El antropómetro va en dos tamaños, barra larga para biacromial, biileocrestal
+y tórax, y paquímetro reducido para codo, muñeca, rodilla, tobillo, mano y pie: con un solo tamaño,
+en los sitios chicos el instrumento tapaba la articulación entera.
+
+**Los ángulos.** La cámara ya no usa una restricción `TRACK_TO`. Con ella el "arriba" lo decide el eje
+Z del mundo y, al orbitar alrededor de un eje horizontal, la imagen sale inclinada — la barra del
+antropómetro aparecía en diagonal. Ahora el eje de la medición se fija como horizontal de la imagen y
+la órbita gira alrededor de ese mismo eje, que es lo que evita el escorzo: en un perímetro se ve el
+anillo ceñido y en un diámetro la separación real entre las puntas.
+
+**Tres cosas que sólo se ven al construirlo.** Los rayos que buscan un accidente óseo en una
+extremidad se colaban por el hueco entre el brazo y el tronco y acababan impactando en el torso (el
+"húmero" medía del brazo a las costillas): cada sitio declara ahora desde qué distancia se lanza el
+rayo. Los puntos están escritos sobre el cuerpo en reposo, así que si la pose abduce el brazo hay que
+girarlos con él o el rayo apunta al aire. Y en este modelo la abducción positiva cruza el brazo sobre
+el pecho —que es lo que piden los pliegues de la línea axilar— mientras que los diámetros del codo y
+la muñeca necesitan lo contrario, separarlo del costado, es decir abducción negativa.
+
+**Contenido.** Se reescribieron las descripciones de los 26 campos de perímetros y diámetros con la
+referencia anatómica, la posición del sujeto y el momento de la lectura, y cada grupo tiene ahora su
+propia línea de técnica (pliegue, cinta y antropómetro), no sólo los pliegues.
+
+**Verificado** con Chromium sobre el expediente real: los 36 campos cargan su animación y sus dos
+párrafos, sin más error de consola que el `favicon.ico` de siempre. `npm run build` OK y `npm test`
+(48/48). El pipeline completo queda en `tools/mediciones-3d/` con su README.

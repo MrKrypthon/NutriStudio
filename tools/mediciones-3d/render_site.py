@@ -47,8 +47,10 @@ tip_mat = g.solid_material('Punta', g.CALIPER_TIP, roughness=0.22, metallic=0.9)
 
 g.build_mark(origin, fold_axis, across, normal, mark_mat)
 fold = g.build_fold(origin, fold_axis, across, normal, fold_mat)
-hand_mat = g.solid_material('Mano', (0.88, 0.66, 0.58, 1), roughness=0.66)
-fingers, pads = g.build_fingers(origin, fold_axis, across, normal, hand_mat)
+import hand as hand_mod  # noqa: E402
+hand_mat = hand_mod.hand_material()
+hand, thumb = g.place_hand(origin, fold_axis, across, normal, hand_mat, roll=25, scale=0.78)
+hand_base = hand.location.copy()
 caliper, jaws = g.build_caliper(origin, fold_axis, across, normal, steel, tip_mat)
 
 # --- luces relativas al sitio para que la región quede bien iluminada ---
@@ -107,11 +109,15 @@ FOLD_KEYS = [(1, 0.02), (8, 0.02), (18, 1.0), (38, 1.0), (46, 0.02), (48, 0.02)]
 CAL_Z_KEYS = [(1, 0.105), (18, 0.105), (26, 0.020), (38, 0.020), (46, 0.105), (48, 0.105)]
 JAW_KEYS = [(1, 0.056), (20, 0.056), (26, 0.024), (38, 0.024), (44, 0.056), (48, 0.056)]  # separación entre puntas (m)
 
-FINGER_KEYS = [(1, 0.055, 0.052), (8, 0.055, 0.052), (18, 0.021, 0.012), (38, 0.021, 0.012), (46, 0.055, 0.052), (48, 0.055, 0.052)]
-for frame, gap, lift in FINGER_KEYS:
-    for sign, pad in zip((-1, 1), pads):
-        pad.location = (0, sign * gap, lift)
-        pad.keyframe_insert('location', frame=frame)
+# La mano entra desde fuera, cierra la pinza sobre el pliegue, la sostiene y se retira.
+HAND_KEYS = [(1, 0.085), (8, 0.060), (18, 0.0), (38, 0.0), (46, 0.085), (48, 0.085)]
+for frame, retreat in HAND_KEYS:
+    hand.location = hand_base + normal * retreat + across * (retreat * 0.6)
+    hand.keyframe_insert('location', frame=frame)
+THUMB_KEYS = [(1, 26), (8, 26), (18, 0), (38, 0), (46, 26), (48, 26)]
+for frame, degrees in THUMB_KEYS:
+    thumb.rotation_euler = (0, radians(degrees), 0)
+    thumb.keyframe_insert('rotation_euler', frame=frame)
 
 for frame, value in FOLD_KEYS:
     fold.scale = (1.0, 1.0, value)
@@ -142,7 +148,7 @@ def iter_fcurves(action):
     return curves
 
 
-for obj in (fold, caliper, *jaws, *pads):
+for obj in (fold, caliper, *jaws, hand, thumb):
     if obj.animation_data and obj.animation_data.action:
         for fcurve in iter_fcurves(obj.animation_data.action):
             for kp in fcurve.keyframe_points:
