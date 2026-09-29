@@ -135,7 +135,7 @@ una nueva, venga de donde venga.
 
 Seis pasos, del más dañino al más cosmético. Cada uno es verificable por separado.
 
-### Paso 1 — Que no se pierda lo escrito *(corrección, sin cambio de flujo)*
+### Paso 1 — Que no se pierda lo escrito *(corrección, sin cambio de flujo)* ✅
 
 - Mover el `consultation` de la limpieza a un `ref` para que la función de desmontaje vea el valor
   vigente, y desanidar el payload.
@@ -143,28 +143,30 @@ Seis pasos, del más dañino al más cosmético. Cada uno es verificable por sep
 - Prueba: escribir en Clínico, cambiar de módulo antes de 800 ms, volver y comprobar que el texto
   está. Hoy falla.
 
-### Paso 2 — Que abrir a mirar no cree nada
+### Paso 2 — Que abrir a mirar no cree nada ✅
 
 - `ClinicalRecordPage` deja de llamar a `create`. Si no hay sesión en curso, muestra el expediente en
   modo lectura con el botón **Iniciar consulta**.
 - `POST /patients/:id/consultations` rechaza crear una segunda sesión abierta para el mismo paciente
   (hoy nada lo impide).
-- Script de limpieza para las 6 consultas vacías y las 11 abiertas rancias, a ejecutar una vez y con
-  respaldo previo.
+- Las 11 sesiones rancias se sanean solas: la primera vez que se abre cada expediente, el paso 3 las
+  cierra. Las 6 consultas vacías siguen ahí; borrarlas es destructivo y queda **pendiente de tu
+  visto bueno**.
 
-### Paso 3 — Cerrar solas las sesiones de días anteriores
+### Paso 3 — Cerrar solas las sesiones de días anteriores ✅
 
 - Subir la comprobación de "sesión de otro día" fuera de la rama de la cita, para que valga en las
   cinco puertas de entrada.
 - Al cerrarla, dejar constancia (`completedAt` + evento de auditoría) de que la cerró el sistema y no
   la nutrióloga, para no ensuciar Finanzas con un cobro que nadie hizo.
 
-### Paso 4 — Saber siempre en qué sesión estás
+### Paso 4 — Saber siempre en qué sesión estás *(parcial)*
 
-- Cabecera con fecha y posición: *"Consulta del 28 sep 2026 · sesión 4 de 7 · En curso"*.
-- Selector de sesión dentro del expediente, para moverse entre visitas sin salir a Consultas.
-- Una consulta `COMPLETED` se abre **en sólo lectura**, con un botón explícito de "Reabrir para
-  corregir" que quede registrado en la auditoría.
+- ✅ Cabecera con fecha y posición: *"Consulta del 28 sep 2026 · sesión 4 de 7 · En curso"*.
+- ✅ Una consulta `COMPLETED` se abre **en sólo lectura**, con un botón explícito de "Reabrir para
+  corregir" que queda registrado en la auditoría.
+- Pendiente: selector de sesión dentro del expediente, para moverse entre visitas sin salir a
+  Consultas.
 
 ### Paso 5 — Poder volver a donde lo dejaste
 
