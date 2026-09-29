@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/AuthContext.jsx'
+import { parseLocation, pathFor } from './routes.js'
 
 import LoginPage from '../modules/auth/LoginPage.jsx'
 import DashboardPage from '../modules/dashboard/DashboardPage.jsx'
@@ -22,39 +23,48 @@ import NewMaterialPage from '../modules/education/NewMaterialPage.jsx'
 import SettingsPage from '../modules/settings/SettingsPage.jsx'
 import FinancePage from '../modules/finance/FinancePage.jsx'
 
-const pathToModule = { '/': 'Hoy', '/hoy': 'Hoy', '/agenda': 'Agenda', '/pacientes': 'Pacientes', '/recetas': 'Recetas', '/ingredientes': 'Ingredientes', '/plantillas': 'Plantillas', '/constructor-plan': 'Constructor de plan', '/documentos': 'Documentos', '/nuevo-paciente': 'Nuevo paciente', '/configuracion': 'Configuración', '/importar-alimentos': 'Importar alimentos', '/finanzas': 'Finanzas' }
-const moduleToSlug = { 'Hoy': 'hoy', 'Agenda': 'agenda', 'Pacientes': 'pacientes', 'Recetas': 'recetas', 'Ingredientes': 'ingredientes', 'Plantillas': 'plantillas', 'Constructor de plan': 'constructor-plan', 'Documentos': 'documentos', 'Nuevo paciente': 'nuevo-paciente', 'Configuración': 'configuracion', 'Importar alimentos': 'importar-alimentos', 'Documento': 'documentos', 'Expediente': 'pacientes', 'Finanzas': 'finanzas' }
-
 export default function App() {
   const { status } = useAuth()
-  const [active, setActiveState] = useState(() => pathToModule[window.location.pathname] || 'Hoy')
+  const initial = parseLocation(window.location.pathname)
+  const [active, setActiveState] = useState(() => initial.module)
   // Sin paciente por defecto: antes arrancaba con el paciente de demostración, así que Consultas y
   // el Constructor abrían con Mariana Torres sin haber elegido a nadie. Cada pantalla que necesita
-  // un paciente ahora pide elegirlo.
-  const [selectedPatientId, setSelectedPatientId] = useState('')
+  // un paciente ahora pide elegirlo — o lo toma de la dirección, al recargar.
+  const [selectedPatientId, setSelectedPatientId] = useState(initial.patientId)
   const [selectedMaterialId, setSelectedMaterialId] = useState(null)
   const [selectedRecipeId, setSelectedRecipeId] = useState(null)
   const [startAppointmentId, setStartAppointmentId] = useState(null)
-  const [selectedConsultationId, setSelectedConsultationId] = useState(null)
+  const [selectedConsultationId, setSelectedConsultationId] = useState(initial.consultationId)
   const [pendingRecipeName, setPendingRecipeName] = useState(null)
   const [autoOpenNewAppointment, setAutoOpenNewAppointment] = useState(false)
   const [newAppointmentPatientId, setNewAppointmentPatientId] = useState('')
   const [autoAgendaFilter, setAutoAgendaFilter] = useState(null)
-  const setActive = (next) => {
-    setActiveState(next)
-    const slug = moduleToSlug[next]
-    if (slug) {
-      if (window.location.pathname !== `/${slug}`) window.history.pushState({}, '', `/${slug}`)
-      return
-    }
-    // "Nueva receta"/"Editar receta" have no slug of their own. Push a history entry anyway
-    // (keeping the /recetas URL) so the browser back returns to the recipe list and unmounts the
-    // form — which is what stores its in-memory draft — instead of leaving the section entirely.
-    if (next === 'Nueva receta' || next === 'Editar receta') window.history.pushState({}, '', '/recetas')
+
+  /**
+   * Único punto por el que se navega. Escribe a la vez el estado y la dirección, porque si sólo se
+   * actualizara el estado la barra de direcciones quedaría mintiendo y recargar sacaría al usuario
+   * de donde estaba. El paciente y la consulta se pasan explícitamente cuando cambian: leerlos del
+   * estado aquí daría el valor viejo, ya que `setState` no se ha aplicado todavía.
+   */
+  const go = (module, options = {}) => {
+    const patientId = 'patientId' in options ? options.patientId : selectedPatientId
+    const consultationId = 'consultationId' in options ? options.consultationId : null
+    if ('patientId' in options) setSelectedPatientId(options.patientId)
+    setSelectedConsultationId(consultationId)
+    setActiveState(module)
+    const next = pathFor(module, patientId, consultationId)
+    if (next && window.location.pathname !== next) window.history.pushState({}, '', next)
   }
+  const setActive = (next) => go(next)
 
   useEffect(() => {
-    const onPopState = () => setActiveState(pathToModule[window.location.pathname] || 'Hoy')
+    // Atrás y adelante del navegador reconstruyen el estado desde la dirección, paciente incluido.
+    const onPopState = () => {
+      const route = parseLocation(window.location.pathname)
+      setActiveState(route.module)
+      setSelectedPatientId(route.patientId || '')
+      setSelectedConsultationId(route.consultationId)
+    }
     window.addEventListener('popstate', onPopState)
     return () => window.removeEventListener('popstate', onPopState)
   }, [])
@@ -63,19 +73,15 @@ export default function App() {
   // which appointment triggered it (so ClinicalRecordPage can mark it COMPLETED when it creates
   // the consultation), and jumps to the expediente.
   const startConsultation = (patientId, appointmentId) => {
-    setSelectedPatientId(patientId)
-    setSelectedConsultationId(null)
     setStartAppointmentId(appointmentId || null)
-    setActive('Expediente')
+    go('Expediente', { patientId, consultationId: null })
   }
 
   // "Historial de sesiones" in Consultas opens THAT specific session in the expediente (a
   // completed one included), instead of always jumping to the current in-progress consultation.
   const openSession = (patientId, consultationId) => {
-    setSelectedPatientId(patientId)
-    setSelectedConsultationId(consultationId)
     setStartAppointmentId(null)
-    setActive('Expediente')
+    go('Expediente', { patientId, consultationId })
   }
 
   // "Nueva cita" from Hoy used to just land on Agenda, where you then had to click its own
@@ -104,9 +110,9 @@ export default function App() {
   if (status === 'checking') return null
   if (status === 'anonymous') return <LoginPage />
 
-  if (active === 'Hoy') return <DashboardPage setActive={setActive} onStartConsultation={startConsultation} onNewAppointment={goToNewAppointment} onOpenAgendaFiltered={goToAgendaFiltered} onOpenPlan={(pid) => { setSelectedPatientId(pid); setActive('Constructor de plan') }} />
+  if (active === 'Hoy') return <DashboardPage setActive={setActive} onStartConsultation={startConsultation} onNewAppointment={goToNewAppointment} onOpenAgendaFiltered={goToAgendaFiltered} onOpenPlan={(pid) => go('Constructor de plan', { patientId: pid })} />
   if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} autoOpenNew={autoOpenNewAppointment} autoOpenPatientId={newAppointmentPatientId} onConsumeAutoOpen={() => { setAutoOpenNewAppointment(false); setNewAppointmentPatientId('') }} autoFilter={autoAgendaFilter} onConsumeAutoFilter={() => setAutoAgendaFilter(null)} />
-  if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
+  if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} onOpenPatient={(pid, module) => go(module, { patientId: pid })} />
   if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Nueva receta') return <NewRecipePage key="new" setActive={setActive} />
   if (active === 'Editar receta') return <NewRecipePage key={selectedRecipeId || 'new'} setActive={setActive} recipeId={selectedRecipeId} />
@@ -118,7 +124,7 @@ export default function App() {
   if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
   if (active === 'Seguimientos') return <FollowupsPage setActive={setActive} />
   if (active === 'Finanzas') return <FinancePage setActive={setActive} />
-  if (active === 'Consultas') return <ConsultationsPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} onOpenSession={openSession} />
+  if (active === 'Consultas') return <ConsultationsPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} onOpenSession={openSession} onOpenPatient={(pid, module) => go(module, { patientId: pid })} />
   if (active === 'Plantillas') return <TemplatesPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Recetas') return <RecipesPage setActive={setActive} onSelectRecipe={setSelectedRecipeId} onAssignRecipe={assignRecipe} />
   if (active === 'Ingredientes') return <IngredientsPage setActive={setActive} />

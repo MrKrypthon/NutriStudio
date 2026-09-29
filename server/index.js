@@ -417,6 +417,10 @@ app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => 
   let userId = nutritionistId || request.userId
   if (!userId) userId = (await prisma.user.findFirst({ where: { practiceId } }))?.id
   if (!userId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La consulta necesita un profesional responsable.', fields: { nutritionistId: 'required' } })
+  // Un paciente no puede tener dos consultas en curso a la vez: si las hubiera, cada pantalla
+  // elegiría una distinta y la visita quedaría partida en dos expedientes paralelos.
+  const alreadyOpen = await prisma.consultation.findFirst({ where: { patientId: request.params.patientId, status: 'IN_PROGRESS' } })
+  if (alreadyOpen) return reply.code(409).send({ code: 'CONSULTATION_ALREADY_OPEN', message: 'Este paciente ya tiene una consulta en curso.', fields: {}, consultationId: alreadyOpen.id })
   const consultation = await prisma.consultation.create({ data: { patientId: request.params.patientId, appointmentId, nutritionistId: userId, templateId, status: 'IN_PROGRESS', startedAt: new Date() } })
   if (appointment) await prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'COMPLETED' } })
   return reply.code(201).send(consultation)
@@ -469,16 +473,36 @@ app.delete('/api/v1/lab-attachments/:attachmentId', async (request, reply) => {
 })
 
 app.post('/api/v1/consultations/:consultationId/complete', async (request, reply) => {
-  const { paymentMethod, amountCents } = request.body || {}
+  const { paymentMethod, amountCents, autoClosed } = request.body || {}
   const consultation = await prisma.consultation.findFirst({
     where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } },
     include: { patient: true, appointment: true },
   })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   const updated = await prisma.consultation.update({ where: { id: consultation.id }, data: { status: 'COMPLETED', completedAt: consultation.completedAt || new Date() } })
+  // `autoClosed` es el cierre que hace el sistema al encontrar una sesión abierta de un día
+  // anterior. No genera ingreso: nadie cobró esa consulta, y apuntarla en Finanzas inventaría
+  // dinero que no entró. Queda en la auditoría para poder distinguirla de un cierre real.
+  if (autoClosed) {
+    await logAudit(request, { action: 'auto_closed', entity: 'Consultation', entityId: consultation.id, patientId: consultation.patientId, metadata: { startedAt: consultation.startedAt } })
+    return updated
+  }
   // Al cerrar la consulta queda registrado su ingreso (tarifa del tipo de cita + método de pago).
   // Best-effort: un fallo aquí no debe impedir cerrar la sesión clínica.
   await recordConsultationIncome(consultation, { paymentMethod, amountCents }).catch((error) => app.log.warn({ err: error }, 'No se pudo registrar el ingreso de la consulta'))
+  return updated
+})
+
+// Reabrir una consulta cerrada para corregirla. Es deliberado y queda auditado: el expediente se
+// abre en sólo lectura precisamente para que editar una visita pasada sea una decisión, no un
+// descuido. No se toca el ingreso ya registrado — corregir la nota clínica no deshace el cobro.
+app.post('/api/v1/consultations/:consultationId/reopen', async (request, reply) => {
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const open = await prisma.consultation.findFirst({ where: { patientId: consultation.patientId, status: 'IN_PROGRESS' } })
+  if (open && open.id !== consultation.id) return reply.code(409).send({ code: 'CONSULTATION_ALREADY_OPEN', message: 'Este paciente ya tiene una consulta en curso. Ciérrala antes de reabrir otra.', fields: {} })
+  const updated = await prisma.consultation.update({ where: { id: consultation.id }, data: { status: 'IN_PROGRESS' } })
+  await logAudit(request, { action: 'reopened', entity: 'Consultation', entityId: consultation.id, patientId: consultation.patientId, metadata: {} })
   return updated
 })
 

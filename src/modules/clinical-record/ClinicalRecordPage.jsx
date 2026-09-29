@@ -8,6 +8,7 @@ import RecallBuilder from '../../components/RecallBuilder.jsx'
 import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
+import { shouldAutoClose } from '../../lib/consultationSession.js'
 
 const TABS = ['Resumen', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
 // Los antecedentes familiares viven ahora en Clínico (ver flujo-consulta-nutricional.md), así que
@@ -193,6 +194,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [loadState, setLoadState] = useState('loading')
   const [consultation, setConsultation] = useState(null)
   const [historyCount, setHistoryCount] = useState(0)
+  // Sesión que se cerró sola por ser de un día anterior: se avisa en pantalla para que quede claro
+  // que lo que se escriba ahora ya no va a esa consulta.
+  const [autoClosed, setAutoClosed] = useState(null)
+  const [startState, setStartState] = useState('idle')
+  const [sessionIndex, setSessionIndex] = useState(null)
   const [sections, setSections] = useState({})
   const [saveState, setSaveState] = useState('idle')
   const [measurementState, setMeasurementState] = useState('idle')
@@ -237,6 +243,61 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const inFlightRef = useRef(new Set())
   const lastSavedAtRef = useRef({})
   const payloadMirrorRef = useRef({})
+  // Espejo de la consulta cargada. El efecto de carga depende de [patientId], así que su función de
+  // limpieza se creó en el primer render, cuando `consultation` todavía era null: leer el estado
+  // desde ahí daba siempre undefined y el guardado de salida no se disparaba nunca.
+  const consultationRef = useRef(null)
+
+  // Vacía a la fuerza lo que quede pendiente, sin esperar al debounce ni a que React vuelva a
+  // renderizar. Se usa al salir del expediente y al cerrar la pestaña, donde no hay ocasión de
+  // reintentar: es "dispara y olvida" con keepalive para que la petición sobreviva al desmontaje.
+  const flushPendingNow = () => {
+    const consultationId = consultationRef.current?.id
+    const batch = pendingRef.current
+    pendingRef.current = {}
+    if (!consultationId) return
+    for (const [key, pending] of Object.entries(batch)) {
+      clinicalApi.saveSection(consultationId, key, pending.payload, lastSavedAtRef.current[key], { keepalive: true }).catch(() => {})
+    }
+  }
+
+  useEffect(() => { consultationRef.current = consultation }, [consultation])
+
+  // Cerrar la pestaña con algo a medio escribir también tiene que guardar.
+  useEffect(() => {
+    const onLeave = () => flushPendingNow()
+    window.addEventListener('beforeunload', onLeave)
+    window.addEventListener('pagehide', onLeave)
+    return () => {
+      window.removeEventListener('beforeunload', onLeave)
+      window.removeEventListener('pagehide', onLeave)
+    }
+  }, [])
+
+  // Vuelca una consulta recién traída del servidor al estado de la pantalla. Lo usan tanto la carga
+  // inicial como "Iniciar consulta" y "Reabrir", para que las tres dejen la pantalla igual.
+  const applyConsultation = (full) => {
+    setConsultation(full)
+    setAttachments(full.labAttachments || [])
+    const bySectionKey = {}
+    payloadMirrorRef.current = {}
+    lastSavedAtRef.current = {}
+    for (const section of full.sections || []) {
+      bySectionKey[section.sectionKey] = section
+      payloadMirrorRef.current[section.sectionKey] = section.payload || {}
+      lastSavedAtRef.current[section.sectionKey] = section.lastSavedAt
+    }
+    if (bySectionKey.general) {
+      const clinical = bySectionKey.clinical || { sectionKey: 'clinical', payload: {} }
+      clinical.payload = { ...bySectionKey.general.payload, ...(clinical.payload || {}) }
+      bySectionKey.clinical = clinical
+      payloadMirrorRef.current.clinical = clinical.payload
+      delete bySectionKey.general
+      delete payloadMirrorRef.current.general
+    }
+    setSections(bySectionKey)
+    setDiagnoses(full.diagnoses || [])
+  }
 
   useEffect(() => {
     if (!patientId) { setLoadState('ready'); return undefined }
@@ -261,48 +322,45 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           let active
           try {
             active = (list.items || []).find((item) => item.status === 'IN_PROGRESS')
-            if (!active) {
-              active = await clinicalApi.create(patientId, appointmentId ? { appointmentId } : {})
-            } else if (appointmentId) {
-              // Same-day second appointment joins the open session (documented intent). But a session
-              // left open from a PREVIOUS day must be closed before starting a new one, otherwise
-              // different visits keep merging into a single ever-growing consultation.
-              const stale = new Date(active.startedAt).toISOString().slice(0, 10) !== new Date().toISOString().slice(0, 10)
-              if (stale) {
-                await clinicalApi.complete(active.id).catch(() => {})
-                active = await clinicalApi.create(patientId, { appointmentId })
-              } else {
-                await appointmentsApi.complete(appointmentId).catch(() => {})
-              }
+            // Una sesión abierta de un día anterior se cierra sola, venga de donde venga la
+            // entrada. Antes esta comprobación sólo corría al entrar desde una cita, así que al
+            // abrir desde Pacientes o Consultas se reutilizaba la sesión vieja y las visitas de
+            // semanas distintas se iban acumulando todas en la misma consulta.
+            if (shouldAutoClose(active)) {
+              await clinicalApi.complete(active.id, { autoClosed: true }).catch(() => {})
+              if (!cancelled) setAutoClosed(active)
+              active = null
+            }
+            if (appointmentId) {
+              // Entrar desde una cita sí es un acto explícito de iniciar la consulta: si no hay
+              // sesión de hoy se crea, y si ya la hay la segunda cita del día se suma a ella.
+              if (active) await appointmentsApi.complete(appointmentId).catch(() => {})
+              else active = await clinicalApi.create(patientId, { appointmentId })
             }
           } finally {
             // Consume the appointment id whether or not the calls above succeeded — a stuck id
             // would re-run complete/create side effects on the same appointment next open.
             if (appointmentId) onConsumeAppointment?.()
           }
-          full = await clinicalApi.get(active.id)
+          // Sin cita y sin sesión de hoy no se crea nada: abrir el expediente para consultar un
+          // dato no puede inaugurar una consulta. Se muestra la última visita en sólo lectura y el
+          // profesional decide si inicia una nueva.
+          full = active ? await clinicalApi.get(active.id) : ((list.items || [])[0] ? await clinicalApi.get(list.items[0].id) : null)
         }
         if (cancelled) return
-        setConsultation(full)
-        setAttachments(full.labAttachments || [])
-        const bySectionKey = {}
-        payloadMirrorRef.current = {}
-        lastSavedAtRef.current = {}
-        for (const section of full.sections || []) {
-          bySectionKey[section.sectionKey] = section
-          payloadMirrorRef.current[section.sectionKey] = section.payload || {}
-          lastSavedAtRef.current[section.sectionKey] = section.lastSavedAt
+        if (!full) {
+          setConsultation(null)
+          setSections({})
+          setDiagnoses([])
+          setAttachments([])
+          setLoadState('ready')
+          return
         }
-        if (bySectionKey.general) {
-          const clinical = bySectionKey.clinical || { sectionKey: 'clinical', payload: {} }
-          clinical.payload = { ...bySectionKey.general.payload, ...(clinical.payload || {}) }
-          bySectionKey.clinical = clinical
-          payloadMirrorRef.current.clinical = clinical.payload
-          delete bySectionKey.general
-          delete payloadMirrorRef.current.general
-        }
-        setSections(bySectionKey)
-        setDiagnoses(full.diagnoses || [])
+        applyConsultation(full)
+        // Posición contando desde la primera visita: la lista viene de la más reciente a la más
+        // antigua, así que "sesión 4 de 7" es el total menos el índice.
+        const position = (list.items || []).findIndex((item) => item.id === full.id)
+        setSessionIndex(position >= 0 ? (list.items || []).length - position : null)
         setLoadState('ready')
       } catch {
         if (!cancelled) setLoadState('error')
@@ -312,13 +370,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     return () => {
       cancelled = true
       clearTimeout(saveTimer.current)
-      // The debounce trades "save on every keystroke" for "save 800ms after the user stops
-      // typing" — but navigating away inside that window must not drop edits. Replay every
-      // pending section as a best-effort fire-and-forget request (in-flight ones finish on
-      // their own; the component is gone so failures have nowhere to surface anyway).
-      for (const [key, payload] of Object.entries(pendingRef.current)) {
-        if (consultation?.id) clinicalApi.saveSection(consultation.id, key, payload, lastSavedAtRef.current[key]).catch(() => {})
-      }
+      // El debounce cambia "guardar en cada tecla" por "guardar 800 ms después de dejar de
+      // escribir", pero salir dentro de esa ventana no puede tirar lo escrito: se vacía a la
+      // fuerza (las peticiones en vuelo terminan solas; el componente ya no está, así que un
+      // fallo no tendría dónde mostrarse).
+      flushPendingNow()
     }
   }, [patientId])
 
@@ -395,6 +451,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   // currentValues closure, so two edits landing in the same tick (e.g. two transcription chunks)
   // accumulate instead of the second silently overwriting the first.
   const updateFields = (updates) => {
+    if (locked) return
     const base = payloadMirrorRef.current[sectionKey] || {}
     const nextValues = { ...base, ...updates }
     payloadMirrorRef.current[sectionKey] = nextValues
@@ -404,6 +461,52 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     scheduleFlush()
   }
   const updateField = (label, value) => updateFields({ [label]: value })
+
+  // Una consulta existe porque alguien la inició, nunca porque alguien miró: mientras no haya
+  // sesión de hoy el expediente se abre en sólo lectura y este botón es el único que la crea.
+  const startConsultation = async () => {
+    if (!patientId || startState === 'saving') return
+    setStartState('saving')
+    try {
+      const created = await clinicalApi.create(patientId, {})
+      const full = await clinicalApi.get(created.id)
+      applyConsultation(full)
+      setAutoClosed(null)
+      // La recién creada es la última visita: pasa a ser la número historyCount + 1 de ese total.
+      setHistoryCount(historyCount + 1)
+      setSessionIndex(historyCount + 1)
+      setStartState('idle')
+    } catch {
+      setStartState('error')
+    }
+  }
+
+  // Corregir una consulta ya cerrada tiene que ser deliberado: se reabre a propósito, no por el
+  // hecho de estar mirándola.
+  const reopenConsultation = async () => {
+    if (!consultation || startState === 'saving') return
+    setStartState('saving')
+    try {
+      await clinicalApi.reopen(consultation.id)
+      const full = await clinicalApi.get(consultation.id)
+      applyConsultation(full)
+      setStartState('idle')
+    } catch {
+      setStartState('error')
+    }
+  }
+
+  // Lo que está cerrado (o el expediente sin sesión de hoy) no se edita: se mira. Así abrir el
+  // expediente para consultar un dato no puede escribir por accidente en una visita pasada.
+  const locked = !consultation || consultation.status === 'COMPLETED'
+
+  // La cabecera decía sólo "Consulta nutricional · En curso", así que una sesión de hoy y una del
+  // mes pasado se veían idénticas. Ahora dice de qué día es y qué número de visita ocupa.
+  const sessionLabel = consultation
+    ? [`Consulta del ${formatDate(consultation.startedAt || consultation.createdAt)}`,
+       sessionIndex && historyCount ? `sesión ${sessionIndex} de ${historyCount}` : null,
+       CONSULTATION_STATUS_LABELS[consultation.status] || consultation.status].filter(Boolean).join(' · ')
+    : 'Sin consultas registradas'
 
   // Appends against the synchronous payloadMirrorRef, so consecutive speech chunks landing in the
   // same tick accumulate instead of the second overwriting the first from a stale render closure.
@@ -426,7 +529,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     updateFields(next)
   }
 
-  const saveLabel = SAVE_LABELS[saveState]
+  // En sólo lectura no hay nada que guardar: decir "Guardado" ahí daría a entender que lo que se
+  // escriba se está persistiendo, que es justo lo que no pasa.
+  const saveLabel = locked ? '▤ Sólo lectura' : SAVE_LABELS[saveState]
   const anthro = sections.anthropometric?.payload || {}
   const numOrUndefined = (value) => value !== undefined && value !== '' ? Number(value) : undefined
   // The server upserts today's measurement, so re-registering corrects it instead of stacking a
@@ -775,16 +880,30 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   // Hallazgos de exploración seleccionados, para mostrar su imagen de referencia.
   const examSelected = PHYSICAL_EXAM.flatMap(([, findings]) => findings).filter((finding) => !!currentValues[`Exploración: ${finding}`])
 
-  if (!patientId) return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
+  if (!patientId) return <AppChrome active="Pacientes" crumb="Expediente" setActive={setActive}><div className="content clinical-content">
     <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Abre el expediente desde la lista de pacientes para registrar una consulta.</p><button className="primary" onClick={() => setActive('Pacientes')}>Ir a Pacientes</button></div>
   </div></AppChrome>
 
-  return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
+  return <AppChrome active="Pacientes" crumb="Expediente" setActive={setActive}><div className="content clinical-content">
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
-      <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><div className="clinical-person-head"><h2>{patientName}</h2><button type="button" className="record-button" title="Grabar consulta" aria-label="Grabar consulta" onClick={() => setTab('Transcripción')}><Icon>record</Icon></button></div><span>Consulta nutricional · {CONSULTATION_STATUS_LABELS[consultation?.status] || 'en curso'}</span></div></div>
-      <div className="clinical-actions">{consultation?.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}<button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}{clinicalReport?.storageKey && <button className="secondary" disabled={clinicalReportState === 'working'} onClick={downloadClinicalReport}>{clinicalReportState === 'working' ? '…' : 'Descargar informe clínico'}</button>}<button className="secondary" disabled={clinicalReportState === 'working'} onClick={generateClinicalReport}>{clinicalReportState === 'working' ? 'Generando…' : clinicalReport?.storageKey ? 'Actualizar informe clínico' : 'Informe clínico'}</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
+      <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><div className="clinical-person-head"><h2>{patientName}</h2><button type="button" className="record-button" title="Grabar consulta" aria-label="Grabar consulta" onClick={() => setTab('Transcripción')}><Icon>record</Icon></button></div><span>{sessionLabel}</span></div></div>
+      <div className="clinical-actions">{consultation && consultation.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}<button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}{clinicalReport?.storageKey && <button className="secondary" disabled={clinicalReportState === 'working'} onClick={downloadClinicalReport}>{clinicalReportState === 'working' ? '…' : 'Descargar informe clínico'}</button>}<button className="secondary" disabled={clinicalReportState === 'working'} onClick={generateClinicalReport}>{clinicalReportState === 'working' ? 'Generando…' : clinicalReport?.storageKey ? 'Actualizar informe clínico' : 'Informe clínico'}</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
     </div>
+    {/* El aviso lleva su propia acción: explicar la situación y ofrecer la salida en el mismo sitio
+        evita que "Iniciar consulta" se pierda entre los ocho botones de informes de la cabecera. */}
+    {locked && loadState === 'ready' && <div className="record-notice">
+      <p>{!consultation
+        ? <>▤ {patientName} todavía no tiene consultas registradas.</>
+        : autoClosed
+          ? <>◷ La consulta del {formatDate(autoClosed.startedAt || autoClosed.createdAt)} había quedado abierta de un día anterior y se cerró sola. Se muestra en <b>sólo lectura</b>: lo que escribas aquí no se guardaría en la visita de hoy.</>
+          : <>▤ Estás viendo la consulta del {formatDate(consultation.startedAt || consultation.createdAt)} en <b>sólo lectura</b>.</>}</p>
+      <div className="record-notice-actions">
+        <button type="button" className="primary" disabled={startState === 'saving'} onClick={startConsultation}>{startState === 'saving' ? 'Iniciando…' : '+ Iniciar consulta de hoy'}</button>
+        {consultation?.status === 'COMPLETED' && <button type="button" className="secondary" disabled={startState === 'saving'} onClick={reopenConsultation}>Reabrir para corregir</button>}
+      </div>
+    </div>}
+    {startState === 'error' && <div className="form-error">⚠ No se pudo iniciar o reabrir la consulta. Revisa si el paciente ya tiene una en curso.</div>}
     {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
     {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
     {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
@@ -793,7 +912,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando expediente…</h3></div>}
     {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar ni crear la consulta de {patientName}.</div>}
 
-    {loadState === 'ready' && <>
+    {/* Un `fieldset` deshabilitado apaga de golpe todos los controles que contiene: es la forma
+        de que una consulta cerrada se pueda leer y no escribir sin tener que ir campo por campo
+        (y sin que un campo nuevo se escape del bloqueo por olvido). */}
+    {loadState === 'ready' && <fieldset className="record-lock" disabled={locked}>
       {tab === 'Antropométrico' ? <div className="anthro-tab-wrap">
         <Anthropometry values={currentValues} onFieldChange={updateAnthropometric} registerMeasurement={registerMeasurement} measurementState={measurementState} todayMeasured={todayMeasured} patientSex={patient?.sex} patientAge={computeAge(patient?.birthDate)} />
         {chartPoints.length >= 2 && <div className="panel progress-chart">
@@ -996,7 +1118,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>}
 
       <div className="wizard-footer"><button className="secondary" disabled={TABS.indexOf(tab) === 0} onClick={() => setTab(TABS[TABS.indexOf(tab) - 1])}>← Anterior</button><span>{saveLabel}</span><button className="primary" disabled={TABS.indexOf(tab) === TABS.length - 1} onClick={() => setTab(TABS[TABS.indexOf(tab) + 1])}>Siguiente <span>→</span></button></div>
-    </>}
+    </fieldset>}
   </div>
   {completeOpen && <div className="modal-backdrop" onClick={() => setCompleteOpen(false)}><div className="modal" onClick={(event) => event.stopPropagation()}>
     <div className="modal-head"><div><p className="eyebrow">TERMINAR CONSULTA</p><h2>Registra el pago</h2><span className="modal-subtitle">El ingreso se guarda solo en Finanzas con el método que elijas.</span></div><button onClick={() => setCompleteOpen(false)}>×</button></div>
