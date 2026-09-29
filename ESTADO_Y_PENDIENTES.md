@@ -829,3 +829,45 @@ Pedido: un panel de administrador para habilitar/deshabilitar cuentas del SaaS, 
 **Verificado** con Chromium + API aislados: login de admin; suspender la cuenta → el login de la práctica responde 403 y al habilitarla 200; registrar un pago de $1,500 extendió la cobertura a +31 días y apareció en la tabla con el total actualizado. Datos de prueba (transacción y cobertura) borrados y la práctica restaurada a `ACTIVE`, `paymentMethod: null`, `paidUntil: null`. `npm run build` OK, `node --check server/index.js` OK y `npm test` (48/48).
 
 **Guías ilustradas del antropométrico (mismo commit de fase 81).** Se agregó la **guía por medición** que faltaba respecto a las capturas: al enfocar cada pliegue/perímetro/diámetro aparece a la derecha una **silueta humana animada** (marcador pulsante en la ubicación aproximada) con el nombre y una **descripción** de cómo tomarse. La medición activa se resalta en verde. Coordenadas y textos para todas las mediciones de Pliegues, Perímetros y Diámetros.
+
+## Fase 82 — Guías 3D de los pliegues rehechas: sitio, dirección del pliegue y técnica (rama `fase-82-pliegues-3d`)
+
+Pedido: mejorar las ilustraciones del antropométrico en la sección de **Pliegues**, investigando la
+técnica de medición y generando animaciones 3D repetitivas.
+
+**Qué había.** Las guías de fase 81 eran un maniquí genérico girando 360° con un marcador de color
+apuntando a un punto. Dos problemas: el maniquí se veía a tamaño mínimo (no se distinguía la región
+del cuerpo) y **el punto estaba mal colocado en varios sitios** — el de tricipital, por ejemplo,
+señalaba la cintura en vez de la cara posterior del brazo. Tampoco mostraban lo único que de verdad
+hace falta saber al tomar un pliegue: **hacia dónde corre el pliegue** y **cómo se aplica el
+plicómetro**.
+
+**Investigación.** Se tomaron las especificaciones sitio por sitio de ISAK (Esparza-Ros et al.) y
+Lohman et al., a través de la revisión *"Skinfolds Measurement Protocols and Standards"*
+([PMC13276579](https://pmc.ncbi.nlm.nih.gov/articles/PMC13276579/)): ubicación anatómica, dirección
+del pliegue (vertical / oblicuo 45° / horizontal), posición del sujeto y lectura a los 2 segundos.
+De ahí salieron dos correcciones de contenido: el abdominal es **vertical** a 5 cm del ombligo en
+ISAK (Lohman lo toma horizontal, 3 cm lateral y 1 cm abajo — ambas quedan anotadas), y los sitios de
+la línea axilar (cresta ilíaca, supraespinal, axilar medial) se miden **con el brazo derecho
+abducido**, que es justo lo que los dejaba tapados en la guía anterior.
+
+**Lo nuevo.** Diez animaciones en bucle (WebP, 24 cuadros, 260 px, ~95 KB cada una, se cargan sólo
+al seleccionar la medición) que muestran, acercadas a la región del cuerpo que corresponde:
+
+- la **marca del sitio** con una línea discontinua en la **dirección real del pliegue**;
+- los **dedos del evaluador** tomando y levantando el pliegue;
+- el **plicómetro** aplicándose perpendicular al pliegue, a 1 cm de los dedos, cerrando, manteniendo
+  la lectura ~2 s y soltando;
+- una órbita suave de la cámara para que se entienda el relieve.
+
+El texto de cada pliegue se reescribió con la ubicación **y** la dirección del pliegue, y se agregó
+una línea de técnica común (tomar con pulgar e índice, plicómetro perpendicular a 1 cm de los dedos
+y a media altura, leer a los 2 s, siempre del lado derecho).
+
+**Cómo se generan.** El pipeline quedó versionado en `tools/mediciones-3d/` (Blender 5 + ImageMagick)
+con su README: cuerpo por metaballs, sitios colocados con un rayo contra la piel (punto y normal
+reales, no coordenadas a ojo), y la escena/animación por sitio. Se puede regenerar o afinar el
+encuadre de una sola medición sin tocar las demás.
+
+**Verificado** con Chromium sobre el expediente real: los 10 campos cargan su animación (260×260) y
+el texto nuevo, sin errores de consola. `npm run build` OK y `npm test` (48/48).

@@ -1,0 +1,2912 @@
+[
+  {
+    "source": "cheat-meal",
+    "mealType": "dessert",
+    "name": "Crumble de manzana",
+    "ingredientsText": [
+      "2 cdas de harina de coco o 1 cda de crema de cacahuate",
+      "1/2 taza de zanahoria rallada",
+      "3 cdas de harina de avena",
+      "Stevia al gusto",
+      "1 cda de vainilla",
+      "1 cdita de canela"
+    ],
+    "instructions": "Divide el crumble en dos y coloca la mitad en una taza. Mete al microondas por 1 minuto. Calienta 1/2 pza de manzana en dados con un poco de stevia, 3 cdas de agua y 1 cdita de canela para caramelizarla por 1 minuto y medio. Saca y coloca el crumble restante arriba. Mete al micro por 1 minuto y medio más. Decora con 3 cdas de queso ricota o 3 cdas de yogurt griego."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "dessert",
+    "name": "Brownie al sartén",
+    "ingredientsText": [
+      "1/2 taza de avena licuada o 50 g de harina de avena",
+      "1 cdita de polvo para hornear",
+      "3 cdas de cocoa",
+      "1/3 de taza de leche de almendra o coco",
+      "Stevia al gusto",
+      "1/2 cda de aceite de oliva",
+      "1 pza de huevo + 2 claras de huevo",
+      "1 cdita de almendras fileteadas"
+    ],
+    "instructions": "Mezclar los ingredientes secos, luego los húmedos, integrar bien y llevar la mezcla a un sartén a fuego bajo como hot cakes, que se cocine por ambos lados."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "dessert",
+    "name": "Cheesecake de crema de cacahuate",
+    "ingredientsText": [
+      "Base: 3 cdas de salvado de trigo o avena",
+      "Base: 1/3 de pza de plátano machacado",
+      "Base: 1 clara de huevo",
+      "Base: stevia al gusto",
+      "Base: 1 cdita de canela en polvo",
+      "Relleno: 2 claras de huevo",
+      "Relleno: 2 cdas de yogurt griego",
+      "Relleno: 1 cda de queso ricotta o cottage",
+      "Relleno: 1 cdita de esencia de vainilla",
+      "Relleno: stevia al gusto",
+      "Relleno: 1 cdita de crema de cacahuate"
+    ],
+    "instructions": "Base: licúa y vacía en un molde pequeño, aplasta bien y mete al microondas por 1 minuto hasta que quede duro. Relleno: mezcla todo, vierte arriba de la base y mete 3 minutos al microondas o hasta que cuaje. Al final mezcla 1 cda de crema de cacahuate con yogurt y stevia a modo de betún."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "lunch",
+    "name": "Sándwich de salmón, queso ricotta y arúgula",
+    "ingredientsText": [
+      "2 pzas de pan integral",
+      "60 g de salmón o media lata de salmón enlatado",
+      "1 taza de arúgula o espinaca",
+      "1 cda de queso ricota",
+      "1/3 de pza de aguacate"
+    ],
+    "instructions": "Armar el sándwich con todos los ingredientes."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "lunch",
+    "name": "Sándwich de pollo y aderezo de frutos rojos",
+    "ingredientsText": [
+      "2 pzas de pan integral",
+      "1 taza de arúgula o espinaca",
+      "60 g de pollo deshebrado",
+      "Aderezo: 2 cdas de vinagre balsámico + 1/2 taza de frambuesa, fresas y moras machacadas + 1/2 cda de mostaza + salpimienta + stevia al gusto",
+      "4 rebanadas de pepino"
+    ],
+    "instructions": "Mezclar el pollo con el aderezo de frutos rojos y armar el sándwich."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "lunch",
+    "name": "Quesadas con jamón y champiñones",
+    "ingredientsText": [
+      "2 pzas de tortillas de maíz",
+      "2 rebanadas de jamón de pavo",
+      "2 rebanadas de queso panela",
+      "1 taza de champiñones",
+      "1/3 de taza de pico de gallo o medio jitomate en rebanadas",
+      "1 cda de aderezo de yogurt griego",
+      "Salpimienta + 1 pizca de ajo en polvo"
+    ],
+    "instructions": "Armar las quesadas con los ingredientes y calentar hasta fundir el queso."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "breakfast",
+    "name": "Mango toast",
+    "ingredientsText": [
+      "2 pzas de pan integral",
+      "2 cdas de queso cottage",
+      "1/2 pza de mango"
+    ],
+    "instructions": "Untar el queso cottage sobre el pan. Picar el mango en cubitos y agregar 2 nueces picadas como topping."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "breakfast",
+    "name": "Toast de aguacate y pollo",
+    "ingredientsText": [
+      "2 tostaditas de arroz inflado",
+      "1/3 de pza de aguacate",
+      "60 g de pollo deshebrado",
+      "Mix de pimientos al grill"
+    ],
+    "instructions": "Untar el aguacate en las tostaditas y agregar el pollo deshebrado con los pimientos."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "snack",
+    "name": "Jamaica enchilada",
+    "ingredientsText": [
+      "500 g de flor de Jamaica natural previamente hervida",
+      "Stevia al gusto",
+      "Tajín bajo en sodio"
+    ],
+    "instructions": "Hierve y cuela la mezcla. Déjala escurrir y secar. Al otro día agrega Tajín bajo en sodio y un poco más de stevia. Deja secar al sol y resguarda."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "snack",
+    "name": "Chilli gelatin",
+    "ingredientsText": [
+      "1 taza de gelatina light con chile en polvo y limón",
+      "9 cacahuates enchilados",
+      "1 taza de pepino"
+    ],
+    "instructions": "Mezclar y servir."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "lunch",
+    "name": "Salmón burger",
+    "ingredientsText": [
+      "60 g de salmón en crudo, mezclado o picado finamente",
+      "1/3 de taza de avena molida",
+      "1 pza de huevo",
+      "Sal, pimienta y especias al gusto"
+    ],
+    "instructions": "Cocina en el sartén a fuego lento por los dos lados y acompaña con ensalada de espinacas y acelgas y 1/3 de aguacate."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "lunch",
+    "name": "Oriental beef bowl",
+    "ingredientsText": [
+      "90 g de carne de res",
+      "1/4 de pza de cebolla",
+      "1/2 taza de champiñones",
+      "1/3 de taza de zanahoria",
+      "1/3 de taza de brócoli",
+      "1/2 taza de arroz",
+      "1 cda de salsa soya baja en sodio"
+    ],
+    "instructions": "Cocina en un sartén la carne. Cuando esté cocinada agrega la cebolla, champiñones, zanahoria y brócoli. Sazona con salsa soya baja en sodio. Acompaña con 1/2 taza de arroz. Opcional: una pizca de ajonjolí y 1/3 de aguacate."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "lunch",
+    "name": "Ensalada tropical",
+    "ingredientsText": [
+      "1 taza de lechuga",
+      "1 taza de espinaca",
+      "1/4 de cebolla morada",
+      "5 pzas de tomate cherry",
+      "1/3 de taza de piña",
+      "90 g de camarón a la plancha",
+      "Aderezo: 1 limón + 1 cdita de salsa de soya baja en sodio + 1 cdita de aceite de oliva"
+    ],
+    "instructions": "Mezclar todos los ingredientes y aderezar."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "lunch",
+    "name": "Bowl hawaiano",
+    "ingredientsText": [
+      "90 g de atún o salmón cortado en cubitos marinado con limón",
+      "1/2 taza de quinoa",
+      "1/2 taza de spaghetti de pepino",
+      "1/3 de pza de calabacita",
+      "1/3 de taza de brócoli",
+      "1/3 de pza de aguacate",
+      "Salsa de soya baja en sodio"
+    ],
+    "instructions": "Mezclar todos los ingredientes en un bowl y sazonar con salsa de soya."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "lunch",
+    "name": "Enchiladas suizas fit",
+    "ingredientsText": [
+      "Salsa: agua (la necesaria), 1 taza de tomates verdes, 1/4 de pza de cebolla blanca, 1 pza de chile verde, 1/2 diente de ajo, 2 cdas de yogurt griego, sal y pimienta",
+      "Enchiladas: 2 pzas de tortilla de maíz",
+      "Enchiladas: 60 g de pechuga de pollo",
+      "Enchiladas: 2 rebanadas de queso Oaxaca light"
+    ],
+    "instructions": "Hierve los tomates con cebolla, chile y ajo. Licúa y mezcla con yogurt, sal y pimienta. Forma tacos con las tortillas, rellena de pollo y coloca en un refractario. Baña con la salsa y tiras de queso Oaxaca light; hornea 5 minutos a 180°C o microondas 2 minutos. Decora con 1/3 de aguacate."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "dessert",
+    "name": "Golden milk ice cream",
+    "ingredientsText": [
+      "4 cdas de yogurt griego",
+      "4 cubitos de leche de almendra o coco congelados (o hielo + 1/4 taza de leche de coco)",
+      "2 cdas de esencia de vainilla",
+      "Stevia al gusto",
+      "1/2 cdita de cúrcuma",
+      "1 cdita de canela en polvo",
+      "1/3 de pza de plátano congelado"
+    ],
+    "instructions": "Licuar todo hasta obtener una consistencia de helado."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "dessert",
+    "name": "Chocolate cookies",
+    "ingredientsText": [
+      "3 cdas de harina de coco",
+      "1 clara de huevo",
+      "1 cdita de esencia de vainilla y canela",
+      "Stevia al gusto",
+      "1/2 taza de coliflor hervida machacada",
+      "1 cda de crema de avellanas sin azúcar (o crema de cacahuate)"
+    ],
+    "instructions": "Añade todos los ingredientes y mezcla hasta formar una masa consistente. Haz bolitas y aplánalas. Mete al micro por 1 minuto y medio, saca y repite un minuto y medio más o hasta que estén crunchy. Como topping puedes colocar 1/2 pza de Turín sin azúcar o 1/2 taza de fresas."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "dessert",
+    "name": "Mugcake de galleta",
+    "ingredientsText": [
+      "1 taza de coliflor hervida sin agua y bien escurrida (se puede omitir)",
+      "1 cdita de canela en polvo",
+      "2 claras de huevo",
+      "2 cdas de harina de coco (o avena)",
+      "2 cdas de cacao",
+      "Stevia al gusto"
+    ],
+    "instructions": "Licúa y mete al micro por 1 minuto. Deja enfriar. Como topping agrega 1 cda de yogurt griego + 1 cdita de esencia de vainilla + stevia. Al final agrega un poquito más de cacao y 1/3 de plátano en trozos."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "dessert",
+    "name": "Helado de frambuesa y chocolate",
+    "ingredientsText": [
+      "5 cubitos de yogurt griego congelado",
+      "4 cubitos de leche de almendra o coco congelados",
+      "2 cdas de esencia de vainilla",
+      "1/2 taza de frambuesas",
+      "Stevia al gusto",
+      "1/2 pza de chocolate Turín sin azúcar + 1 cda de coco rallado (topping)"
+    ],
+    "instructions": "Licuar los ingredientes y decorar con el chocolate derretido y el coco rallado."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "dessert",
+    "name": "Arroz con leche fake",
+    "ingredientsText": [
+      "1 taza de coliflor hervida",
+      "2 cdas de harina de coco o 2 cdas de crema de cacahuate",
+      "1 cdita de canela en polvo",
+      "Stevia al gusto",
+      "Esencia de vainilla",
+      "2 claras de huevo",
+      "1/3 de taza de leche de almendra o coco"
+    ],
+    "instructions": "Licua bien la coliflor hasta que quede como arroz. Agrega leche, claras, vainilla, stevia, harina o crema de cacahuate y canela; mete al micro por dos minutos. Saca y añade canela en polvo."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "lunch",
+    "name": "Pizza low-carb",
+    "ingredientsText": [
+      "Masa: 1 coliflor pequeña sin tallos, rallada o triturada",
+      "Masa: 1 pza de huevo",
+      "Masa: 1 cdita de royal",
+      "Masa: 3 cdas de harina de avena",
+      "Masa: 1 cdita de aceite de oliva",
+      "Masa: sazonador de hierbas o sal de ajo y orégano",
+      "Topping: salsa de tomate casera, 30 g de queso, 1/2 taza de pimientos, 1/2 taza de champiñones, cebolla y orégano"
+    ],
+    "instructions": "Mete la coliflor 7 minutos al microondas para quitar humedad y exprime en un paño. Mezcla con los demás ingredientes de la masa y da forma de pizza. Hornea 15 minutos a 200°C. Agrega salsa de tomate, queso, pimientos, champiñones, cebolla y orégano; hornea otros 15 minutos a 180°C."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "lunch",
+    "name": "Crepas saladas de pollo y champiñones a la mexicana con aderezo de ricotta y cebolla caramelizada",
+    "ingredientsText": [
+      "3 claras de huevo",
+      "1/4 de taza de leche",
+      "3 cdas de salvado de trigo o avena",
+      "Especias al gusto y una pizca de polvo para hornear",
+      "40 g de pollo deshebrado",
+      "1/2 taza de champiñones a la mexicana (con 1 jitomate)",
+      "1 cda de queso ricotta + cebollín (topping)",
+      "Cebolla caramelizada con stevia"
+    ],
+    "instructions": "Mezcla las claras con la leche, el salvado, especias y el polvo para hornear; vierte en un sartén y extiende. Rellena con el pollo y los champiñones a la mexicana y cierra la crepa. Como topping mezcla el queso ricotta con cebollín. Para la cebolla caramelizada, sofríe y añade uno o dos sobres de stevia."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "breakfast",
+    "name": "Avo-toast capresse",
+    "ingredientsText": [
+      "1 pza de pan integral tostado al sartén",
+      "1/3 de pza de aguacate",
+      "7 pzas de tomates cherry",
+      "60 g de queso panela",
+      "1 cdita de vinagre balsámico"
+    ],
+    "instructions": "Armar el toast con el aguacate, los tomates, el queso panela y el vinagre balsámico."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "snack",
+    "name": "Green monster",
+    "ingredientsText": [
+      "1/2 pza de manzana verde",
+      "1/2 pza de pepino picado",
+      "Jugo de 1 limón",
+      "1 cdita de jengibre picado",
+      "Stevia al gusto",
+      "1/2 taza de hielo"
+    ],
+    "instructions": "Licuar todos los ingredientes y servir."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "snack",
+    "name": "Jugo verde de nopal y piña",
+    "ingredientsText": [
+      "1.5 tazas de agua",
+      "1/2 taza de nopal",
+      "2 varas de apio",
+      "1/2 taza de piña"
+    ],
+    "instructions": "Licuar todos los ingredientes y colar."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "snack",
+    "name": "Jugo de pepino",
+    "ingredientsText": [
+      "1/4 de taza de pepino",
+      "1 tallo de apio",
+      "1/4 de pza de naranja"
+    ],
+    "instructions": "Licuar todos los ingredientes y servir."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "snack",
+    "name": "Smoothie full cítrico",
+    "ingredientsText": [
+      "4 ramitas de perejil",
+      "1 pieza de nopal",
+      "Jugo de 1/2 toronja",
+      "1/2 pieza de apio",
+      "1/2 pza de pepino"
+    ],
+    "instructions": "Licuar todos los ingredientes y servir."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "snack",
+    "name": "Smoothie menta fresh",
+    "ingredientsText": [
+      "1/2 taza de menta fresca",
+      "1/4 de pza de pepino",
+      "1 tallo de apio"
+    ],
+    "instructions": "Licuar todos los ingredientes y servir."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "snack",
+    "name": "Smoothie de limón y chía",
+    "ingredientsText": [
+      "1/4 de taza de jugo de limón",
+      "Stevia al gusto",
+      "3 cditas de chía",
+      "1 taza de pepino",
+      "Hielo al gusto"
+    ],
+    "instructions": "Licuar todos los ingredientes y servir."
+  },
+  {
+    "source": "cheat-meal",
+    "mealType": "snack",
+    "name": "Mangonada",
+    "ingredientsText": [
+      "1/3 de pza de mango",
+      "1 taza de agua de coco",
+      "1 cdita de tajín bajo en sodio",
+      "Jugo de 1 limón",
+      "Hielo al gusto"
+    ],
+    "instructions": "Licuar todos los ingredientes y servir."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado Chocochai",
+    "ingredientsText": [
+      "Anacardos remojados 8 h",
+      "Té chai infusionado y frío",
+      "Cacao puro"
+    ],
+    "instructions": "Triturar los anacardos con el té chai y el cacao. Remover cada 3 horas durante el congelado."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado Nutella saludable",
+    "ingredientsText": [
+      "Queso batido",
+      "Leche",
+      "Avellanas tostadas",
+      "Cacao puro en polvo",
+      "Nibs de cacao"
+    ],
+    "instructions": "Triturar el queso con la leche, las avellanas y el cacao. Decorar con los nibs de cacao."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de piña y coco",
+    "ingredientsText": [
+      "Piña congelada",
+      "Agua de coco"
+    ],
+    "instructions": "Mezclar en la batidora y congelar. Decorar con ralladura de coco."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de frutos rojos y plátano",
+    "ingredientsText": [
+      "Frutos rojos y plátano congelados",
+      "Bebida de almendras o yogur natural"
+    ],
+    "instructions": "Batir la fruta y añadir la bebida de almendras o el yogur natural."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de frutos secos y canela",
+    "ingredientsText": [
+      "Queso fresco batido",
+      "Yogur natural",
+      "Nueces y almendras",
+      "Canela"
+    ],
+    "instructions": "Batir los ingredientes, verter en moldes y congelar."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de plátano y fresas",
+    "ingredientsText": [
+      "Plátano y fresas/frambuesas congelados",
+      "Frutos secos"
+    ],
+    "instructions": "Triturar y añadir trozos de frutos secos."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de mango y yogur",
+    "ingredientsText": [
+      "Mango congelado",
+      "Yogur o leche de coco",
+      "Chocolate negro >80%",
+      "Almendras picadas"
+    ],
+    "instructions": "Triturar el mango con el yogur griego natural o la leche de coco. Rallar chocolate negro y almendras picadas por encima."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de anacardos y coco",
+    "ingredientsText": [
+      "Anacardos (remojados)",
+      "Leche de coco",
+      "Cacao"
+    ],
+    "instructions": "Previamente remojados los anacardos, triturar junto con la leche de coco y el cacao. Congelar."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de fresas y manzana",
+    "ingredientsText": [
+      "Fresas y manzana congeladas",
+      "Yogur natural",
+      "1 cda de aceite de coco",
+      "Canela"
+    ],
+    "instructions": "Triturar junto a un yogur natural, una cucharada de aceite de coco y un poco de canela. Meter en moldes y congelar."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de pera y sandía",
+    "ingredientsText": [
+      "Pera y sandía congeladas",
+      "Leche"
+    ],
+    "instructions": "Echar leche para triturar y congelar en moldes."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de plátano y cacao",
+    "ingredientsText": [
+      "Plátano congelado",
+      "Cacao en polvo",
+      "Frambuesas congeladas (para el caviar)"
+    ],
+    "instructions": "Triturar y decorar con caviar de frambuesas (congelar las frambuesas y machacarlas en un mortero)."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de plátano y café",
+    "ingredientsText": [
+      "Plátano congelado",
+      "Café",
+      "Cacao"
+    ],
+    "instructions": "Preparar un café solo, dejar enfriar o medio congelar y triturar todos los ingredientes."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de plátano y algarroba",
+    "ingredientsText": [
+      "Plátano congelado",
+      "Algarroba",
+      "Almendras trituradas y chocolate >80% (topping)"
+    ],
+    "instructions": "Batir junto a la algarroba. Servir inmediatamente con toppings de almendras trituradas y chocolate >80%."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de plátano, fresas y avellanas",
+    "ingredientsText": [
+      "Plátano y fresas congeladas",
+      "Avellanas",
+      "Chocolate (topping)"
+    ],
+    "instructions": "Batir junto con las avellanas y añadir toppings de chocolate."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de frutos rojos y coco",
+    "ingredientsText": [
+      "Frutos rojos y plátano congelados",
+      "Leche de coco",
+      "Esencia de vainilla",
+      "Coco rallado (topping)"
+    ],
+    "instructions": "Triturar con leche de coco y esencia de vainilla. Terminar con toppings de coco rallado."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de yogur y frutas",
+    "ingredientsText": [
+      "Yogur natural, plátano, 1/2 naranja y pera congeladas",
+      "3-4 dátiles",
+      "Hojas de menta (topping)"
+    ],
+    "instructions": "Triturar junto a 3-4 dátiles hasta conseguir una consistencia cremosa. Consumir o congelar y adornar con hojas de menta."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de limón",
+    "ingredientsText": [
+      "Limón",
+      "Agua",
+      "Dátiles",
+      "Menta"
+    ],
+    "instructions": "Triturar y congelar en moldes."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Helado de melocotón",
+    "ingredientsText": [
+      "Melocotón congelado",
+      "Yogur congelado",
+      "Almendras picadas"
+    ],
+    "instructions": "Batir y espolvorear almendras picadas."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Bombones helados",
+    "ingredientsText": [
+      "Chocolate negro >80%",
+      "Plátano"
+    ],
+    "instructions": "Fundir el chocolate negro y cortar trozos pequeños de plátano. Bañar los trozos en el chocolate y congelar."
+  },
+  {
+    "source": "helados-saludables",
+    "mealType": "dessert",
+    "name": "Bolitas heladas",
+    "ingredientsText": [
+      "Plátano y sandía",
+      "Chocolate negro fundido",
+      "Trocitos de almendras"
+    ],
+    "instructions": "Triturar, verter en moldes de bolas y congelar. Una vez congelados, bañar en chocolate negro fundido y trocitos de almendras, y volver a congelar."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "breakfast",
+    "name": "Omelette de rajas poblanas",
+    "ingredientsText": [
+      "2 chiles poblanos (Libre)",
+      "2 huevos (2 eq. AOA)",
+      "1/4 de taza de elotes (1/2 eq. cereal sin grasa)",
+      "Cebolla fileteada y un diente de ajo (Libre)",
+      "1 1/2 tortillas de nopal (1/2 eq. cereal sin grasa)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)"
+    ],
+    "instructions": "Asa el chile, retira la piel y límpialo. Pica en rajas y sofríe con cebolla y ajo. Haz el omelette y rellena con las rajas. Acompaña con las tortillas y el aguacate."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "breakfast",
+    "name": "Blueberries coconut pancakes",
+    "ingredientsText": [
+      "3 cdas de harina de avena (1 eq. cereal sin grasa)",
+      "2 claras de huevo (1 eq. AOA)",
+      "2 cdas de leche de coco",
+      "1 cdita de coco rayado",
+      "1 cdita de aceite de coco (1 eq. grasa sin proteína)",
+      "3 cdas de queso cottage (1 eq. AOA)",
+      "1/3 taza de blueberries",
+      "Edulcorante y royal (Libre)"
+    ],
+    "instructions": "Licúa la harina, las claras, la leche y el aceite de coco y las blueberries. Haz los pancakes en un sartén. Mezcla el queso cottage con el coco rayado y blueberries machacadas para decorar."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "breakfast",
+    "name": "Quesadillas de nopal",
+    "ingredientsText": [
+      "4 rebanadas de queso Oaxaca light (2 eq. AOA)",
+      "3 tortillas de nopal (1 eq. cereal sin grasa)",
+      "1 taza de nopales (Libre)",
+      "Jitomate, cebolla y cilantro (Libre)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)"
+    ],
+    "instructions": "Pica el jitomate, cebolla, cilantro y aguacate y agrega los nopales cocidos. Haz las quesadillas y rellénalas con la ensalada de nopal. Acompaña con salsa casera."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "breakfast",
+    "name": "Toast avocado & egg",
+    "ingredientsText": [
+      "2 toast de arroz inflado (1 eq. cereal sin grasa)",
+      "2 huevos (2 eq. AOA)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)",
+      "Jitomatitos cherry (Libre)",
+      "Sal y pimienta"
+    ],
+    "instructions": "Haz los huevos estrellados. Monta los huevos y las rebanadas de aguacate sobre los toast. Salpimienta."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "breakfast",
+    "name": "Fritatta de espinaca, pimientos y requesón",
+    "ingredientsText": [
+      "4 claras de huevo (2 eq. AOA)",
+      "2 cdas de requesón",
+      "2 puñados de espinacas en crudo (Libre)",
+      "3 cdas de harina de avena (1 eq. cereal sin grasa)",
+      "1/4 de cebolla y 1/4 de pimiento rojo (Libre)",
+      "1 cdita de aceite de oliva (1 eq. grasa sin proteína)",
+      "Sal, orégano, especias y pizca de royal (Libre)"
+    ],
+    "instructions": "Verter toda la mezcla en el sartén y cocinar hasta cuajar."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "breakfast",
+    "name": "Toasts dulce de ricotta y canela",
+    "ingredientsText": [
+      "2 toast de arroz inflado (1 eq. cereal sin grasa)",
+      "6 cdas de queso ricotta (2 eq. AOA)",
+      "Canela molida (Libre)",
+      "1 cda de semillas de girasol",
+      "Miel para hotcakes sugar free"
+    ],
+    "instructions": "Mezcla el queso con la canela, monta sobre los toast y decora con las semillas de girasol."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "breakfast",
+    "name": "Napolitan pancake",
+    "ingredientsText": [
+      "3 cdas de harina de avena (1 eq. cereal sin grasa)",
+      "1 cdita de cacao",
+      "1 huevo (1 eq. AOA)",
+      "1 cdita de aceite de coco (1 eq. grasa sin proteína)",
+      "1/4 taza de leche de almendra",
+      "Edulcorante, esencia de vainilla, canela y royal (Libre)",
+      "1/2 taza de fresas congeladas",
+      "3 cdas de queso cottage"
+    ],
+    "instructions": "Mezcla la harina, el cacao, el huevo, la leche, la vainilla y el aceite. Haz el pancake. Licúa el queso cottage con las fresas, edulcorante y vainilla para coronar. Agrega miel de maple sugar free."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "breakfast",
+    "name": "Portobellos al gratín",
+    "ingredientsText": [
+      "2 portobellos (Libre)",
+      "1 paquete de Crisps Susalias (1 eq. cereal sin grasa)",
+      "4 rebanadas de queso Oaxaca light (2 eq. AOA)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)",
+      "Sal de ajo y pimienta (Libre)"
+    ],
+    "instructions": "Sofríe los portobellos por ambos lados y salpimienta. Pon el queso encima y tapa para gratinar. Acompaña con los Crisps Susalias, aguacate y salsa casera."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Hummus con apio",
+    "ingredientsText": [
+      "1 taza de apio (Libre)",
+      "2 cdas de hummus con chipotle (1 eq. grasa con proteína)"
+    ],
+    "instructions": "Untar el hummus en las varas de apio."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Smoothie de pepino con chía",
+    "ingredientsText": [
+      "1 taza de pepino pelado y sin semillas (Libre)",
+      "1 1/2 cditas de chía (1 eq. grasa con proteína)",
+      "Jugo de limón, hielo y edulcorante (Libre)"
+    ],
+    "instructions": "Licúa todos los ingredientes."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Mix de frutos secos",
+    "ingredientsText": [
+      "1 taza de jícama y zanahoria rallada (Libre) + jugo de limón y Tajín bajo en sodio",
+      "3 almendras, 2 nueces, 4 cacahuates, 4 pistaches (1 eq. grasa con proteína)"
+    ],
+    "instructions": "Mezclar la jícama y zanahoria con limón y Tajín; acompañar con los frutos secos."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Carrots & peanut butter",
+    "ingredientsText": [
+      "1 taza de zanahoria (1 eq. verdura)",
+      "1 cda de crema de cacahuate (1 eq. grasa con proteína)"
+    ],
+    "instructions": "Cortar la zanahoria en bastones y acompañar con la crema de cacahuate."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Bubulubu FIT",
+    "ingredientsText": [
+      "Gelatina light sabor fresa (Libre)",
+      "Grenetina (Libre)",
+      "1/4 taza de leche",
+      "Edulcorante (Libre)",
+      "Turín sin azúcar (1 eq. grasa con proteína)"
+    ],
+    "instructions": "Cuaja un sobre de gelatina light en 150 ml de agua y congela 20 minutos. Cuaja 2 sobres de grenetina en 1 taza de leche con edulcorante y deja enfriar; coloca sobre la gelatina y congela otros 20 minutos. Recorta en forma de Bubulubu. Derrite el chocolate sin azúcar a baño María y vierte encima; congela media hora."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Jelly & nuts",
+    "ingredientsText": [
+      "1 taza de gelatina light",
+      "15 cacahuates"
+    ],
+    "instructions": "Servir la gelatina con los cacahuates."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "base",
+    "name": "Crema de zanahoria",
+    "ingredientsText": [
+      "Zanahoria, cebolla y cilantro",
+      "1/2 taza de leche",
+      "Sal"
+    ],
+    "instructions": "Hierve la zanahoria, cebolla y cilantro con sal. Licúa las verduras cocidas con 1/2 taza de leche hasta obtener una consistencia suave."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "base",
+    "name": "Crema de champiñones",
+    "ingredientsText": [
+      "1 taza de champiñones, cebolla y cilantro",
+      "1/2 taza de leche",
+      "Sal"
+    ],
+    "instructions": "Hierve los champiñones con cebolla y cilantro. Licúa con 1/2 taza de leche hasta obtener una consistencia suave."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "base",
+    "name": "Mix de vegetales al fuego",
+    "ingredientsText": [
+      "1 taza de champiñones",
+      "1/2 taza de cebolla morada",
+      "1 taza de pimiento amarillo, rojo y verde",
+      "Salpimienta",
+      "1/2 cdita de aceite de coco"
+    ],
+    "instructions": "Saltear todas las verduras con el aceite de coco y salpimentar."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "base",
+    "name": "Ensalada de espinaca y acelga",
+    "ingredientsText": [
+      "1 taza de espinaca",
+      "1 taza de acelga",
+      "1/2 taza de tomatitos cherry",
+      "1 cda de cacahuates troceados"
+    ],
+    "instructions": "Mezclar todos los ingredientes."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "base",
+    "name": "Sopa de verduras",
+    "ingredientsText": [
+      "1/4 taza de brócoli",
+      "1/2 taza de calabacita",
+      "1/4 taza de coliflor",
+      "1/2 taza de ejote",
+      "Recaudo"
+    ],
+    "instructions": "Cocer las verduras con el recaudo."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "base",
+    "name": "Puré de coliflor",
+    "ingredientsText": [
+      "1 taza de coliflor hervida",
+      "Salpimienta al gusto",
+      "1 pizca de ajo en polvo"
+    ],
+    "instructions": "Licuar todo hasta obtener un puré."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "lunch",
+    "name": "Taquitos de jamaica",
+    "ingredientsText": [
+      "1 taza de jamaica",
+      "1/2 taza de zanahoria rallada (Libre)",
+      "Cebolla y ajo (Libre)",
+      "1/4 taza de puré de tomate (Libre)",
+      "1 chile chipotle",
+      "3 tortillas de nopal (1 eq. cereal)",
+      "1/3 taza de frijoles machacados (1 eq. leguminosa)",
+      "2 rebanadas de queso panela (1 eq. AOA)",
+      "1/3 aguacate (1 eq. grasa sin proteína)"
+    ],
+    "instructions": "Sofríe cebolla y ajo, agrega la jamaica picada y la zanahoria. Licúa el puré de tomate con el chipotle y agrégalo. Acompaña con frijoles y queso panela."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "lunch",
+    "name": "Toast de tofu a las hierbas",
+    "ingredientsText": [
+      "2 toast de arroz inflado (1 eq. cereal)",
+      "120 g de tofu (1 eq. leguminosa)",
+      "3 cdas de queso ricotta (1 eq. AOA)",
+      "1 cdita de aceite de oliva (1 eq. grasa sin proteína)",
+      "Arúgula y jitomate (Libre)",
+      "Sal, pimienta y hierbas"
+    ],
+    "instructions": "Fríe láminas de tofu con el aceite. Salpimienta y agrega hierbas. Monta sobre los toast el tofu, el queso y las verduras."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "lunch",
+    "name": "Espagueti a la boloñesa Veggie",
+    "ingredientsText": [
+      "2 tazas de espagueti de calabacita (Libre)",
+      "120 g de tofu (1 eq. leguminosa)",
+      "2 rebanadas de queso Oaxaca light (1 eq. AOA)",
+      "1 cda de aceite de oliva (1 eq. grasa sin proteína)",
+      "2 jitomates maduros (Libre)",
+      "Cebolla, ajo, albahaca (Libre)",
+      "1 rebanada de pan integral (1 eq. cereal)"
+    ],
+    "instructions": "Sofríe cebolla y ajo con el aceite. Muele los jitomates y agrega; salpimenta, agrega albahaca y deja reducir. Agrega el tofu en cubitos y luego el espagueti. Sirve y decora con el queso. Acompaña con la rebanada de pan."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "lunch",
+    "name": "Pizza de coliflor",
+    "ingredientsText": [
+      "2 tazas de coliflor (Libre)",
+      "1 huevo (1 eq. AOA)",
+      "3 cdas de harina de avena (1 eq. cereal)",
+      "1 cdita de aceite de oliva (1 eq. grasa sin proteína)",
+      "120 g de tofu (1 eq. leguminosa)",
+      "1 taza de jitomate, champiñones y pimientos"
+    ],
+    "instructions": "Tritura la coliflor cocida y quita el exceso de agua. Mezcla con el huevo, la harina y el aceite hasta formar una masa. Forma la pizza en una bandeja y cubre con la salsa de jitomate con tofu, jitomate, champiñones y pimientos. Hornea 15-18 minutos a 180°C."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "lunch",
+    "name": "Tacos de fajitas veggie",
+    "ingredientsText": [
+      "1 portobello (Libre)",
+      "1 taza de pimientos (Libre)",
+      "Cebolla (Libre)",
+      "3 tortillas de nopal (1 eq. cereal)",
+      "2 rebanadas de queso panela (1 eq. AOA)",
+      "1/2 taza de frijoles (1 eq. leguminosa)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)"
+    ],
+    "instructions": "Pica el portobello y los pimientos en fajitas y sofríe con cebolla. Montar sobre las tortillas. Acompañar con frijoles, queso y aguacate."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "lunch",
+    "name": "Bowl de garbanzos",
+    "ingredientsText": [
+      "1/3 taza de garbanzo cocido (1 eq. leguminosa)",
+      "1 taza de espinacas, 1/2 zanahoria rallada, cebolla morada, pepino (Libre)",
+      "2 rebanadas de queso panela (1 eq. AOA)",
+      "1 cdita de aceite de oliva (1 eq. grasa sin proteína)",
+      "Sal, pimienta, paprika, pimentón ahumado (Libre)",
+      "Jugo de limón (Libre)",
+      "1 paquete de Crisps Susalias (1 eq. cereal)"
+    ],
+    "instructions": "Dora los garbanzos con paprika, pimentón, sal y pimienta. En un bowl pon una cama de espinacas y las demás verduras, el queso en cubitos y los garbanzos. Mezcla el aceite con limón y agrega. Acompaña con los Crisps Susalias."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "lunch",
+    "name": "Ceviche de garbanzo",
+    "ingredientsText": [
+      "1/3 de taza de garbanzo cocido (1 eq. leguminosa)",
+      "1 taza de cebolla, jitomate, pepino y cilantro picados (Libre)",
+      "Jugo de 2 limones (Libre)",
+      "1 cdita de aceite de oliva (1 eq. grasa sin proteína)",
+      "Sal y pimienta (Libre)",
+      "1 paquete de Crisps Susalias (1 eq. cereal)",
+      "2 rebanadas de queso panela (1 eq. AOA)"
+    ],
+    "instructions": "Mezcla el garbanzo con las verduras, el jugo de limón, el aceite, sal y pimienta. Refrigera 20 minutos. Acompaña con Crisps Susalias y queso panela."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "lunch",
+    "name": "Bowl de tofu yakitori",
+    "ingredientsText": [
+      "120 g de tofu (1 eq. leguminosa)",
+      "2 rebanadas de queso panela (1 eq. AOA)",
+      "2 cdas de salsa yakitori o teriyaki (Libre)",
+      "1 taza de lechuga, 1/2 pepino rallado, 1 zanahoria rallada (Libre)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)",
+      "1 paquete de Crisps Susalias (1 eq. cereal sin grasa)"
+    ],
+    "instructions": "Dora el tofu y úntale la salsa yakitori. En un bowl mezcla las verduras, agrega el tofu y decora con aguacate. Acompaña con los Crisps Susalias."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Smoothie de betabel con chía",
+    "ingredientsText": [
+      "1/2 taza de betabel (Libre)",
+      "1 1/2 cditas de chía (1 eq. grasa con proteína)",
+      "Jugo de limón, hielo y edulcorante (Libre)"
+    ],
+    "instructions": "Licúa todos los ingredientes."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Jamaica enchilada vegetariana",
+    "ingredientsText": [
+      "500 g de flor de Jamaica natural (Libre)",
+      "4 sobres de edulcorante (Libre)",
+      "15 cacahuates enchilados (1 eq. grasa con proteína)"
+    ],
+    "instructions": "Hierve la jamaica y cuela. Déjala escurrir y secar. Al otro día agrega Tajín bajo en sodio y edulcorante. Deja secar al sol y resguarda. Acompaña con 15 cacahuates."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Chamofresa",
+    "ingredientsText": [
+      "Saborizante sin azúcar sabor fresa (Libre)",
+      "Hielo (Libre)",
+      "Chamoy sugar free y/o Tajín en polvo (Libre)",
+      "1/2 taza de fresa congelada",
+      "15 cacahuates (1 eq. grasa con proteína)"
+    ],
+    "instructions": "Licúa el saborizante con los hielos y un poco de chamoy o Tajín. Sirve en un vaso, opcionalmente chorrea chamoy por dentro. Pica las fresas y añade encima. Acompaña con los cacahuates."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Hummus chipotle con pepino",
+    "ingredientsText": [
+      "1 taza de pepino (1 eq. verdura)",
+      "2 cdas de hummus (1 eq. grasa con proteína)"
+    ],
+    "instructions": "Machaca un pedacito de chipotle y mezcla con el hummus. Rebana el pepino en rodajas y úntale el hummus."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "snack",
+    "name": "Mix rallado",
+    "ingredientsText": [
+      "1/2 taza de betabel rallado (Libre)",
+      "1/2 taza de zanahoria rallada (Libre)",
+      "1/2 taza de jícama rallada (Libre)",
+      "Jugo de limón y Tajín bajo en sodio (Libre)",
+      "15 cacahuates (1 eq. grasa con proteína)"
+    ],
+    "instructions": "Mezcla todos los ingredientes en un bowl."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "dinner",
+    "name": "Nachos",
+    "ingredientsText": [
+      "10 totopos Susalia o 3 tortillas de nopal doradas (1 eq. cereal)",
+      "4 rebanadas de queso Oaxaca light (2 eq. AOA)",
+      "Jitomate, cebolla, cilantro, chile serrano (Libre)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)",
+      "Chiles jalapeños (Libre)"
+    ],
+    "instructions": "Pica la verdura en pico de gallo y machaca el aguacate. Coloca los totopos con el queso y gratina en microondas 30 segundos. Corona con el guacamole y chiles jalapeños."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "dinner",
+    "name": "Crust de queso y brócoli",
+    "ingredientsText": [
+      "1 taza de bits de brócoli (Libre)",
+      "1 clara de huevo (1/2 eq. AOA)",
+      "3 rebanadas de queso Oaxaca light (1 1/2 eq. AOA)",
+      "1 cdita de aceite de oliva (1 eq. grasa sin proteína)",
+      "3 cdas de harina de avena (1 eq. cereal)",
+      "Sal de ajo (Libre)"
+    ],
+    "instructions": "Cocina el brócoli 8 minutos en microondas y quita el exceso de agua. Mezcla con el queso, la clara, la sal de ajo y el aceite. Forma una tortita y hornea 15 minutos a 180°C. Acompaña con ensalada de espinacas con cherry y vinagre balsámico."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "dinner",
+    "name": "Papa rellena",
+    "ingredientsText": [
+      "1 papa mediana (1 eq. cereal)",
+      "4 rebanadas de queso Oaxaca light (2 eq. AOA)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)",
+      "1 jitomate, cebolla, cilantro (Libre)",
+      "Sal, pimienta, paprika, jugo de limón y chorrito de leche"
+    ],
+    "instructions": "Hornea o hierve la papa. Ábrela y rellena con el queso y condimentos; gratina. Pica el jitomate, cebolla y cilantro. Licúa el aguacate con ajo, leche y limón para un guacamole y mezcla con las verduras. Corona la papa."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "dinner",
+    "name": "Tostaditas de pepino",
+    "ingredientsText": [
+      "3 tortillas de nopal (1 eq. cereal)",
+      "4 rebanadas de queso panela (2 eq. AOA)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)",
+      "1 taza de pepino, cebolla, cilantro, chile serrano, jugo de dos limones (Libre)",
+      "Sal y pimienta",
+      "1 cda de crema light"
+    ],
+    "instructions": "Pica el pepino, cebolla, cilantro y chile en cubitos y mezcla con limón, sal, pimienta y crema. Refrigera 20 minutos. Dora las tortillas tipo tostadas y monta la mezcla de pepino; decora con aguacate."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "dinner",
+    "name": "Thai veggie bowl",
+    "ingredientsText": [
+      "1 taza de pimientos en cuadritos (Libre)",
+      "1 zanahoria rallada (Libre)",
+      "1/2 taza de ejotes picados (Libre)",
+      "1/3 taza de quinoa cocida (1 eq. cereal sin grasa)",
+      "4 rebanadas de queso panela (2 eq. AOA)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)",
+      "2 cdas de soya sin sodio (Libre)",
+      "1 cdita de jengibre picado (Libre)",
+      "Jugo de dos limones (Libre)",
+      "1 cdita de ajonjolí"
+    ],
+    "instructions": "En un bowl incorpora la verdura, la quinoa y el queso. Mezcla aparte la soya, el jengibre, el limón, el ajonjolí y el edulcorante. Vierte la salsa sobre el bowl y decora con aguacate."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "dinner",
+    "name": "Espagueti al burro con jitomate",
+    "ingredientsText": [
+      "2 tazas de espagueti de calabacita (1 eq. verdura)",
+      "1 cdita de aceite de oliva (1 eq. grasa sin proteína)",
+      "1 diente de ajo, cebolla, jitomatitos cherry, perejil fresco (Libre)",
+      "4 rebanadas de queso Oaxaca light (2 eq. AOA)",
+      "1 pan tostado integral (1 eq. cereal sin grasa)",
+      "2 tazas de ensalada (Libre)",
+      "Vinagre balsámico (Libre)"
+    ],
+    "instructions": "Pica el ajo y la cebolla y sofríe con el aceite y los cherry. Agrega el espagueti y cocina un par de minutos. Salpimenta y agrega perejil. Sirve y decora con el queso. Acompaña con la rebanada de pan y ensalada con vinagre balsámico."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "dinner",
+    "name": "Flautas horneadas de portobello",
+    "ingredientsText": [
+      "3 tortillas de nopal (1 eq. cereal sin grasa)",
+      "1 portobello (Libre)",
+      "4 rebanadas de queso Oaxaca (2 eq. AOA)",
+      "Lechuga, 1 jitomate, cebolla, ajo, chile chipotle (Libre)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)",
+      "Sal y pimienta (Libre)"
+    ],
+    "instructions": "Pica el portobello y sofríe con ajo y cebolla. Rellena las tortillas en forma de flauta y hornea 15 minutos o dora en comal. Cocer el jitomate y licuar con chipotle; agregar cebolla picada, sal y pimienta. Corona con lechuga, aguacate, salsa y queso rallado."
+  },
+  {
+    "source": "menu-vegetariano-2",
+    "mealType": "dinner",
+    "name": "Enchiladas rojas fit",
+    "ingredientsText": [
+      "3 chiles guajillo (Libre)",
+      "Ajo, cebolla, jitomate y lechuga (Libre)",
+      "3 tortillas de nopal (1 eq. cereal sin grasa)",
+      "4 rebanadas de queso Oaxaca light (2 eq. AOA)",
+      "1/3 de aguacate (1 eq. grasa sin proteína)"
+    ],
+    "instructions": "Hierve agua, apaga y remoja los chiles 15 minutos. Licúa con ajo y reserva la salsa. Ralla el queso y mezcla con cebolla picada. Calienta las tortillas, baña en salsa, rellena con queso y dora. Sirve con lechuga, jitomate y aguacate."
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Omelette de claras",
+    "nutrition": {
+      "kcal": 530
+    },
+    "ingredientsText": [
+      "2 claras de huevo",
+      "1 cda de aceite",
+      "Sal y pimiento al gusto",
+      "1/2 taza de elote en granos cocidos",
+      "1/2 taza de zanahoria cocida y picada",
+      "Cilantro finamente picado al gusto",
+      "2 tortillas de maíz",
+      "Para acompañar: licuado de guayaba (1 taza de leche entera fría, 2 cditas de azúcar, 1 guayaba)"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Sándwich dulce",
+    "nutrition": {
+      "kcal": 210
+    },
+    "ingredientsText": [
+      "2 rebanadas de pan de caja",
+      "1 1/2 cditas de mermelada",
+      "Para acompañar: 1 naranja"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Sincronizada de jamón",
+    "nutrition": {
+      "kcal": 222
+    },
+    "ingredientsText": [
+      "1 tortilla de maíz",
+      "14 g de queso asadero",
+      "1 rebanada de jamón de pavo",
+      "Para acompañar: 1/2 taza de leche entera"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Tortita de queso",
+    "nutrition": {
+      "kcal": 235
+    },
+    "ingredientsText": [
+      "1 bolillo mediano",
+      "40 g de queso panela",
+      "Jitomate, lechuga y cebolla al gusto",
+      "Para acompañar: 1/3 taza de gelatina"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Tacos de aguacate con queso",
+    "nutrition": {
+      "kcal": 240
+    },
+    "ingredientsText": [
+      "2 tortillas de maíz",
+      "1/3 de pieza de aguacate",
+      "40 g de queso panela",
+      "Para acompañar: 1 taza de agua de frutas sin azúcar"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Sándwich de huevo",
+    "nutrition": {
+      "kcal": 260
+    },
+    "ingredientsText": [
+      "2 rebanadas de pan de caja integral",
+      "1 huevo",
+      "Cebolla y jitomate picado al gusto",
+      "1 cdita de aceite",
+      "Sal al gusto",
+      "Para acompañar: agua de mango sin endulzar"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Avena con plátano y fresa",
+    "nutrition": {
+      "kcal": 265
+    },
+    "ingredientsText": [
+      "1/2 taza de avena en hojuelas",
+      "1/4 de plátano en rodajas",
+      "1/4 de taza de fresa en rebanadas",
+      "Para acompañar: 1 taza de leche entera"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Rollitos de jamón",
+    "nutrition": {
+      "kcal": 290
+    },
+    "ingredientsText": [
+      "2 rebanadas de jamón de pavo",
+      "20 g de queso fresco",
+      "1/3 de pieza de aguacate en rebanadas",
+      "Sal",
+      "Para acompañar: 1 taza de leche entera y 1/2 taza de pepino rebanado"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Huevo con salchicha",
+    "nutrition": {
+      "kcal": 305
+    },
+    "ingredientsText": [
+      "1 salchicha de pavo picada en cuadritos",
+      "1 huevo",
+      "1 cdita de aceite",
+      "Cebolla al gusto",
+      "Sal",
+      "2 cdas de salsa cátsup",
+      "Para acompañar: 1 tortilla de maíz"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Huevo con ejotes",
+    "nutrition": {
+      "kcal": 325
+    },
+    "ingredientsText": [
+      "1 huevo",
+      "1/2 taza de ejotes cocidos picados",
+      "1 cdita de aceite",
+      "Sal",
+      "Para acompañar: licuado de papaya (1/2 taza de papaya picada y 1 taza de leche entera)"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Arroz con frijoles",
+    "nutrition": {
+      "kcal": 337
+    },
+    "ingredientsText": [
+      "20 g de arroz",
+      "1/2 jitomate",
+      "Sal, ajo y cebolla al gusto",
+      "1 cdita de aceite",
+      "1/2 taza de frijoles de olla cocidos",
+      "Para acompañar: 1 plátano"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Fruta con granola",
+    "nutrition": {
+      "kcal": 340
+    },
+    "ingredientsText": [
+      "1/2 manzana",
+      "1 guayaba",
+      "1 taza de yogurt natural",
+      "3 cdas de granola baja en grasa",
+      "Para acompañar: 5 galletas marías"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Hot cakes",
+    "nutrition": {
+      "kcal": 350
+    },
+    "ingredientsText": [
+      "1 hot cake chico (38 g)",
+      "2 1/2 cditas de mermelada",
+      "1/2 plátano en rebanadas",
+      "Para acompañar: licuado de manzana (1 taza de leche entera, 1/2 manzana)"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Taquitos de papa a la mexicana",
+    "nutrition": {
+      "kcal": 380
+    },
+    "ingredientsText": [
+      "1 papa cocida picada",
+      "1 jitomate",
+      "Cebolla picada al gusto",
+      "30 g de queso asadero",
+      "1 tortilla de maíz",
+      "1 cdita de aceite",
+      "Para acompañar: agua de jamaica sin endulzar"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Claras de huevo con verdura",
+    "nutrition": {
+      "kcal": 460
+    },
+    "ingredientsText": [
+      "2 claras de huevo",
+      "1 cdita de aceite",
+      "Sal y pimiento al gusto",
+      "1/2 jitomate picado, pimiento picado",
+      "Cebolla al gusto",
+      "2 tortillas de maíz",
+      "Para acompañar: 1/2 taza de jugo de naranja y 1 taza de yogurt natural"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "breakfast",
+    "name": "Club sándwich",
+    "nutrition": {
+      "kcal": 470
+    },
+    "ingredientsText": [
+      "2 rebanadas de pan de caja integral",
+      "2 rebanadas de jamón de pavo",
+      "40 g de queso fresco",
+      "Verduras al gusto",
+      "1 cda de mayonesa",
+      "Para acompañar: licuado de fresa (1 taza de fresa picada, 1/2 taza de leche entera, 2 cdas de azúcar)"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Caldo de pollo y vegetales",
+    "nutrition": {
+      "kcal": 0
+    },
+    "ingredientsText": [
+      "80 g de pechuga de pollo",
+      "1/2 taza de zanahoria",
+      "1/2 calabacita",
+      "1/2 taza de brócoli en arbolitos",
+      "Cebolla en julianas al gusto",
+      "Sal y pimienta",
+      "1 tortilla de maíz",
+      "Para acompañar: agua de mango sin endulzar"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Filete de pollo gratinado",
+    "nutrition": {
+      "kcal": 245
+    },
+    "ingredientsText": [
+      "60 g de pechuga de pollo deshuesada y aplanada",
+      "60 g de queso panela",
+      "1/2 taza de brócoli crudo",
+      "1/4 de taza de zanahoria picada cruda",
+      "1 cdita de aceite",
+      "Sal",
+      "Para acompañar: agua de sandía endulzada con 1 cdita de azúcar"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Sopa de codito con verduras",
+    "nutrition": {
+      "kcal": 265
+    },
+    "ingredientsText": [
+      "20 g de codito",
+      "1/2 taza de zanahoria cocida picada",
+      "1 cdita de mayonesa",
+      "2 rebanadas de jamón de pavo",
+      "Sal",
+      "Para acompañar: 1 rebanada de pan de caja y agua de jamaica sin endulzar"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Deditos de pescado",
+    "nutrition": {
+      "kcal": 290
+    },
+    "ingredientsText": [
+      "40 g de filete de pescado en tiritas",
+      "1 huevo",
+      "4 cdas de pan molido",
+      "1 cdita de aceite",
+      "1/2 taza de espinacas cocidas",
+      "Sal al gusto",
+      "1 pza de pan de caja",
+      "Para acompañar: agua de limón sin azúcar"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Bistec asado",
+    "nutrition": {
+      "kcal": 290
+    },
+    "ingredientsText": [
+      "60 g de carne de res",
+      "1 cdita de aceite",
+      "1/4 de taza de arroz cocido",
+      "1 tortilla de maíz",
+      "1 taza de lechuga picada",
+      "Para acompañar: agua de papaya sin endulzar"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Tostadas de ceviche de pescado",
+    "nutrition": {
+      "kcal": 317
+    },
+    "ingredientsText": [
+      "80 g de filete de pescado",
+      "1/2 jitomate picado",
+      "Cebolla picada al gusto",
+      "Cilantro picado",
+      "Limón y sal al gusto",
+      "2/3 de pieza de aguacate",
+      "2 tostadas de maíz horneadas",
+      "Pimienta al gusto",
+      "Para acompañar: 6 galletas de animalitos y 1 taza de agua de papaya"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Pollo a la jardinera",
+    "nutrition": {
+      "kcal": 302
+    },
+    "ingredientsText": [
+      "60 g de pechuga de pollo aplastada y deshuesada",
+      "1/2 pimiento morrón verde en tiras",
+      "1/2 pimiento morrón rojo en tiras",
+      "1 cdita de aceite",
+      "1/4 taza de cebolla en julianas",
+      "Sal y pimienta al gusto",
+      "Para acompañar: 1/2 taza de arroz cocido y agua de sandía"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Rajas con elote",
+    "nutrition": {
+      "kcal": 345
+    },
+    "ingredientsText": [
+      "1 chile poblano",
+      "Cebolla picada al gusto",
+      "1/2 taza de elote cocido desgranado",
+      "1 cda de crema",
+      "1 cdita de aceite",
+      "Sal",
+      "30 g de pollo cocido y desmenuzado",
+      "1 tortilla de maíz",
+      "Para acompañar: ensalada (1/2 taza de coliflor cocida, 1/4 taza de brócoli cocido) y agua de manzana"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Pollo con piña",
+    "nutrition": {
+      "kcal": 350
+    },
+    "ingredientsText": [
+      "80 g de pechuga sin piel",
+      "1 rebanada de piña en almíbar picada",
+      "Cebolla, sal y pimienta al gusto",
+      "1 cdita de aceite",
+      "2 tortillas de maíz",
+      "Para acompañar: 1/4 taza de jícama picada, 1/4 taza de zanahoria picada y agua de piña"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Milanesa de res con papas",
+    "nutrition": {
+      "kcal": 400
+    },
+    "ingredientsText": [
+      "1/2 papa cocida picada",
+      "60 g de carne molida de res",
+      "Un poco de huevo",
+      "1 cda de mostaza",
+      "1 cdita de aceite",
+      "Sal y pimiento al gusto",
+      "2 cdas de salsa cátsup",
+      "1 tortilla de maíz",
+      "Para acompañar: 1/2 taza de brócoli cocido y agua de tamarindo"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Ceviche de soya",
+    "nutrition": {
+      "kcal": 415
+    },
+    "ingredientsText": [
+      "30 g de soya texturizada",
+      "Sal",
+      "1 hojita de laurel",
+      "1/2 pepino picado en cubitos",
+      "1/4 de taza de zanahoria rallada",
+      "Cilantro picado",
+      "Jugo de 3 limones",
+      "3 tostadas secas",
+      "Para acompañar: agua de pepino con limón"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Sopa de brócoli",
+    "nutrition": {
+      "kcal": 428
+    },
+    "ingredientsText": [
+      "1 taza de brócoli",
+      "1/2 taza de agua",
+      "1 cda de harina",
+      "Sal y pimiento al gusto",
+      "1/2 taza de leche entera",
+      "1 ramita de perejil",
+      "2 rebanadas de pan de caja integral",
+      "60 g de pechuga de pollo asada",
+      "Para acompañar: 2 guayabas y agua de limón"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Sopa de semillita de melón",
+    "nutrition": {
+      "kcal": 430
+    },
+    "ingredientsText": [
+      "40 g de sopa semilla de melón cruda",
+      "1 jitomate",
+      "Cebolla, ajo y sal al gusto",
+      "1 cdita de aceite",
+      "60 g de pechuga de pollo previamente cocida",
+      "Para acompañar: 2 rebanadas de pan de caja blanco y 1 taza de agua de piña"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Flautas de pollo con queso",
+    "nutrition": {
+      "kcal": 435
+    },
+    "ingredientsText": [
+      "60 g de pechuga de pollo hervida y desmenuzada",
+      "2 tortillas de maíz",
+      "40 g de queso fresco",
+      "2 cditas de aceite",
+      "1 cda de crema natural",
+      "Para acompañar: lechuga, 1/2 jitomate rebanado, 1/2 taza de pepino y agua de melón"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "lunch",
+    "name": "Pierna de pollo asada con arroz",
+    "nutrition": {
+      "kcal": 542
+    },
+    "ingredientsText": [
+      "1 pierna de pollo",
+      "1/4 de taza de zanahoria cocida en rodajas",
+      "1 cdita de aceite",
+      "1/2 taza de arroz cocido",
+      "Para acompañar: 2 tortillas de maíz y agua de fresa"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Huevo estrellado con tortilla",
+    "nutrition": {
+      "kcal": 215
+    },
+    "ingredientsText": [
+      "1 huevo",
+      "1 cdita de aceite",
+      "1 tortilla de maíz",
+      "Sal y pimiento al gusto",
+      "Para acompañar: 1/2 taza de champiñón cocido"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Crepas con leche",
+    "nutrition": {
+      "kcal": 273
+    },
+    "ingredientsText": [
+      "2 claras de huevo",
+      "1/4 de taza de leche entera",
+      "1 1/4 cda de harina de trigo",
+      "1 1/2 cdita de mantequilla derretida",
+      "2 1/2 cditas de mermelada",
+      "Para acompañar: 1/2 taza de leche entera"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Pan tostado con crema de avellana",
+    "nutrition": {
+      "kcal": 280
+    },
+    "ingredientsText": [
+      "2 rebanadas de pan tostado",
+      "1 cda de crema de avellana",
+      "Para acompañar: 1 taza de melón picado"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Burrito de pollo",
+    "nutrition": {
+      "kcal": 310
+    },
+    "ingredientsText": [
+      "1 tortilla de maíz",
+      "30 g de pollo cocido",
+      "Recaudo (1 jitomate cocido, sal y ajo)",
+      "1/2 taza de zanahoria cocida picada",
+      "Sal",
+      "Para acompañar: licuado de vainilla (1 taza de leche entera, vainilla, hielos)"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Atole",
+    "nutrition": {
+      "kcal": 320
+    },
+    "ingredientsText": [
+      "1 taza de leche entera",
+      "1/4 de sobre de atole",
+      "Canela al gusto",
+      "2 cditas de azúcar",
+      "Para acompañar: 6 galletas de animalitos"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Smoothie de guayaba",
+    "nutrition": {
+      "kcal": 350
+    },
+    "ingredientsText": [
+      "1 taza de leche entera",
+      "1 guayaba",
+      "2 cditas de azúcar",
+      "6 mitades de nuez",
+      "Para acompañar: 1 rebanada de pan tostado"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Wafle con fruta",
+    "nutrition": {
+      "kcal": 365
+    },
+    "ingredientsText": [
+      "1 wafle congelado chico",
+      "2 cditas de miel",
+      "Para acompañar: 1/2 taza de fresa rebanada, 3/4 de kiwi y 1 taza de yogurt natural"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Croissant",
+    "nutrition": {
+      "kcal": 390
+    },
+    "ingredientsText": [
+      "1 pza de cuernito pequeño (29 g)",
+      "2 rebanadas de jamón de pavo",
+      "40 g de queso panela",
+      "Verdura al gusto",
+      "Para acompañar: batido de fresa (1 taza de leche entera y 1/4 taza de fresa)"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Yogurt con papaya",
+    "nutrition": {
+      "kcal": 410
+    },
+    "ingredientsText": [
+      "1 taza de yogurt natural",
+      "1 taza de papaya picada",
+      "3 cditas de miel",
+      "3 piezas de nuez picada",
+      "Para acompañar: 5 galletas maría"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Sándwich de plátano y crema de avellana",
+    "nutrition": {
+      "kcal": 430
+    },
+    "ingredientsText": [
+      "2 rebanadas de pan de caja integral",
+      "1/2 pza de plátano",
+      "1 cda de crema de avellana",
+      "Para acompañar: 1 taza de leche entera fría"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Burritos de frijoles con queso",
+    "nutrition": {
+      "kcal": 440
+    },
+    "ingredientsText": [
+      "1 tortilla de harina",
+      "1/2 taza de frijoles cocidos",
+      "40 g de queso fresco",
+      "Para acompañar: 1 taza de leche entera"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Tacos de frijoles con chorizo",
+    "nutrition": {
+      "kcal": 455
+    },
+    "ingredientsText": [
+      "1/2 taza de frijoles cocidos",
+      "45 g de chorizo de pollo",
+      "Sal al gusto",
+      "1 cdita de aceite",
+      "2 tortillas de maíz",
+      "1/2 pera"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Pan francés",
+    "nutrition": {
+      "kcal": 465
+    },
+    "ingredientsText": [
+      "2 rebanadas de pan integral de caja",
+      "2 claras de huevo",
+      "2 cditas de azúcar",
+      "Para acompañar: biónico (1 taza de manzana verde y roja, 3 piezas de nuez, 2 cdas de miel y 1/2 taza de yogurt natural)"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Carne de res con verdura y jitomate",
+    "nutrition": {
+      "kcal": 537
+    },
+    "ingredientsText": [
+      "60 g de bistec picado",
+      "2 cditas de aceite",
+      "1/2 taza de zanahoria picada",
+      "1/2 jitomate picado",
+      "Sal",
+      "2 tortillas de maíz",
+      "Para acompañar: licuado de vainilla (1 taza de leche entera, vainilla y 2 cditas de azúcar)"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "dinner",
+    "name": "Carne de res en fajitas",
+    "nutrition": {
+      "kcal": 560
+    },
+    "ingredientsText": [
+      "60 g de carne de res",
+      "1 taza de nopales cocidos",
+      "Cebolla, sal y pimiento al gusto",
+      "1 cda de aceite",
+      "2 tortillas de maíz",
+      "1/2 taza de arroz cocido",
+      "Para acompañar: 1 mango y agua de melón"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Manzana con pepino",
+    "nutrition": {
+      "kcal": 42
+    },
+    "ingredientsText": [
+      "1/2 taza de pepino picado",
+      "1/2 taza de manzana picada",
+      "Chamoy en polvo"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Ensalada bicolor",
+    "nutrition": {
+      "kcal": 43
+    },
+    "ingredientsText": [
+      "1/2 taza de mango picado",
+      "1/2 taza de pepino picado",
+      "Limón al gusto"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Jícama con naranja",
+    "nutrition": {
+      "kcal": 55
+    },
+    "ingredientsText": [
+      "1/2 taza de jícama picada",
+      "1 naranja"
+    ],
+    "instructions": "Mezclar ambas."
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Palomitas de maíz",
+    "nutrition": {
+      "kcal": 56
+    },
+    "ingredientsText": [
+      "2 tazas de palomitas de maíz naturales con poca sal"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Jugo de uva",
+    "nutrition": {
+      "kcal": 60
+    },
+    "ingredientsText": [
+      "18 pzas de uva"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Manzana suave",
+    "nutrition": {
+      "kcal": 60
+    },
+    "ingredientsText": [
+      "1 manzana",
+      "Canela"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Melón con nuez",
+    "nutrition": {
+      "kcal": 100
+    },
+    "ingredientsText": [
+      "1/2 taza de melón picado",
+      "3 piezas de nueces machacadas"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Jugo natural mixto",
+    "nutrition": {
+      "kcal": 110
+    },
+    "ingredientsText": [
+      "1/2 taza de jugo de zanahoria",
+      "1/2 taza de jugo de naranja"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Atún con galletas saladas",
+    "nutrition": {
+      "kcal": 175
+    },
+    "ingredientsText": [
+      "2/3 de lata de atún en agua drenado",
+      "1/2 jitomate en cuadritos",
+      "1/4 taza de zanahoria picada en cuadritos",
+      "4 cuadritos de galletas saladas"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Gazpacho",
+    "nutrition": {
+      "kcal": 215
+    },
+    "ingredientsText": [
+      "1/2 taza de jícama picada",
+      "1/2 taza de jugo de naranja",
+      "3/4 de taza de piña picada",
+      "5 galletas marías"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-nut",
+    "mealType": "snack",
+    "name": "Mini banana split",
+    "nutrition": {
+      "kcal": 290
+    },
+    "ingredientsText": [
+      "1 taza de helado de yogurt",
+      "1/2 plátano rebanado",
+      "1 cda de chispas de chocolate"
+    ],
+    "instructions": ""
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "breakfast",
+    "page": 5,
+    "name": "Cinnamon French Toast",
+    "nutrition": {
+      "kcal": 291,
+      "carbs": 35.8,
+      "protein": 30.77,
+      "fat": 2.55
+    },
+    "ingredientsText": [
+      "2 rebanadas de pan multigrano",
+      "1/4 de taza de leche light o vegetal sin en- dulzar (soya, almendras o coco). º",
+      "3 claras de huevo.",
+      "1/2 scoop de proteína de suero de leche de 1 porcion vainilla.",
+      "1 cucharadita de canela en polvo. Toppings:",
+      "1 sobre de endulzante. canela en polvo o 2 cucharaditas de miel de abeja o 1 cucharada de miel sin azúcar. Utilizando leche light y 1. En un recipiente, mezcla con un tenedor las miel de abeja: claras y el huevo, la leche, el endulzante y la canela hasta que esté casi a punto de nieve. con el tenedor. La miel de abeja aporta calorías (45 6. Puedes no remojar tanto el pan para que no se extra. la rebanada de pan cuando esté en el sartén."
+    ],
+    "instructions": "2. Añade la proteína en polvo y vuelve a mezclar 3. *Puedes licuar todos los ingredientes* 4. Remoja el pan de uno y otro lado hasta que",
+    "imageFile": "flex-cinnamon-french-toast.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "breakfast",
+    "page": 6,
+    "name": "Sándwich Montecristo",
+    "nutrition": {
+      "kcal": 407,
+      "carbs": 35.8,
+      "protein": 44,
+      "fat": 5.5
+    },
+    "ingredientsText": [
+      "2 rebanadas de pan multigrano",
+      "1/4 de taza de leche light o vegetal sin en- dulzar (soya, almendras o coco). º",
+      "4 claras de huevo. 1 porcion",
+      "1 cucharadita de canela en polvo.",
+      "1 sobre de endulzante.",
+      "40g de queso panela light.",
+      "30g de pechuga de pavo. Toppings: 2 cucharaditas de miel de abeja o 1 cucharada de miel sin azúcar. Utilizando leche light y 1. En un recipiente, mezcla con un tenedor las miel de abeja: claras y el huevo, la leche, el endulzante y la absorba líquido. rompa, y con la mezcla sobrante puedes bañar La miel de abeja aporta calorías (45 extra."
+    ],
+    "instructions": "3. Ponlo a dorar en un sartén caliente. 4. Puedes no remojar tanto el pan para que no se 5. *Gratina el queso en el sartén con el jamón*",
+    "imageFile": "flex-sandwich-montecristo.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "breakfast",
+    "page": 7,
+    "name": "Crepas Ligeras",
+    "nutrition": {
+      "kcal": 244,
+      "carbs": 28,
+      "protein": 17.9,
+      "fat": 6.8
+    },
+    "ingredientsText": [
+      "¼ de taza de harina de trigo integral o avena molida.",
+      "1 huevo + 1 clara º",
+      "½ tza de leche light.",
+      "1 cucharadita de esencia de vainilla. 1 porcion",
+      "2 sobres de edulcorante sin calorías. Toppings: Rellena con proteína como pollo des- hebrado, queso panela o Oaxaca light, aguacate. das de la mezcla y expándelo por todo el sartén Mujeres 1 porción para hacerlas delgadas. Voltea cuidadosamente. Hombres 2 porciones Recuerda que las cantidades del relleno serán las que aporten principalmente proteína o puedes añadir whey protein a la mezcla y añadir más agua si las quieres rellenar solo de fruta. 3"
+    ],
+    "instructions": "1. En un recipiente, mezcla todos los ingredientes 3. Con una cuchara mediana agrega 2-3 cuchara-",
+    "imageFile": "flex-crepas-ligeras.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "breakfast",
+    "page": 8,
+    "name": "Pro-oats",
+    "nutrition": {
+      "kcal": 274,
+      "carbs": 27.3,
+      "protein": 31.7,
+      "fat": 3.85
+    },
+    "ingredientsText": [
+      "1/2 taza de avena (60g)",
+      "1 scoop de proteína de suero de leche sabor chocolate o vainilla o 4 claras de º huevo.",
+      "1/2 taza de agua o leche vegetal sin azúcar 1 porcion (almendra leche o coco).",
+      "1 sobre de endulzante Utilizando proteína de sue- 1. En una olla agrega la leche vegetal o el agua, la ro de leche y leche light: avena y el endulzante hasta que hierva. bien. Puedes agregar un poco más de leche o agua si no te gusta la consistencia. Con las claras de huevo: Mismo procedimiento, solo añade las claras, una por una batiendo vigorosamente, vuelve a colocar al fuego hasta que espese un poco, aproximadamente 1-2 minutos. 4"
+    ],
+    "instructions": "",
+    "imageFile": "flex-pro-oats.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "breakfast",
+    "page": 9,
+    "name": "Burrito",
+    "nutrition": {
+      "kcal": 243,
+      "carbs": 19.94,
+      "protein": 18.96,
+      "fat": 10
+    },
+    "ingredientsText": [
+      "1 huevo + 2 claras. En cualquier",
+      "1/4 de taza de granos de frijoles drena- Momento dos. º",
+      "30g de queso Oaxaca Light.",
+      "1 tortilla de harina integral 1 porcion",
+      "Pimienta y sal al gusto.",
+      "Salsa roja. y pimienta. de los frijoles y el queso. 5"
+    ],
+    "instructions": "1. Bate los huevos y las claras con una pizca de sal 2. En un sartén antihaderente, revuélvelos y aña- 3. Rellena la tortilla y ponle salsa al gusto. 4. Enróllala como burrito.",
+    "imageFile": "flex-burrito.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "breakfast",
+    "page": 10,
+    "name": "Pizzadillas",
+    "nutrition": {
+      "kcal": 407,
+      "carbs": 35.8,
+      "protein": 44,
+      "fat": 5.5
+    },
+    "ingredientsText": [
+      "2 tortillas de harina integral En cualquier",
+      "2 cucharadas de salsa de tomate para Momento pizza. º",
+      "60grs de queso Oaxaca light.",
+      "1 taza de vegetales de tu preferencia 1 porcion",
+      "1/2 taza de espinacas picadas y previamen- te desinfectadas.",
+      "1/2 taza de champiñones Utilizando leche light y 1. Coloca en una tortilla de harina integral en el miel de abeja: sartén a fuego lento y coloca la salsa, luego tortilla. 6"
+    ],
+    "instructions": "3. Espera a que dore y voltea.",
+    "imageFile": "flex-pizzadillas.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "breakfast",
+    "page": 11,
+    "name": "Carrot Pancakes",
+    "nutrition": {
+      "kcal": 310,
+      "carbs": 33,
+      "protein": 21.2,
+      "fat": 8.35
+    },
+    "ingredientsText": [
+      "1 huevo entero + 2 claras . Pre o Post",
+      "½ taza de avena en hojuelas (60g) Workout",
+      "1 zanahoria rayada cruda (1/2 taza).",
+      "1/4 de taza de leche light o vegetal sin en- dulzar (coco, almendra o soya). 1 porcion",
+      "1/3 de taza de yogur griego natural sin grasa (125g) (opcional). Toppings:",
+      "1 cucharadita de canela en polvo o vanilla miel de abeja y pasitas o nueces (opcional). picadas o mezcla queso filadelfia",
+      "½ cucharadita de clavos de olor en pol- light (1 cucharada) o yogur grie- vo. go (2 cucharadas) con splenda y",
+      "¼ de cucharadita de nuez moscada. rayadura de naranja.",
+      "1 pizca de polvo para hornear (opcio- nal)*",
+      "2 sobres de endulzante sin calorías. polvo. los líquidos (yogur, leche, claras de huevo). los con la mezcla del tamaño que desees. y voltea. 7"
+    ],
+    "instructions": "2. Mezcla la avena con la canela, clavos de olor, 4. Deja reposar la mezcla unos segundos. 5. Añade la zanahoria rayada y mezcla. 6. En un sartén antiadherente caliente, haz círcu- 7. Espera hasta que esté burbujeando la panqueca",
+    "imageFile": "flex-carrot-pancakes.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "breakfast",
+    "page": 12,
+    "name": "Pancakes de avena",
+    "nutrition": {
+      "kcal": 248,
+      "carbs": 23,
+      "protein": 27.6,
+      "fat": 4.35
+    },
+    "ingredientsText": [
+      "4 claras de huevo. Pre o Post",
+      "¼ de taza de avena en hojuelas (30g) Workout",
+      "1 zanahoria rayada cruda (1/2 taza).",
+      "1/4 de taza de leche light o vegetal sin en- 1 porcion dulzar (coco, almendra o soya).",
+      "1/3 de taza de yogur griego natural sin grasa (125g) (opcional).",
+      "1 cucharadita de canela en polvo o vanilla (opcional).",
+      "1 pizca de polvo para hornear (opcio- nal)*",
+      "2 sobres de endulzante sin calorías. polvo. los líquidos (yogur, leche, claras de huevo). y voltea. Puedes añadir aceite en spray por máximo 5 segundos ó 1/2 cdita de mantequilla o aceite vegetal para evitar que se pegue la panqueca, en caso de no contar con sartén antiadhe- rente. 8"
+    ],
+    "instructions": "1. Licúa la avena hasta que se haga totalmente 2. Mezcla la avena con la canela y el endulzante. 3. Gentilmente, mezcla los ingredientes secos con 4. Deja reposar la mezcla unos segundos. 5. En un sartén antiadherente caliente, haz círcu- 6. Espera hasta que esté burbujeando la panqueca",
+    "imageFile": "flex-pancakes-de-avena.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "lunch",
+    "page": 15,
+    "name": "Hamburguesas de pollo",
+    "nutrition": {
+      "kcal": 113.6,
+      "carbs": 0,
+      "protein": 22,
+      "fat": 2.11
+    },
+    "ingredientsText": [
+      "500 grs de carne molida de pechuga Por cada 100g de carne sin de pollo cruda. pan",
+      "1 diente de ajo picado Energia:",
+      "2-3 tomates picados.",
+      "1 huevo",
+      "1 cebolla roja o blanca finamente Macros:",
+      "2 tzas de espinaca picada.",
+      "Perejil al gusto.",
+      "Sal y pimienta al gusto. 22g Proteína º 1 porcion spray máximo. integral o 1 pan thins de Oroweat."
+    ],
+    "instructions": "1. Coloca todo en un bowl y mezcla todo con las 2. Haz de 5 a 7 tortitas con las manos. 3. Cocínalas con poco aceite o 5 seg de aceite en 4. *Puedes acompañarlas solas o con 1 pan pita",
+    "imageFile": "flex-hamburguesas-de-pollo.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "lunch",
+    "page": 16,
+    "name": "Pollo con chícharos",
+    "nutrition": {
+      "kcal": 487,
+      "carbs": 43,
+      "protein": 56.94,
+      "fat": 12.99
+    },
+    "ingredientsText": [
+      "2 dientes de ajo. Por toda la preparación",
+      "2 cucharaditas de aceite de olivo.",
+      "220g de pechuga de pollo asadas, pica- Energia: das.",
+      "½ cebolla picada.",
+      "200g de chícharos drenados. Macros:",
+      "1 tomate picado. 43g HCO",
+      "¼ cucharadita de comino en polvo. 12.99g Lípidos",
+      "¼ cucharadita de sal. aceite de olivo a fuego medio por unos segun- dos (no dejes que el ajo se dore) pollo. Saltea hasta que la cebolla torne de color º café. tos más hasta que la comida tome consistencia. comer toda la porción, mujeres mitad de porción."
+    ],
+    "instructions": "1. En un sartén grande, saltea el ajo picado con el 2. Añade la cebolla y los trozos de pechuga de Workout 3. Añade el resto de los ingredientes. 4. Continúa cocinando y revolviendo por 3 minu-",
+    "imageFile": "flex-pollo-con-chicharos.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "lunch",
+    "page": 17,
+    "name": "Chop Suey",
+    "nutrition": {
+      "kcal": 593,
+      "carbs": 45,
+      "protein": 64,
+      "fat": 27.15
+    },
+    "ingredientsText": [
+      "1 taza de brócoli cocido momento",
+      "¼ de cebolla cortada en juliana grue- º sa.",
+      "½ calabacita picada en rodajas. 1 porcion",
+      "1 taza de brotes de soya.",
+      "1 zanahoria cortada en rodajas.",
+      "50 ml de salsa de soya Lite* complemento: *Se puede acompañar con 1 taza de",
+      "2 cucharaditas de aceite de olivo.",
+      "2 cucharaditas de ajonjolí.",
+      "200 grs de pechuga de pollo cocida pica- da. Por toda la preparación 1. Colocar en un sartén caliente las 2 cucharaditas de aceite de olivo y dejarlas acitronar. horia a fuego medio, añadir un poco de salsa de ditas de ajonjolí y si se desea una cucharada de salsa teriyaki o salsa de soya lite. 13 comer toda la porción, mujeres mitad de porción."
+    ],
+    "instructions": "2. Añadir las calabacitas, brotes de soya y la zana-",
+    "imageFile": "flex-chop-suey.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "lunch",
+    "page": 18,
+    "name": "Fajitas de Res con Arroz",
+    "nutrition": {
+      "kcal": 475,
+      "carbs": 18,
+      "protein": 63,
+      "fat": 12.99
+    },
+    "ingredientsText": [
+      "1 taza de arroz blanco o integral cocido. momento",
+      "1 cucharadita de paprika. º",
+      "1/8 de cucharadita de comino.",
+      "½ taza de salsa roja. 2 porciones",
+      "500g de carne de res magra.",
+      "1 cebolla pequeña picada.",
+      "1 pimiento morrón picado.",
+      "Sal y pimienta al gusto. Por toda la preparación 1. En un bowl combina el arroz cocido con la pa- prika, el comino y la salsa. que todo esté completamente caliente (puedes pimientos a fuego alto por 2 minutos. cla de res y vegetales. Puedes añadir el jugo de ½ limón si deseas. remojado toda la noche o dos horas previas. 14"
+    ],
+    "instructions": "2. Mezcla todo y calienta en el microondas hasta 4. Separa el arroz en dos partes y sirve con la mez-",
+    "imageFile": "flex-fajitas-de-res-con-arroz.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dinner",
+    "page": 20,
+    "name": "Hamburguesas de atún",
+    "nutrition": {
+      "kcal": 475,
+      "carbs": 18,
+      "protein": 63,
+      "fat": 12.99
+    },
+    "ingredientsText": [
+      "3 paquetes de atún bajos en sodio. Por toda la preparación",
+      "½ taza de harina de linaza o almendras o coco.",
+      "4 cebollines picados. 475 kcal",
+      "2 huevos. Macros:",
+      "1 cucharada de salsa de soya.",
+      "1 pizca de ajo en polvo.",
+      "Sal y pimienta al gusto. 12.99g Lípidos",
+      "2 cucharaditas de aceite de olivo. 63g Proteína Cualquier grande. Fórmalos en 2 hamburguesitas. momento 2. Pon a freír las dos hamburguesitas con las 2 º cucharaditas de aceite de olivo en un sartén o puedes ponerlas al horno previamente preca- 2 porciones lentado a 180 °C por 10 minutos o hasta que doren. 16"
+    ],
+    "instructions": "1. Combina todos los ingredientes en un bowl",
+    "imageFile": "flex-hamburguesas-de-atun.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dinner",
+    "page": 21,
+    "name": "Pizza de pollo al pesto",
+    "nutrition": {
+      "kcal": 658,
+      "carbs": 50,
+      "protein": 67,
+      "fat": 20
+    },
+    "ingredientsText": [
+      "2 pan árabe medianos. Por toda la preparación con",
+      "170g de pechuga de pollo al grill en cubi- salsa pesto tos.",
+      "Aceite de olivo en spray.",
+      "3 cucharaditas de salsa pesto (opcio- 658 kcal",
+      "¼ de taza de flores de brócoli cocido.",
+      "¼ de taza de tomates deshidratados.",
+      "¼ de taza de calabacitas picadas. 20g Lípidos",
+      "½ taza de queso Oaxaca light deshebra- 67g Proteína do. Cualquier 2. Coloca en una bandeja para hornear un trozo de momento papel para horneado y rocía el aceite en spray y º coloca el pan árabe. 2 porciones 3. Unta la salsa pesto o puede ser salsa de tomate para pizza. Mezcla todos los vegetales y el pollo en un bowl, y añádelos en la superficie del pan. hasta que se derrita (10 minutos aprox). 17"
+    ],
+    "instructions": "1. Precalienta el horno a 180°C. 4. Añade sobre los vegetales el queso y hornea",
+    "imageFile": "flex-pizza-de-pollo-al-pesto.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dinner",
+    "page": 22,
+    "name": "Crepa de Espinaca",
+    "nutrition": {
+      "kcal": 351,
+      "carbs": 5.5,
+      "protein": 54,
+      "fat": 11.2
+    },
+    "ingredientsText": [
+      "6 claras (1 taza líquidas).",
+      "1 manojo de espinacas.",
+      "50g taza de queso Mozarella. 351 kcal",
+      "4 rebanadas de pechuga de pavo. Macros:",
+      "Aceite de olivo en spray.",
+      "Sal y pimienta al gusto 11.2 Lípidos viamente desinfectadas, la sal y la pimienta. spray. Añade la mezcla en el sartén y deja cocer º hasta que se levanten las orillas. de el queso y la pechuga de pavo y envuelve como crepa, deja que se derrita el queso. 18"
+    ],
+    "instructions": "1. Licúa las claras de huevo con las espinacas pre- 2. Precalienta un sartén y añade aceite de olivo en 3. Voltea deja cocer por unos segundos más. Aña- 1 porcion",
+    "imageFile": "flex-crepa-de-espinaca.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dinner",
+    "page": 23,
+    "name": "Chicken Bakes",
+    "nutrition": {
+      "kcal": 464,
+      "carbs": 26.6,
+      "protein": 56,
+      "fat": 13.3
+    },
+    "ingredientsText": [
+      "1 tortilla de harina grande.",
+      "200grs de pechuga pollo en fajitas cocida Energia:",
+      "50g de queso Oaxaca light.",
+      "Aceite de oliva en spray.",
+      "1 taza de vegetales mixtos cocidos. 26.6g HCO",
+      "3 cucharadas de salsa para pizza. 13.3 Lípidos º 2. Extiende la tortilla y añade la salsa para pizza como base. 1 porcion tortilla. 19"
+    ],
+    "instructions": "1. Precalienta el horno a 180°C. En una charola 3. Añade el pollo y los vegetales. 4. De último añade el queso Oaxaca deshebrado. 5. Hornea por 10 minutos o hasta que dore la",
+    "imageFile": "flex-chicken-bakes.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dessert",
+    "page": 25,
+    "name": "Nana ice-cream",
+    "nutrition": {
+      "kcal": 248,
+      "carbs": 26,
+      "protein": 30,
+      "fat": 6
+    },
+    "ingredientsText": [
+      "1 plátano congelado",
+      "1 scoop de proteína de suero de leche cho- colate o vainilla (depende del sabor que te º guste)",
+      "1 cucharada (5g) de cacao en polvo 1 porcion",
+      "1/3 de taza de leche vegetal sin azúcar o yogur griego natural sin grasa.",
+      "2 sobres de endulzante sin calorías. Hecho con yogur griego* 21"
+    ],
+    "instructions": "1. Mezcla bien todos los ingredientes en la licuadora 2. Vierte en un recipiente de vidrio. 248 kcal 3. Congela hasta que tome consistencia de helado. Macros:",
+    "imageFile": "flex-nana-ice-cream.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dessert",
+    "page": 26,
+    "name": "Choco Mugcake",
+    "nutrition": {
+      "kcal": 177,
+      "carbs": 8,
+      "protein": 30,
+      "fat": 3
+    },
+    "ingredientsText": [
+      "1 scoop de proteína de suero de leche vai- nilla o chocolate.",
+      "1 clara de huevo º",
+      "1/4 de taza de leche light o vegetal sin en- dulzar (coco, almendra o soya). 1 porcion",
+      "1 cucharadita de cocoa sin endulzar.",
+      "1/2 cucharadita de polvo para hor- near.",
+      "2 sobres de endulzante sin calorías. Toppings: 1 cucharada de chocolate o miel maple sin azúcar. 22"
+    ],
+    "instructions": "1. Mezcla los ingredientes secos en una taza. 2. Incorpora los húmedos. Energia: 3. Mezcla muy bien. 177 kcal 4. Cocina por un minuto y medio en el microon- Macros: 5. Voltea en un plato. 3g Lípidos",
+    "imageFile": "flex-choco-mugcake.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dessert",
+    "page": 27,
+    "name": "Lava Cake in a Mug",
+    "nutrition": {
+      "kcal": 311,
+      "carbs": 25.6,
+      "protein": 8.8,
+      "fat": 17
+    },
+    "ingredientsText": [
+      "60g de chocolate oscuro 70% cacao o 3.5 barritas de 18g de chocolate Turín sin",
+      "1 huevo.",
+      "4 cucharadas de harina de trigo integral o",
+      "¼ de cucharadita de polvo para hor- 25.6g HCO",
+      "3 cucharadas de cocoa sin azúcar.",
+      "¼ de cucharadita de sal.",
+      "3 sobres de splenda.",
+      "1 cucharada de aceite de coco o de tu pre- ferencia.",
+      "3 cucharadas de leche light. º da, cocoa, polvo para hornear, el huevo batido y el aceite vegetal. 2 porciones mente 1 chocolate ½ en cada una. mente por 50 segundos a una potencia media. Esta receta no es baja en grasa, tomar en cuenta la cantidad que comes durante el día. 23"
+    ],
+    "instructions": "1. Bate el huevo con un tenedor o batidor manual 2. En un bowl pequeño combina la harina, splen- 3. Divide en dos tazas pequeñas. Pon aproximada- 4. Hornea en microondas cada una aproximada- 5. Sirve inmediatamente en un plato.",
+    "imageFile": "flex-lava-cake-in-a-mug.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dessert",
+    "page": 28,
+    "name": "Brownie Fast",
+    "nutrition": {
+      "kcal": 149,
+      "carbs": 19.65,
+      "protein": 13.25,
+      "fat": 3.7
+    },
+    "ingredientsText": [
+      "1 cucharada + 1 cucharadita de harina inte- Cualquier gral o de avena (avena molida). momento",
+      "2 cucharadas de cocoa en polvo sin azú- º car.",
+      "2 sobres de endulzante sin calorías. 1 porcion",
+      "1/2 cucharadita de bicarbonato de so- dio.",
+      "1/3 de taza de yogur griego natural sin grasa.",
+      "3 cucharadas de leche light. del brownie y revolverlos muy bien hasta que se haga una mezcla homogénea y húmeda. Toppings: 1 cucharada de chocolate líquido sin azúcar + 1 cucharada de yogur griego o 3 cucharadas de chispas de chocolate. 24"
+    ],
+    "instructions": "1. Colocar en un recipiente o taza los ingredientes 2. Cocinarlo en el microondas por minuto y medio.",
+    "imageFile": "flex-brownie-fast.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dessert",
+    "page": 29,
+    "name": "Nana & Oats Muffins",
+    "nutrition": {
+      "kcal": 370,
+      "carbs": 50,
+      "protein": 10,
+      "fat": 12
+    },
+    "ingredientsText": [
+      "3 plátanos pequeños",
+      "2 tazas de avena en hojuelas",
+      "2 cucharadas de leche light o de almen- º dra.",
+      "1/4 de taza de arándanos 50% menos 6 porciones azúcar.",
+      "1/4 de taza de almendras fileteadas o nueces. estén listos. 11g Fibra 25"
+    ],
+    "instructions": "1. Precalienta el horno a 180°C Por 1 muffin 2. Preparar un molde para muffins de mínimo 6 y 3. Licua o procesa todos los ingredientes. 370 kcal 4. Repartir la mezcla en los 6 moldes. Macros: 5. Hornear por lo menos 15-18 minutos, hasta que 50g HCO Netos 6. Cuando estén fríos, guarda en un recipiente con 12g Lípidos",
+    "imageFile": "flex-nana-oats-muffins.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dessert",
+    "page": 30,
+    "name": "Brownies Flexibles",
+    "nutrition": {
+      "kcal": 55,
+      "carbs": 7.86,
+      "protein": 4.5,
+      "fat": 4.5
+    },
+    "ingredientsText": [
+      "1 huevo cualquier",
+      "½ taza de avena instantánea. momento",
+      "½ taza de cocoa.",
+      "1 pizca de sal.",
+      "1 cucharadita de polvo para hornear. 9 porciones",
+      "¾ de taza de yogur griego sin grasa ni azú- car añadido (Chobani natural).",
+      "1/4 de taza de leche light.",
+      "½ taza de endulzante sin calorías o 12 sobres de edulcorante sin calorías (splen- da). en spray. estén listos. 26"
+    ],
+    "instructions": "1. Precalienta el horno a 180°C Por 1 brownie 2. Engrasa un molde de 8 x 8 pulgadas con aceite Energia: 3. Licua o procesa todos los ingredientes. 4. Repartir la mezcla en los 6 moldes. 5. Hornear por lo menos 15 minutos, hasta que 6. Cuando estén fríos, córtalos en cuadritos.",
+    "imageFile": "flex-brownies-flexibles.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dessert",
+    "page": 31,
+    "name": "Muffins choco-plátano",
+    "nutrition": {
+      "kcal": 291,
+      "carbs": 0,
+      "protein": 10,
+      "fat": 6.5
+    },
+    "ingredientsText": [
+      "1 plátano maduro.",
+      "1 scoop de proteína sabor chocolate.",
+      "50g de crema de maní o almendras.",
+      "2 cucharadas de cocoa sin azúcar.",
+      "1 huevo o 2 claras de huevo. 5 porciones",
+      "10 ml de escencia de vainilla.",
+      "5 sobres de splenda. licuadora hasta que quede totalmente homogéneo. 8.2 HCO 27"
+    ],
+    "instructions": "1. Precalienta el horno a 180º C. Por 1 muffin 2. Mezcla todos los ingredientes en un procesador o Energia: 3. Pasa a moldes para muffin. 4. Hornea por 15-20 minutos.",
+    "imageFile": "flex-muffins-choco-platano.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dessert",
+    "page": 32,
+    "name": "Peanut Butter Cups",
+    "nutrition": {
+      "kcal": 92,
+      "carbs": 6,
+      "protein": 3,
+      "fat": 6
+    },
+    "ingredientsText": [
+      "¼ de taza de crema de cacahuate. cualquier",
+      "2-3 cucharadas de proteína de vainilla momento (opcional).",
+      "1 taza de chips de chocolate oscuro.",
+      "1 cucharada de aceite de coco. 12 porciones Por Porción. cacahuate con la proteína hasta que formes una pasta. derrite las chispas de chocolate y el aceite de coco por 45 segundos o hasta que esté líquido. dita de chocolate aprox en cada uno y llévalo al congelador por 10-15 minutos hasta que quede firme. de crema de cacahuate con mucho cuidado y añade una cucharadita más de chocolate por encima. pletamente firme. 28"
+    ],
+    "instructions": "1. Coloca 12 papeles para muffin ó 12 moldes de 2. En un recipiente mediano combina la crema de 92 kcal 3. Forma 12 bolas con la pasta de la medida de una 4. En un recipiente de vidrio o para microondas, 3g Proteína 5. Llena los moldes para muffin con una cuchara- 6. Una vez firme, añade una bolita de la pasta 7. Enfría por 10-15 minutos o hasta que esté com-",
+    "imageFile": "flex-peanut-butter-cups.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "dessert",
+    "page": 33,
+    "name": "Nana-nut Bread",
+    "nutrition": {
+      "kcal": 166.6,
+      "carbs": 23.9,
+      "protein": 6.8,
+      "fat": 5.5
+    },
+    "ingredientsText": [
+      "2 plátanos maduros. cualquier",
+      "3 huevos. momento",
+      "½ taza de chispas de chocolate hersheys se- miamargo.",
+      "¼ de taza de crema de cacahuate. 12 porciones",
+      "3 cucharadas de miel de abeja.",
+      "1 taza de harina de trigo integral.",
+      "1 taza de harina de avena (avena instantánea molida).",
+      "3 cucharaditas de polvo para hornear.",
+      "½ cucharadita de sal. Por Porción. de abeja y la crema de cacahuate, agrega la mez- para hornear y la sal de mar. añade la mezcla. centro cocido. 29"
+    ],
+    "instructions": "1. Precalienta el horno a 180 grados. 2. En u bowl grande aplasta los plátanos con un 3. Calienta en el microondas por 10 segundos la miel 4. Mezcla hasta incorporar. 23.9g HCO 5. En otro bowl mezcla la harina y la avena, el polvo 5.5g Lípidos 6. Añade los ingredientes líquidos y mezcla bien. 7. Añade las chispas de chocolate y mezcla. 8. Engrasa un molde con aceite vegetal en spray y 9. Hornea por 30-45 minutos o hasta que esté el 10. Deja enfriar y corta en cuadritos.",
+    "imageFile": "flex-nana-nut-bread.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "snack",
+    "page": 35,
+    "name": "Café frappuccino",
+    "nutrition": {
+      "kcal": 147,
+      "carbs": 3,
+      "protein": 25,
+      "fat": 4
+    },
+    "ingredientsText": [
+      "1 scoop de proteína de vainilla o chocola- pre te. workout",
+      "1 taza de leche de almendra, coco o soya sin endulzar o agua.",
+      "1 cucharada de café instantáneo. 1 porcion",
+      "1-2 sobres de endulzante sin calorías.",
+      "1 taza de hielo picado. Sin plátano y con leche de coco. junto con el hielo y listo. 31"
+    ],
+    "instructions": "1. Mezcla todos los ingredientes en la licuadora 2. Si la utilizas pre entreno o para desayuno pue- Energia:",
+    "imageFile": "flex-cafe-frappuccino.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "snack",
+    "page": 36,
+    "name": "Nana Protein Shake",
+    "nutrition": {
+      "kcal": 421,
+      "carbs": 45,
+      "protein": 37,
+      "fat": 12.45
+    },
+    "ingredientsText": [
+      "1 plátano congelado. post",
+      "240 ml de leche light. workout",
+      "1 cda (15g) de mantequilla de maní.",
+      "1 scoop de proteína de vainilla.",
+      "1 taza de hielo picado. 1 porcion",
+      "2 sobres de splenda. vainilla a la licuadora. dulzante. Licúa por unos segundos. 32"
+    ],
+    "instructions": "1. Añade el plátano en rodajas congelado, la 2. Por último añade la leche y hielo picado y en-",
+    "imageFile": "flex-nana-protein-shake.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "snack",
+    "page": 37,
+    "name": "Energreen Shake",
+    "nutrition": {
+      "kcal": 204,
+      "carbs": 39.9,
+      "protein": 15,
+      "fat": 0.56
+    },
+    "ingredientsText": [
+      "1 taza de té verde sin endulzar. pre",
+      "½ pera. workout",
+      "1 manzana verde.",
+      "1 puño de espinaca.",
+      "½ puño de kale. 1 porcion",
+      "2 sobres de splenda.",
+      "125g de yogur griego natural. to con los 2 sobres de splenda. Licúa hasta que quede completamente batido. 33"
+    ],
+    "instructions": "1. Añade la manzana y la pera con cáscara picada, 2. Añade el yogur griego y la taza de té verde jun- 204 kcal",
+    "imageFile": "flex-energreen-shake.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "snack",
+    "page": 38,
+    "name": "Berry-Almond Shake",
+    "nutrition": {
+      "kcal": 454,
+      "carbs": 50.6,
+      "protein": 38.37,
+      "fat": 12.93
+    },
+    "ingredientsText": [
+      "1 taza de frutos rojos (fresas y bluebe- post rries). workout",
+      "½ plátano.",
+      "50g de yogur griego.",
+      "1 taza de leche de almendras. 1 porcion",
+      "10 almendras.",
+      "1/3 de tza de avena.",
+      "1 scoop de proteína de vainilla.",
+      "Hielo al gusto.",
+      "2 sobres de splenda. licuar por 1 minuto más. 34"
+    ],
+    "instructions": "1. Añade los frutos rojos, el plátano, el hielo y el 2. Añade el resto de los ingredientes y vuelve a 454 kcal",
+    "imageFile": "flex-berry-almond-shake.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "snack",
+    "page": 39,
+    "name": "Lemon Pie Shake",
+    "nutrition": {
+      "kcal": 321,
+      "carbs": 30,
+      "protein": 50,
+      "fat": 6.58
+    },
+    "ingredientsText": [
+      "125g de yogur griego natural sin azúcar post (chobani). workout",
+      "5 galletas Marías",
+      "El jugo de ½ limón.",
+      "1 taza de leche de almendras sin azú- 1 porcion car.",
+      "1 scoop de proteína de vainilla (opcio- nal).",
+      "Hielo al gusto.",
+      "1 cdita de escencia de vainilla.",
+      "2 sobres de splenda. Con la proteína 3 galletas Marías con el hielo al gusto o puedes 35 quedarte con el yogur y aportaría 20g de proteína."
+    ],
+    "instructions": "1. En la licuadora agrega todos los ingredientes y 2. Sirve en un vaso y tritura el resto de las galle- 321 kcal",
+    "imageFile": "flex-lemon-pie-shake.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "snack",
+    "page": 40,
+    "name": "Veggie Power Shake",
+    "nutrition": {
+      "kcal": 182,
+      "carbs": 10.72,
+      "protein": 26.46,
+      "fat": 4.27
+    },
+    "ingredientsText": [
+      "1 taza de espinacas. cualquier",
+      "½ taza de apio picado o 3 varas de momento apio.",
+      "½ taza de zanahoria rayada o 3 zanaho- rias. 1 porcion",
+      "1 scoop de proteína de vainilla.",
+      "1 cucharada de semillas de chía o lina- za. grandes si deseas utilizar de base el jugo de los todos los ingredientes, excepto las semillas de chía. 36"
+    ],
+    "instructions": "1. Puedes usar las porciones de vegetales más Energia: 2. Licúa con 300 ml de leche de almendras o agua 10.72g HCO",
+    "imageFile": "flex-veggie-power-shake.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "base",
+    "page": 44,
+    "name": "Ensalada pakistaní",
+    "nutrition": {
+      "kcal": 332,
+      "carbs": 8.57,
+      "protein": 12.1,
+      "fat": 28.8
+    },
+    "ingredientsText": [
+      "½ pimiento rojo cualquier",
+      "½ pimiento naranja momento",
+      "1 taza de gajos de cítricos (naranja, man- darina y toronja).",
+      "60g de queso de cabra. 1 porcion",
+      "7 nueces picadas.",
+      "1 cucharadita de aceite de oliva",
+      "Pimienta y sal al gusto* sirve fresco con pan pita. el horno y orégano molido."
+    ],
+    "instructions": "1. Lava los pimientos. Energia: 2. Cortarlos en juliana y retirarle las semillas. 332kcal 3. Mezcla todos los ingredientes en un bowl y",
+    "imageFile": "flex-ensalada-pakistani.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "base",
+    "page": 45,
+    "name": "Apple&Carrot Cream Salad",
+    "nutrition": {
+      "kcal": 228,
+      "carbs": 25.2,
+      "protein": 13.82,
+      "fat": 9.49
+    },
+    "ingredientsText": [
+      "1 zanahoria rayada. cualquier",
+      "7 nueces en mitad. momento",
+      "1 manzana verde picada.",
+      "½ taza de apio picado.",
+      "½ taza de yogur griego sin azúcar 1 porcion (125g). 41"
+    ],
+    "instructions": "1. Mezcla todos los ingredientes en un bowl. Energia: 2. Refrigera por 20 minutos. 228 kcal 3. Sirve fresca en hojas de lechuga (opcional).",
+    "imageFile": "flex-apple-carrot-cream-salad.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "base",
+    "page": 46,
+    "name": "Greek Salad",
+    "nutrition": {
+      "kcal": 429,
+      "carbs": 52.78,
+      "protein": 11.36,
+      "fat": 20.35
+    },
+    "ingredientsText": [
+      "1 zanahoria rayada. post",
+      "7 nueces en mitad. workout",
+      "1 manzana verde picada.",
+      "½ taza de apio picado.",
+      "½ taza de yogur griego sin azúcar 1 porcion (125g). 42"
+    ],
+    "instructions": "1. Mezcla todos los ingredientes en un bowl. Energia: 2. Refrigera por 20 minutos. 429 kcal 3. Sirve fresca en hojas de lechuga (opcional).",
+    "imageFile": "flex-greek-salad.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "base",
+    "page": 47,
+    "name": "Ensalada de manzana y brócoli",
+    "nutrition": {
+      "kcal": 130,
+      "carbs": 13.19,
+      "protein": 2.8,
+      "fat": 5
+    },
+    "ingredientsText": [
+      "1 taza de brócoli cocido. complemento",
+      "½ taza de arándanos o pasas.",
+      "14 nueces en mitades.",
+      "1 zanahoria rayada.",
+      "1 manzana roja. 4 porciones",
+      "125g de yogur natural.",
+      "El jugo de 1 limón pequeño.",
+      "Pimienta y sal. coli previamente lavados. o las pasas. pimienta al gusto y el jugo de un limón. y mezcla."
+    ],
+    "instructions": "1. Pon en una cacerola a hervir los floretes de bró- Energia: 2. Se trocea la manzana en pedazos pequeños con 3. Trocea las nueces en pedazos pequeños. 13.19g HCO 4. Una vez cocido el brócoli, se deja escurrir y se 2.8g Proteína 5. Para el aderezo mezcla el yogur con la sal y 6. Vierte en el bowl junto con las nueces troceadas",
+    "imageFile": "flex-ensalada-de-manzana-y-brocoli.jpg"
+  },
+  {
+    "source": "recetario-flexible",
+    "mealType": "base",
+    "page": 48,
+    "name": "Crema de espinaca",
+    "nutrition": {
+      "kcal": 196,
+      "carbs": 25,
+      "protein": 10.7,
+      "fat": 6.17
+    },
+    "ingredientsText": [
+      "240 ml de leche descremada ó soya entrada o",
+      "1 manojo de espinacas lavadas y desinfec- cena tadas",
+      "¼ de cebolla picada",
+      "1 cdita de aceite 1 porcion",
+      "2 cdas de arroz ó harina integral. de aceite en spray, acitronar la cebolla y agre- añadir pizca de sal y especias al gusto e ir mo- viendo para evitar que se pegue. *Esta sopa pude realizarse con brócoli cocido en lugar de espinacas. Para una 44"
+    ],
+    "instructions": "1. Calentar la cdita de aceite ó 5 seg de aspersión Energia: 2. Colocar en la licuadora la leche y el sofrito de Macros: 3. En una cacerola aparte poner a cocer la sopa, 10.7g Proteína 4. Servir caliente.",
+    "imageFile": "flex-crema-de-espinaca.jpg"
+  }
+]
