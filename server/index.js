@@ -399,6 +399,35 @@ app.get('/api/v1/patients/:patientId/consultations', async (request, reply) => {
   return { items: consultations }
 })
 
+// Datos permanentes del paciente (antecedentes familiares, cirugías, alergias…): viven fuera de
+// la consulta para no tener que recapturarlos en cada visita. Ver src/lib/patientFields.js, que es
+// quien decide qué campo va aquí y cuál se queda en la consulta.
+app.get('/api/v1/patients/:patientId/sections', async (request, reply) => {
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  const sections = await prisma.patientSection.findMany({ where: { patientId: patient.id } })
+  return { items: sections }
+})
+
+app.put('/api/v1/patients/:patientId/sections/:sectionKey', async (request, reply) => {
+  const { payload = {}, updatedAt } = request.body || {}
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  const where = { patientId_sectionKey: { patientId: patient.id, sectionKey: request.params.sectionKey } }
+  const existing = await prisma.patientSection.findUnique({ where })
+  // Mismo control optimista que en las secciones de la consulta: si otra sesión guardó por encima,
+  // se avisa en vez de pisar su trabajo en silencio.
+  if (existing && updatedAt && new Date(updatedAt).getTime() !== new Date(existing.lastSavedAt).getTime()) {
+    return reply.code(409).send({ code: 'CONCURRENT_EDIT', message: 'Los datos del paciente cambiaron en otra sesión. Recarga antes de guardar.', fields: {} })
+  }
+  const section = await prisma.patientSection.upsert({
+    where,
+    create: { patientId: patient.id, sectionKey: request.params.sectionKey, payload, lastSavedBy: request.userId || 'system' },
+    update: { payload, lastSavedBy: request.userId || 'system' },
+  })
+  return section
+})
+
 app.get('/api/v1/patients/:patientId/plans', async (request, reply) => {
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })

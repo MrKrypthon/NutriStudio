@@ -85,6 +85,9 @@ export const patientsApi = {
   consultations: (id) => apiRequest(`/patients/${id}/consultations`),
   plans: (id) => apiRequest(`/patients/${id}/plans`),
   timeline: (id) => apiRequest(`/patients/${id}/timeline`),
+  // Datos permanentes del paciente, los que no pertenecen a una visita concreta.
+  sections: (id) => apiRequest(`/patients/${id}/sections`),
+  saveSection: (id, sectionKey, payload, updatedAt, options = {}) => apiRequest(`/patients/${id}/sections/${sectionKey}`, { method: 'PUT', body: JSON.stringify({ payload, updatedAt }), ...options }),
 }
 
 export const appointmentsApi = {
