@@ -44,7 +44,7 @@ function describeEvent(event) {
 
 const emptyEditForm = (patient) => ({ firstName: patient?.firstName || '', lastName: patient?.lastName || '', email: patient?.email || '', phone: patient?.phone || '', birthDate: patient?.birthDate ? patient.birthDate.slice(0, 10) : '', sex: patient?.sex || 'Femenino', occupation: patient?.occupation || '' })
 
-export default function PatientsPage({ setActive, onSelectPatient }) {
+export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient }) {
   const [rows, setRows] = useState(patients)
   const [status, setStatus] = useState('loading')
   const [search, setSearch] = useState('')
@@ -85,7 +85,14 @@ export default function PatientsPage({ setActive, onSelectPatient }) {
   const visible = rows
     .filter((p) => [p[1], p[7]?.email, p[7]?.phone].filter(Boolean).join(' ').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (sortBy === 'name' ? a[1].localeCompare(b[1]) : new Date(b[7]?.createdAt || 0) - new Date(a[7]?.createdAt || 0)))
-  const goTo = (module) => { if (selected?.[6]) onSelectPatient?.(selected[6]); setActive(module) }
+  // Se navega con el paciente en el mismo salto para que quede en la dirección: hacerlo en dos
+  // pasos (elegir paciente y luego cambiar de módulo) dejaba la URL sin el id y recargar sacaba de
+  // la pantalla.
+  const goTo = (module) => {
+    if (selected?.[6] && onOpenPatient) { onOpenPatient(selected[6], module); return }
+    if (selected?.[6]) onSelectPatient?.(selected[6])
+    setActive(module)
+  }
 
   const openPatient = (row) => { setSelected(row); setEditing(false); setEditState('idle'); setEditError('') }
   const closeDrawer = () => { setSelected(null); setEditing(false) }

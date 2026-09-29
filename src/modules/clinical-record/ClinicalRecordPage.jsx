@@ -880,11 +880,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   // Hallazgos de exploración seleccionados, para mostrar su imagen de referencia.
   const examSelected = PHYSICAL_EXAM.flatMap(([, findings]) => findings).filter((finding) => !!currentValues[`Exploración: ${finding}`])
 
-  if (!patientId) return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
+  if (!patientId) return <AppChrome active="Pacientes" crumb="Expediente" setActive={setActive}><div className="content clinical-content">
     <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Abre el expediente desde la lista de pacientes para registrar una consulta.</p><button className="primary" onClick={() => setActive('Pacientes')}>Ir a Pacientes</button></div>
   </div></AppChrome>
 
-  return <AppChrome active="Pacientes" setActive={setActive}><div className="content clinical-content">
+  return <AppChrome active="Pacientes" crumb="Expediente" setActive={setActive}><div className="content clinical-content">
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
       <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><div className="clinical-person-head"><h2>{patientName}</h2><button type="button" className="record-button" title="Grabar consulta" aria-label="Grabar consulta" onClick={() => setTab('Transcripción')}><Icon>record</Icon></button></div><span>{sessionLabel}</span></div></div>

@@ -12,7 +12,7 @@ const summarize = (consultation) => consultation.plans?.some((p) => p.status ===
 // Antes esta pantalla arrastraba el paciente de demostración por defecto (el mismo id fijo que usaba
 // el Constructor de plan), así que al entrar sin elegir a nadie el selector mostraba a la primera
 // paciente de la lista mientras los datos eran de otro id. Ahora exige elegir un paciente real.
-export default function ConsultationsPage({ setActive, patientId, onSelectPatient, onOpenSession }) {
+export default function ConsultationsPage({ setActive, patientId, onSelectPatient, onOpenSession, onOpenPatient }) {
   const { patient: patientRecord } = usePatient(patientId)
   const [sessions, setSessions] = useState([])
   const [loadState, setLoadState] = useState('loading')
@@ -50,8 +50,8 @@ export default function ConsultationsPage({ setActive, patientId, onSelectPatien
       <div className="session-question">
         <p className="eyebrow">¿POR DÓNDE QUIERES COMENZAR HOY?</p>
         <div className="session-options">
-          <button className="session-option" onClick={() => setActive('Expediente')}><span className="session-icon mint">▤</span><b>Grabar consulta / informe</b><small>Registra la anamnesis, evaluación y diagnóstico nutricio.</small><strong>Ir al informe <span>→</span></strong></button>
-          <button className="session-option" onClick={() => setActive('Constructor de plan')}><span className="session-icon blue">▦</span><b>Diseñar plan de alimentación</b><small>Distribuye macros, crea menús y programa la semana.</small><strong>Ir al plan <span>→</span></strong></button>
+          <button className="session-option" onClick={() => onOpenPatient?.(patientId, 'Expediente') || setActive('Expediente')}><span className="session-icon mint">▤</span><b>Grabar consulta / informe</b><small>Registra la anamnesis, evaluación y diagnóstico nutricio.</small><strong>Ir al informe <span>→</span></strong></button>
+          <button className="session-option" onClick={() => onOpenPatient?.(patientId, 'Constructor de plan') || setActive('Constructor de plan')}><span className="session-icon blue">▦</span><b>Diseñar plan de alimentación</b><small>Distribuye macros, crea menús y programa la semana.</small><strong>Ir al plan <span>→</span></strong></button>
         </div>
         <div className="session-note">↗ Podrás cambiar entre Consulta y Plan en cualquier momento.</div>
       </div>
