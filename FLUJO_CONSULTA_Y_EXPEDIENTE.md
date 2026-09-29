@@ -160,20 +160,20 @@ Seis pasos, del más dañino al más cosmético. Cada uno es verificable por sep
 - Al cerrarla, dejar constancia (`completedAt` + evento de auditoría) de que la cerró el sistema y no
   la nutrióloga, para no ensuciar Finanzas con un cobro que nadie hizo.
 
-### Paso 4 — Saber siempre en qué sesión estás *(parcial)*
+### Paso 4 — Saber siempre en qué sesión estás ✅
 
 - ✅ Cabecera con fecha y posición: *"Consulta del 28 sep 2026 · sesión 4 de 7 · En curso"*.
 - ✅ Una consulta `COMPLETED` se abre **en sólo lectura**, con un botón explícito de "Reabrir para
   corregir" que queda registrado en la auditoría.
-- Pendiente: selector de sesión dentro del expediente, para moverse entre visitas sin salir a
-  Consultas.
+- ✅ Selector de sesión dentro del expediente, para moverse entre visitas sin salir a Consultas.
 
-### Paso 5 — Poder volver a donde lo dejaste
+### Paso 5 — Poder volver a donde lo dejaste ✅
 
-- URL propia: `/pacientes/:id/expediente` y `/pacientes/:id/consultas/:consultaId`, más los slugs que
-  faltan (`/consultas`, `/seguimientos`, `/educacion`).
-- Leer el paciente y la sesión de la URL al arrancar, para que recargar no pierda nada.
-- La migaja de pan deja de decir "Pacientes" cuando estás dentro de un expediente.
+- ✅ URL propia: `/pacientes/:id/expediente[/:consultaId]` y `/pacientes/:id/plan`, más los slugs que
+  faltaban (`/consultas`, `/seguimientos`, `/educacion`).
+- ✅ El paciente y la sesión se leen de la URL al arrancar y al usar atrás/adelante, así que recargar
+  no pierde nada y un enlace directo abre exactamente esa visita.
+- ✅ La migaja de pan dice "Expediente" en vez de "Pacientes" cuando estás dentro de uno.
 
 ### Paso 6 — Datos del paciente que no se retecleen
 
@@ -195,5 +195,14 @@ Seis pasos, del más dañino al más cosmético. Cada uno es verificable por sep
 | 5 | medio | no | Cambia el enrutado de toda la app |
 | 6 | **alto** | migración | El más valioso y el más invasivo; al final y con respaldo |
 
-Los pasos 1 a 4 se pueden entregar juntos en esta rama. El 5 conviene aparte porque toca todas las
-pantallas. El 6 merece su propia fase con respaldo de la base antes de migrar.
+Los pasos 1 a 5 están entregados en esta rama. El 6 merece su propia fase, con respaldo de la base
+antes de migrar.
+
+---
+
+## 6. Qué queda
+
+- **Paso 6**, el de separar el dato permanente del paciente del dato de la visita. Es el más valioso
+  para el trabajo diario y el único que necesita migración.
+- **Las 6 consultas vacías** que dejó el comportamiento anterior. Las 11 sesiones rancias se sanean
+  solas al abrir cada expediente, pero borrar las vacías es destructivo y espera tu visto bueno.
