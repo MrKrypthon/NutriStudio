@@ -35,6 +35,7 @@
     "pdfkit": "^0.17.2",
     "react": "latest",
     "react-dom": "latest",
+    "recharts": "^3.10.1",
     "vite": "latest"
   },
   "devDependencies": {
