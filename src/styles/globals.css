@@ -1066,3 +1066,31 @@ html{scroll-behavior:smooth}
 .plan-context-grid>div{border-top:1px solid var(--line);padding-top:8px}
 .plan-context-grid small{display:block;font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px}
 .plan-context-grid p{margin:0;font-size:11px;color:#3d3e51;line-height:1.4}
+
+/* Bloqueo de lectura del expediente: el cuerpo va dentro de un <fieldset disabled>, que trae borde
+   y márgenes propios del navegador y hay que neutralizar para que no se note que es un fieldset. */
+.record-lock{border:0;margin:0;padding:0;min-width:0}
+.record-lock[disabled]{opacity:.92}
+.record-lock[disabled] input,.record-lock[disabled] select,.record-lock[disabled] textarea{background:#f4f5f7;color:#5d5f6b;cursor:not-allowed}
+.record-lock[disabled] .toggle-pill,.record-lock[disabled] button{cursor:not-allowed}
+.record-notice{margin:12px 0;background:#fdf6e7;border:1px solid #f0e2c0;border-radius:9px;padding:12px 14px;color:#7d6322;font-size:11px;line-height:1.5;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.record-notice p{margin:0;flex:1;min-width:260px}
+.record-notice-actions{display:flex;gap:8px;flex-shrink:0}
+.record-notice b{font-weight:700}
+
+/* Gráficas de Finanzas (Recharts) */
+.finance-charts-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.chart-frame{margin-top:8px}
+.chart-empty{padding:48px 0;text-align:center}
+.chart-tooltip{background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 8px 22px -8px rgba(28,35,47,.25);padding:8px 10px;font-size:11px;color:#343647;display:grid;gap:3px}
+.chart-tooltip b{font:600 10px 'DM Mono';color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.chart-tooltip span{display:flex;align-items:center;gap:6px}
+.chart-tooltip i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.chart-tooltip strong{margin-left:auto;font-weight:600;color:var(--ink)}
+.chart-donut-wrap{display:flex;flex-direction:column;gap:8px}
+.chart-donut-legend{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:150px;overflow-y:auto}
+.chart-donut-legend li{display:grid;grid-template-columns:10px 1fr auto;align-items:center;gap:8px;font-size:11px;color:#3d3e51}
+.chart-donut-legend i{width:10px;height:10px;border-radius:3px}
+.chart-donut-legend b{font:600 11px 'DM Mono';color:var(--ink)}
+.recharts-default-legend{font-size:11px}
+@media(max-width:900px){.finance-charts-row{grid-template-columns:1fr}}

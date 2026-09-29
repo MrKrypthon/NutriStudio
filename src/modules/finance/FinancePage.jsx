@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
-import FinanceBars from '../../components/FinanceBars.jsx'
+import { BalanceTrend, CategoryDonut, IncomeExpenseChart, MethodDonut } from '../../components/FinanceCharts.jsx'
 import { financeApi, practiceApi } from '../../lib/api.js'
 import { APPOINTMENT_TYPE_FEES, EMPTY_FEES, centsToPesos, formatMoney, formatShortDay, normalizeFees, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, pesosToCents } from '../../lib/finance.js'
 
@@ -61,7 +61,7 @@ export default function FinancePage({ setActive }) {
   const totals = data?.allTime || { incomeCents: 0, expenseCents: 0, balanceCents: 0 }
   const rangeTotals = data?.range || { incomeCents: 0, expenseCents: 0, balanceCents: 0 }
   const entries = data?.entries || []
-  const methods = data?.byMethod || PAYMENT_METHODS.map(([method]) => ({ method, incomeCents: 0, count: 0 }))
+  const methods = (data?.byMethod || PAYMENT_METHODS.map(([method]) => ({ method, incomeCents: 0, count: 0 }))).map((item) => ({ ...item, name: PAYMENT_METHOD_LABELS[item.method] || item.method }))
 
   const openExpense = () => { setExpenseForm({ ...EMPTY_FORM, date: todayIso() }); setExpenseError(''); setExpenseState('idle'); setExpenseOpen(true) }
   const closeExpense = () => { setExpenseOpen(false); setExpenseError('') }
@@ -122,13 +122,23 @@ export default function FinancePage({ setActive }) {
         <div className="finance-section-head"><div><h2>Ingresos y egresos</h2><p>{range.label} · ingresos en verde, egresos en rojo.</p></div>
           <div className="view-switch">{RANGES.map(([key, label]) => <button className={rangeKey === key ? 'selected' : ''} onClick={() => setRangeKey(key)} key={key}>{label}</button>)}</div>
         </div>
-        <FinanceBars series={data?.daily || []} />
-        <div className="finance-legend"><span><i className="income" />Ingresos</span><span><i className="expense" />Egresos</span></div>
+        <IncomeExpenseChart daily={data?.daily || []} />
       </section>
       <aside className="panel finance-methods">
         <div className="finance-section-head"><div><h2>Ingresos por método</h2><p>De dónde entró el dinero en {range.label.toLowerCase()}.</p></div></div>
-        <div className="finance-method-list">{methods.map((item) => <div className="finance-method-row" key={item.method}><span>{PAYMENT_METHOD_LABELS[item.method]}</span><b>{formatMoney(item.incomeCents)}</b><small>{item.count} {item.count === 1 ? 'consulta' : 'consultas'}</small></div>)}</div>
+        <MethodDonut methods={methods} />
       </aside>
+    </div>
+
+    <div className="finance-charts-row">
+      <section className="panel">
+        <div className="finance-section-head"><div><h2>Egresos por categoría</h2><p>En qué se fue el gasto en {range.label.toLowerCase()}.</p></div></div>
+        <CategoryDonut entries={entries} />
+      </section>
+      <section className="panel">
+        <div className="finance-section-head"><div><h2>Tendencia de saldo</h2><p>Saldo acumulado durante {range.label.toLowerCase()}.</p></div></div>
+        <BalanceTrend daily={data?.daily || []} />
+      </section>
     </div>
 
     <section className="panel finance-movements">
