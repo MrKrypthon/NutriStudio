@@ -183,7 +183,7 @@ function TranscriptionTab({ values, updateField, updateFields, appendField, pati
   </div>
 }
 
-export default function ClinicalRecordPage({ setActive, patientId, consultationId, onConsumeConsultation, appointmentId, onConsumeAppointment, onScheduleAppointment }) {
+export default function ClinicalRecordPage({ setActive, patientId, consultationId, onOpenSession, appointmentId, onConsumeAppointment, onScheduleAppointment }) {
   const { patient, reload: reloadPatient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
@@ -199,6 +199,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [autoClosed, setAutoClosed] = useState(null)
   const [startState, setStartState] = useState('idle')
   const [sessionIndex, setSessionIndex] = useState(null)
+  const [sessions, setSessions] = useState([])
   const [sections, setSections] = useState({})
   const [saveState, setSaveState] = useState('idle')
   const [measurementState, setMeasurementState] = useState('idle')
@@ -307,17 +308,16 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       try {
         const list = await patientsApi.consultations(patientId)
         setHistoryCount((list.items || []).length)
+        setSessions(list.items || [])
         // Real evolution data for the Antropométrico chart: every measurement across the
         // patient's consultations, oldest first.
         setMeasurements((list.items || []).flatMap((c) => c.measurements || []).sort((a, b) => new Date(a.measuredAt) - new Date(b.measuredAt)))
         let full
         if (consultationId) {
-          // A specific historical session requested from Consultas → load it as-is (a completed
-          // one included) instead of the current in-progress consultation. Consume the id even if
-          // the fetch fails — otherwise it stays set and the next "Abrir expediente" reopens the
-          // wrong (stale or other-patient) session.
-          full = await clinicalApi.get(consultationId).catch((err) => { onConsumeConsultation?.(); throw err })
-          onConsumeConsultation?.()
+          // La sesión concreta que pide la dirección (`/expediente/<consulta>`), aunque esté
+          // cerrada. Ya no hace falta "consumir" el id: al navegar a otro sitio la dirección lo
+          // suelta sola, y mantenerlo es lo que permite recargar sin perder la sesión abierta.
+          full = await clinicalApi.get(consultationId)
         } else {
           let active
           try {
@@ -376,7 +376,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       // fallo no tendría dónde mostrarse).
       flushPendingNow()
     }
-  }, [patientId])
+  }, [patientId, consultationId])
 
   useEffect(() => {
     if (!consultation) return
@@ -475,6 +475,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       // La recién creada es la última visita: pasa a ser la número historyCount + 1 de ese total.
       setHistoryCount(historyCount + 1)
       setSessionIndex(historyCount + 1)
+      setSessions((prev) => [full, ...prev])
+      // Si se estaba mirando una visita pasada, la dirección todavía apunta a ella: hay que
+      // soltarla o al recargar volveríamos a la sesión vieja en vez de a la que acabamos de abrir.
+      if (consultationId) onOpenSession?.(null)
       setStartState('idle')
     } catch {
       setStartState('error')
@@ -888,6 +892,15 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
       <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><div className="clinical-person-head"><h2>{patientName}</h2><button type="button" className="record-button" title="Grabar consulta" aria-label="Grabar consulta" onClick={() => setTab('Transcripción')}><Icon>record</Icon></button></div><span>{sessionLabel}</span></div></div>
+      {/* Moverse entre visitas sin salir a Consultas: cada una tiene su propia dirección, así que
+          elegir aquí es lo mismo que abrirla por enlace, y se puede recargar o compartir. */}
+      {sessions.length > 1 && <label className="session-picker">Sesión
+        <select value={consultation?.id || ''} onChange={(event) => onOpenSession?.(event.target.value)}>
+          {sessions.map((item, index) => <option value={item.id} key={item.id}>
+            {`${sessions.length - index}. ${formatDate(item.startedAt || item.createdAt)} · ${CONSULTATION_STATUS_LABELS[item.status] || item.status}`}
+          </option>)}
+        </select>
+      </label>}
       <div className="clinical-actions">{consultation && consultation.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}<button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}{clinicalReport?.storageKey && <button className="secondary" disabled={clinicalReportState === 'working'} onClick={downloadClinicalReport}>{clinicalReportState === 'working' ? '…' : 'Descargar informe clínico'}</button>}<button className="secondary" disabled={clinicalReportState === 'working'} onClick={generateClinicalReport}>{clinicalReportState === 'working' ? 'Generando…' : clinicalReport?.storageKey ? 'Actualizar informe clínico' : 'Informe clínico'}</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
     </div>
     {/* El aviso lleva su propia acción: explicar la situación y ofrecer la salida en el mismo sitio
