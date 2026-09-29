@@ -42,6 +42,7 @@ export default function FinancePage({ setActive }) {
   const [feesState, setFeesState] = useState('idle')
   const [feesError, setFeesError] = useState('')
   const [entryBusy, setEntryBusy] = useState(null)
+  const [selectedDay, setSelectedDay] = useState(null)
 
   const range = rangeFor(rangeKey)
   const load = useCallback(async () => {
@@ -62,6 +63,7 @@ export default function FinancePage({ setActive }) {
   const rangeTotals = data?.range || { incomeCents: 0, expenseCents: 0, balanceCents: 0 }
   const entries = data?.entries || []
   const methods = (data?.byMethod || PAYMENT_METHODS.map(([method]) => ({ method, incomeCents: 0, count: 0 }))).map((item) => ({ ...item, name: PAYMENT_METHOD_LABELS[item.method] || item.method }))
+  const visibleEntries = selectedDay ? entries.filter((entry) => new Date(entry.occurredAt).toISOString().slice(0, 10) === selectedDay) : entries
 
   const openExpense = () => { setExpenseForm({ ...EMPTY_FORM, date: todayIso() }); setExpenseError(''); setExpenseState('idle'); setExpenseOpen(true) }
   const closeExpense = () => { setExpenseOpen(false); setExpenseError('') }
@@ -122,7 +124,7 @@ export default function FinancePage({ setActive }) {
         <div className="finance-section-head"><div><h2>Ingresos y egresos</h2><p>{range.label} · ingresos en verde, egresos en rojo.</p></div>
           <div className="view-switch">{RANGES.map(([key, label]) => <button className={rangeKey === key ? 'selected' : ''} onClick={() => setRangeKey(key)} key={key}>{label}</button>)}</div>
         </div>
-        <IncomeExpenseChart daily={data?.daily || []} />
+        <IncomeExpenseChart daily={data?.daily || []} selectedDate={selectedDay} onSelectDay={setSelectedDay} />
       </section>
       <aside className="panel finance-methods">
         <div className="finance-section-head"><div><h2>Ingresos por método</h2><p>De dónde entró el dinero en {range.label.toLowerCase()}.</p></div></div>
@@ -142,12 +144,12 @@ export default function FinancePage({ setActive }) {
     </div>
 
     <section className="panel finance-movements">
-      <div className="finance-section-head"><div><h2>Movimientos</h2><p>{range.label} · ingresos automáticos por consulta y egresos que registras.</p></div></div>
+      <div className="finance-section-head"><div><h2>Movimientos</h2><p>{selectedDay ? `Mostrando el ${formatShortDay(selectedDay)}.` : `${range.label} · ingresos automáticos por consulta y egresos que registras.`}</p></div>{selectedDay && <button className="secondary" onClick={() => setSelectedDay(null)}>Ver todo el periodo</button>}</div>
       {status === 'loading' && <p className="muted">Cargando movimientos…</p>}
-      {status !== 'loading' && entries.length === 0 && <p className="finance-empty muted">Todavía no hay movimientos en este periodo. Los ingresos aparecen solos al terminar una consulta.</p>}
-      {entries.length > 0 && <div className="finance-table">
+      {status !== 'loading' && visibleEntries.length === 0 && <p className="finance-empty muted">{selectedDay ? 'Ese día no tuvo movimientos.' : 'Todavía no hay movimientos en este periodo. Los ingresos aparecen solos al terminar una consulta.'}</p>}
+      {visibleEntries.length > 0 && <div className="finance-table">
         <div className="finance-head"><span>Fecha</span><span>Movimiento</span><span>Método</span><span className="finance-amount-col">Monto</span><span /></div>
-        {entries.map((entry) => <div className={'finance-row ' + (entry.type === 'INCOME' ? 'income' : 'expense')} key={entry.id}>
+        {visibleEntries.map((entry) => <div className={'finance-row ' + (entry.type === 'INCOME' ? 'income' : 'expense')} key={entry.id}>
           <span className="finance-date">{formatShortDay(entry.occurredAt)}</span>
           <span className="finance-desc"><b>{entry.type === 'INCOME' ? (entry.patientName || 'Consulta') : (entry.category || 'Gasto')}</b><small>{entry.type === 'INCOME' ? (APPOINTMENT_TYPE_LABELS[entry.appointmentType] || 'Consulta') : (entry.description || 'Egreso del consultorio')}</small></span>
           <span className="finance-method">{entry.method ? PAYMENT_METHOD_LABELS[entry.method] : '—'}</span>

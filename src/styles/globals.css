@@ -1094,3 +1094,7 @@ html{scroll-behavior:smooth}
 .chart-donut-legend b{font:600 11px 'DM Mono';color:var(--ink)}
 .recharts-default-legend{font-size:11px}
 @media(max-width:900px){.finance-charts-row{grid-template-columns:1fr}}
+
+.chart-mode{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
+.chart-hint{font-size:10px;color:var(--muted)}
+.finance-chart .recharts-wrapper,.finance-chart .recharts-wrapper svg,.finance-chart .recharts-surface{outline:none}
