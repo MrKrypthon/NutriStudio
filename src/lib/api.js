@@ -137,8 +137,11 @@ export const plansApi = {
 export const clinicalApi = {
   get: (id) => apiRequest(`/consultations/${id}`),
   create: (patientId, payload) => apiRequest(`/patients/${patientId}/consultations`, { method: 'POST', body: JSON.stringify(payload) }),
-  saveSection: (consultationId, sectionKey, payload, updatedAt) => apiRequest(`/consultations/${consultationId}/sections/${sectionKey}`, { method: 'PUT', body: JSON.stringify({ payload, updatedAt }) }),
+  // `options` admite `keepalive: true` para el guardado de salida: sin él, el navegador puede
+  // cancelar la petición al desmontar la pantalla o al cerrar la pestaña y se perdería lo escrito.
+  saveSection: (consultationId, sectionKey, payload, updatedAt, options = {}) => apiRequest(`/consultations/${consultationId}/sections/${sectionKey}`, { method: 'PUT', body: JSON.stringify({ payload, updatedAt }), ...options }),
   complete: (id, payload = {}) => apiRequest(`/consultations/${id}/complete`, { method: 'POST', body: JSON.stringify(payload) }),
+  reopen: (id) => apiRequest(`/consultations/${id}/reopen`, { method: 'POST' }),
   registerMeasurement: (consultationId, payload) => apiRequest(`/consultations/${consultationId}/measurements`, { method: 'POST', body: JSON.stringify(payload) }),
   addDiagnosis: (consultationId, payload) => apiRequest(`/consultations/${consultationId}/diagnoses`, { method: 'POST', body: JSON.stringify(payload) }),
   updateDiagnosis: (consultationId, diagnosisId, payload) => apiRequest(`/consultations/${consultationId}/diagnoses/${diagnosisId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
