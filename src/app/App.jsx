@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/AuthContext.jsx'
 import { parseLocation, pathFor } from './routes.js'
+import { growTextareas } from '../lib/autoGrow.js'
 
 import LoginPage from '../modules/auth/LoginPage.jsx'
 import DashboardPage from '../modules/dashboard/DashboardPage.jsx'
@@ -38,6 +39,21 @@ export default function App() {
   const [pendingRecipeName, setPendingRecipeName] = useState(null)
   const [autoOpenNewAppointment, setAutoOpenNewAppointment] = useState(false)
   const [newAppointmentPatientId, setNewAppointmentPatientId] = useState('')
+
+  // Autoajuste del alto de los textarea al contenido (respaldo de `field-sizing: content`): al
+  // escribir, al montarse campos nuevos y cuando cambian por código (p. ej. chips de sugerencia).
+  useEffect(() => {
+    const onInput = (event) => {
+      const el = event.target
+      if (el?.tagName === 'TEXTAREA') { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px` }
+    }
+    document.addEventListener('input', onInput, true)
+    growTextareas()
+    let raf = 0
+    const observer = new MutationObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(() => growTextareas()) })
+    observer.observe(document.body, { childList: true, subtree: true })
+    return () => { document.removeEventListener('input', onInput, true); observer.disconnect(); cancelAnimationFrame(raf) }
+  }, [])
   const [autoAgendaFilter, setAutoAgendaFilter] = useState(null)
 
   /**

@@ -1105,7 +1105,7 @@ html{scroll-behavior:smooth}
 .session-picker select:hover{border-color:var(--green)}
 
 /* Chips de sugerencia (SuggestionChips.jsx): frases comunes que completan un campo con un clic. */
-.chip-suggestions{margin:-6px 0 12px}
+.chip-suggestions{margin:9px 0 14px}
 .chip-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .chip-wrap{display:inline-flex;align-items:center}
 .chip{border:1px solid var(--line);background:#f5f7fa;color:#3d4152;border-radius:999px;padding:5px 11px;font-size:10px;cursor:pointer;white-space:nowrap}
@@ -1223,3 +1223,7 @@ html{scroll-behavior:smooth}
 .field-with-chips-head>span{font-size:10px;color:#737680;white-space:nowrap}
 .field-with-chips-head .chip-suggestions{margin:0;flex:1;min-width:0}
 .field-with-chips-head .chip-row{flex-wrap:wrap;margin:0}
+
+/* Los textarea ajustan su alto al contenido (Chrome/Edge lo hacen por CSS; los demás navegadores
+   usan el respaldo en JS). Se limita el alto máximo y se permite scroll si crece de más. */
+textarea{field-sizing:content;max-height:340px;overflow-y:auto}
