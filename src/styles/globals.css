@@ -199,11 +199,19 @@ html{scroll-behavior:smooth}
 .smae-summary.empty{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#f5f6f8;border-color:var(--line)}
 .smae-summary.empty span{font-size:9px;color:var(--muted)}
 
-/* Agenda: huecos disponibles para agendar en un clic y alta rápida de paciente en el modal */
-.slot-bookable{cursor:pointer;transition:background-color .12s,box-shadow .12s}
+/* Agenda: huecos disponibles para agendar en un clic y alta rápida de paciente en el modal.
+   .slot-clickable es el hueco en sí (puede traer una cita que no ocupa toda la hora, con algo de
+   espacio libre después); .slot-bookable es sólo la celda vacía, la única que dibuja el "+"
+   centrado -- si se dibujara también sobre una celda con cita, el "+" quedaba encima del recuadro
+   del nombre y lo tapaba. */
+.slot-clickable{cursor:pointer}
+.slot-bookable{transition:background-color .12s,box-shadow .12s}
 .slot-bookable:hover{background:color-mix(in srgb,var(--green) 6%,#fff);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--green) 32%,transparent)}
 .slot-bookable:after{content:'+';position:absolute;inset:0;display:grid;place-items:center;color:color-mix(in srgb,var(--green) 32%,#fff);font:600 16px 'DM Mono';pointer-events:none;opacity:.55;transition:opacity .12s}
 .slot-bookable:hover:after{opacity:1;color:color-mix(in srgb,var(--green) 60%,#fff)}
+/* Marcas de cuartos de hora dentro de cada fila (63px = 1h), para ubicar a simple vista si una
+   cita empieza en :15/:30/:45 sin tener que pasar el cursor encima. */
+.slot{background-image:repeating-linear-gradient(to bottom,transparent 0,transparent calc(25% - 1px),color-mix(in srgb,var(--line) 55%,transparent) calc(25% - 1px),color-mix(in srgb,var(--line) 55%,transparent) 25%)}
 .new-patient-inline{margin:2px 0 13px;padding:12px;border:1px dashed color-mix(in srgb,var(--green) 40%,transparent);border-radius:8px;background:#f7fbf9}
 .new-patient-inline .form-row{margin-top:0}
 .new-patient-inline>button{margin-top:4px}
