@@ -910,3 +910,54 @@ propia línea de técnica (pliegue, cinta y antropómetro), no sólo los pliegue
 **Verificado** con Chromium sobre el expediente real: los 36 campos cargan su animación y sus dos
 párrafos, sin más error de consola que el `favicon.ico` de siempre. `npm run build` OK y `npm test`
 (48/48). El pipeline completo queda en `tools/mediciones-3d/` con su README.
+
+## Fase 83 — el flujo de la consulta y el expediente
+
+El contenido de la consulta ya estaba completo (las 12 secciones, el cierre, el pago, el informe).
+Lo que faltaba era la capa de encima: qué sesión abres cuando entras, cómo vuelves a donde lo
+dejaste y qué pasa con lo que escribiste. El diagnóstico completo, con lo que se comprobó sobre la
+base real, está en `FLUJO_CONSULTA_Y_EXPEDIENTE.md`.
+
+**El problema de fondo.** No existía ninguna entidad "expediente": lo que la interfaz llamaba así
+era *una consulta concreta* abierta en pantalla, y por eso "¿me lleva a la consulta actual, a una
+pasada o a modificar el expediente?" no tenía respuesta. Ahora son dos cosas distintas: al
+**expediente** se entra a mirar y no crea nada; la **consulta** se inicia con un acto explícito, se
+trabaja y se cierra. Una consulta existe porque alguien la inició, nunca porque alguien miró.
+
+**Lo que se corrigió, con lo que se encontró en la base:**
+
+- Abrir el expediente inauguraba una consulta: había **6 consultas totalmente vacías de 22**.
+- Una sesión abierta absorbía las visitas siguientes para siempre. El control existía pero sólo
+  corría al entrar desde una cita: **11 de 22 estaban `IN_PROGRESS` con fecha anterior**, y una
+  llevaba 27 días abierta. Ahora se cierran solas, sin generar ingreso (nadie las cobró) y dejando
+  constancia en la auditoría.
+- Se podía escribir en una consulta ya cerrada. El cuerpo del expediente va dentro de un `fieldset`
+  deshabilitado, así que ningún campo se escapa del bloqueo por olvido, y corregir una visita pasada
+  exige reabrirla a propósito.
+- La cabecera decía sólo "Consulta nutricional · En curso". Ahora dice de qué día es y qué número de
+  visita ocupa, y hay un selector para moverse entre sesiones sin salir a Consultas.
+- **Se perdía lo escrito al salir.** El guardado de salida no se disparaba nunca: su función de
+  limpieza se creó cuando `consultation` todavía era `null`. Detrás había un segundo fallo, el
+  payload se enviaba anidado. Ahora usa un ref, manda la forma correcta, va con `keepalive` y
+  también se dispara al cerrar la pestaña.
+- **No se podía volver a donde lo dejaste.** El expediente no tenía dirección propia (la URL decía
+  `/pacientes`) y recargar te devolvía a la lista. Ahora cada visita tiene la suya
+  (`/pacientes/<id>/expediente/<consulta>`), recargable y compartible, y `Consultas`,
+  `Seguimientos` y `Educación` tienen por fin la suya.
+- **Nada se arrastraba entre consultas.** Los antecedentes familiares, las cirugías y las alergias
+  pasan a `PatientSection`, a nivel de paciente, y se ven en todas sus visitas. Lo que sí cambia de
+  una visita a otra (medicamentos, síntomas, exploración física) se queda en la consulta.
+
+**Migración.** `npm run db:migrate-patient-sections` (simula por defecto, `--write` aplica). La tabla
+de antecedentes familiares se consolida entera y no campo a campo: sus casillas sin marcar valen
+`false`, indistinguible de "nunca se tocó", así que campo a campo un "no" reciente perdería frente a
+un "sí" de hace un año. Aplicada sobre la base de trabajo con respaldo previo.
+
+**Pendiente.** Borrar las 6 consultas vacías (destructivo, espera visto bueno) y decidir si
+medicamentos y suplementos se mueven también al paciente.
+
+**Verificado** en navegador sobre una instancia aislada, para no tocar el `dev:all` en marcha:
+sesión rancia cerrada con aviso, expediente en sólo lectura, "Iniciar consulta" crea y desbloquea,
+texto escrito 120 ms antes de salir persistido, recarga y enlace directo conservando la sesión, y
+los antecedentes del paciente visibles en una consulta recién creada con cero secciones propias.
+`npm run build` OK y `npm test` 81/81.

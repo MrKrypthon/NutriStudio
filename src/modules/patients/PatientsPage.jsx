@@ -24,8 +24,23 @@ const AUDIT_LABELS = {
   'Diagnosis:updated': 'Diagnóstico editado',
   'Diagnosis:deleted': 'Diagnóstico eliminado',
   'NutritionPlan:published': 'Plan publicado',
+  'NutritionPlan:updated': 'Plan editado',
+  'ClinicalSection:created': 'Expediente capturado',
+  'ClinicalSection:updated': 'Expediente editado',
+  'Measurement:created': 'Medición registrada',
+  'Measurement:updated': 'Medición corregida',
+  'Consultation:reopened': 'Consulta reabierta',
+  'Consultation:auto_closed': 'Consulta cerrada automáticamente',
   'Document:delivered': 'Documento entregado',
   'LabAttachment:uploaded': 'PDF de análisis clínicos adjuntado',
+}
+
+// Resume el user-agent a "Chrome · Windows" para poder decir desde qué equipo se editó.
+function deviceLabel(agent) {
+  if (!agent) return ''
+  const browser = /Edg\//.test(agent) ? 'Edge' : /OPR\//.test(agent) ? 'Opera' : /Chrome\//.test(agent) ? 'Chrome' : /Firefox\//.test(agent) ? 'Firefox' : /Safari\//.test(agent) ? 'Safari' : 'Navegador'
+  const os = /Windows/.test(agent) ? 'Windows' : /Android/.test(agent) ? 'Android' : /iPhone|iPad/.test(agent) ? 'iOS' : /Mac OS X|Macintosh/.test(agent) ? 'macOS' : /Linux/.test(agent) ? 'Linux' : ''
+  return os ? `${browser} · ${os}` : browser
 }
 const DONE_STATUSES = new Set(['COMPLETED', 'PUBLISHED', 'DELIVERED', 'DONE'])
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
@@ -38,7 +53,7 @@ function describeEvent(event) {
   if (event.kind === 'appointment') return { icon: '◷', label: `Cita · ${APPOINTMENT_TYPE_LABELS[event.subtype] || event.subtype}` }
   if (event.kind === 'consultation') return { icon: '▤', label: `Consulta · ${CONSULTATION_STATUS_LABELS[event.status] || event.status}` }
   if (event.kind === 'plan') return { icon: '▦', label: `Plan · ${PLAN_STATUS_LABELS[event.status] || event.status}` }
-  if (event.kind === 'audit') { const base = AUDIT_LABELS[`${event.entity}:${event.action}`] || `${event.entity} · ${event.action}`; return { icon: '◈', label: event.userName ? `${base} · ${event.userName}` : base } }
+  if (event.kind === 'audit') { const base = AUDIT_LABELS[`${event.entity}:${event.action}`] || `${event.entity} · ${event.action}`; const device = deviceLabel(event.metadata?.origin?.agent); return { icon: '◈', label: [base, event.userName, device && `desde ${device}`].filter(Boolean).join(' · ') } }
   return { icon: '▧', label: `${DOCUMENT_TYPE_LABELS[event.subtype] || 'Documento'} · ${DOCUMENT_STATUS_LABELS[event.status] || event.status}` }
 }
 

@@ -88,7 +88,11 @@ app.addHook('onRequest', async (request, reply) => {
 // them belongs to exactly one patient, and that's what the patient timeline queries by.
 async function logAudit(request, { action, entity, entityId, patientId, metadata }) {
   try {
-    await prisma.auditEvent.create({ data: { practiceId: request.practiceId, userId: request.userId, action, entity, entityId, metadata: { patientId, ...metadata } } })
+    // "Desde dónde" se editó: guardamos la IP y el navegador/sistema (device) en todos los eventos
+    // para poder reconstruir quién cambió qué y desde qué equipo.
+    const agent = String(request?.headers?.['user-agent'] || '').slice(0, 200)
+    const origin = { ip: request?.ip || null, agent }
+    await prisma.auditEvent.create({ data: { practiceId: request.practiceId, userId: request.userId, action, entity, entityId, metadata: { patientId, origin, ...metadata } } })
   } catch (err) {
     app.log.warn({ err }, 'No se pudo registrar el evento de auditoría')
   }
@@ -383,7 +387,7 @@ app.get('/api/v1/patients/:patientId/timeline', async (request, reply) => {
     ...consultations.map((c) => ({ kind: 'consultation', date: c.startedAt || c.createdAt, status: c.status, id: c.id })),
     ...plans.map((p) => ({ kind: 'plan', date: p.publishedAt || p.createdAt, status: p.status, id: p.id })),
     ...documents.map((d) => ({ kind: 'document', date: d.generatedAt || d.createdAt, status: d.deliveredAt ? 'DELIVERED' : d.generatedAt ? 'GENERATED' : 'PENDING', subtype: d.type, id: d.id })),
-    ...auditEvents.map((e) => ({ kind: 'audit', date: e.createdAt, status: 'DONE', action: e.action, entity: e.entity, id: e.id, userName: e.user?.name })),
+    ...auditEvents.map((e) => ({ kind: 'audit', date: e.createdAt, status: 'DONE', action: e.action, entity: e.entity, id: e.id, userName: e.user?.name, metadata: e.metadata })),
   ].sort((a, b) => new Date(b.date) - new Date(a.date))
   return { items: events }
 })
@@ -393,6 +397,35 @@ app.get('/api/v1/patients/:patientId/consultations', async (request, reply) => {
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   const consultations = await prisma.consultation.findMany({ where: { patientId: request.params.patientId }, include: { sections: true, measurements: true, diagnoses: true, plans: true }, orderBy: { createdAt: 'desc' } })
   return { items: consultations }
+})
+
+// Datos permanentes del paciente (antecedentes familiares, cirugías, alergias…): viven fuera de
+// la consulta para no tener que recapturarlos en cada visita. Ver src/lib/patientFields.js, que es
+// quien decide qué campo va aquí y cuál se queda en la consulta.
+app.get('/api/v1/patients/:patientId/sections', async (request, reply) => {
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  const sections = await prisma.patientSection.findMany({ where: { patientId: patient.id } })
+  return { items: sections }
+})
+
+app.put('/api/v1/patients/:patientId/sections/:sectionKey', async (request, reply) => {
+  const { payload = {}, updatedAt } = request.body || {}
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  const where = { patientId_sectionKey: { patientId: patient.id, sectionKey: request.params.sectionKey } }
+  const existing = await prisma.patientSection.findUnique({ where })
+  // Mismo control optimista que en las secciones de la consulta: si otra sesión guardó por encima,
+  // se avisa en vez de pisar su trabajo en silencio.
+  if (existing && updatedAt && new Date(updatedAt).getTime() !== new Date(existing.lastSavedAt).getTime()) {
+    return reply.code(409).send({ code: 'CONCURRENT_EDIT', message: 'Los datos del paciente cambiaron en otra sesión. Recarga antes de guardar.', fields: {} })
+  }
+  const section = await prisma.patientSection.upsert({
+    where,
+    create: { patientId: patient.id, sectionKey: request.params.sectionKey, payload, lastSavedBy: request.userId || 'system' },
+    update: { payload, lastSavedBy: request.userId || 'system' },
+  })
+  return section
 })
 
 app.get('/api/v1/patients/:patientId/plans', async (request, reply) => {
@@ -513,6 +546,10 @@ app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (req
   const existing = await prisma.clinicalSection.findUnique({ where: { consultationId_sectionKey: { consultationId: consultation.id, sectionKey: request.params.sectionKey } } })
   if (existing && updatedAt && new Date(updatedAt).getTime() !== new Date(existing.lastSavedAt).getTime()) return reply.code(409).send({ code: 'CONCURRENT_EDIT', message: 'La sección cambió en otra sesión. Recarga antes de guardar.', fields: {} })
   const section = await prisma.clinicalSection.upsert({ where: { consultationId_sectionKey: { consultationId: consultation.id, sectionKey: request.params.sectionKey } }, create: { consultationId: consultation.id, sectionKey: request.params.sectionKey, payload, completionState, lastSavedBy: request.userId || 'system' }, update: { payload, completionState, lastSavedBy: request.userId || 'system' } })
+  // Registro de ediciones del expediente: sólo cuando el contenido cambió de verdad (el autosave
+  // dispara cada 800 ms; sin esta comparación el historial se llenaría de eventos idénticos).
+  const changed = !existing || JSON.stringify(existing.payload || {}) !== JSON.stringify(payload || {})
+  if (changed) await logAudit(request, { action: existing ? 'updated' : 'created', entity: 'ClinicalSection', entityId: section.id, patientId: consultation.patientId, metadata: { sectionKey: request.params.sectionKey, fields: Object.keys(payload || {}).length } })
   return section
 })
 
@@ -1371,6 +1408,7 @@ app.patch('/api/v1/plans/:planId', async (request, reply) => {
       ...(recommendations !== undefined ? { recommendations } : {}),
     },
   })
+  await logAudit(request, { action: 'updated', entity: 'NutritionPlan', entityId: updated.id, patientId: plan.patientId, metadata: { section: 'indicaciones' } })
   return updated
 })
 
@@ -1411,6 +1449,7 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
         evaluation: { formulaVersion: energy.formulaVersion, formulaLabel: energy.formulaLabel, bmr: energy.bmr, bmi: energy.bmi, bmiCategory: energy.bmiCategory, idealWeightRange: energy.idealWeightRange, flags: energy.flags, inputs: energy.inputs },
       },
     })
+    await logAudit(request, { action: 'updated', entity: 'NutritionPlan', entityId: updated.id, patientId: plan.patientId, metadata: { section: 'evaluación', kcal: energy.get } })
     return { ...updated, macros: macros.macros }
   } catch (error) {
     if (error instanceof NutritionEngineError) return reply.code(400).send({ code: error.code, message: error.message, fields: error.fields })
@@ -1426,6 +1465,7 @@ app.put('/api/v1/plans/:planId/distribution', async (request, reply) => {
   const validRecipes = recipeIds.length ? await prisma.recipe.findMany({ where: { id: { in: recipeIds }, practiceId: request.practiceId }, select: { id: true } }) : []
   const validRecipeIds = new Set(validRecipes.map((item) => item.id))
   await prisma.$transaction([prisma.mealSlot.deleteMany({ where: { planId: plan.id } }), prisma.mealSlot.createMany({ data: mealSlots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: validRecipeIds.has(slot.recipeId) ? slot.recipeId : null, servings: slot.servings, notes: slot.notes })) })])
+  await logAudit(request, { action: 'updated', entity: 'NutritionPlan', entityId: plan.id, patientId: plan.patientId, metadata: { section: 'distribución', slots: mealSlots.length } })
   return prisma.nutritionPlan.findUnique({ where: { id: plan.id }, include: { mealSlots: true } })
 })
 

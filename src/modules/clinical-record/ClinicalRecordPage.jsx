@@ -9,6 +9,7 @@ import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
 import { shouldAutoClose } from '../../lib/consultationSession.js'
+import { mergeValues, splitUpdates } from '../../lib/patientFields.js'
 
 const TABS = ['Resumen', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
 // Los antecedentes familiares viven ahora en Clínico (ver flujo-consulta-nutricional.md), así que
@@ -183,7 +184,7 @@ function TranscriptionTab({ values, updateField, updateFields, appendField, pati
   </div>
 }
 
-export default function ClinicalRecordPage({ setActive, patientId, consultationId, onConsumeConsultation, appointmentId, onConsumeAppointment, onScheduleAppointment }) {
+export default function ClinicalRecordPage({ setActive, patientId, consultationId, onOpenSession, appointmentId, onConsumeAppointment, onScheduleAppointment }) {
   const { patient, reload: reloadPatient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
@@ -199,7 +200,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [autoClosed, setAutoClosed] = useState(null)
   const [startState, setStartState] = useState('idle')
   const [sessionIndex, setSessionIndex] = useState(null)
+  const [sessions, setSessions] = useState([])
   const [sections, setSections] = useState({})
+  // Datos permanentes del paciente, en paralelo a las secciones de la consulta.
+  const [patientSections, setPatientSections] = useState({})
   const [saveState, setSaveState] = useState('idle')
   const [measurementState, setMeasurementState] = useState('idle')
   const [measurements, setMeasurements] = useState([])
@@ -243,25 +247,33 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const inFlightRef = useRef(new Set())
   const lastSavedAtRef = useRef({})
   const payloadMirrorRef = useRef({})
+  const patientMirrorRef = useRef({})
   // Espejo de la consulta cargada. El efecto de carga depende de [patientId], así que su función de
   // limpieza se creó en el primer render, cuando `consultation` todavía era null: leer el estado
   // desde ahí daba siempre undefined y el guardado de salida no se disparaba nunca.
   const consultationRef = useRef(null)
+  const patientIdRef = useRef(patientId)
 
   // Vacía a la fuerza lo que quede pendiente, sin esperar al debounce ni a que React vuelva a
   // renderizar. Se usa al salir del expediente y al cerrar la pestaña, donde no hay ocasión de
   // reintentar: es "dispara y olvida" con keepalive para que la petición sobreviva al desmontaje.
   const flushPendingNow = () => {
-    const consultationId = consultationRef.current?.id
+    const openConsultationId = consultationRef.current?.id
     const batch = pendingRef.current
     pendingRef.current = {}
-    if (!consultationId) return
-    for (const [key, pending] of Object.entries(batch)) {
-      clinicalApi.saveSection(consultationId, key, pending.payload, lastSavedAtRef.current[key], { keepalive: true }).catch(() => {})
+    for (const [scoped, pending] of Object.entries(batch)) {
+      const scope = scoped.slice(0, 1)
+      const key = scoped.slice(2)
+      if (scope === 'p') {
+        if (patientIdRef.current) patientsApi.saveSection(patientIdRef.current, key, pending.payload, lastSavedAtRef.current[scoped], { keepalive: true }).catch(() => {})
+      } else if (openConsultationId) {
+        clinicalApi.saveSection(openConsultationId, key, pending.payload, lastSavedAtRef.current[scoped], { keepalive: true }).catch(() => {})
+      }
     }
   }
 
   useEffect(() => { consultationRef.current = consultation }, [consultation])
+  useEffect(() => { patientIdRef.current = patientId }, [patientId])
 
   // Cerrar la pestaña con algo a medio escribir también tiene que guardar.
   useEffect(() => {
@@ -281,11 +293,13 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     setAttachments(full.labAttachments || [])
     const bySectionKey = {}
     payloadMirrorRef.current = {}
-    lastSavedAtRef.current = {}
+    // Sólo se limpian las marcas de la consulta: las del paciente (`p:`) valen para todas sus
+    // visitas y no deben perderse al cambiar de sesión.
+    for (const scoped of Object.keys(lastSavedAtRef.current)) if (scoped.startsWith('c:')) delete lastSavedAtRef.current[scoped]
     for (const section of full.sections || []) {
       bySectionKey[section.sectionKey] = section
       payloadMirrorRef.current[section.sectionKey] = section.payload || {}
-      lastSavedAtRef.current[section.sectionKey] = section.lastSavedAt
+      lastSavedAtRef.current[`c:${section.sectionKey}`] = section.lastSavedAt
     }
     if (bySectionKey.general) {
       const clinical = bySectionKey.clinical || { sectionKey: 'clinical', payload: {} }
@@ -305,19 +319,32 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     async function load() {
       setLoadState('loading')
       try {
-        const list = await patientsApi.consultations(patientId)
+        // Las secciones del paciente se piden a la vez que su historial: son independientes de qué
+        // consulta se acabe abriendo, así que no hay razón para encadenar las dos peticiones.
+        const [list, patientPayload] = await Promise.all([
+          patientsApi.consultations(patientId),
+          patientsApi.sections(patientId).catch(() => ({ items: [] })),
+        ])
+        if (cancelled) return
+        const byPatientKey = {}
+        patientMirrorRef.current = {}
+        for (const section of patientPayload.items || []) {
+          byPatientKey[section.sectionKey] = section
+          patientMirrorRef.current[section.sectionKey] = section.payload || {}
+          lastSavedAtRef.current[`p:${section.sectionKey}`] = section.lastSavedAt
+        }
+        setPatientSections(byPatientKey)
         setHistoryCount((list.items || []).length)
+        setSessions(list.items || [])
         // Real evolution data for the Antropométrico chart: every measurement across the
         // patient's consultations, oldest first.
         setMeasurements((list.items || []).flatMap((c) => c.measurements || []).sort((a, b) => new Date(a.measuredAt) - new Date(b.measuredAt)))
         let full
         if (consultationId) {
-          // A specific historical session requested from Consultas → load it as-is (a completed
-          // one included) instead of the current in-progress consultation. Consume the id even if
-          // the fetch fails — otherwise it stays set and the next "Abrir expediente" reopens the
-          // wrong (stale or other-patient) session.
-          full = await clinicalApi.get(consultationId).catch((err) => { onConsumeConsultation?.(); throw err })
-          onConsumeConsultation?.()
+          // La sesión concreta que pide la dirección (`/expediente/<consulta>`), aunque esté
+          // cerrada. Ya no hace falta "consumir" el id: al navegar a otro sitio la dirección lo
+          // suelta sola, y mantenerlo es lo que permite recargar sin perder la sesión abierta.
+          full = await clinicalApi.get(consultationId)
         } else {
           let active
           try {
@@ -376,7 +403,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       // fallo no tendría dónde mostrarse).
       flushPendingNow()
     }
-  }, [patientId])
+  }, [patientId, consultationId])
 
   useEffect(() => {
     if (!consultation) return
@@ -394,17 +421,35 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }, [consultation, patientId])
 
   const sectionKey = SECTION_KEYS[tab]
-  const currentValues = sections[sectionKey]?.payload || {}
+  // Lo que se ve en la sección es lo de la consulta con los datos permanentes del paciente encima:
+  // antecedentes familiares, cirugías y alergias son del paciente y se muestran en todas sus visitas.
+  const currentValues = mergeValues(sectionKey, sections[sectionKey]?.payload, patientSections[sectionKey]?.payload)
 
-  const saveSection = async (key, payload) => {
-    if (!consultation || inFlightRef.current.has(key)) return
-    inFlightRef.current.add(key)
+  // Las secciones se guardan en dos sitios —la consulta y el paciente— con la misma maquinaria de
+  // autoguardado. Para no duplicarla, la cola trabaja con claves con ámbito: `c:clinical` es la
+  // sección de esta consulta y `p:clinical` los datos permanentes del paciente.
+  const scopedKey = (scope, key) => `${scope}:${key}`
+  const unscope = (scoped) => [scoped.slice(0, 1), scoped.slice(2)]
+
+  const saveSection = async (scoped, payload) => {
+    const [scope, key] = unscope(scoped)
+    if (inFlightRef.current.has(scoped)) return
+    if (scope === 'c' && !consultation) return
+    if (scope === 'p' && !patientId) return
+    inFlightRef.current.add(scoped)
     setSaveState('saving')
     try {
-      const saved = await clinicalApi.saveSection(consultation.id, key, payload, lastSavedAtRef.current[key])
-      lastSavedAtRef.current[key] = saved.lastSavedAt
-      payloadMirrorRef.current[key] = saved.payload || {}
-      setSections((prev) => ({ ...prev, [key]: saved }))
+      const saved = scope === 'c'
+        ? await clinicalApi.saveSection(consultation.id, key, payload, lastSavedAtRef.current[scoped])
+        : await patientsApi.saveSection(patientId, key, payload, lastSavedAtRef.current[scoped])
+      lastSavedAtRef.current[scoped] = saved.lastSavedAt
+      if (scope === 'c') {
+        payloadMirrorRef.current[key] = saved.payload || {}
+        setSections((prev) => ({ ...prev, [key]: saved }))
+      } else {
+        patientMirrorRef.current[key] = saved.payload || {}
+        setPatientSections((prev) => ({ ...prev, [key]: saved }))
+      }
       setSaveState('saved')
     } catch (error) {
       if (error.code === 'CONCURRENT_EDIT') {
@@ -413,20 +458,28 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         // Resync lastSavedAt from the server and re-queue the local version so it actually lands
         // instead of 409-ing forever.
         try {
-          const fresh = await clinicalApi.get(consultation.id)
-          for (const s of fresh.sections || []) {
-            lastSavedAtRef.current[s.sectionKey] = s.lastSavedAt
-            payloadMirrorRef.current[s.sectionKey] = s.payload || {}
+          if (scope === 'c') {
+            const fresh = await clinicalApi.get(consultation.id)
+            for (const s of fresh.sections || []) {
+              lastSavedAtRef.current[scopedKey('c', s.sectionKey)] = s.lastSavedAt
+              payloadMirrorRef.current[s.sectionKey] = s.payload || {}
+            }
+          } else {
+            const fresh = await patientsApi.sections(patientId)
+            for (const s of fresh.items || []) {
+              lastSavedAtRef.current[scopedKey('p', s.sectionKey)] = s.lastSavedAt
+              patientMirrorRef.current[s.sectionKey] = s.payload || {}
+            }
           }
-          pendingRef.current[key] = payload
+          pendingRef.current[scoped] = { payload }
           scheduleFlush()
         } catch { /* leave the conflict banner visible */ }
       } else {
         setSaveState('error')
       }
     } finally {
-      inFlightRef.current.delete(key)
-      if (pendingRef.current[key]) scheduleFlush()
+      inFlightRef.current.delete(scoped)
+      if (pendingRef.current[scoped]) scheduleFlush()
     }
   }
 
@@ -441,23 +494,33 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const flushPending = () => {
     const batch = pendingRef.current
     pendingRef.current = {}
-    for (const [key, pending] of Object.entries(batch)) {
-      if (inFlightRef.current.has(key)) { pendingRef.current[key] = pending; continue }
-      saveSection(key, pending.payload)
+    for (const [scoped, pending] of Object.entries(batch)) {
+      if (inFlightRef.current.has(scoped)) { pendingRef.current[scoped] = pending; continue }
+      saveSection(scoped, pending.payload)
     }
   }
 
-  // updateFields merges against the synchronous payloadMirrorRef instead of the render-time
-  // currentValues closure, so two edits landing in the same tick (e.g. two transcription chunks)
-  // accumulate instead of the second silently overwriting the first.
+  // updateFields merges against the synchronous mirrors instead of the render-time currentValues
+  // closure, so two edits landing in the same tick (e.g. two transcription chunks) accumulate
+  // instead of the second silently overwriting the first. Cada cambio va al almacén que le toca.
   const updateFields = (updates) => {
     if (locked) return
-    const base = payloadMirrorRef.current[sectionKey] || {}
-    const nextValues = { ...base, ...updates }
-    payloadMirrorRef.current[sectionKey] = nextValues
-    setSections((prev) => ({ ...prev, [sectionKey]: { ...prev[sectionKey], payload: nextValues } }))
+    const { patient: patientUpdates, consultation: consultationUpdates } = splitUpdates(sectionKey, updates)
+    if (Object.keys(consultationUpdates).length) {
+      const base = payloadMirrorRef.current[sectionKey] || {}
+      const nextValues = { ...base, ...consultationUpdates }
+      payloadMirrorRef.current[sectionKey] = nextValues
+      setSections((prev) => ({ ...prev, [sectionKey]: { ...prev[sectionKey], payload: nextValues } }))
+      pendingRef.current[scopedKey('c', sectionKey)] = { payload: nextValues }
+    }
+    if (Object.keys(patientUpdates).length) {
+      const base = patientMirrorRef.current[sectionKey] || {}
+      const nextValues = { ...base, ...patientUpdates }
+      patientMirrorRef.current[sectionKey] = nextValues
+      setPatientSections((prev) => ({ ...prev, [sectionKey]: { ...prev[sectionKey], payload: nextValues } }))
+      pendingRef.current[scopedKey('p', sectionKey)] = { payload: nextValues }
+    }
     setSaveState('editing')
-    pendingRef.current[sectionKey] = { payload: nextValues }
     scheduleFlush()
   }
   const updateField = (label, value) => updateFields({ [label]: value })
@@ -475,6 +538,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       // La recién creada es la última visita: pasa a ser la número historyCount + 1 de ese total.
       setHistoryCount(historyCount + 1)
       setSessionIndex(historyCount + 1)
+      setSessions((prev) => [full, ...prev])
+      // Si se estaba mirando una visita pasada, la dirección todavía apunta a ella: hay que
+      // soltarla o al recargar volveríamos a la sesión vieja en vez de a la que acabamos de abrir.
+      if (consultationId) onOpenSession?.(null)
       setStartState('idle')
     } catch {
       setStartState('error')
@@ -888,6 +955,15 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     <div className="patient-context">
       <button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button>
       <div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><div className="clinical-person-head"><h2>{patientName}</h2><button type="button" className="record-button" title="Grabar consulta" aria-label="Grabar consulta" onClick={() => setTab('Transcripción')}><Icon>record</Icon></button></div><span>{sessionLabel}</span></div></div>
+      {/* Moverse entre visitas sin salir a Consultas: cada una tiene su propia dirección, así que
+          elegir aquí es lo mismo que abrirla por enlace, y se puede recargar o compartir. */}
+      {sessions.length > 1 && <label className="session-picker">Sesión
+        <select value={consultation?.id || ''} onChange={(event) => onOpenSession?.(event.target.value)}>
+          {sessions.map((item, index) => <option value={item.id} key={item.id}>
+            {`${sessions.length - index}. ${formatDate(item.startedAt || item.createdAt)} · ${CONSULTATION_STATUS_LABELS[item.status] || item.status}`}
+          </option>)}
+        </select>
+      </label>}
       <div className="clinical-actions">{consultation && consultation.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}<button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}{clinicalReport?.storageKey && <button className="secondary" disabled={clinicalReportState === 'working'} onClick={downloadClinicalReport}>{clinicalReportState === 'working' ? '…' : 'Descargar informe clínico'}</button>}<button className="secondary" disabled={clinicalReportState === 'working'} onClick={generateClinicalReport}>{clinicalReportState === 'working' ? 'Generando…' : clinicalReport?.storageKey ? 'Actualizar informe clínico' : 'Informe clínico'}</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
     </div>
     {/* El aviso lleva su propia acción: explicar la situación y ofrecer la salida en el mismo sitio

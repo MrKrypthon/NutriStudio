@@ -1098,3 +1098,8 @@ html{scroll-behavior:smooth}
 .chart-mode{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px}
 .chart-hint{font-size:10px;color:var(--muted)}
 .finance-chart .recharts-wrapper,.finance-chart .recharts-wrapper svg,.finance-chart .recharts-surface{outline:none}
+
+/* Selector de sesión del expediente: va en la cabecera, junto al nombre del paciente. */
+.session-picker{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--muted);margin-left:18px}
+.session-picker select{border:1px solid var(--line);background:#fff;border-radius:7px;padding:8px 10px;font-size:10px;color:#3d3e51;cursor:pointer;max-width:230px}
+.session-picker select:hover{border-color:var(--green)}
