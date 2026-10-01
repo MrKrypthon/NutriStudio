@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { scheduleGrowTextareas } from '../lib/autoGrow.js'
 
 /**
  * Chips de sugerencia para un campo de texto libre: clic en un chip completa el campo con una frase
@@ -50,9 +51,10 @@ export default function SuggestionChips({ storageKey, seed, value, onPick, joine
 
   const pick = (suggestionText) => {
     const current = (value || '').trim()
-    if (!current) { onPick(suggestionText); return }
+    if (!current) { onPick(suggestionText); scheduleGrowTextareas(); return }
     if (current.includes(suggestionText)) return // ya está: evita duplicar al hacer doble clic
     onPick(`${current}${current.endsWith(joiner.trim()) ? ' ' : joiner}${suggestionText}`)
+    scheduleGrowTextareas()
   }
 
   const submitQuick = () => {
