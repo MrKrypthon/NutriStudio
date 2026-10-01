@@ -212,7 +212,7 @@ html{scroll-behavior:smooth}
 .patient-field{display:block;margin-bottom:12px}
 .patient-field .field-label{display:block;font-size:10px;color:#737680;font-weight:600;margin-bottom:6px}
 .patient-select-row{display:flex;gap:8px;align-items:center}
-.patient-select-row select{flex:1}
+.patient-select-row select,.patient-select-row input{flex:1}
 .patient-select-row button{white-space:nowrap;flex-shrink:0}
 
 /* Menú lateral: botón hamburguesa dentro de la barra, colapso animado en escritorio y drawer en móvil */
@@ -1103,3 +1103,66 @@ html{scroll-behavior:smooth}
 .session-picker{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--muted);margin-left:18px}
 .session-picker select{border:1px solid var(--line);background:#fff;border-radius:7px;padding:8px 10px;font-size:10px;color:#3d3e51;cursor:pointer;max-width:230px}
 .session-picker select:hover{border-color:var(--green)}
+
+/* Chips de sugerencia (SuggestionChips.jsx): frases comunes que completan un campo con un clic. */
+.chip-suggestions{margin:-6px 0 12px}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.chip-wrap{display:inline-flex;align-items:center}
+.chip{border:1px solid var(--line);background:#f5f7fa;color:#3d4152;border-radius:999px;padding:5px 11px;font-size:10px;cursor:pointer;white-space:nowrap}
+.chip:hover{border-color:var(--green);color:var(--green);background:var(--mint)}
+.chip-remove{border:0;background:none;color:var(--muted);font-size:12px;cursor:pointer;margin-left:-6px;padding:0 6px 0 2px}
+.chip-remove:hover{color:#c0564f}
+.chip-add{background:#fff;color:var(--green);border:1px dashed #9fcdba}
+.chip-add:hover{background:var(--mint)}
+.chip-quick-form{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+.chip-quick-form input{border:1px solid var(--line);border-radius:7px;padding:8px 10px;font:11px 'DM Sans';flex:1;min-width:160px}
+.chip-quick-form button{flex-shrink:0}
+
+/* Gráficas pequeñas de progreso (Resumen): peso, % grasa, masa muscular, lado a lado. */
+.summary-trends{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}
+.summary-trend-card{border:1px solid var(--line);border-radius:10px;padding:12px}
+.summary-trend-head{display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:6px}
+.summary-trend-head b{color:#28362f}
+.trend-delta{color:#55565f;font:600 10px 'DM Mono'}
+.summary-trend-svg{width:100%;height:58px;display:block}
+.summary-trend-empty{margin:14px 0;text-align:center}
+
+/* Par Sí/No dentro de un <label> del form-grid (antecedentes ginecobstétricos, etc). */
+.toggle-pair{display:flex;gap:6px;margin-top:6px}
+.toggle-pair .toggle-pill{margin:0}
+
+/* Buscador sobre los dominios PES de Diagnóstico. */
+.diagnosis-search{margin-bottom:4px;background:#fff}
+
+/* Requerimientos (Tratamiento): balance calórico y objetivo energético calculado en vivo. */
+.balance-toggle{display:flex;gap:8px}
+.requirement-result{margin-top:18px;background:#eaf6ef;border-radius:9px;padding:14px 16px}
+.requirement-result small{display:block;color:#6e6e73;font-size:9px}
+.requirement-result b{display:block;color:#28187b;font:800 24px Manrope;margin:5px 0}
+.requirement-result em{font:400 10px 'DM Sans'}
+.requirement-result span{font-size:10px;color:#3e9974}
+
+/* Diagnóstico: selector de términos PES */
+.pes-picker{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--surface-soft);margin-bottom:14px}
+.pes-picker-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.pes-picker-head b{font:600 11px 'DM Sans';color:#343647}
+.pes-picker-head input{flex:1;max-width:300px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:8px 10px;font:11px 'DM Sans';color:#343647}
+.pes-picked{font-size:11px;color:var(--green);margin:0 0 8px}
+.pes-picked code{font:600 10px 'DM Mono';background:var(--mint);border-radius:4px;padding:2px 5px;margin-right:4px}
+.pes-term-list{display:grid;gap:4px;max-height:220px;overflow-y:auto}
+.pes-term{display:grid;grid-template-columns:92px 1fr;align-items:center;gap:10px;border:1px solid transparent;background:#fff;border-radius:8px;padding:7px 10px;text-align:left;cursor:pointer;font:11px 'DM Sans';color:#3d3e51}
+.pes-term code{font:600 9px 'DM Mono';color:var(--green)}
+.pes-term:hover{border-color:var(--green)}
+.pes-term.selected{border-color:var(--green);background:var(--mint)}
+.pes-empty{margin:4px 0}
+
+/* Diagnóstico: árbol de apartados (título) con sus diagnósticos (hijos) */
+.pes-tree{display:grid;gap:6px;max-height:300px;overflow-y:auto}
+.pes-cat{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+.pes-cat-head{width:100%;display:grid;grid-template-columns:16px 1fr auto auto;align-items:center;gap:10px;border:0;background:#fff;padding:9px 12px;cursor:pointer;text-align:left}
+.pes-cat-head.open{background:var(--surface-soft)}
+.pes-cat-head b{font:600 11px 'DM Sans';color:var(--ink)}
+.pes-cat-head code{font:600 9px 'DM Mono';color:var(--green)}
+.pes-cat-head small{font:600 9px 'DM Mono';color:var(--muted);background:var(--mint);border-radius:9px;padding:1px 7px}
+.pes-cat-arrow{color:var(--green);font-size:11px}
+.pes-cat-terms{display:grid;gap:3px;padding:6px 8px 8px;border-top:1px solid var(--line)}

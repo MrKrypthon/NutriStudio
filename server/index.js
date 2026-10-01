@@ -591,11 +591,13 @@ app.patch('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async 
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   const diagnosis = await prisma.diagnosis.findFirst({ where: { id: request.params.diagnosisId, consultationId: consultation.id } })
   if (!diagnosis) return reply.code(404).send({ code: 'DIAGNOSIS_NOT_FOUND', message: 'Diagnóstico no encontrado.', fields: {} })
-  const { problem, etiology, evidence } = request.body || {}
+  const { domain, code, problem, etiology, evidence } = request.body || {}
   if (problem !== undefined && !problem) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El problema no puede quedar vacío.', fields: { problem: true } })
   const updated = await prisma.diagnosis.update({
     where: { id: diagnosis.id },
     data: {
+      ...(domain !== undefined ? { domain } : {}),
+      ...(code !== undefined ? { code: code || null } : {}),
       ...(problem !== undefined ? { problem } : {}),
       ...(etiology !== undefined ? { etiology } : {}),
       ...(evidence !== undefined ? { evidence } : {}),
@@ -1564,6 +1566,13 @@ const compactPayload = (payload, skip = []) => Object.entries(payload || {})
   .join('  ·  ')
 const signatureFor = (user, practice) => [user?.name || practice?.name || 'Nutri Studio', user?.specialty || null].filter(Boolean).join(' · ')
 
+// Aviso de confidencialidad al pie del informe, el informe clínico y el expediente completo: son
+// los tres documentos del historial clínico nutricio, por eso citan la NOM-004-SSA3-2012 (expediente
+// clínico) y la Ley Federal de Protección de Datos Personales en Posesión de los Particulares. El
+// PDF de alimentación (menú semanal) no lleva este aviso porque no es el expediente clínico.
+const CONFIDENTIALITY_NOTICE = 'Documento del expediente clínico (NOM-004-SSA3-2012). Contiene datos personales sensibles protegidos por la Ley Federal de Protección de Datos Personales en Posesión de los Particulares: uso exclusivo del paciente y del personal de salud autorizado.'
+const drawConfidentialityNotice = (file) => { file.moveDown(0.3); file.fillColor('#a7a8b3').fontSize(7).text(CONFIDENTIALITY_NOTICE, 48, file.y, { width: 516, align: 'center' }) }
+
 function drawConsultationReport(file, document, practice, user, logoBuffer) {
   drawDocumentBrand(file, 'EXPEDIENTE DE CONSULTA NUTRICIONAL', practice, logoBuffer)
   file.fontSize(18).fillColor('#1c232f').text('Informe de consulta')
@@ -1622,6 +1631,7 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   // Explicit width: pdfkit persists the last text() box, so a bare { align: 'center' } would pin
   // the footer to whatever width/x the previous line used (see the menu footer fix).
   file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
+  drawConfidentialityNotice(file)
 }
 
 const EXPORT_SECTION_KEYS = [
@@ -1701,6 +1711,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
     file.moveDown(0.6)
   }
   file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
+  drawConfidentialityNotice(file)
 }
 
 // ── Informe clínico (profesional) ────────────────────────────────────────────────────────────
@@ -1817,6 +1828,7 @@ function drawClinicalReport(file, document, practice, user, logoBuffer) {
   file.moveDown(1)
   file.fillColor('#8e8f9a').fontSize(9).text(`Elaboró: ${signatureFor(user, practice)}`, 48, file.y, { width: 516, align: 'center' })
   file.fillColor('#b0b1ba').fontSize(7).text('Documento clínico de apoyo. Las estimaciones antropométricas son orientativas y no sustituyen al juicio profesional.', 48, file.y, { width: 516, align: 'center' })
+  drawConfidentialityNotice(file)
 }
 
 function drawLabTable(file, labs) {
