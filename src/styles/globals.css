@@ -1216,3 +1216,10 @@ html{scroll-behavior:smooth}
 .food-bucket-empty{color:var(--muted);font-size:10px;padding:4px 2px}
 @media(max-width:1000px){.food-frequency-board{grid-template-columns:1fr}}
 @media(max-width:600px){.food-chip-grid{grid-template-columns:repeat(auto-fill,minmax(72px,1fr))}}
+
+/* Campo con chips de sugerencia al lado del rótulo */
+.field-with-chips{display:flex;flex-direction:column;min-width:0}
+.field-with-chips-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.field-with-chips-head>span{font-size:10px;color:#737680;white-space:nowrap}
+.field-with-chips-head .chip-suggestions{margin:0;flex:1;min-width:0}
+.field-with-chips-head .chip-row{flex-wrap:wrap;margin:0}
