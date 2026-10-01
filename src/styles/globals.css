@@ -1227,3 +1227,10 @@ html{scroll-behavior:smooth}
 /* Los textarea ajustan su alto al contenido (Chrome/Edge lo hacen por CSS; los demás navegadores
    usan el respaldo en JS). Se limita el alto máximo y se permite scroll si crece de más. */
 textarea{field-sizing:content;max-height:340px;overflow-y:auto}
+
+/* "Hoy" es un tablero: se desplaza completo en pantallas bajas (zoom alto) en vez de dejar sólo
+   el último bloque con scroll interno, que recortaba las tarjetas de abajo sin poder alcanzarlas. */
+@media(min-width:1001px){
+  .content.dashboard-content{display:block;overflow-y:auto}
+  .content.dashboard-content > *{flex:none}
+}
