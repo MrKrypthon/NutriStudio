@@ -273,7 +273,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
 
-  const [tab, setTab] = useState('Antropométrico')
+  const [tab, setTab] = useState('Resumen')
   const [sub, setSub] = useState('')
   const [newDisease, setNewDisease] = useState('')
   const [loadState, setLoadState] = useState('loading')
@@ -396,6 +396,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const applyConsultation = (full) => {
     setConsultation(full)
     setAttachments(full.labAttachments || [])
+    // Al abrir el expediente (o iniciar/reabrir la consulta) se empieza por el Resumen, no por la
+    // última pestaña que quedó de otra visita.
+    setTab('Resumen')
+    setSub('')
     const bySectionKey = {}
     payloadMirrorRef.current = {}
     // Sólo se limpian las marcas de la consulta: las del paciente (`p:`) valen para todas sus
