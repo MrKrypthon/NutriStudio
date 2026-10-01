@@ -6,11 +6,13 @@ import FormCard from '../../components/FormCard.jsx'
 import Icon from '../../components/Icon.jsx'
 import RecallBuilder from '../../components/RecallBuilder.jsx'
 import SuggestionChips from '../../components/SuggestionChips.jsx'
+import { pesTermsFor, searchPesTerms } from '../../lib/pesTerms.js'
 import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
 import { shouldAutoClose } from '../../lib/consultationSession.js'
 import { mergeValues, splitUpdates } from '../../lib/patientFields.js'
+import { PES_CATALOG, searchPesDiagnoses } from '../../lib/pesDiagnoses.js'
 
 const TABS = ['Resumen', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
 // Los antecedentes familiares viven ahora en Clínico (ver flujo-consulta-nutricional.md), así que
@@ -293,6 +295,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [diagnoses, setDiagnoses] = useState([])
   const [diagnosisForm, setDiagnosisForm] = useState(null)
   const [diagnosisSearch, setDiagnosisSearch] = useState('')
+  const [diagnosisTermQuery, setDiagnosisTermQuery] = useState('')
   const [diagnosisSaveState, setDiagnosisSaveState] = useState('idle')
   const [labForm, setLabForm] = useState(null)
   const [report, setReport] = useState(null)
@@ -519,6 +522,14 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     return diagnoses.filter((d) => `${d.domain} ${d.problem} ${d.etiology || ''} ${d.evidence || ''}`.toLowerCase().includes(q))
   }, [diagnoses, diagnosisSearch])
 
+  // Términos del catálogo PES del dominio del formulario, filtrados por la búsqueda.
+  const diagnosisPesTerms = useMemo(() => {
+    if (!diagnosisForm) return []
+    const normalize = (value) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const q = normalize(diagnosisTermQuery.trim())
+    return pesTermsFor(diagnosisForm.domain).filter((term) => !q || normalize(`${term.label} ${term.code}`).includes(q))
+  }, [diagnosisForm, diagnosisTermQuery])
+
   const sectionKey = SECTION_KEYS[tab]
   // Lo que se ve en la sección es lo de la consulta con los datos permanentes del paciente encima:
   // antecedentes familiares, cirugías y alergias son del paciente y se muestran en todas sus visitas.
@@ -728,7 +739,14 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     }
   }
 
-  const openDiagnosisForm = (domain) => { setDiagnosisSaveState('idle'); setDiagnosisForm({ domain, problem: '', etiology: '', evidence: '' }) }
+  // El dominio se guarda con el título de la app (no el del catálogo PES): el de CONDUCTUAL-AMBIENTAL
+  // se mapea a su equivalente para que coincida con las tarjetas de dominio.
+  const openDiagnosisForm = (domain, term) => {
+    setDiagnosisSaveState('idle')
+    setDiagnosisTermQuery('')
+    setDiagnosisForm({ domain: domain === 'CONDUCTUAL-AMBIENTAL' ? 'CONDUCTUALES-AMBIENTALES' : domain, code: term?.code || '', problem: term?.label || '', etiology: '', evidence: '' })
+  }
+  const pickDiagnosisTerm = (term) => setDiagnosisForm((prev) => (prev ? { ...prev, code: term.code, problem: term.label } : prev))
   const closeDiagnosisForm = () => setDiagnosisForm(null)
   const updateDiagnosisForm = (key, value) => setDiagnosisForm((prev) => ({ ...prev, [key]: value }))
 
@@ -1187,15 +1205,27 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             <div className="search-field diagnosis-search"><span>⌕</span><input value={diagnosisSearch} onChange={(e) => setDiagnosisSearch(e.target.value)} placeholder="Buscar por dominio o por diagnóstico ya registrado…" /></div>
             <div className="diagnosis-domains">{DIAGNOSIS_DOMAINS.filter(([title, desc]) => !diagnosisSearch.trim() || `${title} ${desc}`.toLowerCase().includes(diagnosisSearch.trim().toLowerCase())).map(([title, desc, color]) => <div className={'domain-card ' + color} key={title} onClick={() => { setSub('registrados'); openDiagnosisForm(title) }} style={{ cursor: 'pointer' }}><span>◉</span><b>{title}</b><small>{desc}</small><strong>{diagnoses.filter((d) => d.domain === title).length} seleccionados</strong></div>)}</div>
             {diagnosisSearch.trim() && <div className="diagnosis-selected">
-              <p className="eyebrow">DIAGNÓSTICOS QUE COINCIDEN</p>
-              {filteredDiagnoses.length === 0 && <p className="muted">Ningún diagnóstico registrado coincide con "{diagnosisSearch}".</p>}
-              {filteredDiagnoses.map((d) => <div className="diagnosis-entry" key={d.id}><div><b>{d.domain}</b><span>{d.problem}</span></div></div>)}
+              <p className="eyebrow">TÉRMINOS PES QUE COINCIDEN</p>
+              {searchPesTerms(diagnosisSearch).length === 0 && <p className="muted">Ningún término del catálogo coincide con "{diagnosisSearch}".</p>}
+              {searchPesTerms(diagnosisSearch).map((term) => <div className="diagnosis-entry" key={term.code + term.label}>
+                <div><b>{term.domainCode} · {term.code}</b><span>{term.label}</span></div>
+                <button type="button" className="link-button" onClick={() => { setSub('registrados'); openDiagnosisForm(term.domain, term) }}>Usar</button>
+              </div>)}
+              {filteredDiagnoses.length > 0 && <p className="eyebrow">YA REGISTRADOS</p>}
+              {filteredDiagnoses.map((d) => <div className="diagnosis-entry" key={d.id}><div><b>{d.domain}{d.code ? ` · ${d.code}` : ''}</b><span>{d.problem}</span></div></div>)}
             </div>}
           </div>],
           ['registrados', 'Diagnósticos', <div className="sub-stack" key="rg">
             {diagnosisForm && <div className="diagnosis-form panel">
               <p className="eyebrow">{diagnosisForm._editingId ? 'EDITAR DIAGNÓSTICO' : 'NUEVO DIAGNÓSTICO'} · {diagnosisForm.domain}</p>
-              <label>Problema<input value={diagnosisForm.problem} onChange={(e) => updateDiagnosisForm('problem', e.target.value)} placeholder="Ej. Ingesta excesiva de energía" /></label>
+              <div className="pes-picker">
+                <div className="pes-picker-head"><b>Términos PES</b><input value={diagnosisTermQuery} onChange={(e) => setDiagnosisTermQuery(e.target.value)} placeholder="Buscar término o clave (NI-5.6.1)…" /></div>
+                {diagnosisForm.code && <p className="pes-picked">Seleccionado: <code>{diagnosisForm.code}</code> {diagnosisForm.problem}</p>}
+                {diagnosisPesTerms.length === 0
+                  ? <p className="muted pes-empty">{pesTermsFor(diagnosisForm.domain).length === 0 ? 'Este dominio no tiene catálogo; escribe el problema a mano.' : 'Sin coincidencias para tu búsqueda.'}</p>
+                  : <div className="pes-term-list">{diagnosisPesTerms.slice(0, 40).map((term) => <button type="button" key={term.code + term.label} className={'pes-term' + (diagnosisForm.problem === term.label ? ' selected' : '')} onClick={() => pickDiagnosisTerm(term)}><code>{term.code}</code><span>{term.label}</span></button>)}</div>}
+              </div>
+              <label>Problema<input value={diagnosisForm.problem} onChange={(e) => updateDiagnosisForm('problem', e.target.value)} placeholder="Elige un término o escríbelo" /></label>
               <label>Etiología (relacionado con…)<textarea value={diagnosisForm.etiology} onChange={(e) => updateDiagnosisForm('etiology', e.target.value)} placeholder="Causa o factores contribuyentes..." /></label>
               <label>Evidencia (evidenciado por…)<textarea value={diagnosisForm.evidence} onChange={(e) => updateDiagnosisForm('evidence', e.target.value)} placeholder="Signos, síntomas o datos que lo sustentan..." /></label>
               {diagnosisSaveState === 'error' && <div className="form-error">⚠ No se pudo guardar el diagnóstico.</div>}
@@ -1205,7 +1235,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               <p className="eyebrow">DIAGNÓSTICOS SELECCIONADOS</p>
               {!diagnoses.length && <p className="muted">Todavía no hay diagnósticos registrados para esta consulta.</p>}
               {diagnoses.map((d) => <div className="diagnosis-entry" key={d.id}>
-                <div><b>{d.domain}</b><span>{d.problem}</span>{d.etiology && <small>Relacionado con: {d.etiology}</small>}{d.evidence && <small>Evidenciado por: {d.evidence}</small>}</div>
+                <div><b>{d.domain}{d.code ? ` · ${d.code}` : ''}</b><span>{d.problem}</span>{d.etiology && <small>Relacionado con: {d.etiology}</small>}{d.evidence && <small>Evidenciado por: {d.evidence}</small>}</div>
                 <div className="diagnosis-actions"><button type="button" className="link-button" onClick={() => editDiagnosis(d)}>Editar</button><button type="button" className="link-button" onClick={() => removeDiagnosis(d.id)}>Quitar</button></div>
               </div>)}
             </div>

@@ -1141,3 +1141,17 @@ html{scroll-behavior:smooth}
 .requirement-result b{display:block;color:#28187b;font:800 24px Manrope;margin:5px 0}
 .requirement-result em{font:400 10px 'DM Sans'}
 .requirement-result span{font-size:10px;color:#3e9974}
+
+/* Diagnóstico: selector de términos PES */
+.pes-picker{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--surface-soft);margin-bottom:14px}
+.pes-picker-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+.pes-picker-head b{font:600 11px 'DM Sans';color:#343647}
+.pes-picker-head input{flex:1;max-width:300px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:8px 10px;font:11px 'DM Sans';color:#343647}
+.pes-picked{font-size:11px;color:var(--green);margin:0 0 8px}
+.pes-picked code{font:600 10px 'DM Mono';background:var(--mint);border-radius:4px;padding:2px 5px;margin-right:4px}
+.pes-term-list{display:grid;gap:4px;max-height:220px;overflow-y:auto}
+.pes-term{display:grid;grid-template-columns:92px 1fr;align-items:center;gap:10px;border:1px solid transparent;background:#fff;border-radius:8px;padding:7px 10px;text-align:left;cursor:pointer;font:11px 'DM Sans';color:#3d3e51}
+.pes-term code{font:600 9px 'DM Mono';color:var(--green)}
+.pes-term:hover{border-color:var(--green)}
+.pes-term.selected{border-color:var(--green);background:var(--mint)}
+.pes-empty{margin:4px 0}

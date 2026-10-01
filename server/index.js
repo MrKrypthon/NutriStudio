@@ -591,11 +591,13 @@ app.patch('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async 
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   const diagnosis = await prisma.diagnosis.findFirst({ where: { id: request.params.diagnosisId, consultationId: consultation.id } })
   if (!diagnosis) return reply.code(404).send({ code: 'DIAGNOSIS_NOT_FOUND', message: 'Diagnóstico no encontrado.', fields: {} })
-  const { problem, etiology, evidence } = request.body || {}
+  const { domain, code, problem, etiology, evidence } = request.body || {}
   if (problem !== undefined && !problem) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El problema no puede quedar vacío.', fields: { problem: true } })
   const updated = await prisma.diagnosis.update({
     where: { id: diagnosis.id },
     data: {
+      ...(domain !== undefined ? { domain } : {}),
+      ...(code !== undefined ? { code: code || null } : {}),
       ...(problem !== undefined ? { problem } : {}),
       ...(etiology !== undefined ? { etiology } : {}),
       ...(evidence !== undefined ? { evidence } : {}),
