@@ -58,11 +58,19 @@ medida que avanza.
 
 ## Tanda 6 — Diagnóstico
 
-- [~] Buscador por diagnóstico o clave sobre los dominios PES.
-- [ ] **Bloqueado**: el catálogo completo de diagnósticos PES por dominio/categoría con sus claves
-  (NI-#, NC-#, NB-#, NO-#…) para construir el árbol seleccionable que muestran las capturas. La
-  nutrióloga mencionó que lo enviaría aparte; sin él se mantiene el formulario libre actual
-  (problema/etiología/evidencia) con el buscador añadido encima de los dominios.
+- [x] **Catálogo completo**, ya desbloqueado: la nutrióloga envió el documento fuente (eNCPT 2017,
+  Academy of Nutrition and Dietetics) y se transcribió a `src/lib/pesTerms.js` — los 4 dominios, sus
+  categorías y 162 términos con clave TPAN. Dominios PES ahora muestra, por dominio, las categorías
+  desplegables con sus diagnósticos hijos y la cuenta de cada una; un buscador filtra por texto o
+  clave en vivo. Elegir un término precarga Problema y la clave TPAN en el formulario, dejando sólo
+  etiología y evidencia por capturar — propias de cada paciente y no parte de ningún catálogo.
+  Esto se construyó en paralelo por otra sesión trabajando en este mismo repo; de mi parte se
+  encontró y corrigió un bug real en los datos que esa sesión entregó: la clave `NC-3.5` ("Tasa de
+  crecimiento por debajo de lo esperado") estaba duplicada —una vez en Bioquímicos por error de
+  transcripción, una vez en Peso correctamente—, y esa colisión de `key` en React rompía el buscador:
+  una búsqueda sin relación con ese término (p. ej. "obesidad") lo mostraba igual, dos veces. Quitada
+  la entrada sobrante, verificado que las 162 claves son únicas y que la búsqueda vuelve a filtrar
+  con exactitud.
 
 ## Tanda 7 — Tratamiento
 
@@ -99,18 +107,15 @@ medida que avanza.
 
 ## Pendiente de la usuaria
 
-1. **Catálogo de diagnósticos PES** (Tanda 6) — documento por enviar. Es lo único que queda
-   genuinamente bloqueado de las 9 tandas.
-2. Confirmar la consolidación de botones de la Tanda 9 si no es lo que tenía en mente.
+1. Confirmar la consolidación de botones de la Tanda 9 si no es lo que tenía en mente.
 
 ---
 
 ## Resumen de lo entregado
 
-Las 9 tandas están implementadas y verificadas en la rama `fase-84-mejoras-expediente`
-(commits del `69dcd9d` al `5668fea`), cada una con su propia verificación en navegador contra datos
-reales y, donde aplicaba, generando los PDF de verdad para comprobar el resultado. Sólo la Tanda 6
-queda parcial por el catálogo de diagnósticos pendiente.
+Las 9 tandas están implementadas, verificadas y completas en la rama `fase-84-mejoras-expediente`,
+cada una con su propia verificación en navegador contra datos reales y, donde aplicaba, generando
+los PDF de verdad para comprobar el resultado.
 
 De paso se corrigió una regresión real que la verificación de la Tanda 2 sacó a la luz: las
 subpestañas de cada sección eran `<button>`, un elemento de formulario, y vivían dentro del

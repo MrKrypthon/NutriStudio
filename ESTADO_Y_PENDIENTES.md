@@ -985,9 +985,16 @@ y TRH). Nueva pestaña "Monitoreo Clínico" con signos vitales, pruebas capilare
 alimentación como "Hidratación y bebidas" (agua, refrescos, bebidas energéticas, café o té).
 Historial gana "¿Ha utilizado medicamentos para bajar de peso?" y el bloque Historia dietética.
 
-**Diagnóstico.** Buscador sobre los dominios PES — parcial a propósito: el catálogo completo de
-diagnósticos con sus claves (NI-#, NC-#, NB-#, NO-#…) queda bloqueado hasta que llegue el documento
-que la nutrióloga va a enviar aparte.
+**Diagnóstico.** La nutrióloga envió el documento fuente (eNCPT 2017, Academy of Nutrition and
+Dietetics) y se transcribió el catálogo completo a `src/lib/pesTerms.js`: 4 dominios, sus categorías
+y 162 términos con clave TPAN. Dominios PES muestra, por dominio, categorías desplegables con sus
+diagnósticos hijos y un buscador por texto o clave; elegir un término precarga Problema y la clave
+TPAN, dejando sólo etiología y evidencia por capturar. Esto se construyó en paralelo por otra sesión
+trabajando en el mismo repo; de este lado se encontró y corrigió un bug real que esa sesión dejó: la
+clave `NC-3.5` estaba duplicada (una vez por error en Bioquímicos, correctamente en Peso), y la
+colisión de `key` en React rompía el buscador — una búsqueda sin relación, por ejemplo "obesidad",
+mostraba igual ese término repetido dos veces. Corregido y verificado: 162 claves únicas, búsqueda
+exacta.
 
 **Tratamiento.** Botón "Ir al plan", apartado "Requerimientos" (balance calórico y g/kg de
 macronutrientes, con el objetivo energético calculado en vivo a partir del peso más reciente), y
@@ -1014,5 +1021,5 @@ consulta ya cerrada no había forma de cambiar de subsección para revisar lo es
 base (informe, informe clínico, expediente completo: el aviso aparece al pie sin empujar contenido a
 una página de más). `npm run build` OK y `npm test` 81/81 en cada tanda.
 
-**Pendiente.** El catálogo de diagnósticos PES (Tanda 6) y confirmar si la consolidación de botones
-es lo que la nutrióloga tenía en mente.
+**Pendiente.** Confirmar si la consolidación de botones (Tanda 9) es lo que la nutrióloga tenía en
+mente. Las 9 tandas del PDF quedan completas.
