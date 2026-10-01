@@ -5,6 +5,7 @@ import ExamArt from '../../components/ExamArt.jsx'
 import FormCard from '../../components/FormCard.jsx'
 import Icon from '../../components/Icon.jsx'
 import RecallBuilder from '../../components/RecallBuilder.jsx'
+import SuggestionChips from '../../components/SuggestionChips.jsx'
 import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
@@ -49,6 +50,75 @@ const FAMILY_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'HTA', 'Dislip
 const RELATIVES = ['Mamá/Papá', 'Abuelos', 'Tíos']
 // Sugerencias para "agregar padecimiento" en antecedentes familiares.
 const SUGGESTED_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'Hipertensión arterial', 'Dislipidemias', 'Nefropatías', 'Cáncer', 'Enfermedad cerebrovascular', 'Hipotiroidismo', 'Hipertiroidismo', 'Asma', 'Alergias', 'Anemia', 'Artritis', 'Osteoporosis', 'Depresión', 'Ansiedad', 'Alzheimer', 'Celiaquía', 'Colitis', 'Gastritis', 'Cálculos renales', 'Trombosis', 'Epilepsia']
+
+// Sugerencias de arranque para los campos con chips (SuggestionChips). Las que agregue la
+// nutrióloga con "+ Rápido" se suman a éstas desde localStorage; ver el componente para el porqué.
+const MOTIVO_CONSULTA_SUGGESTIONS = [
+  { label: 'Pérdida de peso', text: 'Acude para perder peso.' },
+  { label: 'Ganancia muscular', text: 'Busca ganar masa muscular.' },
+  { label: 'Patología', text: 'Diagnóstico o seguimiento nutricional de una patología.' },
+  { label: 'Prevención', text: 'Acude por prevención y hábitos saludables.' },
+  { label: 'Deportivo', text: 'Busca mejorar su rendimiento deportivo.' },
+  { label: 'Embarazo', text: 'Control nutricional del embarazo.' },
+  { label: 'Suplementos', text: 'Solicita asesoría sobre suplementos.' },
+]
+const REFERENCIA_CITA_SUGGESTIONS = [
+  { label: 'Recomendación', text: 'Recomendación de un paciente.' },
+  { label: 'Médico', text: 'Referido por un médico.' },
+  { label: 'Redes', text: 'Redes sociales.' },
+  { label: 'Prensa', text: 'Prensa o medios.' },
+]
+const ANTECEDENTES_SUGGESTIONS = [
+  { label: 'Diabetes', text: 'Diabetes mellitus tipo 2.' },
+  { label: 'Prediabetes', text: 'Prediabetes.' },
+  { label: 'Resistencia a la insulina', text: 'Resistencia a la insulina.' },
+  { label: 'HTA', text: 'Hipertensión arterial.' },
+  { label: 'Hipotiroidismo', text: 'Hipotiroidismo.' },
+  { label: 'Hipertiroidismo', text: 'Hipertiroidismo.' },
+  { label: 'Dislipidemia', text: 'Dislipidemia.' },
+  { label: 'Gastritis', text: 'Gastritis.' },
+  { label: 'Reflujo', text: 'Reflujo gastroesofágico.' },
+  { label: 'Ninguno', text: 'Ninguno referido.' },
+]
+const CIRUGIAS_SUGGESTIONS = [
+  { label: 'Apendicectomía', text: 'Apendicectomía.' },
+  { label: 'Colecistectomía', text: 'Colecistectomía.' },
+  { label: 'Cesárea', text: 'Cesárea.' },
+  { label: 'Bariátrica', text: 'Cirugía bariátrica.' },
+  { label: 'Ninguna', text: 'Ninguna.' },
+]
+const MEDICAMENTOS_SUGGESTIONS = [
+  { label: 'Metformina', text: 'Metformina.' },
+  { label: 'Levotiroxina', text: 'Levotiroxina.' },
+  { label: 'Anticonceptivos', text: 'Anticonceptivos orales.' },
+  { label: 'AINEs', text: 'Antiinflamatorios no esteroideos (AINEs).' },
+  { label: 'Ninguno', text: 'Ninguno.' },
+]
+const SUPLEMENTOS_SUGGESTIONS = [
+  { label: 'Multivitamínico', text: 'Multivitamínico.' },
+  { label: 'Vitamina D', text: 'Vitamina D.' },
+  { label: 'Hierro', text: 'Hierro.' },
+  { label: 'Omega 3', text: 'Omega 3.' },
+  { label: 'Ninguno', text: 'Ninguno.' },
+]
+const INTERACCIONES_SUGGESTIONS = [
+  { label: 'Levotiroxina en ayuno', text: 'Levotiroxina: tomar en ayuno, separada de alimentos con calcio o hierro.' },
+  { label: 'Metformina con alimento', text: 'Metformina: tomar con alimentos para reducir molestias gastrointestinales.' },
+  { label: 'AINEs con alimento', text: 'AINEs: tomar con alimentos para proteger la mucosa gástrica.' },
+]
+const ALERGIAS_SUGGESTIONS = [
+  { label: 'Lácteos', text: 'Lácteos.' },
+  { label: 'Mariscos', text: 'Mariscos.' },
+  { label: 'Frutos secos', text: 'Frutos secos.' },
+  { label: 'Gluten', text: 'Gluten.' },
+  { label: 'Ninguna', text: 'Ninguna.' },
+]
+const INTOLERANCIAS_SUGGESTIONS = [
+  { label: 'Lactosa', text: 'Intolerancia a la lactosa.' },
+  { label: 'Fructosa', text: 'Intolerancia a la fructosa.' },
+  { label: 'Gluten', text: 'Sensibilidad al gluten no celíaca.' },
+  { label: 'Ninguna', text: 'Ninguna.' },
+]
 // Evaluación cualitativa del diagnóstico alimentario (CESIVA) y frecuencia de consumo por alimento.
 const CESIVA = [['Completa', 'Incluye todos los grupos de alimentos'], ['Equilibrada', 'Proporción adecuada entre grupos'], ['Suficiente', 'Cubre los requerimientos'], ['Inocua', 'Sin riesgo para la salud'], ['Variada', 'Alterna distintos alimentos'], ['Adecuada', 'Apta para el paciente']]
 const FOOD_FREQUENCY = ['Leche', 'Queso', 'Yogur', 'Avena', 'Carne de res', 'Carne de pollo', 'Pescado', 'Huevo', 'Tortilla', 'Pan', 'Arroz', 'Frijol', 'Verduras', 'Frutas', 'Refresco', 'Jugo', 'Café', 'Dulces o postres', 'Frituras']
@@ -67,8 +137,14 @@ function TogglePill({ active, label, onClick }) {
 
 // Subsecciones internas: cada bloque de una sección larga se muestra por separado para no tener
 // que hacer scroll dentro del expediente.
+// Navegación, no un control de formulario: usa <div role="button"> en vez de <button> a propósito.
+// Esta barra vive dentro del <fieldset disabled> que bloquea una consulta cerrada (ver `locked`), y
+// un <fieldset disabled> apaga TODOS los elementos asociados a formulario que contiene — <button>
+// incluido — así que con <button> no se podía ni cambiar de subsección para revisar una visita
+// pasada. Un <div> no es un elemento de formulario: el fieldset no lo toca y la navegación entre
+// subsecciones sigue funcionando en sólo lectura; sólo los campos de verdad quedan bloqueados.
 function SubTabs({ tabs, value, onChange }) {
-  return <div className="sub-tabs">{tabs.map(([key, label]) => <button type="button" key={key} className={'sub-tab' + (value === key ? ' active' : '')} onClick={() => onChange(key)}>{label}</button>)}</div>
+  return <div className="sub-tabs">{tabs.map(([key, label]) => <div role="button" tabIndex={0} key={key} className={'sub-tab' + (value === key ? ' active' : '')} onClick={() => onChange(key)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onChange(key) } }}>{label}</div>)}</div>
 }
 
 function Subsection({ groups, value, onChange }) {
@@ -921,6 +997,26 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }, [measurements, chartMetric])
   const chartPointLine = chartPoints.map((p) => `${p.x},${p.y}`).join(' ')
 
+  // Tres gráficas pequeñas para el Resumen (peso, % grasa, masa muscular): mismo cálculo que
+  // chartPoints pero las tres a la vez y en un lienzo más chico, para verlas de un vistazo sin
+  // tener que entrar a Antropométrico ni cambiar el selector de métrica.
+  const summaryTrends = useMemo(() => {
+    const series = [
+      ['Peso', (m) => (m.weightKg != null ? Number(m.weightKg) : null), 'kg'],
+      ['% grasa corporal', (m) => (m.bodyFatPercent != null ? Number(m.bodyFatPercent) : null), '%'],
+      ['Masa muscular', (m) => (m.muscleMassKg != null ? Number(m.muscleMassKg) : null), 'kg'],
+    ]
+    return series.map(([label, extract, unit]) => {
+      const pts = measurements.map((m) => ({ date: m.measuredAt, value: extract(m) })).filter((p) => p.value != null).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(-8)
+      if (pts.length < 2) return { label, unit, points: [], line: '' }
+      const min = Math.min(...pts.map((p) => p.value))
+      const max = Math.max(...pts.map((p) => p.value))
+      const range = max - min || 1
+      const plotted = pts.map((p, i) => ({ ...p, x: 6 + (i / (pts.length - 1)) * 168, y: 52 - ((p.value - min) / range) * 42, value: Math.round(p.value * 10) / 10 }))
+      return { label, unit, points: plotted, line: plotted.map((p) => `${p.x},${p.y}`).join(' '), last: plotted[plotted.length - 1].value, first: plotted[0].value }
+    })
+  }, [measurements])
+
   // Antecedentes familiares: "Ninguno/No" por padecimiento y padecimientos agregados por el usuario.
   const customFamilyDiseases = Array.isArray(currentValues['Padecimientos familiares agregados']) ? currentValues['Padecimientos familiares agregados'] : []
   const familyDiseases = [...FAMILY_DISEASES, ...customFamilyDiseases]
@@ -1146,17 +1242,41 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       : tab === 'Resumen' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Resumen</h1><p className="subtitle">Motivo de consulta, datos generales y contexto de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
-          ['motivo', 'Motivo de consulta', <FormCard key="mo" title="Motivo de consulta y objetivo" fields={['Motivo de consulta|*', 'Objetivo|*']} values={currentValues} onFieldChange={updateField} />],
-          ['datos', 'Datos del paciente', <div className="summary-card form-card" key="dp"><div className="summary-card-head"><h3>Datos del paciente</h3>{!patientEdit
-            ? <button type="button" className="link-button" onClick={startPatientEdit}>Editar fecha de nacimiento y ocupación</button>
-            : <div className="summary-card-actions"><button type="button" className="link-button" onClick={() => setPatientEdit(false)}>Cancelar</button><button type="button" className="link-button" disabled={patientSaveState === 'saving'} onClick={savePatientEdit}>{patientSaveState === 'saving' ? 'Guardando…' : 'Guardar'}</button></div>}</div><div className="form-grid three">
-            <label>Nombre<input value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} readOnly /></label>
-            <label>Sexo<input value={patient?.sex ? (SEX_LABELS[patient.sex] || patient.sex) : '—'} readOnly /></label>
-            <label>Fecha de nacimiento{patientEdit ? <input type="date" value={patientForm.birthDate} onChange={(e) => setPatientForm((prev) => ({ ...prev, birthDate: e.target.value }))} /> : <input value={patient?.birthDate ? formatDateUTC(patient.birthDate) : '—'} readOnly />}</label>
-            <label>Edad<input value={computeAge(patient?.birthDate) != null ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label>
-            <label>Ocupación{patientEdit ? <input value={patientForm.occupation} onChange={(e) => setPatientForm((prev) => ({ ...prev, occupation: e.target.value }))} placeholder="Ej. Diseñadora" /> : <input value={patient?.occupation || '—'} readOnly />}</label>
-            <label>Contacto<input value={[patient?.phone, patient?.email].filter(Boolean).join(' · ') || '—'} readOnly /></label>
-          </div>{patientSaveState === 'error' && <div className="form-error">⚠ No se pudieron guardar los datos.</div>}</div>],
+          ['datos', 'Datos del paciente', <div className="sub-stack" key="dp-stack">
+            <div className="summary-card form-card"><div className="summary-card-head"><h3>Datos del paciente</h3>{!patientEdit
+              ? <button type="button" className="link-button" onClick={startPatientEdit}>Editar fecha de nacimiento y ocupación</button>
+              : <div className="summary-card-actions"><button type="button" className="link-button" onClick={() => setPatientEdit(false)}>Cancelar</button><button type="button" className="link-button" disabled={patientSaveState === 'saving'} onClick={savePatientEdit}>{patientSaveState === 'saving' ? 'Guardando…' : 'Guardar'}</button></div>}</div><div className="form-grid three">
+              <label>Nombre<input value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} readOnly /></label>
+              <label>Sexo<input value={patient?.sex ? (SEX_LABELS[patient.sex] || patient.sex) : '—'} readOnly /></label>
+              <label>Fecha de nacimiento{patientEdit ? <input type="date" value={patientForm.birthDate} onChange={(e) => setPatientForm((prev) => ({ ...prev, birthDate: e.target.value }))} /> : <input value={patient?.birthDate ? formatDateUTC(patient.birthDate) : '—'} readOnly />}</label>
+              <label>Edad<input value={computeAge(patient?.birthDate) != null ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label>
+              <label>Ocupación{patientEdit ? <input value={patientForm.occupation} onChange={(e) => setPatientForm((prev) => ({ ...prev, occupation: e.target.value }))} placeholder="Ej. Diseñadora" /> : <input value={patient?.occupation || '—'} readOnly />}</label>
+              <label>Contacto<input value={[patient?.phone, patient?.email].filter(Boolean).join(' · ') || '—'} readOnly /></label>
+            </div>{patientSaveState === 'error' && <div className="form-error">⚠ No se pudieron guardar los datos.</div>}</div>
+            {summaryTrends.some((t) => t.points.length) && <div className="summary-trends">
+              {summaryTrends.map((trend) => <div className="summary-trend-card" key={trend.label}>
+                {/* Sin color de "bien/mal": subir es la meta en masa muscular y lo contrario en
+                    grasa, y en peso depende del objetivo de cada paciente — el signo lo juzga la
+                    nutrióloga, no el color del número. */}
+                <div className="summary-trend-head"><b>{trend.label}</b>{trend.points.length >= 2 && <span className="trend-delta">{trend.last >= trend.first ? '↑' : '↓'} {Math.abs(Math.round((trend.last - trend.first) * 10) / 10)} {trend.unit}</span>}</div>
+                {trend.points.length >= 2
+                  ? <svg viewBox="0 0 180 58" preserveAspectRatio="none" className="summary-trend-svg"><polyline points={trend.line} fill="none" stroke="var(--green)" strokeWidth="2.5" />{trend.points.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="3" fill="var(--green)" />)}</svg>
+                  : <p className="muted summary-trend-empty">Aún no hay suficientes mediciones.</p>}
+              </div>)}
+            </div>}
+          </div>],
+          ['motivo', 'Motivo de consulta', <div className="form-card" key="mo">
+            <h3>Motivo de consulta y objetivo</h3>
+            <div className="form-grid">
+              <label>Motivo de consulta<textarea value={currentValues['Motivo de consulta'] ?? ''} onChange={(e) => updateField('Motivo de consulta', e.target.value)} /></label>
+            </div>
+            <SuggestionChips storageKey="chips:motivo-consulta" seed={MOTIVO_CONSULTA_SUGGESTIONS} value={currentValues['Motivo de consulta']} onPick={(next) => updateField('Motivo de consulta', next)} joiner=". " />
+            <div className="form-grid">
+              <label>Objetivo<textarea value={currentValues['Objetivo'] ?? ''} onChange={(e) => updateField('Objetivo', e.target.value)} /></label>
+              <label>Referencia de la cita<input value={currentValues['Referencia de la cita'] ?? ''} onChange={(e) => updateField('Referencia de la cita', e.target.value)} placeholder="¿Cómo llegó el paciente?" /></label>
+            </div>
+            <SuggestionChips storageKey="chips:referencia-cita" seed={REFERENCIA_CITA_SUGGESTIONS} value={currentValues['Referencia de la cita']} onPick={(next) => updateField('Referencia de la cita', next)} joiner=", " />
+          </div>],
           ['historial', 'Historial y agenda', <div className="summary-card form-card" key="ha"><h3>Historial y agenda</h3><div className="form-grid">
             <label>Consultas registradas<input value={`${historyCount}`} readOnly /></label>
             <label>Consulta actual<input value={consultation ? (consultation.status === 'IN_PROGRESS' ? 'En curso' : consultation.status) : '—'} readOnly /></label>
