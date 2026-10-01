@@ -54,6 +54,13 @@ const main = async () => {
       run('npm run db:import-recetas')
     }
 
+    const nuevasSources = ['recetario-nut', 'menu-vegetariano-2', 'recetario-flexible', 'cheat-meal', 'helados-saludables']
+    const nuevasCount = await prisma.recipe.count({ where: { practiceId: PRACTICE_ID, source: { in: nuevasSources } } })
+    if (nuevasCount === 0) {
+      console.log('[sync] Faltan las recetas extraídas de PDF (fase 29): importando')
+      run('npm run db:import-recetas-nuevas')
+    }
+
     const recetarioCount = await prisma.recipe.count({ where: { practiceId: PRACTICE_ID, source: 'recetario-cero-mexico' } })
     if (recetarioCount < 500) {
       console.log(`[sync] Recetario incompleto (${recetarioCount}/500): importando`)
@@ -65,6 +72,13 @@ const main = async () => {
     if (withCalc < total) {
       console.log(`[sync] Cálculo SMAE pendiente (${withCalc}/${total}): calculando`)
       run('npm run db:link-smae')
+    }
+
+    if (fresh) {
+      // Después de las recetas (de las que depende -- enlaza los planes de ejemplo por nombre de
+      // receta) para que la práctica de ejemplo no se quede con el menú a medias.
+      console.log('[sync] Sembrando la práctica de ejemplo: pacientes con historial, agenda y finanzas (fase 91)')
+      run('npm run db:import-demo-practice')
     }
 
     console.log('[sync] Base de datos lista.')

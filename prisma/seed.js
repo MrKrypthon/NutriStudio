@@ -45,35 +45,11 @@ async function main() {
     }))
   }
 
-  const day = '2026-08-26'
-  const appointments = [
-    ['09:00', 60, 0, 'INITIAL', 'CONFIRMED'],
-    ['10:30', 45, 1, 'FOLLOW_UP', 'CONFIRMED'],
-    ['12:00', 60, 2, 'FOLLOW_UP', 'PENDING_CONFIRMATION'],
-    ['16:30', 45, 3, 'QUICK_CONTROL', 'CONFIRMED'],
-  ]
-  const appointmentIds = ['00000000-0000-0000-0002-000000000001', '00000000-0000-0000-0002-000000000002', '00000000-0000-0000-0002-000000000003', '00000000-0000-0000-0002-000000000004']
-  for (const [index, [time, duration, personIndex, type, status]] of appointments.entries()) {
-    const startAt = new Date(`${day}T${time}:00.000Z`)
-    const endAt = new Date(startAt.getTime() + duration * 60 * 1000)
-    await prisma.appointment.upsert({
-      where: { id: appointmentIds[index] },
-      update: { startAt, endAt, status },
-      create: { id: appointmentIds[index], practiceId: practice.id, patientId: patients[personIndex].id, startAt, endAt, type, status, notifyVia: ['whatsapp'], timeZone: practice.timeZone },
-    })
-  }
-
-  await prisma.consultation.deleteMany({ where: { patientId: patients[0].id } })
-  const consultation = await prisma.consultation.create({ data: { patientId: patients[0].id, appointmentId: appointmentIds[0], nutritionistId: nutritionist.id, status: 'IN_PROGRESS', startedAt: new Date(`${day}T09:00:00.000Z`) } })
-  await prisma.clinicalSection.createMany({ data: [
-    { consultationId: consultation.id, sectionKey: 'summary', lastSavedBy: nutritionist.id, completionState: 'complete', payload: { reason: 'Mejorar composición corporal y energía', goal: 'Reducir 4 kg en 12 semanas' } },
-    { consultationId: consultation.id, sectionKey: 'general', lastSavedBy: nutritionist.id, completionState: 'complete', payload: { referral: 'Recomendación médica', priority: 'Composición corporal' } },
-    { consultationId: consultation.id, sectionKey: 'anthropometric', lastSavedBy: nutritionist.id, completionState: 'complete', payload: { 'Peso (kg)': '72.4', 'Talla (cm)': '165', 'IMC calculado': '26.6', 'Análisis de peso y talla': 'Sobrepeso, con tendencia favorable', 'Cintura (cm)': '84' } },
-    { consultationId: consultation.id, sectionKey: 'dietary', lastSavedBy: nutritionist.id, completionState: 'in_progress', payload: { mealsPerDay: 3, waterLiters: 1.2, preferences: ['Avena', 'Pollo', 'Fruta'] } },
-    { consultationId: consultation.id, sectionKey: 'treatment', lastSavedBy: nutritionist.id, completionState: 'in_progress', payload: { recommendations: ['Aumentar agua', 'Incluir fibra', 'Caminar 30 minutos'] } },
-  ] })
-  await prisma.measurement.create({ data: { patientId: patients[0].id, consultationId: consultation.id, measuredAt: new Date(`${day}T09:15:00.000Z`), weightKg: 72.4, heightCm: 165, waistCm: 84, hipCm: 103, bodyFatPercent: 31.2, method: 'Bioimpedancia' } })
-  await prisma.diagnosis.create({ data: { consultationId: consultation.id, domain: 'INGESTIÓN', code: 'NI-1.5', problem: 'Ingesta energética excesiva', etiology: 'Patrón de comidas irregular', evidence: 'IMC 26.6 y recordatorio de 24 horas' } })
+  // Las citas, consultas, mediciones, diagnósticos y planes de ejemplo (con historial real de
+  // varias semanas y fechas siempre ancladas a "hoy") ya no se escriben aquí a mano: las siembra
+  // `db:import-demo-practice` (ver prisma/import-demo-practice.js), que corre después de este seed
+  // dentro de `predev:all` / `db:setup`. Este script se queda con lo que esa importación necesita
+  // ya puesto: la práctica, la nutrióloga, los 4 pacientes base y el catálogo mínimo de recetas.
   await prisma.recipe.deleteMany({ where: { practiceId: practice.id } })
   await prisma.recipe.createMany({ data: [
     { practiceId: practice.id, name: 'Avena cocida con manzana', mealTypes: ['breakfast'], portions: 1, nutrition: { kcal: 204, carbs: 29.1, protein: 7.4, fat: 7.2, fiber: 6.3 }, restrictions: [], instructions: 'Cocinar la avena y servir con manzana.' },
@@ -125,15 +101,6 @@ async function main() {
   if (yogurtRecipe && greekYogurt && strawberry && granola) await prisma.recipe.update({ where: { id: yogurtRecipe.id }, data: { ingredients: { create: [{ ingredientId: greekYogurt.id, quantity: 200, unit: 'g', equivalence: 2 }, { ingredientId: strawberry.id, quantity: 100, unit: 'g', equivalence: 1 }, { ingredientId: granola.id, quantity: 10, unit: 'g', equivalence: 0.5 }] } } })
   if (saladRecipe && spinach && queso && tomato && potato && oliveOil) await prisma.recipe.update({ where: { id: saladRecipe.id }, data: { ingredients: { create: [{ ingredientId: spinach.id, quantity: 150, unit: 'g', equivalence: 1.5 }, { ingredientId: queso.id, quantity: 80, unit: 'g', equivalence: 1 }, { ingredientId: tomato.id, quantity: 100, unit: 'g', equivalence: 1 }, { ingredientId: potato.id, quantity: 40, unit: 'g', equivalence: 0.5 }, { ingredientId: oliveOil.id, quantity: 5, unit: 'g', equivalence: 1 }] } } })
 
-  const plan = await prisma.nutritionPlan.create({ data: { patientId: patients[0].id, consultationId: consultation.id, status: 'DRAFT', goal: 'Reducir peso y mejorar energía', formula: 'mifflin', activityMethod: 'factor', activityFactor: 1.375, targetKcal: 1700, carbsPercent: 50, proteinPercent: 25, fatPercent: 25, evaluation: { formulaVersion: 'mifflin_v1', formulaLabel: 'Mifflin-St Jeor', bmr: 1454, bmi: 26.6, bmiCategory: 'sobrepeso', idealWeightRange: { minKg: 50.4, maxKg: 67.8 }, flags: [], inputs: { age: 28, weightKg: 72.4, heightCm: 165, sex: 'female', bodyFatPercent: 31.2 } } } })
-  await prisma.mealSlot.createMany({ data: [
-    { planId: plan.id, dayOfWeek: 1, mealType: 'breakfast', recipeId: oatmealRecipe?.id, servings: 1 },
-    { planId: plan.id, dayOfWeek: 1, mealType: 'lunch', recipeId: steakBowlRecipe?.id, servings: 1 },
-    { planId: plan.id, dayOfWeek: 1, mealType: 'snack', recipeId: yogurtRecipe?.id, servings: 1 },
-    { planId: plan.id, dayOfWeek: 1, mealType: 'dinner', recipeId: saladRecipe?.id, servings: 1 },
-  ] })
-  await prisma.document.create({ data: { patientId: patients[0].id, consultationId: consultation.id, planId: plan.id, type: 'consultation_report', sections: { summary: true, anthropometric: true, diagnosis: true, treatment: true }, version: 1 } })
-
   await prisma.educationMaterial.deleteMany({ where: { practiceId: practice.id } })
   await prisma.educationMaterial.createMany({ data: [
     { practiceId: practice.id, title: 'Método visual de porciones', category: 'Guías prácticas', description: 'Aprende a estimar porciones sin báscula usando tus manos y utensilios.', body: 'Una palma abierta equivale aproximadamente a una porción de proteína; un puño, a una porción de verdura o fruta; una mano ahuecada, a una porción de cereal o tubérculo; y el pulgar completo, a una porción de grasa.', color: 'mint', readMinutes: 8 },
@@ -144,11 +111,14 @@ async function main() {
     { practiceId: practice.id, title: 'Preparación semanal', category: 'Hábitos saludables', description: 'Planifica tus comidas para reducir decisiones durante la semana.', body: 'Elige un día fijo para planear el menú, cocina bases (granos, proteínas, vegetales asados) por adelantado y arma tus platos combinándolas durante la semana.', color: 'mint', readMinutes: 6 },
   ] })
 
+  // Ancladas a hoy (no a una fecha fija) para que sigan viéndose como pendientes vigentes sin
+  // importar cuándo se siembre la base.
+  const dueInDays = (days) => new Date(Date.now() + days * 86400000)
   await prisma.task.deleteMany({ where: { practiceId: practice.id } })
   await prisma.task.createMany({ data: [
-    { practiceId: practice.id, patientId: patients[0].id, type: 'nutrition_plan', dueAt: new Date('2026-08-25T18:00:00.000Z') },
-    { practiceId: practice.id, patientId: patients[1].id, type: 'nutrition_plan', dueAt: new Date('2026-08-26T18:00:00.000Z') },
-    { practiceId: practice.id, patientId: patients[2].id, type: 'consultation_report', dueAt: new Date('2026-08-27T18:00:00.000Z') },
+    { practiceId: practice.id, patientId: patients[0].id, type: 'nutrition_plan', dueAt: dueInDays(-1) },
+    { practiceId: practice.id, patientId: patients[1].id, type: 'nutrition_plan', dueAt: dueInDays(0) },
+    { practiceId: practice.id, patientId: patients[2].id, type: 'consultation_report', dueAt: dueInDays(1) },
   ] })
   console.log(`Seed listo: ${practice.name}, ${nutritionist.name}, ${patients.length} pacientes`)
 }
