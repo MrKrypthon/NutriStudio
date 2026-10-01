@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import Icon from './Icon.jsx'
-import { bodyComposition, bodyFatEstimates, energyFromMacros, somatotype, theoreticalWeights } from '../lib/anthropometry.js'
+import { bodyComposition, bodyFatEstimates, somatotype, theoreticalWeights } from '../lib/anthropometry.js'
 
 // Módulo antropométrico con el menú superior y el submenú de tipos al estilo de las capturas
-// (Mediciones / Cálculos / Calorías / Somatocarta / Notas / Fotos). En esta fase sólo Mediciones
-// está funcional; el resto muestra un aviso de "próxima fase".
-const TABS = [['Mediciones', 'scan'], ['Cálculos', 'calculator'], ['Calorías', 'flame'], ['Somatocarta', 'triangle'], ['Notas', 'note'], ['Fotos', 'camera']]
+// (Mediciones / Cálculos / Somatocarta / Notas / Fotos). El cálculo de calorías se movió a
+// Tratamiento → Requerimientos, junto al resto del plan de intervención.
+const TABS = [['Mediciones', 'scan'], ['Cálculos', 'calculator'], ['Somatocarta', 'triangle'], ['Notas', 'note'], ['Fotos', 'camera']]
 
 const TYPES = [
   ['peso', 'Peso/Estatua', 'scan'],
@@ -23,7 +23,6 @@ const CALC_TYPES = [
   ['imc-embarazo', 'IMC embarazo', 'flame'],
 ]
 
-const BALANCES = [['normo', 'Normocalórico'], ['deficit', 'Déficit'], ['superavit', 'Superávit']]
 const EMBARAZO_GAIN = [
   { label: 'Bajo peso', to: 18.5, range: '12.5 – 18 kg' },
   { label: 'Normal', to: 25, range: '11.5 – 16 kg' },
@@ -167,9 +166,6 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   const [type, setType] = useState('peso')
   const [activeField, setActiveField] = useState(GROUP_FIELDS.pliegues[0].key)
   const [calcType, setCalcType] = useState('grasa')
-  const [balance, setBalance] = useState('superavit')
-  const [perKg, setPerKg] = useState(true)
-  const [macros, setMacros] = useState({ carbs: 4, protein: 3.1, fat: 3 })
   const [gestWeek, setGestWeek] = useState('28')
   const [photoError, setPhotoError] = useState('')
   const selectType = (key) => { setType(key); const first = GROUP_FIELDS[key]?.[0]; if (first) setActiveField(first.key) }
@@ -304,34 +300,6 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
     </div>
   }
 
-  const renderCalories = () => {
-    const target = energyFromMacros(values['Peso (kg)'], macros, perKg)
-    const setMacro = (key, value) => setMacros((prev) => ({ ...prev, [key]: value }))
-    const balanceLabel = BALANCES.find(([k]) => k === balance)?.[1] || ''
-    const rows = [['Hidratos', 'carbs', 0, 10, 0.1], ['Proteína', 'protein', 0, 5, 0.1], ['Lípidos', 'fat', 0, 3, 0.1]]
-    return <div className="anthro-layout panel">
-      <aside className="anthro-types"><p className="eyebrow">Balance energético</p>{BALANCES.map(([key, label]) => <button type="button" className={'anthro-type' + (balance === key ? ' active' : '')} key={key} onClick={() => setBalance(key)}><Icon>flame</Icon>{label}</button>)}</aside>
-      <section className="anthro-main">
-        <h2 className="anthro-title"><Icon>flame</Icon>Cálculo para {balanceLabel.toLowerCase()} calórico</h2>
-        <p className="anthro-hint">Frecuentemente utilizado en pacientes para el aumento de masa muscular o la reducción de grasa.</p>
-        <div className="calc-sliders">
-          {rows.map(([label, key, min, max, step]) => <div className="calc-slider-row" key={key}>
-            <span className="calc-slider-label">{label}</span>
-            <input type="range" min={min} max={max} step={step} value={macros[key]} onChange={(event) => setMacro(key, Number(event.target.value))} />
-            <input className="calc-slider-input" type="number" min={min} max={max} step={step} value={macros[key]} onChange={(event) => setMacro(key, Number(event.target.value))} />
-            <span className="calc-slider-unit">{perKg ? 'g/kg' : 'g'}</span>
-          </div>)}
-          <label className="anthro-check"><input type="checkbox" checked={perKg} onChange={(event) => setPerKg(event.target.checked)} /> Gramos por kilos</label>
-        </div>
-        <div className="calc-result-strip">
-          <div><small>Objetivo energético</small><b>{target.kcal.toLocaleString()} kcal</b><span>{balanceLabel} calórico · {target.carbs} g H · {target.protein} g P · {target.fat} g G</span></div>
-          <button type="button" className="primary" onClick={() => onFieldChange?.('Objetivo calórico (kcal)', String(target.kcal))}>Guardar como objetivo</button>
-        </div>
-        <p className="anthro-note">Las calorías seleccionadas aparecen como Objetivo en la sección de Dietas.</p>
-      </section>
-    </div>
-  }
-
   const renderSomatocarta = () => {
     const s = somatotype(values)
     const total = (s.endo || 0) + (s.meso || 0) + (s.ecto || 0)
@@ -416,7 +384,6 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
       </section>
     </div>
       : tab === 'Cálculos' ? renderCalculations()
-      : tab === 'Calorías' ? renderCalories()
       : tab === 'Somatocarta' ? renderSomatocarta()
       : tab === 'Notas' ? renderNotes()
       : renderPhotos()}
