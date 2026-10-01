@@ -113,6 +113,12 @@ const ALERGIAS_SUGGESTIONS = [
   { label: 'Gluten', text: 'Gluten.' },
   { label: 'Ninguna', text: 'Ninguna.' },
 ]
+const APEGO_SUGGESTIONS = [
+  { label: 'Buen apego', text: 'Buen apego al plan.' },
+  { label: 'Apego parcial', text: 'Apego parcial, con desviaciones puntuales.' },
+  { label: 'Bajo apego', text: 'Bajo apego al plan.' },
+  { label: 'Fin de semana', text: 'Se desvía principalmente los fines de semana.' },
+]
 const INTOLERANCIAS_SUGGESTIONS = [
   { label: 'Lactosa', text: 'Intolerancia a la lactosa.' },
   { label: 'Fructosa', text: 'Intolerancia a la fructosa.' },
@@ -311,6 +317,16 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [attachments, setAttachments] = useState([])
   const [uploadState, setUploadState] = useState('idle')
   const [uploadError, setUploadError] = useState('')
+  // La cabecera tenía ocho botones sueltos (tres documentos, cada uno con su variante
+  // generar/actualizar/descargar). Se agrupan bajo un solo menú "Generar informe ▾": nada deja de
+  // poder hacerse, sólo deja de competir por espacio con Terminar consulta y Agendar.
+  const [reportMenuOpen, setReportMenuOpen] = useState(false)
+  const reportMenuRef = useRef(null)
+  useEffect(() => {
+    const onClickOutside = (event) => { if (reportMenuRef.current && !reportMenuRef.current.contains(event.target)) setReportMenuOpen(false) }
+    document.addEventListener('mousedown', onClickOutside)
+    return () => document.removeEventListener('mousedown', onClickOutside)
+  }, [])
   const saveTimer = useRef(null)
   // Per-section autosave state (a single pendingSaveRef + single timer LOST edits: switching
   // sections within the 800ms window cancelled the previous section's save, and the finally in
@@ -1067,7 +1083,24 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           </option>)}
         </select>
       </label>}
-      <div className="clinical-actions">{consultation && consultation.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}<button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>{exportDoc?.storageKey && <button className="secondary" disabled={exportState === 'working'} onClick={downloadExport}>{exportState === 'working' ? '…' : 'Descargar expediente'}</button>}<button className="secondary" disabled={exportState === 'working'} onClick={generateExport}>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</button>{report?.storageKey && <button className="secondary" disabled={reportState === 'working'} onClick={downloadReport}>{reportState === 'working' ? '…' : 'Descargar informe'}</button>}{clinicalReport?.storageKey && <button className="secondary" disabled={clinicalReportState === 'working'} onClick={downloadClinicalReport}>{clinicalReportState === 'working' ? '…' : 'Descargar informe clínico'}</button>}<button className="secondary" disabled={clinicalReportState === 'working'} onClick={generateClinicalReport}>{clinicalReportState === 'working' ? 'Generando…' : clinicalReport?.storageKey ? 'Actualizar informe clínico' : 'Informe clínico'}</button><button className="primary" disabled={reportState === 'working'} onClick={generateReport}>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</button></div>
+      <div className="clinical-actions">
+        {consultation && consultation.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}
+        <button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>
+        <div className="header-pop" ref={reportMenuRef}>
+          <button className="primary" onClick={() => setReportMenuOpen((v) => !v)}>Generar informe {reportMenuOpen ? '▴' : '▾'}</button>
+          {reportMenuOpen && <div className="dropdown-panel report-menu">
+            <p className="dropdown-title">INFORME PARA EL PACIENTE</p>
+            <button type="button" className="dropdown-item" disabled={reportState === 'working'} onClick={() => { generateReport(); setReportMenuOpen(false) }}><div><b>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</b><small>Resumen visual de la consulta</small></div></button>
+            {report?.storageKey && <button type="button" className="dropdown-item" disabled={reportState === 'working'} onClick={() => { downloadReport(); setReportMenuOpen(false) }}><div><b>Descargar informe</b></div></button>}
+            <p className="dropdown-title">INFORME CLÍNICO</p>
+            <button type="button" className="dropdown-item" disabled={clinicalReportState === 'working'} onClick={() => { generateClinicalReport(); setReportMenuOpen(false) }}><div><b>{clinicalReportState === 'working' ? 'Generando…' : clinicalReport?.storageKey ? 'Actualizar informe clínico' : 'Informe clínico'}</b><small>Para referir o compartir con otro profesional</small></div></button>
+            {clinicalReport?.storageKey && <button type="button" className="dropdown-item" disabled={clinicalReportState === 'working'} onClick={() => { downloadClinicalReport(); setReportMenuOpen(false) }}><div><b>Descargar informe clínico</b></div></button>}
+            <p className="dropdown-title">EXPEDIENTE COMPLETO</p>
+            <button type="button" className="dropdown-item" disabled={exportState === 'working'} onClick={() => { generateExport(); setReportMenuOpen(false) }}><div><b>{exportState === 'working' ? 'Generando…' : exportDoc?.storageKey ? 'Actualizar expediente' : 'Expediente completo'}</b><small>Todas las secciones, para el archivo</small></div></button>
+            {exportDoc?.storageKey && <button type="button" className="dropdown-item" disabled={exportState === 'working'} onClick={() => { downloadExport(); setReportMenuOpen(false) }}><div><b>Descargar expediente</b></div></button>}
+          </div>}
+        </div>
+      </div>
     </div>
     {/* El aviso lleva su propia acción: explicar la situación y ofrecer la salida en el mismo sitio
         evita que "Iniciar consulta" se pierda entre los ocho botones de informes de la cabecera. */}
@@ -1310,7 +1343,20 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Monitoreo</h1><p className="subtitle">Seguimiento entre consultas de {patientName}: apego, síntomas y ajustes al plan.</p>
         <Subsection value={sub} onChange={setSub} groups={[
           ['apego', 'Apego a macros', <FormCard key="ap" title="Apego a macros reportado" fields={['% Carbohidratos consumidos|', '% Proteína consumida|', '% Lípidos consumidos|']} values={currentValues} onFieldChange={updateField} />],
-          ['subjetivo', 'Seguimiento', <FormCard key="sb" title="Seguimiento subjetivo" fields={['Estado de ánimo|', 'Apego al plan|', 'Antojos|', 'Hambre|', 'Consumo de agua|', 'Ejercicio|']} values={currentValues} onFieldChange={updateField} />],
+          ['subjetivo', 'Seguimiento', <div key="sb" className="form-card">
+            <h3>Seguimiento subjetivo</h3>
+            <div className="form-grid">
+              <label>Estado de ánimo<input value={currentValues['Estado de ánimo'] ?? ''} onChange={(e) => updateField('Estado de ánimo', e.target.value)} /></label>
+              <label>Apego al plan<input value={currentValues['Apego al plan'] ?? ''} onChange={(e) => updateField('Apego al plan', e.target.value)} /></label>
+            </div>
+            <SuggestionChips storageKey="chips:apego-plan" seed={APEGO_SUGGESTIONS} value={currentValues['Apego al plan']} onPick={(next) => updateField('Apego al plan', next)} joiner=". " />
+            <div className="form-grid">
+              <label>Antojos<input value={currentValues['Antojos'] ?? ''} onChange={(e) => updateField('Antojos', e.target.value)} /></label>
+              <label>Hambre<input value={currentValues['Hambre'] ?? ''} onChange={(e) => updateField('Hambre', e.target.value)} /></label>
+              <label>Consumo de agua<input value={currentValues['Consumo de agua'] ?? ''} onChange={(e) => updateField('Consumo de agua', e.target.value)} /></label>
+              <label>Ejercicio<input value={currentValues['Ejercicio'] ?? ''} onChange={(e) => updateField('Ejercicio', e.target.value)} /></label>
+            </div>
+          </div>],
           ['sintomas', 'Síntomas', <FormCard key="sn" title="Síntomas" fields={['Diarrea o estreñimiento|', 'Inflamación|', 'Cefalea|']} values={currentValues} onFieldChange={updateField} />],
           ['evaluacion', 'Evaluación', <FormCard key="ev" title="Evaluación de la consulta" fields={['Calidad de preparación de comidas|', 'Modificaciones al plan|', 'Tema para la próxima consulta|', 'Observaciones|']} values={currentValues} onFieldChange={updateField} />],
         ]} />
