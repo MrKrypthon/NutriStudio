@@ -961,3 +961,58 @@ sesión rancia cerrada con aviso, expediente en sólo lectura, "Iniciar consulta
 texto escrito 120 ms antes de salir persistido, recarga y enlace directo conservando la sesión, y
 los antecedentes del paciente visibles en una consulta recién creada con cero secciones propias.
 `npm run build` OK y `npm test` 81/81.
+
+## Fase 84 — mejoras del MVP en la sección Expediente
+
+Transcripción a tareas de `Mejoras del MVP - Seccion Expediente.pdf` (16 páginas de feedback de la
+nutrióloga, con capturas). El plan completo, tanda por tanda, está en `MEJORAS_EXPEDIENTE.md`.
+
+**Hoy, Agenda, Pacientes.** Confirmar una cita pedía un solo clic sin aviso — ahora se detiene en
+"¿Deseas confirmar la cita?" con nombre, fecha y hora. El selector de paciente del modal de nueva
+cita pasa de un `<select>` a un buscador de texto. Pacientes gana el botón "Agendar cita" en la
+ficha del paciente.
+
+**Resumen.** Se reordena (Datos del paciente primero, luego Motivo de consulta), se agregan tres
+gráficas de progreso (peso, % grasa, masa muscular) con las mediciones reales, y Motivo de consulta
+más la nueva "Referencia de la cita" ganan chips de sugerencia.
+
+**Clínico.** Antecedentes personales, cirugías, medicamentos, suplementos, interacciones, alergias
+e intolerancias ganan chips de sugerencia con un botón "+ Rápido" para agregar las propias sin salir
+del formulario. Nueva sección "Antecedentes ginecobstétricos" (ciclo, historia obstétrica, climaterio
+y TRH). Nueva pestaña "Monitoreo Clínico" con signos vitales, pruebas capilares y fuerza/función.
+
+**Dietético.** "Consumo de agua" deja de ser su propia subpestaña: se integra en Patrón de
+alimentación como "Hidratación y bebidas" (agua, refrescos, bebidas energéticas, café o té).
+Historial gana "¿Ha utilizado medicamentos para bajar de peso?" y el bloque Historia dietética.
+
+**Diagnóstico.** Buscador sobre los dominios PES — parcial a propósito: el catálogo completo de
+diagnósticos con sus claves (NI-#, NC-#, NB-#, NO-#…) queda bloqueado hasta que llegue el documento
+que la nutrióloga va a enviar aparte.
+
+**Tratamiento.** Botón "Ir al plan", apartado "Requerimientos" (balance calórico y g/kg de
+macronutrientes, con el objetivo energético calculado en vivo a partir del peso más reciente), y
+"Actividad física recomendada" en Recomendaciones.
+
+**Botones y cumplimiento normativo.** Los ocho botones sueltos de la cabecera (tres tipos de
+documento, cada uno con su variante generar/actualizar/descargar) se agrupan en un único menú
+"Generar informe ▾": nada deja de poder hacerse, sólo dejan de competir por espacio con Terminar
+consulta y Agendar. Los tres documentos del historial clínico llevan ahora un aviso de
+confidencialidad al pie citando la NOM-004-SSA3-2012 y la Ley Federal de Protección de Datos
+Personales en Posesión de los Particulares.
+
+**Reutilizable.** `SuggestionChips.jsx`: chips de sugerencia + "+ Rápido". Las sugerencias de
+arranque son fijas en el código; las que agrega la nutrióloga se guardan en `localStorage` de su
+navegador — son atajos de redacción propios de quien los escribe, no datos clínicos del paciente.
+
+**De paso**, la verificación de esta fase sacó a la luz una regresión real de la fase 83: las
+subpestañas de cada sección eran `<button>` dentro del `<fieldset disabled>` que bloquea una
+consulta cerrada, y un fieldset deshabilitado apaga todos los botones que contiene — así que en una
+consulta ya cerrada no había forma de cambiar de subsección para revisar lo escrito. Corregido a
+`<div role="button">`, que el fieldset no toca.
+
+**Verificado** en navegador sobre una instancia aislada y generando los tres PDF reales contra la
+base (informe, informe clínico, expediente completo: el aviso aparece al pie sin empujar contenido a
+una página de más). `npm run build` OK y `npm test` 81/81 en cada tanda.
+
+**Pendiente.** El catálogo de diagnósticos PES (Tanda 6) y confirmar si la consolidación de botones
+es lo que la nutrióloga tenía en mente.

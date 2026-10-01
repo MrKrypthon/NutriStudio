@@ -68,15 +68,21 @@ medida que avanza.
 
 - [x] Botón "Ir al plan" (lleva al Constructor de plan con el paciente ya seleccionado).
 - [x] Campo "Actividad física recomendada".
-- [x] Nuevo apartado **Requerimientos** después de Objetivos: se traslada ahí el cálculo de
-  superávit/déficit calórico que hoy vive en el Constructor de plan, como referencia dentro del
-  expediente.
+- [x] Nuevo apartado **Requerimientos** después de Objetivos: balance calórico
+  (Normocalórico/Déficit/Superávit) y gramos por kilo de hidratos, proteína y lípidos, con el
+  objetivo energético calculado en vivo a partir del peso más reciente ya capturado en
+  Antropométrico. Es una calculadora propia y más simple que la del Constructor de plan (que sigue
+  siendo la autoridad para armar el menú con fórmulas de GET por edad/sexo/actividad); ésta vive en
+  el expediente para registrar el objetivo en g/kg sin salir de la consulta.
 
 ## Tanda 8 — Monitoreo y Notas
 
-- [x] Monitoreo (general) ya usa chips de sugerencia; se homologa al componente reutilizable de la
-  Tanda 4 sin cambiar su contenido.
-- [x] Notas: sin cambios de fondo, se revisa que siga el mismo patrón visual.
+- [x] Monitoreo (general) gana chips de sugerencia en "Apego al plan" con el mismo componente de la
+  Tanda 4. Las capturas de referencia del PDF para esta sección mostraban campos de otra
+  herramienta ("Aspectos a revisar en próxima visita", "Indicadores de seguimiento") que no
+  corresponden a los campos reales de este Monitoreo — se aplicó el patrón de chips a lo que sí
+  existe en pantalla, sin inventar campos nuevos no pedidos explícitamente.
+- [x] Notas: sin cambios de fondo, sigue el mismo patrón visual.
 
 ## Tanda 9 — Botones y cumplimiento normativo
 
@@ -93,5 +99,22 @@ medida que avanza.
 
 ## Pendiente de la usuaria
 
-1. **Catálogo de diagnósticos PES** (Tanda 6) — documento por enviar.
+1. **Catálogo de diagnósticos PES** (Tanda 6) — documento por enviar. Es lo único que queda
+   genuinamente bloqueado de las 9 tandas.
 2. Confirmar la consolidación de botones de la Tanda 9 si no es lo que tenía en mente.
+
+---
+
+## Resumen de lo entregado
+
+Las 9 tandas están implementadas y verificadas en la rama `fase-84-mejoras-expediente`
+(commits del `69dcd9d` al `5668fea`), cada una con su propia verificación en navegador contra datos
+reales y, donde aplicaba, generando los PDF de verdad para comprobar el resultado. Sólo la Tanda 6
+queda parcial por el catálogo de diagnósticos pendiente.
+
+De paso se corrigió una regresión real que la verificación de la Tanda 2 sacó a la luz: las
+subpestañas de cada sección eran `<button>`, un elemento de formulario, y vivían dentro del
+`<fieldset disabled>` que bloquea una consulta cerrada (fase 83) — un fieldset deshabilitado apaga
+todos los elementos de formulario que contiene, botones incluidos, así que en una consulta ya
+cerrada no había forma de cambiar de subsección para revisar lo que se había escrito. Ahora son
+`<div role="button">`, que el fieldset no toca.
