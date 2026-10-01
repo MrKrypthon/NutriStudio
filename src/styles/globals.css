@@ -465,10 +465,10 @@ html{scroll-behavior:smooth}
 /* Expediente: textareas a ancho completo, frecuencia de alimentos y evaluación CESIVA */
 .generic-section .form-card .form-grid label:has(textarea){grid-column:1/-1}
 .freq-hint{font:400 9px 'DM Sans';color:var(--muted);margin-left:4px}
-.frequency-chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.frequency-chip{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;background:#fbfcfc;font-size:11px;color:#3d3e51;min-width:0}
-.frequency-chip span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.frequency-chip input{width:48px;flex:0 0 auto;border:1px solid var(--line);border-radius:6px;padding:5px 6px;font:11px 'DM Sans';color:#343647;background:#fff;text-align:center}
+
+
+
+
 .cesiva-card{padding:20px 22px}
 .cesiva-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:16px}
 .cesiva-card-head h3{margin:0}
@@ -490,8 +490,8 @@ html{scroll-behavior:smooth}
 .cesiva-note{width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:11px 'DM Sans';background:#fff;color:#343647}
 .post-complete>p{font-size:12px;color:#3d3e51;margin:0 0 14px}
 @media(max-width:900px){.cesiva-row{grid-template-columns:1fr}.cesiva-head{display:none}.cesiva-eval{max-width:340px}}
-@media(max-width:1000px){.frequency-chips{grid-template-columns:1fr 1fr}}
-@media(max-width:600px){.frequency-chips{grid-template-columns:1fr}}
+@media(max-width:1000px){}
+@media(max-width:600px){}
 
 /* Agenda: horarios sugeridos y recordatorio de estudios en el modal de cita */
 .suggested-slots{display:flex;align-items:center;gap:10px;margin:2px 0 14px;flex-wrap:wrap}
@@ -977,7 +977,7 @@ html{scroll-behavior:smooth}
   .recall-meal textarea{min-height:0;height:40px}
   .recall-add{margin-top:6px}
   .heredo-head,.heredo-row{padding:5px 12px;grid-template-columns:1.3fr repeat(3,76px) 56px}
-  .frequency-chips{gap:6px}
+  
 }
 @media(max-height:800px){
   .generic-section h1,.diagnosis-panel h1{font-size:17px}
@@ -1003,8 +1003,8 @@ html{scroll-behavior:smooth}
   .heredo-row .toggle-pill{min-width:30px;height:24px}
   .exam-group-title{font-size:10px}
   .exam-subhead{font-size:11px;margin:8px 0 6px}
-  .frequency-chips{gap:5px}
-  .frequency-chip input{width:38px;padding:4px}
+  
+  
   .recall-builder{gap:7px}
   .recall-meal{padding:7px}
   .recall-meal textarea{min-height:0;height:30px}
@@ -1033,9 +1033,9 @@ html{scroll-behavior:smooth}
   .cesiva-row{padding:2px 9px}
   .cesiva-opt{padding:3px 5px;font-size:8px}
   .cesiva-note{padding:3px 6px}
-  .frequency-chips{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:4px}
-  .frequency-chip{padding:4px 6px}
-  .frequency-chip input{width:30px;padding:3px}
+  
+  
+  
   .recall-meal{padding:6px}
   .recall-meal textarea{height:16px}
   .recall-summary{padding:4px}
@@ -1166,3 +1166,46 @@ html{scroll-behavior:smooth}
 .pes-cat-head small{font:600 9px 'DM Mono';color:var(--muted);background:var(--mint);border-radius:9px;padding:1px 7px}
 .pes-cat-arrow{color:var(--green);font-size:11px}
 .pes-cat-terms{display:grid;gap:3px;padding:6px 8px 8px;border-top:1px solid var(--line)}
+
+/* Tablero de Frecuencia de consumo de alimentos (FoodFrequencyBoard.jsx). */
+.food-frequency-intro{margin:0 0 16px}
+.food-frequency-board{display:grid;grid-template-columns:1.3fr 1fr;gap:18px;align-items:start}
+.food-frequency-sources{display:flex;flex-direction:column;gap:16px}
+.food-palette-badge{display:inline-block;border-radius:7px;padding:7px 16px;font:600 11px 'DM Sans';color:#fff;margin-bottom:10px}
+.food-badge-groups{background:#d65a6e}
+.food-badge-foods{background:#2592a8}
+.food-palette-box{border:1px solid var(--line);border-radius:10px;padding:14px;min-height:72px}
+.food-palette-empty{margin:10px 4px}
+.food-chip-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px 6px}
+.food-chip{display:flex;flex-direction:column;align-items:center;gap:6px;border:1px solid transparent;border-radius:9px;padding:8px 4px 6px;cursor:grab;text-align:center;user-select:none;transition:background-color .12s,border-color .12s,transform .12s;position:relative}
+.food-chip:hover{background:#f6f7f9}
+.food-chip:active{cursor:grabbing}
+.food-chip.picked{border-color:var(--green);background:var(--mint);box-shadow:0 0 0 2px color-mix(in srgb,var(--green) 25%,transparent)}
+.food-chip-badge{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:21px;border:2px solid currentColor;background:#fff;flex-shrink:0;color:inherit}
+.food-chip-label{font-size:9.5px;color:inherit;font-weight:600;line-height:1.25;word-break:break-word}
+.food-chip.compact{flex-direction:row;align-items:center;gap:7px;border:1px solid var(--line);background:#fff;border-radius:999px;padding:5px 9px 5px 5px;cursor:default;width:max-content;max-width:100%}
+.food-chip.compact .food-chip-badge{width:26px;height:26px;font-size:12px;border-width:1.5px}
+.food-chip.compact .food-chip-label{font-size:10px;white-space:nowrap}
+.food-chip.compact .food-chip-remove{color:var(--muted)}
+.food-chip-remove{border:0;background:none;color:var(--muted);font-size:13px;cursor:pointer;padding:0 2px;margin-left:2px;flex-shrink:0}
+.food-chip-remove:hover{color:#c0564f}
+/* Paleta de colores de los iconos: fondo pastel detrás del badge circular + color del trazo. */
+.food-color-rose{color:#c24a68}
+.food-color-green{color:#4b8f5a}
+.food-color-olive{color:#7a8a3f}
+.food-color-blue{color:#3f7fb5}
+.food-color-orange{color:#c97a34}
+.food-color-brown{color:#8a6238}
+.food-color-yellow{color:#b89324}
+.food-color-teal{color:#2592a8}
+.food-color-purple{color:#8064ad}
+.food-frequency-buckets{display:flex;flex-direction:column;gap:12px}
+.food-pick-hint{margin:0 0 -2px;font-size:11px;color:#1f7759;background:var(--mint);border-radius:7px;padding:8px 12px}
+.food-bucket{border:1px solid var(--line);border-radius:10px;overflow:hidden;transition:box-shadow .12s}
+.food-bucket-targetable{box-shadow:0 0 0 2px color-mix(in srgb,var(--green) 18%,transparent)}
+.food-bucket-head{width:100%;border:0;background:#5d6471;color:#fff;font:600 11px 'DM Sans';padding:11px 14px;text-align:left;cursor:pointer}
+.food-bucket-head:hover{background:#4d5360}
+.food-bucket-body{min-height:46px;padding:10px 12px;display:flex;flex-wrap:wrap;gap:7px;align-items:flex-start;cursor:default;background:#fff}
+.food-bucket-empty{color:var(--muted);font-size:10px;padding:4px 2px}
+@media(max-width:1000px){.food-frequency-board{grid-template-columns:1fr}}
+@media(max-width:600px){.food-chip-grid{grid-template-columns:repeat(auto-fill,minmax(72px,1fr))}}
