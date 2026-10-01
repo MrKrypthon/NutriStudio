@@ -1101,7 +1101,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           <div className="section-heading"><div><p className="eyebrow">SECCIÓN 3 DE 12</p><h1>Bioquímico</h1><p className="subtitle">Los estudios son opcionales en la primera consulta: se sugieren y suelen traerse en la segunda. Registra los valores que traiga el paciente.</p></div><button className="primary" onClick={() => { setSub('estudios'); openLabForm() }}>+ Agregar estudio</button></div>
           <Subsection value={sub} onChange={setSub} groups={[
             ['estudios', 'Solicitud y estudios', <div className="sub-stack" key="est">
-              <FormCard title="Solicitud de estudios" fields={['Estudios solicitados (se traen en la 2ª consulta)|*', 'Notas de bioquímico|*']} values={currentValues} onFieldChange={updateField} />
+              <FormCard title="Solicitud de estudios" fields={['Estudios solicitados|*', 'Notas de bioquímico|*']} values={currentValues} onFieldChange={updateField} />
               {!labs.length && <div className="lab-empty"><span>▧</span><b>Sin estudios adjuntos</b><small>Registra los resultados manualmente con "+ Agregar estudio".</small></div>}
               {labForm && <div className="diagnosis-form panel">
                 <p className="eyebrow">NUEVO ESTUDIO</p>
@@ -1181,9 +1181,80 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               <button type="button" className="secondary" disabled={!newDisease.trim()} onClick={addFamilyDisease}>+ Agregar</button>
             </div>
           </div>],
-          ['antecedentes', 'Antecedentes', <FormCard key="a" title="Antecedentes personales" fields={['Enfermedades actuales o previas|*', 'Cirugías realizadas|*']} values={currentValues} onFieldChange={updateField} />],
-          ['medicamentos', 'Medicamentos', <FormCard key="m" title="Medicamentos y suplementos" fields={['Medicamentos que toma|*', 'Suplementos que toma|*', 'Interacciones con nutrientes|*']} values={currentValues} onFieldChange={updateField} />],
-          ['alergias', 'Alergias y sustancias', <div key="al" className="sub-stack"><FormCard title="Alergias e intolerancias" fields={['Alergias alimentarias|*', 'Intolerancias|*']} values={currentValues} onFieldChange={updateField} /><FormCard title="Consumo de sustancias" fields={['Tabaquismo (frecuencia)|', 'Consumo de alcohol (frecuencia)|']} values={currentValues} onFieldChange={updateField} /></div>],
+          ['antecedentes', 'Antecedentes', <div key="a" className="sub-stack">
+            <div className="form-card">
+              <h3>Antecedentes personales</h3>
+              <div className="form-grid">
+                <label>Enfermedades actuales o previas<textarea value={currentValues['Enfermedades actuales o previas'] ?? ''} onChange={(e) => updateField('Enfermedades actuales o previas', e.target.value)} /></label>
+              </div>
+              <SuggestionChips storageKey="chips:antecedentes-personales" seed={ANTECEDENTES_SUGGESTIONS} value={currentValues['Enfermedades actuales o previas']} onPick={(next) => updateField('Enfermedades actuales o previas', next)} />
+              <div className="form-grid">
+                <label>Cirugías realizadas<textarea value={currentValues['Cirugías realizadas'] ?? ''} onChange={(e) => updateField('Cirugías realizadas', e.target.value)} /></label>
+              </div>
+              <SuggestionChips storageKey="chips:cirugias" seed={CIRUGIAS_SUGGESTIONS} value={currentValues['Cirugías realizadas']} onPick={(next) => updateField('Cirugías realizadas', next)} />
+            </div>
+            <div className="form-card">
+              <h3>Antecedentes ginecobstétricos</h3>
+              <p className="eyebrow">CICLO Y MENSTRUACIÓN</p>
+              <div className="form-grid three">
+                <label>Menarca (edad)<input value={currentValues['Menarca'] ?? ''} onChange={(e) => updateField('Menarca', e.target.value)} placeholder="Años" /></label>
+                <label>Última menstruación<input type="date" value={currentValues['Última menstruación'] ?? ''} onChange={(e) => updateField('Última menstruación', e.target.value)} /></label>
+                <label>Duración del ciclo<input value={currentValues['Duración del ciclo'] ?? ''} onChange={(e) => updateField('Duración del ciclo', e.target.value)} placeholder="Días" /></label>
+                <label>Eumenorrea<input value={currentValues['Eumenorrea'] ?? ''} onChange={(e) => updateField('Eumenorrea', e.target.value)} /></label>
+                <label>Dismenorrea<input value={currentValues['Dismenorrea'] ?? ''} onChange={(e) => updateField('Dismenorrea', e.target.value)} /></label>
+                <label>Anticonceptivos orales/hormonales<input value={currentValues['Anticonceptivos orales u hormonales'] ?? ''} onChange={(e) => updateField('Anticonceptivos orales u hormonales', e.target.value)} /></label>
+              </div>
+              <p className="eyebrow">HISTORIA OBSTÉTRICA</p>
+              <div className="form-grid three">
+                <label>Gestaciones<input value={currentValues['Gestaciones'] ?? ''} onChange={(e) => updateField('Gestaciones', e.target.value)} /></label>
+                <label>Partos<input value={currentValues['Partos'] ?? ''} onChange={(e) => updateField('Partos', e.target.value)} /></label>
+                <label>Abortos<input value={currentValues['Abortos'] ?? ''} onChange={(e) => updateField('Abortos', e.target.value)} /></label>
+                <label>Cesáreas<input value={currentValues['Cesáreas'] ?? ''} onChange={(e) => updateField('Cesáreas', e.target.value)} /></label>
+                <label>¿Está embarazada?<div className="toggle-pair"><TogglePill active={currentValues['Está embarazada'] === 'Sí'} label="Sí" onClick={() => updateField('Está embarazada', currentValues['Está embarazada'] === 'Sí' ? '' : 'Sí')} /><TogglePill active={currentValues['Está embarazada'] === 'No'} label="No" onClick={() => updateField('Está embarazada', currentValues['Está embarazada'] === 'No' ? '' : 'No')} /></div></label>
+                <label>Semanas de gestación<input value={currentValues['Semanas de gestación'] ?? ''} onChange={(e) => updateField('Semanas de gestación', e.target.value)} /></label>
+              </div>
+              <p className="eyebrow">CLIMATERIO Y TERAPIA HORMONAL</p>
+              <div className="form-grid three">
+                <label>¿Climaterio o menopausia?<div className="toggle-pair"><TogglePill active={currentValues['Climaterio o menopausia'] === 'Sí'} label="Sí" onClick={() => updateField('Climaterio o menopausia', currentValues['Climaterio o menopausia'] === 'Sí' ? '' : 'Sí')} /><TogglePill active={currentValues['Climaterio o menopausia'] === 'No'} label="No" onClick={() => updateField('Climaterio o menopausia', currentValues['Climaterio o menopausia'] === 'No' ? '' : 'No')} /></div></label>
+                <label>Fecha de inicio<input type="date" value={currentValues['Climaterio: fecha de inicio'] ?? ''} onChange={(e) => updateField('Climaterio: fecha de inicio', e.target.value)} /></label>
+                <label>¿Terapia de reemplazo hormonal?<div className="toggle-pair"><TogglePill active={currentValues['Terapia de reemplazo hormonal'] === 'Sí'} label="Sí" onClick={() => updateField('Terapia de reemplazo hormonal', currentValues['Terapia de reemplazo hormonal'] === 'Sí' ? '' : 'Sí')} /><TogglePill active={currentValues['Terapia de reemplazo hormonal'] === 'No'} label="No" onClick={() => updateField('Terapia de reemplazo hormonal', currentValues['Terapia de reemplazo hormonal'] === 'No' ? '' : 'No')} /></div></label>
+                <label>Cuál<input value={currentValues['TRH: cuál'] ?? ''} onChange={(e) => updateField('TRH: cuál', e.target.value)} /></label>
+                <label>Dosis<input value={currentValues['TRH: dosis'] ?? ''} onChange={(e) => updateField('TRH: dosis', e.target.value)} /></label>
+              </div>
+              <div className="form-grid">
+                <label>Observaciones ginecobstétricas<textarea value={currentValues['Observaciones ginecobstétricas'] ?? ''} onChange={(e) => updateField('Observaciones ginecobstétricas', e.target.value)} /></label>
+              </div>
+            </div>
+          </div>],
+          ['medicamentos', 'Medicamentos', <div key="m" className="form-card">
+            <h3>Medicamentos y suplementos</h3>
+            <div className="form-grid">
+              <label>Medicamentos que toma<textarea value={currentValues['Medicamentos que toma'] ?? ''} onChange={(e) => updateField('Medicamentos que toma', e.target.value)} /></label>
+            </div>
+            <SuggestionChips storageKey="chips:medicamentos" seed={MEDICAMENTOS_SUGGESTIONS} value={currentValues['Medicamentos que toma']} onPick={(next) => updateField('Medicamentos que toma', next)} />
+            <div className="form-grid">
+              <label>Suplementos que toma<textarea value={currentValues['Suplementos que toma'] ?? ''} onChange={(e) => updateField('Suplementos que toma', e.target.value)} /></label>
+            </div>
+            <SuggestionChips storageKey="chips:suplementos" seed={SUPLEMENTOS_SUGGESTIONS} value={currentValues['Suplementos que toma']} onPick={(next) => updateField('Suplementos que toma', next)} />
+            <div className="form-grid">
+              <label>Interacciones con nutrientes<textarea value={currentValues['Interacciones con nutrientes'] ?? ''} onChange={(e) => updateField('Interacciones con nutrientes', e.target.value)} /></label>
+            </div>
+            <SuggestionChips storageKey="chips:interacciones" seed={INTERACCIONES_SUGGESTIONS} value={currentValues['Interacciones con nutrientes']} onPick={(next) => updateField('Interacciones con nutrientes', next)} joiner=" " />
+          </div>],
+          ['alergias', 'Alergias y sustancias', <div key="al" className="sub-stack">
+            <div className="form-card">
+              <h3>Alergias e intolerancias</h3>
+              <div className="form-grid">
+                <label>Alergias alimentarias<textarea value={currentValues['Alergias alimentarias'] ?? ''} onChange={(e) => updateField('Alergias alimentarias', e.target.value)} /></label>
+              </div>
+              <SuggestionChips storageKey="chips:alergias" seed={ALERGIAS_SUGGESTIONS} value={currentValues['Alergias alimentarias']} onPick={(next) => updateField('Alergias alimentarias', next)} />
+              <div className="form-grid">
+                <label>Intolerancias<textarea value={currentValues['Intolerancias'] ?? ''} onChange={(e) => updateField('Intolerancias', e.target.value)} /></label>
+              </div>
+              <SuggestionChips storageKey="chips:intolerancias" seed={INTOLERANCIAS_SUGGESTIONS} value={currentValues['Intolerancias']} onPick={(next) => updateField('Intolerancias', next)} />
+            </div>
+            <FormCard title="Consumo de sustancias" fields={['Tabaquismo (frecuencia)|', 'Consumo de alcohol (frecuencia)|']} values={currentValues} onFieldChange={updateField} />
+          </div>],
           ['sintomas', 'Síntomas', <div key="s" className="symptom-grid">{SYMPTOMS.map((symptom) => { const active = !!currentValues[symptom]; return <TogglePill key={symptom} active={active} label={symptom} onClick={() => updateField(symptom, !active)} /> })}</div>],
           ['exploracion', 'Exploración física', <div key="e">{PHYSICAL_EXAM.map(([group, findings]) => <div key={group} className="exam-group">
             <b className="exam-group-title">{group}</b>
@@ -1192,6 +1263,24 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             {examSelected.length > 0
               ? <div className="exam-reference"><p className="eyebrow">REFERENCIA VISUAL DE LOS HALLAZGOS</p><div className="exam-ref-grid">{examSelected.map((finding) => <figure className="exam-ref" key={finding}><ExamArt finding={finding} /><figcaption>{finding}</figcaption></figure>)}</div></div>
               : <p className="anthro-hint">Selecciona un hallazgo y aquí aparecerá una imagen de referencia.</p>}
+          </div>],
+          ['monitoreo-clinico', 'Monitoreo Clínico', <div key="mc" className="sub-stack">
+            {/* Campos de una sola línea escritos a mano en vez de con FormCard: su convención
+                convierte en textarea automáticamente al último campo de la lista cuando no lleva
+                "|*", y aquí los cuatro (lpm, rpm, %, °C) deben quedar como número de una línea. */}
+            <div className="form-card"><h3>Signos vitales</h3><div className="form-grid">
+              <label>Frecuencia cardiaca (lpm)<input value={currentValues['Frecuencia cardiaca (lpm)'] ?? ''} onChange={(e) => updateField('Frecuencia cardiaca (lpm)', e.target.value)} /></label>
+              <label>Frecuencia respiratoria (rpm)<input value={currentValues['Frecuencia respiratoria (rpm)'] ?? ''} onChange={(e) => updateField('Frecuencia respiratoria (rpm)', e.target.value)} /></label>
+              <label>Oxigenación (%)<input value={currentValues['Oxigenación (%)'] ?? ''} onChange={(e) => updateField('Oxigenación (%)', e.target.value)} /></label>
+              <label>Temperatura (°C)<input value={currentValues['Temperatura (°C)'] ?? ''} onChange={(e) => updateField('Temperatura (°C)', e.target.value)} /></label>
+            </div></div>
+            <FormCard title="Pruebas capilares" fields={['Pruebas capilares (glucosa, hemoglobina…)|*']} values={currentValues} onFieldChange={updateField} />
+            <div className="form-card"><h3>Fuerza / función</h3><div className="form-grid">
+              <label>Dinamometría (kg)<input value={currentValues['Dinamometría (kg)'] ?? ''} onChange={(e) => updateField('Dinamometría (kg)', e.target.value)} /></label>
+              <label>Velocidad de la marcha (m/s)<input value={currentValues['Velocidad de la marcha (m/s)'] ?? ''} onChange={(e) => updateField('Velocidad de la marcha (m/s)', e.target.value)} /></label>
+              <label>Time Up and Go (s)<input value={currentValues['Time Up and Go (s)'] ?? ''} onChange={(e) => updateField('Time Up and Go (s)', e.target.value)} /></label>
+              <label>Sentarse y pararse 30 s (repeticiones)<input value={currentValues['Sentarse y pararse 30 s (repeticiones)'] ?? ''} onChange={(e) => updateField('Sentarse y pararse 30 s (repeticiones)', e.target.value)} /></label>
+            </div></div>
           </div>],
           ['notas', 'Notas', <div key="n" className="sub-stack"><FormCard title="Notas clínicas" fields={['Notas clínicas|']} values={currentValues} onFieldChange={updateField} /><FormCard title="Notas de antecedentes" fields={['Notas de antecedentes|']} values={currentValues} onFieldChange={updateField} /></div>],
         ]} />

@@ -1126,3 +1126,7 @@ html{scroll-behavior:smooth}
 .trend-delta{color:#55565f;font:600 10px 'DM Mono'}
 .summary-trend-svg{width:100%;height:58px;display:block}
 .summary-trend-empty{margin:14px 0;text-align:center}
+
+/* Par Sí/No dentro de un <label> del form-grid (antecedentes ginecobstétricos, etc). */
+.toggle-pair{display:flex;gap:6px;margin-top:6px}
+.toggle-pair .toggle-pill{margin:0}
