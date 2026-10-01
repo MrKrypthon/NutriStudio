@@ -322,10 +322,18 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [uploadState, setUploadState] = useState('idle')
   const [uploadError, setUploadError] = useState('')
   // La cabecera tenía ocho botones sueltos (tres documentos, cada uno con su variante
-  // generar/actualizar/descargar). Se agrupan bajo un solo menú "Generar informe ▾": nada deja de
-  // poder hacerse, sólo deja de competir por espacio con Terminar consulta y Agendar.
+  // generar/actualizar/descargar). La página "Botones" del PDF pide dejar sólo tres en la
+  // cabecera: Terminar consulta, Agendar y Generar expediente — así que las tres variantes de
+  // documento se agrupan bajo un solo menú "Generar expediente ▾": nada deja de poder hacerse,
+  // sólo deja de competir por espacio con los otros dos.
   const [reportMenuOpen, setReportMenuOpen] = useState(false)
   const reportMenuRef = useRef(null)
+  const [objectiveSavedAt, setObjectiveSavedAt] = useState(null)
+  useEffect(() => {
+    if (!objectiveSavedAt) return
+    const timer = setTimeout(() => setObjectiveSavedAt(null), 2500)
+    return () => clearTimeout(timer)
+  }, [objectiveSavedAt])
   useEffect(() => {
     const onClickOutside = (event) => { if (reportMenuRef.current && !reportMenuRef.current.contains(event.target)) setReportMenuOpen(false) }
     document.addEventListener('mousedown', onClickOutside)
@@ -1112,7 +1120,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         {consultation && consultation.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}
         <button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>
         <div className="header-pop" ref={reportMenuRef}>
-          <button className="primary" onClick={() => setReportMenuOpen((v) => !v)}>Generar informe {reportMenuOpen ? '▴' : '▾'}</button>
+          <button className="primary" onClick={() => setReportMenuOpen((v) => !v)}>Generar expediente {reportMenuOpen ? '▴' : '▾'}</button>
           {reportMenuOpen && <div className="dropdown-panel report-menu">
             <p className="dropdown-title">INFORME PARA EL PACIENTE</p>
             <button type="button" className="dropdown-item" disabled={reportState === 'working'} onClick={() => { generateReport(); setReportMenuOpen(false) }}><div><b>{reportState === 'working' ? 'Generando…' : report?.storageKey ? 'Actualizar informe' : 'Generar informe'}</b><small>Resumen visual de la consulta</small></div></button>
@@ -1527,10 +1535,16 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             <h3>Cálculo para balance calórico</h3>
             <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>Frecuentemente usado en pacientes para el aumento de masa muscular o la reducción de grasa.</p>
             <div className="balance-toggle">{['Normocalórico', 'Déficit', 'Superávit'].map((option) => <TogglePill key={option} active={(currentValues['Balance energético'] || 'Normocalórico') === option} label={option} onClick={() => updateField('Balance energético', option)} />)}</div>
-            <div className="form-grid three" style={{ marginTop: 16 }}>
-              <label>Hidratos (g/kg)<input type="number" min="0" step="0.1" value={currentValues['Hidratos (g/kg)'] ?? ''} onChange={(e) => updateField('Hidratos (g/kg)', e.target.value)} /></label>
-              <label>Proteína (g/kg)<input type="number" min="0" step="0.1" value={currentValues['Proteína (g/kg)'] ?? ''} onChange={(e) => updateField('Proteína (g/kg)', e.target.value)} /></label>
-              <label>Lípidos (g/kg)<input type="number" min="0" step="0.1" value={currentValues['Lípidos (g/kg)'] ?? ''} onChange={(e) => updateField('Lípidos (g/kg)', e.target.value)} /></label>
+            <div className="macro-sliders" style={{ marginTop: 16 }}>
+              {[['Hidratos (g/kg)', 0, 10], ['Proteína (g/kg)', 0, 4], ['Lípidos (g/kg)', 0, 5]].map(([field, min, max]) => {
+                const raw = currentValues[field]
+                const value = raw === '' || raw == null ? 0 : Number(raw)
+                return <label className="macro-slider-row" key={field}>
+                  <span>{field}</span>
+                  <input type="range" min={min} max={max} step="0.1" value={value} onChange={(e) => updateField(field, e.target.value)} />
+                  <input type="number" className="macro-slider-value" min={min} max={max} step="0.1" value={raw ?? ''} onChange={(e) => updateField(field, e.target.value)} />
+                </label>
+              })}
             </div>
             {(() => {
               // Peso más reciente del paciente (la última medición registrada), para no pedirlo de
@@ -1544,7 +1558,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               return <div className="requirement-result">
                 {weight == null
                   ? <p className="muted">Registra un peso en Antropométrico para calcular el objetivo energético.</p>
-                  : <><small>Objetivo energético · con {weight} kg</small><b>{kcal != null ? kcal.toLocaleString() : '—'} <em>kcal</em></b><span>{carbs ? `${Math.round(carbs * weight)} g HC` : null}{protein ? ` · ${Math.round(protein * weight)} g PRO` : null}{fat ? ` · ${Math.round(fat * weight)} g LIP` : null}</span></>}
+                  : <><small>Objetivo energético · con {weight} kg</small><b>{kcal != null ? kcal.toLocaleString() : '—'} <em>kcal</em></b><span>{carbs ? `${Math.round(carbs * weight)} g HC` : null}{protein ? ` · ${Math.round(protein * weight)} g PRO` : null}{fat ? ` · ${Math.round(fat * weight)} g LIP` : null}</span>
+                    {/* Todo en esta sección ya se autoguarda campo por campo (como el resto del
+                        expediente); este botón no cambia eso, sólo da la confirmación explícita
+                        que pide el PDF de que "ya quedó fijado" el objetivo de hoy. */}
+                    <button type="button" className="secondary save-objective-btn" onClick={() => setObjectiveSavedAt(Date.now())}>{objectiveSavedAt ? 'Guardado ✓' : 'Guardar como objetivo'}</button>
+                  </>}
               </div>
             })()}
           </div>],

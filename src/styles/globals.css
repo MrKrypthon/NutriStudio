@@ -1141,6 +1141,13 @@ html{scroll-behavior:smooth}
 .requirement-result b{display:block;color:#28187b;font:800 24px Manrope;margin:5px 0}
 .requirement-result em{font:400 10px 'DM Sans'}
 .requirement-result span{font-size:10px;color:#3e9974}
+.requirement-result{position:relative}
+.save-objective-btn{display:block;margin-top:12px;width:max-content}
+.macro-sliders{display:flex;flex-direction:column;gap:12px}
+.macro-slider-row{display:grid;grid-template-columns:120px 1fr 64px;align-items:center;gap:12px;font-size:10px;color:#737680}
+.macro-slider-row input[type=range]{accent-color:var(--green)}
+.macro-slider-value{width:100%;border:1px solid var(--line);border-radius:6px;background:#fbfcfc;padding:7px 8px;font:11px 'DM Sans';color:#343547}
+@media(max-width:520px){.macro-slider-row{grid-template-columns:1fr}}
 
 /* Diagnóstico: selector de términos PES */
 .pes-picker{border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--surface-soft);margin-bottom:14px}

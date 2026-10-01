@@ -82,6 +82,10 @@ medida que avanza.
   Antropométrico. Es una calculadora propia y más simple que la del Constructor de plan (que sigue
   siendo la autoridad para armar el menú con fórmulas de GET por edad/sexo/actividad); ésta vive en
   el expediente para registrar el objetivo en g/kg sin salir de la consulta.
+- [x] **Fase 87**: los tres campos de g/kg pasan de inputs numéricos simples a sliders con valor
+  editable al lado, igual que en la referencia del PDF; se agrega el botón "Guardar como objetivo"
+  que pedía esa misma página, con una confirmación visual breve (el resto de la sección sigue
+  autoguardándose campo por campo, como el resto del expediente).
 
 ## Tanda 8 — Monitoreo y Notas
 
@@ -94,11 +98,13 @@ medida que avanza.
 
 ## Tanda 9 — Botones y cumplimiento normativo
 
-- [x] **Decisión de diseño** (no estaba en el PDF de forma inequívoca): la captura pide dejar sólo
-  "Terminar consulta", "Agendar" y "Generar expediente" visibles. Había 3 tipos de documento ya
-  construidos y verificados (informe para paciente, informe clínico, expediente/export) — quitarlos
-  habría sido destructivo. Se optó por un menú desplegable único "Generar informe ▾" que agrupa los
-  tres, dejando sólo 3 botones sueltos en la barra: Terminar consulta, Agendar, Generar informe.
+- [x] **Decisión de diseño, confirmada en la fase 87**: la captura pide dejar sólo "Terminar
+  consulta", "Agendar" y "Generar expediente" visibles. Había 3 tipos de documento ya construidos
+  y verificados (informe para paciente, informe clínico, expediente/export) — quitarlos habría sido
+  destructivo. Se mantiene el menú desplegable único que los agrupa, y en la fase 87 se renombra su
+  botón de "Generar informe ▾" a "Generar expediente ▾" para igualar el nombre exacto de la página
+  "Botones" del PDF, dejando sólo 3 botones sueltos en la barra: Terminar consulta, Agendar,
+  Generar expediente.
 - [x] El PDF señala que "Generar informe" debe cumplir la NOM-004-SSA3-2012 y la Ley Federal de
   Protección de Datos Personales en Posesión de los Particulares — se agrega el aviso de
   confidencialidad y los datos mínimos de expediente clínico (NOM-004) al pie del documento generado.
@@ -107,7 +113,8 @@ medida que avanza.
 
 ## Pendiente de la usuaria
 
-1. Confirmar la consolidación de botones de la Tanda 9 si no es lo que tenía en mente.
+Ninguno: la fase 87 releyó el PDF completo (incluida la página "Botones", que no se había cruzado
+a detalle en el primer pase) y confirmó que la consolidación de la Tanda 9 era la lectura correcta.
 
 ---
 
