@@ -60,6 +60,9 @@ function formatRangeLabel(days) {
   return sameMonth ? `${first.getUTCDate()} – ${last.getUTCDate()} ${MONTHS[first.getUTCMonth()]} ${first.getUTCFullYear()}` : `${first.getUTCDate()} ${MONTHS[first.getUTCMonth()]} – ${last.getUTCDate()} ${MONTHS[last.getUTCMonth()]} ${first.getUTCFullYear()}`
 }
 
+// Nombre completo tal como aparece en el buscador de pacientes del modal (ver patientLabel).
+const patientLabel = (p) => `${p.firstName} ${p.lastName}`
+
 export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew, autoOpenPatientId, onConsumeAutoOpen, autoFilter, onConsumeAutoFilter }) {
   const [view, setView] = useState('Semana')
   const [anchor, setAnchor] = useState(TODAY)
@@ -83,6 +86,13 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   const [dragDuration, setDragDuration] = useState(null)
   const [dropKey, setDropKey] = useState(null)
   const [moveError, setMoveError] = useState('')
+  // Confirmar una cita pedía antes un solo clic sin aviso; ahora se detiene en un mensaje para que
+  // no se confirme por accidente al rozar el recuadro.
+  const [confirmTarget, setConfirmTarget] = useState(null)
+  const [confirmSaving, setConfirmSaving] = useState(false)
+  // Texto libre del buscador de pacientes del modal: se guarda aparte de `form.patientId` porque lo
+  // que escribe la nutrióloga no siempre coincide (todavía) con un paciente real.
+  const [patientQuery, setPatientQuery] = useState('')
   // Ticks every minute so the "now" line moves and past appointments fade out as time passes.
   const [nowTick, setNowTick] = useState(0)
   useEffect(() => { const t = setInterval(() => setNowTick((n) => n + 1), 60000); return () => clearInterval(t) }, [])
@@ -244,11 +254,40 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       setAppointments((prev) => prev.map((a) => (a.id === id ? updated : a)))
     } catch { /* The list keeps its previous state; the professional can retry. */ }
   }
+  // Un clic en una cita "por confirmar" ya no confirma directo: pide "¿Deseas confirmar la cita?"
+  // y recién al aceptar llama a la API, para que un clic accidental no cambie el estado de la cita.
+  const askConfirm = (appointment) => setConfirmTarget(appointment)
+  const resolveConfirm = async () => {
+    if (!confirmTarget) return
+    setConfirmSaving(true)
+    await confirmAppointment(confirmTarget.id)
+    setConfirmSaving(false)
+    setConfirmTarget(null)
+  }
 
-  const openModal = (defaultPatientId) => { setIsBlock(false); setForm(emptyForm(anchor, defaultPatientId)); setResetNewPatient(); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
-  const openBlockModal = () => { setIsBlock(true); setForm({ ...emptyForm(anchor), type: 'BLOCK', notify: 'none' }); setResetNewPatient(); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
-  const openSlotModal = (day, time) => { setIsBlock(false); setForm({ ...emptyForm(day), date: toISODate(day), time, duration: fitDuration(day, time) }); setResetNewPatient(); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const openModal = (defaultPatientId) => {
+    setIsBlock(false)
+    setForm(emptyForm(anchor, defaultPatientId))
+    setResetNewPatient()
+    // Si el modal se abre con un paciente ya elegido (p. ej. "Agendar cita" desde Pacientes), el
+    // nombre se muestra sólo cuando ya se conoce; si la lista de pacientes no ha llegado todavía,
+    // el efecto de abajo lo completa en cuanto llegue, en vez de mostrar un nombre vacío a medias.
+    const match = defaultPatientId && patients.find((p) => p.id === defaultPatientId)
+    setPatientQuery(match ? patientLabel(match) : '')
+    setSubmitError(''); setSubmitState('idle'); setOpen(true)
+  }
+  const openBlockModal = () => { setIsBlock(true); setForm({ ...emptyForm(anchor), type: 'BLOCK', notify: 'none' }); setResetNewPatient(); setPatientQuery(''); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
+  const openSlotModal = (day, time) => { setIsBlock(false); setForm({ ...emptyForm(day), date: toISODate(day), time, duration: fitDuration(day, time) }); setResetNewPatient(); setPatientQuery(''); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
   const setResetNewPatient = () => { setNewPatient(EMPTY_NEW_PATIENT); setNewPatientState('idle'); setNewPatientError(''); setShowNewPatient(false) }
+
+  // El buscador de pacientes admite texto (filtra mientras se escribe) en vez de obligar a abrir un
+  // <select> largo. Se resuelve a un patientId sólo cuando el texto coincide con un paciente real;
+  // mientras tanto el id queda vacío y el envío sigue pidiendo elegir uno, como ya hacía el select.
+  const onPatientQueryChange = (value) => {
+    setPatientQuery(value)
+    const match = patients.find((p) => patientLabel(p).toLowerCase() === value.trim().toLowerCase())
+    update('patientId', match ? match.id : '')
+  }
 
   // Quick "add patient" inside the appointment modal: keeps the in-progress booking (date, time,
   // notes) instead of navigating away to the full patient form.
@@ -269,6 +308,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     try {
       const created = await persistNewPatient()
       setForm((prev) => ({ ...prev, patientId: created.id }))
+      setPatientQuery(patientLabel(created))
     } catch (error) {
       setNewPatientState('error')
       setNewPatientError(error.code === 'DEMO_MODE' ? 'Modo demostración: no se guardará. Conecta el API para crear pacientes.' : (error.message || 'No se pudo crear el paciente.'))
@@ -281,6 +321,14 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   useEffect(() => {
     if (autoOpenNew) { openModal(autoOpenPatientId); onConsumeAutoOpen?.() }
   }, [autoOpenNew])
+  // Completa el buscador de pacientes si el modal se abrió con un id preseleccionado antes de que
+  // la lista terminara de cargar (la carga es async y puede resolver después del primer render).
+  useEffect(() => {
+    if (!open || !form.patientId || patientQuery) return
+    const match = patients.find((p) => p.id === form.patientId)
+    if (match) setPatientQuery(patientLabel(match))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patients, open])
   // Same one-shot pattern for the status filter: "Por confirmar" on Hoy lands here already
   // filtered instead of landing on the unfiltered week.
   useEffect(() => {
@@ -419,7 +467,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
                 const confirmed = isConfirmedLike(appointment.status) && !isBlockEvent
                 const isPast = appointment.endAt ? new Date(appointment.endAt).getTime() < nowMs : false
                 const name = isBlockEvent ? 'Bloqueo' : appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Paciente'
-                const onClick = (e) => { e.stopPropagation(); if (pending) confirmAppointment(appointment.id); else if (confirmed) onStartConsultation?.(appointment.patientId, appointment.id) }
+                const onClick = (e) => { e.stopPropagation(); if (pending) askConfirm(appointment); else if (confirmed) onStartConsultation?.(appointment.patientId, appointment.id) }
                 return <div
                   className={`event ${color}-event${isPast ? ' past' : ''}${dragId === appointment.id ? ' dragging' : ''}`}
                   style={{ top, height, cursor: pending || confirmed ? 'pointer' : 'default' }}
@@ -445,7 +493,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     <div className="modal-head"><div><p className="eyebrow">{isBlock ? 'NUEVO BLOQUEO' : 'NUEVA CITA'}</p><h2>{isBlock ? 'Bloquea tu disponibilidad' : 'Programa una consulta'}</h2><span className="modal-subtitle">{isBlock ? 'Ocupa un horario en tu agenda sin asignarlo a un paciente.' : 'La cita quedará visible en tu agenda.'}</span></div><button onClick={closeModal}>×</button></div>
     <form onSubmit={submit}>
       {!isBlock && <div className="form-step active-step"><span>1</span><b>Selecciona el paciente</b></div>}
-      {!isBlock && <div className="patient-field"><span className="field-label">Paciente</span><div className="patient-select-row"><select value={form.patientId} onChange={(e) => { update('patientId', e.target.value); setShowNewPatient(false) }}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select><button type="button" className={showNewPatient ? 'primary' : 'secondary'} onClick={() => setShowNewPatient((value) => !value)}>{showNewPatient ? 'Cancelar' : '＋ Nuevo paciente'}</button></div></div>}
+      {!isBlock && <div className="patient-field"><span className="field-label">Paciente</span><div className="patient-select-row"><input list="agenda-patient-options" value={patientQuery} onChange={(e) => { onPatientQueryChange(e.target.value); setShowNewPatient(false) }} placeholder="Buscar paciente…" autoComplete="off" /><datalist id="agenda-patient-options">{patients.map((p) => <option value={patientLabel(p)} key={p.id} />)}</datalist><button type="button" className={showNewPatient ? 'primary' : 'secondary'} onClick={() => setShowNewPatient((value) => !value)}>{showNewPatient ? 'Cancelar' : '＋ Nuevo paciente'}</button></div></div>}
       {!isBlock && showNewPatient && <div className="new-patient-inline">
         <div className="form-row"><label>Nombre(s) *<input value={newPatient.firstName} onChange={(e) => setNewPatient((prev) => ({ ...prev, firstName: e.target.value }))} placeholder="Ej. Mariana" /></label><label>Apellido(s) *<input value={newPatient.lastName} onChange={(e) => setNewPatient((prev) => ({ ...prev, lastName: e.target.value }))} placeholder="Ej. Torres" /></label></div>
         <div className="form-row"><label>Teléfono<input value={newPatient.phone} onChange={(e) => setNewPatient((prev) => ({ ...prev, phone: e.target.value }))} placeholder="+52 55 1234 5678" /></label><label>Email<input type="email" value={newPatient.email} onChange={(e) => setNewPatient((prev) => ({ ...prev, email: e.target.value }))} placeholder="correo@email.com" /></label></div>
@@ -465,6 +513,11 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       {submitError && <div className="form-error">⚠ {submitError}</div>}
       <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal}>Cancelar</button><button className="primary" disabled={submitState === 'saving'}>{submitState === 'saving' ? 'Guardando…' : isBlock ? 'Crear bloqueo' : 'Crear cita'} <span>→</span></button></div>
     </form>
+  </div></div>}
+
+  {confirmTarget && <div className="modal-backdrop" onClick={() => !confirmSaving && setConfirmTarget(null)}><div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-head"><div><p className="eyebrow">POR CONFIRMAR</p><h2>¿Deseas confirmar la cita?</h2><span className="modal-subtitle">{confirmTarget.patient ? `${confirmTarget.patient.firstName} ${confirmTarget.patient.lastName}` : 'Paciente'} · {new Date(confirmTarget.startAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', timeZone: 'UTC' })} · {String(new Date(confirmTarget.startAt).getUTCHours()).padStart(2, '0')}:{String(new Date(confirmTarget.startAt).getUTCMinutes()).padStart(2, '0')}</span></div><button onClick={() => !confirmSaving && setConfirmTarget(null)}>×</button></div>
+    <div className="modal-actions"><button type="button" className="secondary" onClick={() => setConfirmTarget(null)} disabled={confirmSaving}>Cancelar</button><button type="button" className="primary" onClick={resolveConfirm} disabled={confirmSaving}>{confirmSaving ? 'Confirmando…' : 'Confirmar cita'} <span>→</span></button></div>
   </div></div>}
   </AppChrome>
 }

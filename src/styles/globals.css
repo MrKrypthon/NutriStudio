@@ -212,7 +212,7 @@ html{scroll-behavior:smooth}
 .patient-field{display:block;margin-bottom:12px}
 .patient-field .field-label{display:block;font-size:10px;color:#737680;font-weight:600;margin-bottom:6px}
 .patient-select-row{display:flex;gap:8px;align-items:center}
-.patient-select-row select{flex:1}
+.patient-select-row select,.patient-select-row input{flex:1}
 .patient-select-row button{white-space:nowrap;flex-shrink:0}
 
 /* Menú lateral: botón hamburguesa dentro de la barra, colapso animado en escritorio y drawer en móvil */

@@ -59,7 +59,7 @@ function describeEvent(event) {
 
 const emptyEditForm = (patient) => ({ firstName: patient?.firstName || '', lastName: patient?.lastName || '', email: patient?.email || '', phone: patient?.phone || '', birthDate: patient?.birthDate ? patient.birthDate.slice(0, 10) : '', sex: patient?.sex || 'Femenino', occupation: patient?.occupation || '' })
 
-export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient }) {
+export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient, onNewAppointment }) {
   const [rows, setRows] = useState(patients)
   const [status, setStatus] = useState('loading')
   const [search, setSearch] = useState('')
@@ -170,6 +170,7 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
       <div className="drawer-actions">
         <button className="primary" disabled={!selected[6]} onClick={() => goTo('Expediente')}>Abrir expediente</button>
         <button className="secondary" disabled={!selected[6]} onClick={() => goTo('Constructor de plan')}>Ir al plan</button>
+        <button className="secondary" disabled={!selected[6]} onClick={() => onNewAppointment?.(selected[6])}>▱ Agendar cita</button>
       </div>
       {selected[6] && <div className="drawer-section">
         <p className="eyebrow">CONTACTO Y PRÓXIMA CITA</p>
