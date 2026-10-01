@@ -128,6 +128,16 @@ const INTOLERANCIAS_SUGGESTIONS = [
   { label: 'Gluten', text: 'Sensibilidad al gluten no celíaca.' },
   { label: 'Ninguna', text: 'Ninguna.' },
 ]
+const TABACO_SUGGESTIONS = [
+  { label: 'Fumador', text: 'Fumador.' },
+  { label: 'Ex fumador', text: 'Ex fumador.' },
+  { label: 'No fuma', text: 'No fuma.' },
+]
+const ALCOHOL_SUGGESTIONS = [
+  { label: 'Consumo ocasional', text: 'Consumo ocasional.' },
+  { label: 'Consumo regular', text: 'Consumo regular.' },
+  { label: 'No consume', text: 'No consume.' },
+]
 // Evaluación cualitativa del diagnóstico alimentario (CESIVA) y frecuencia de consumo por alimento.
 const CESIVA = [['Completa', 'Incluye todos los grupos de alimentos'], ['Equilibrada', 'Proporción adecuada entre grupos'], ['Suficiente', 'Cubre los requerimientos'], ['Inocua', 'Sin riesgo para la salud'], ['Variada', 'Alterna distintos alimentos'], ['Adecuada', 'Apta para el paciente']]
 const SYMPTOMS = ['Diarrea', 'Estreñimiento', 'Náusea', 'Úlcera', 'Pirosis', 'Ceguera nocturna', 'Vómito', 'Gastritis', 'Poliuria', 'Polidipsia', 'Polifagia']
@@ -1366,7 +1376,17 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               </div>
               <SuggestionChips storageKey="chips:intolerancias" seed={INTOLERANCIAS_SUGGESTIONS} value={currentValues['Intolerancias']} onPick={(next) => updateField('Intolerancias', next)} />
             </div>
-            <FormCard title="Consumo de sustancias" fields={['Tabaquismo (frecuencia)|', 'Consumo de alcohol (frecuencia)|']} values={currentValues} onFieldChange={updateField} />
+            <div className="form-card">
+              <h3>Consumo de sustancias</h3>
+              <div className="form-grid">
+                <label>Tabaquismo (frecuencia)<textarea value={currentValues['Tabaquismo (frecuencia)'] ?? ''} onChange={(e) => updateField('Tabaquismo (frecuencia)', e.target.value)} /></label>
+              </div>
+              <SuggestionChips storageKey="chips:tabaco" seed={TABACO_SUGGESTIONS} value={currentValues['Tabaquismo (frecuencia)']} onPick={(next) => updateField('Tabaquismo (frecuencia)', next)} />
+              <div className="form-grid">
+                <label>Consumo de alcohol (frecuencia)<textarea value={currentValues['Consumo de alcohol (frecuencia)'] ?? ''} onChange={(e) => updateField('Consumo de alcohol (frecuencia)', e.target.value)} /></label>
+              </div>
+              <SuggestionChips storageKey="chips:alcohol" seed={ALCOHOL_SUGGESTIONS} value={currentValues['Consumo de alcohol (frecuencia)']} onPick={(next) => updateField('Consumo de alcohol (frecuencia)', next)} />
+            </div>
           </div>],
           ['sintomas', 'Síntomas', <div key="s" className="symptom-grid">{SYMPTOMS.map((symptom) => { const active = !!currentValues[symptom]; return <TogglePill key={symptom} active={active} label={symptom} onClick={() => updateField(symptom, !active)} /> })}</div>],
           ['exploracion', 'Exploración física', <div key="e">{PHYSICAL_EXAM.map(([group, findings]) => <div key={group} className="exam-group">
@@ -1438,6 +1458,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               <label>Refrescos, jugos o bebidas azucaradas (frecuencia y tipo)<input value={currentValues['Refrescos, jugos o bebidas azucaradas'] ?? ''} onChange={(e) => updateField('Refrescos, jugos o bebidas azucaradas', e.target.value)} /></label>
               <label>Bebidas energéticas<input value={currentValues['Consumo de bebidas energéticas'] ?? ''} onChange={(e) => updateField('Consumo de bebidas energéticas', e.target.value)} /></label>
               <label>Café o té (tazas/día y endulzante)<input value={currentValues['Café o té (tazas/día y endulzante)'] ?? ''} onChange={(e) => updateField('Café o té (tazas/día y endulzante)', e.target.value)} /></label>
+              {/* Distinto del "Tabaquismo/Alcohol" de Clínico (ahí es factor de riesgo clínico):
+                  aquí es parte del patrón de bebidas del día a día, como pide el PDF. */}
+              <label>Consumo de alcohol<input value={currentValues['Consumo de alcohol (hidratación)'] ?? ''} onChange={(e) => updateField('Consumo de alcohol (hidratación)', e.target.value)} /></label>
             </div></div>
           </div>],
           ['historial', 'Historial', <div key="hi" className="sub-stack">
