@@ -1403,9 +1403,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             <h3>Seguimiento subjetivo</h3>
             <div className="form-grid">
               <label>Estado de ánimo<input value={currentValues['Estado de ánimo'] ?? ''} onChange={(e) => updateField('Estado de ánimo', e.target.value)} /></label>
-              <label>Apego al plan<input value={currentValues['Apego al plan'] ?? ''} onChange={(e) => updateField('Apego al plan', e.target.value)} /></label>
+              <div className="field-with-chips">
+                <div className="field-with-chips-head"><span>Apego al plan</span><SuggestionChips storageKey="chips:apego-plan" seed={APEGO_SUGGESTIONS} value={currentValues['Apego al plan']} onPick={(next) => updateField('Apego al plan', next)} joiner=". " /></div>
+                <input value={currentValues['Apego al plan'] ?? ''} onChange={(e) => updateField('Apego al plan', e.target.value)} />
+              </div>
             </div>
-            <SuggestionChips storageKey="chips:apego-plan" seed={APEGO_SUGGESTIONS} value={currentValues['Apego al plan']} onPick={(next) => updateField('Apego al plan', next)} joiner=". " />
             <div className="form-grid">
               <label>Antojos<input value={currentValues['Antojos'] ?? ''} onChange={(e) => updateField('Antojos', e.target.value)} /></label>
               <label>Hambre<input value={currentValues['Hambre'] ?? ''} onChange={(e) => updateField('Hambre', e.target.value)} /></label>
