@@ -1,0 +1,4096 @@
+[
+ {
+  "firstName": "Mariana",
+  "lastName": "Torres",
+  "email": "mariana.torres@email.com",
+  "phone": "+52 55 1234 5678",
+  "sex": "Femenino",
+  "birthDateISO": "1998-02-14",
+  "appointments": [
+   {
+    "startOffsetDays": -36.58,
+    "durationMin": 60,
+    "type": "INITIAL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -28.122,
+    "durationMin": 30,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -27.455,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -17.58,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "PENDING_CONFIRMATION"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -36.58,
+    "completedOffsetDays": -0.16,
+    "appointmentIndex": 0,
+    "sections": [
+     {
+      "sectionKey": "transcription",
+      "payload": {
+       "Consentimiento confirmado": true,
+       "Consentimiento registrado el": "2026-09-02T06:59:29.048Z",
+       "Transcripción de la consulta": "Prueba manual de edición del texto transcrito."
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "general",
+      "payload": {
+       "priority": "Composición corporal",
+       "referral": "Recomendación médica"
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "summary",
+      "payload": {
+       "goal": "Reducir 4 kg en 12 semanas",
+       "reason": "Mejorar composición corporal y energía"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "dietary",
+      "payload": {
+       "mealsPerDay": 3,
+       "preferences": [
+        "Avena",
+        "Pollo",
+        "Fruta"
+       ],
+       "waterLiters": 1.2
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "recommendations": [
+        "Aumentar agua",
+        "Incluir fibra",
+        "Caminar 30 minutos"
+       ]
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "clinical",
+      "payload": {
+       "Diarrea": true,
+       "Úlcera": true,
+       "Estreñimiento": true,
+       "Exploración: Petequias": true,
+       "Exploración: Xerosis conjuntival": true,
+       "Exploración: Piel quebradiza y escamosa": true,
+       "Exploración: Movilización de piezas dentales": true
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "notes",
+      "payload": {},
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "72.4",
+       "Talla (cm)": "165",
+       "Cintura (cm)": "84",
+       "IMC calculado": "26.6",
+       "Análisis de peso y talla": "Sobrepeso, con tendencia favorable"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "diagnosis",
+      "payload": {
+       "CESIVA: Completa": true
+      },
+      "completionState": "in_progress"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -36.57,
+      "weightKg": "72.4",
+      "heightCm": "165",
+      "waistCm": "84",
+      "hipCm": "103",
+      "abdomenCm": null,
+      "bodyFatPercent": "31.2",
+      "muscleMassKg": null,
+      "method": "Bioimpedancia",
+      "notes": null
+     }
+    ],
+    "diagnoses": [
+     {
+      "domain": "INGESTIÓN",
+      "code": "NI-1.5",
+      "problem": "Ingesta energética excesiva",
+      "etiology": "Patrón de comidas irregular",
+      "evidence": "IMC 26.6 y recordatorio de 24 horas"
+     }
+    ],
+    "plans": [
+     {
+      "status": "PUBLISHED",
+      "goal": "Reducir peso y mejorar energía",
+      "formula": "mifflin",
+      "activityMethod": "factor",
+      "activityFactor": "1.375",
+      "targetKcal": 2000,
+      "carbsPercent": "50",
+      "proteinPercent": "25",
+      "fatPercent": "25",
+      "evaluation": {
+       "bmi": 26.6,
+       "bmr": 1454,
+       "flags": [],
+       "inputs": {
+        "age": 28,
+        "sex": "female",
+        "heightCm": 165,
+        "weightKg": 72.4,
+        "bodyFatPercent": null
+       },
+       "bmiCategory": "sobrepeso",
+       "formulaLabel": "Mifflin-St Jeor",
+       "formulaVersion": "mifflin_v1",
+       "idealWeightRange": {
+        "maxKg": 67.8,
+        "minKg": 50.4
+       }
+      },
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": [
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": "Bowl de bistec con champiñones",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": "Bowl de bistec con champiñones",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": "Bowl de bistec con champiñones",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": "Bowl de bistec con champiñones",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": "Bowl de bistec con champiñones",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": "Bowl de bistec con champiñones",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": "Bowl de bistec con champiñones",
+        "servings": "1"
+       }
+      ]
+     },
+     {
+      "status": "PUBLISHED",
+      "goal": "",
+      "formula": "mifflin",
+      "activityMethod": "factor",
+      "activityFactor": "1.375",
+      "targetKcal": 1953,
+      "carbsPercent": "50",
+      "proteinPercent": "25",
+      "fatPercent": "25",
+      "evaluation": {
+       "bmi": 25.7,
+       "bmr": 1420,
+       "flags": [],
+       "inputs": {
+        "age": 30,
+        "sex": "female",
+        "heightCm": 165,
+        "weightKg": 70,
+        "bodyFatPercent": null
+       },
+       "bmiCategory": "sobrepeso",
+       "formulaLabel": "Mifflin-St Jeor",
+       "formulaVersion": "mifflin_v1",
+       "idealWeightRange": {
+        "maxKg": 67.8,
+        "minKg": 50.4
+       }
+      },
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": [
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "status": "IN_PROGRESS",
+    "startedOffsetDays": -0.132,
+    "completedOffsetDays": null,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Proteína (g/kg)": "3"
+      },
+      "completionState": "in_progress"
+     }
+    ],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": []
+   }
+  ]
+ },
+ {
+  "firstName": "Diego",
+  "lastName": "Ramírez",
+  "email": "diego.ramirez@email.com",
+  "phone": "+52 55 1234 5680",
+  "sex": "Masculino",
+  "birthDateISO": "1992-08-20",
+  "appointments": [
+   {
+    "startOffsetDays": -36.518,
+    "durationMin": 45,
+    "type": "FOLLOW_UP",
+    "status": "CONFIRMED"
+   },
+   {
+    "startOffsetDays": -28.289,
+    "durationMin": 30,
+    "type": "QUICK_CONTROL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -15.58,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "CONFIRMED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -30.68,
+    "completedOffsetDays": -0.159,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "clinical",
+      "payload": {
+       "Exploración: Onicolisis": true,
+       "Exploración: Xerostomía": true
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "dietary",
+      "payload": {
+       "Notas adicionales": "Le gusta cocinar los fines de semana.",
+       "Registro clínico": "3 comidas al día, desayuno ligero, cena tardía (~21:30). Consumo bajo de verduras, alto de alimentos procesados entre semana por trabajo de oficina."
+      },
+      "completionState": "empty"
+     },
+     {
+      "sectionKey": "general",
+      "payload": {
+       "Notas adicionales": "Motivada, con buena disposición al cambio de hábitos.",
+       "Registro clínico": "Paciente refiere fatiga frecuente y antojos de azúcar por las tardes. Sin antecedentes patológicos relevantes."
+      },
+      "completionState": "empty"
+     },
+     {
+      "sectionKey": "summary",
+      "payload": {
+       "Meta acordada": "Reducir 3-4 kg de grasa corporal en 12 semanas, mejorando energía diaria",
+       "Motivo de consulta": "Mejorar composición corporal y crear hábitos alimenticios sostenibles"
+      },
+      "completionState": "empty"
+     },
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Notas adicionales": "Seguimiento quincenal por WhatsApp.",
+       "Registro clínico": "Aumentar consumo de proteína y fibra, distribuir mejor las comidas, reducir azúcares añadidos."
+      },
+      "completionState": "empty"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "68",
+       "Brazo (cm)": "27",
+       "Talla (cm)": "160",
+       "Cadera (cm)": "98",
+       "Cintura (cm)": "78",
+       "ICC calculado": "0.80",
+       "IMC calculado": "26.6",
+       "Análisis de peso y talla": "Sobrepeso grado I, buena distribución corporal"
+      },
+      "completionState": "empty"
+     }
+    ],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": [
+     {
+      "status": "CANCELLED",
+      "goal": null,
+      "formula": null,
+      "activityMethod": null,
+      "activityFactor": null,
+      "targetKcal": null,
+      "carbsPercent": null,
+      "proteinPercent": null,
+      "fatPercent": null,
+      "evaluation": null,
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": []
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "firstName": "Sofía",
+  "lastName": "Hernández",
+  "email": "sofia.hernandez@email.com",
+  "phone": "+52 55 1234 5681",
+  "sex": "Femenino",
+  "birthDateISO": "1995-01-09",
+  "appointments": [
+   {
+    "startOffsetDays": -36.455,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "PENDING_CONFIRMATION"
+   },
+   {
+    "startOffsetDays": -30.539,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -28.039,
+    "durationMin": 30,
+    "type": "FOLLOW_UP",
+    "status": "PENDING_CONFIRMATION"
+   },
+   {
+    "startOffsetDays": -20.414,
+    "durationMin": 30,
+    "type": "QUICK_CONTROL",
+    "status": "SCHEDULED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "IN_PROGRESS",
+    "startedOffsetDays": -30.679,
+    "completedOffsetDays": null,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "general",
+      "payload": {
+       "Obesidad__Abuelos": true,
+       "Diabetes__Mamá/Papá": true
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "clinical",
+      "payload": {
+       "Náusea": true,
+       "Pirosis": true
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Análisis de peso y talla": "TEST-1788444888240"
+      },
+      "completionState": "in_progress"
+     }
+    ],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": [
+     {
+      "status": "CANCELLED",
+      "goal": null,
+      "formula": null,
+      "activityMethod": null,
+      "activityFactor": null,
+      "targetKcal": null,
+      "carbsPercent": null,
+      "proteinPercent": null,
+      "fatPercent": null,
+      "evaluation": null,
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": [
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "firstName": "Jorge",
+  "lastName": "Castillo",
+  "email": "jorge.castillo@email.com",
+  "phone": "+52 55 1234 5682",
+  "sex": "Masculino",
+  "birthDateISO": "1984-11-03",
+  "appointments": [
+   {
+    "startOffsetDays": -36.268,
+    "durationMin": 45,
+    "type": "QUICK_CONTROL",
+    "status": "CONFIRMED"
+   },
+   {
+    "startOffsetDays": -31.58,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -31.247,
+    "durationMin": 60,
+    "type": "INITIAL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -24.455,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -23.289,
+    "durationMin": 30,
+    "type": "QUICK_CONTROL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -10.58,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "CONFIRMED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -29.976,
+    "completedOffsetDays": -2.894,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "68",
+       "Brazo (cm)": "27",
+       "Talla (cm)": "160",
+       "Cadera (cm)": "98",
+       "Cintura (cm)": "78",
+       "ICC calculado": "0.80",
+       "IMC calculado": "26.6",
+       "Muslo frontal (mm)": "-4",
+       "Análisis de peso y talla": "Sobrepeso grado I, buena distribución corporal"
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "transcription",
+      "payload": {
+       "Consentimiento confirmado": true,
+       "Consentimiento registrado el": "2026-09-02T07:00:36.013Z"
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "general",
+      "payload": {
+       "Notas adicionales": "Motivada, con buena disposición al cambio de hábitos.",
+       "Registro clínico": "Paciente refiere fatiga frecuente y antojos de azúcar por las tardes. Sin antecedentes patológicos relevantes."
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "summary",
+      "payload": {
+       "Meta acordada": "Reducir 3-4 kg de grasa corporal en 12 semanas, mejorando energía diaria",
+       "Motivo de consulta": "Mejorar composición corporal y crear hábitos alimenticios sostenibles"
+      },
+      "completionState": "empty"
+     },
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Notas adicionales": "Seguimiento quincenal por WhatsApp.",
+       "Registro clínico": "Aumentar consumo de proteína y fibra, distribuir mejor las comidas, reducir azúcares añadidos."
+      },
+      "completionState": "empty"
+     },
+     {
+      "sectionKey": "monitoring",
+      "payload": {
+       "Antojos": "Dulces por la tarde, 2 veces por semana",
+       "Apego al plan": "85%",
+       "Observaciones": "Refiere mejor digestión y menos hinchazón desde que aumentó el agua.",
+       "Estado de ánimo": "Positivo, con más energía"
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "biochemical",
+      "payload": {
+       "Estudios": []
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "clinical",
+      "payload": {
+       "Diarrea": false,
+       "Estreñimiento": false
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "dietary",
+      "payload": {
+       "Notas adicionales": "Le gusta cocinar los fines de semana.",
+       "Registro clínico": "3 comidas al día, desayuno ligero, cena tardía (~21:30). Consumo bajo de verduras, alto de alimentos procesados entre semana por trabajo de oficina."
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "notes",
+      "payload": {
+       "Notas de consulta": "contenido distinto"
+      },
+      "completionState": "in_progress"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -29.975,
+      "weightKg": "88",
+      "heightCm": null,
+      "waistCm": null,
+      "hipCm": null,
+      "abdomenCm": "92",
+      "bodyFatPercent": "24.5",
+      "muscleMassKg": "31.2",
+      "method": null,
+      "notes": null
+     }
+    ],
+    "diagnoses": [],
+    "plans": [
+     {
+      "status": "PUBLISHED",
+      "goal": null,
+      "formula": null,
+      "activityMethod": null,
+      "activityFactor": null,
+      "targetKcal": null,
+      "carbsPercent": null,
+      "proteinPercent": null,
+      "fatPercent": null,
+      "evaluation": null,
+      "hydrationNote": "xxx",
+      "recommendations": "xxx",
+      "mealSlots": [
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       }
+      ]
+     },
+     {
+      "status": "DRAFT",
+      "goal": null,
+      "formula": null,
+      "activityMethod": null,
+      "activityFactor": null,
+      "targetKcal": null,
+      "carbsPercent": null,
+      "proteinPercent": null,
+      "fatPercent": null,
+      "evaluation": null,
+      "hydrationNote": null,
+      "recommendations": "prueba auditoría plan",
+      "mealSlots": [
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": "AVENA CON CANELA Y MANZANA (OVERNIGHT OAT)",
+        "servings": "5"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": "AREPAS DE QUESO CON JAMÓN DE PAVO",
+        "servings": "5"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "5"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "5"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "5"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "5"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": "Avena cocida con manzana",
+        "servings": "5"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "firstName": "Valeria",
+  "lastName": "Mendoza Ruiz",
+  "email": "valeria.mendoza@email.com",
+  "phone": "+52 55 4821 0937",
+  "sex": "Femenino",
+  "birthDateISO": "1995-03-22",
+  "appointments": [],
+  "consultations": [
+   {
+    "status": "IN_PROGRESS",
+    "startedOffsetDays": -30.693,
+    "completedOffsetDays": null,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "summary",
+      "payload": {
+       "Meta acordada": "Reducir 3-4 kg de grasa corporal en 12 semanas, mejorando energía diaria",
+       "Motivo de consulta": "Mejorar composición corporal y crear hábitos alimenticios sostenibles"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "68",
+       "Brazo (cm)": "27",
+       "Talla (cm)": "160",
+       "Cadera (cm)": "98",
+       "Cintura (cm)": "78",
+       "ICC calculado": "0.80",
+       "IMC calculado": "26.6",
+       "Análisis de peso y talla": "Sobrepeso grado I, buena distribución corporal"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "dietary",
+      "payload": {
+       "Notas adicionales": "Le gusta cocinar los fines de semana.",
+       "Registro clínico": "3 comidas al día, desayuno ligero, cena tardía (~21:30). Consumo bajo de verduras, alto de alimentos procesados entre semana por trabajo de oficina."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Notas adicionales": "Seguimiento quincenal por WhatsApp.",
+       "Registro clínico": "Aumentar consumo de proteína y fibra, distribuir mejor las comidas, reducir azúcares añadidos."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "general",
+      "payload": {
+       "Notas adicionales": "Motivada, con buena disposición al cambio de hábitos.",
+       "Registro clínico": "Paciente refiere fatiga frecuente y antojos de azúcar por las tardes. Sin antecedentes patológicos relevantes."
+      },
+      "completionState": "complete"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -30.692,
+      "weightKg": "68",
+      "heightCm": "160",
+      "waistCm": "78",
+      "hipCm": "98",
+      "abdomenCm": null,
+      "bodyFatPercent": "29.5",
+      "muscleMassKg": null,
+      "method": "Bioimpedancia",
+      "notes": null
+     },
+     {
+      "measuredOffsetDays": -30.364,
+      "weightKg": "68",
+      "heightCm": "160",
+      "waistCm": "78",
+      "hipCm": "98",
+      "abdomenCm": null,
+      "bodyFatPercent": null,
+      "muscleMassKg": null,
+      "method": null,
+      "notes": null
+     }
+    ],
+    "diagnoses": [],
+    "plans": [
+     {
+      "status": "PUBLISHED",
+      "goal": "Reducir grasa corporal y mejorar hábitos alimenticios",
+      "formula": "mifflin",
+      "activityMethod": "factor",
+      "activityFactor": "1.55",
+      "targetKcal": 2114,
+      "carbsPercent": "40",
+      "proteinPercent": "30",
+      "fatPercent": "30",
+      "evaluation": {
+       "bmi": 26.6,
+       "bmr": 1364,
+       "flags": [],
+       "inputs": {
+        "age": 31,
+        "sex": "female",
+        "heightCm": 160,
+        "weightKg": 68,
+        "bodyFatPercent": 29.5
+       },
+       "bmiCategory": "sobrepeso",
+       "formulaLabel": "Mifflin-St Jeor",
+       "formulaVersion": "mifflin_v1",
+       "idealWeightRange": {
+        "maxKg": 63.7,
+        "minKg": 47.4
+       }
+      },
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": [
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": null,
+        "servings": "1"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "firstName": "Yolanda",
+  "lastName": "Cimé",
+  "email": "",
+  "phone": "",
+  "sex": "Femenino",
+  "birthDateISO": "1972-10-16",
+  "appointments": [
+   {
+    "startOffsetDays": -26.58,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "PENDING_CONFIRMATION"
+   },
+   {
+    "startOffsetDays": -22.58,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -7.497,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "SCHEDULED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -27.209,
+    "completedOffsetDays": -0.003,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "clinical",
+      "payload": {
+       "Diarrea": false
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "transcription",
+      "payload": {
+       "Consentimiento confirmado": true,
+       "Consentimiento registrado el": "2026-09-04T17:56:46.972Z"
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "dietary",
+      "payload": {
+       "Notas adicionales": "Le gusta cocinar los fines de semana.",
+       "Registro clínico": "3 comidas al día, desayuno ligero, cena tardía (~21:30). Consumo bajo de verduras, alto de alimentos procesados entre semana por trabajo de oficina."
+      },
+      "completionState": "empty"
+     },
+     {
+      "sectionKey": "general",
+      "payload": {
+       "Notas adicionales": "Motivada, con buena disposición al cambio de hábitos.",
+       "Registro clínico": "Paciente refiere fatiga frecuente y antojos de azúcar por las tardes. Sin antecedentes patológicos relevantes."
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "summary",
+      "payload": {
+       "Meta acordada": "Reducir 3-4 kg de grasa corporal en 12 semanas, mejorando energía diaria",
+       "Motivo de consulta": "Mejorar composición corporal y crear hábitos alimenticios sostenibles"
+      },
+      "completionState": "empty"
+     },
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Notas adicionales": "Seguimiento quincenal por WhatsApp.",
+       "Registro clínico": "Aumentar consumo de proteína y fibra, distribuir mejor las comidas, reducir azúcares añadidos."
+      },
+      "completionState": "empty"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "68",
+       "Brazo (cm)": "27",
+       "Talla (cm)": "160",
+       "Cadera (cm)": "98",
+       "Cintura (cm)": "78",
+       "ICC calculado": "0.80",
+       "IMC calculado": "26.6",
+       "Análisis de peso y talla": "Sobrepeso grado I, buena distribución corporal"
+      },
+      "completionState": "in_progress"
+     }
+    ],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": []
+   }
+  ]
+ },
+ {
+  "firstName": "Renata",
+  "lastName": "Fuentes Del Valle",
+  "email": "renata.fuentes@email.com",
+  "phone": "+52 55 2011 4432",
+  "sex": "Femenino",
+  "birthDateISO": "1992-03-14",
+  "appointments": [
+   {
+    "startOffsetDays": -31.497,
+    "durationMin": 60,
+    "type": "INITIAL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -21.33,
+    "durationMin": 45,
+    "type": "FOLLOW_UP",
+    "status": "SCHEDULED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.714,
+    "completedOffsetDays": -20.368,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Objetivo general": "Reducir 8 kg en 4 meses de forma sostenida",
+       "Objetivos a corto plazo": "Eliminar picoteo nocturno; caminar 30 min 4 veces por semana",
+       "Objetivos a largo plazo": "Mantener el peso perdido y consolidar hábitos",
+       "Recomendaciones generales": "Dormir 7-8 horas; reducir pantallas antes de dormir",
+       "Recomendaciones de alimentación": "Plato de mano; snacks proteicos en vez de galletas"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "notes",
+      "payload": {
+       "Notas de consulta": "Paciente motivada, primera vez que busca ayuda profesional. Refiere ansiedad por comida en las noches tras jornadas largas de trabajo."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "76.9",
+       "Talla (cm)": "162",
+       "Cadera (cm)": "107",
+       "Cintura (cm)": "90",
+       "IMC calculado": "29.3",
+       "% Grasa corporal": "35",
+       "Análisis de peso y talla": "Sobrepeso, con tendencia favorable en las últimas semanas"
+      },
+      "completionState": "complete"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -44.455,
+      "weightKg": "78.4",
+      "heightCm": "162",
+      "waistCm": "92",
+      "hipCm": "108",
+      "abdomenCm": null,
+      "bodyFatPercent": "36",
+      "muscleMassKg": null,
+      "method": "Plicometría",
+      "notes": null
+     },
+     {
+      "measuredOffsetDays": -29.455,
+      "weightKg": "76.9",
+      "heightCm": "162",
+      "waistCm": "90",
+      "hipCm": "107",
+      "abdomenCm": null,
+      "bodyFatPercent": "35",
+      "muscleMassKg": null,
+      "method": "Plicometría",
+      "notes": null
+     }
+    ],
+    "diagnoses": [],
+    "plans": [
+     {
+      "status": "PUBLISHED",
+      "goal": "Déficit calórico moderado para pérdida de grasa",
+      "formula": "mifflin",
+      "activityMethod": "factor",
+      "activityFactor": "1.375",
+      "targetKcal": 1994,
+      "carbsPercent": "45",
+      "proteinPercent": "30",
+      "fatPercent": "25",
+      "evaluation": {
+       "bmi": 29.3,
+       "bmr": 1451,
+       "flags": [],
+       "inputs": {
+        "age": 34,
+        "sex": "female",
+        "heightCm": 162,
+        "weightKg": 76.9,
+        "bodyFatPercent": null
+       },
+       "bmiCategory": "sobrepeso",
+       "formulaLabel": "Mifflin-St Jeor",
+       "formulaVersion": "mifflin_v1",
+       "idealWeightRange": {
+        "maxKg": 65.3,
+        "minKg": 48.6
+       }
+      },
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": [
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": "Avocado Toast",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": "Portobellos caprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": "Blueberry Pancakes",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": "Enchiladas suizas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": "Burrito o tacos de huevo a la mexicana y frijol",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": "Enchiladas suizas cremosas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": "Smoothie",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": "Chilaquiles fit con huevo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": "Cuernito con jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": "Flautas de pollo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": "French Toast y huevo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": "Gringas con pollo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": "French toast roll ups",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": "Hot Dog",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": "Croissant con jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.161,
+    "completedOffsetDays": -20.16,
+    "appointmentIndex": -1,
+    "sections": [],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": []
+   },
+   {
+    "status": "IN_PROGRESS",
+    "startedOffsetDays": -0.203,
+    "completedOffsetDays": null,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "dietary",
+      "payload": {},
+      "completionState": "in_progress"
+     }
+    ],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": []
+   }
+  ]
+ },
+ {
+  "firstName": "Alejandro",
+  "lastName": "Paredes Nuño",
+  "email": "alejandro.paredes@email.com",
+  "phone": "+52 55 3345 9021",
+  "sex": "Masculino",
+  "birthDateISO": "1981-07-02",
+  "appointments": [
+   {
+    "startOffsetDays": -30.33,
+    "durationMin": 60,
+    "type": "INITIAL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -22.372,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -10.497,
+    "durationMin": 30,
+    "type": "QUICK_CONTROL",
+    "status": "COMPLETED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.714,
+    "completedOffsetDays": -20.368,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "notes",
+      "payload": {
+       "Notas de consulta": "Refiere comidas de trabajo frecuentes con clientes; difícil control de porciones fuera de casa. Bajo tratamiento con losartán."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Objetivo general": "Reducir presión arterial mediante control de sodio y peso",
+       "Objetivos a corto plazo": "Bajar consumo de sodio a menos de 2000 mg/día",
+       "Objetivos a largo plazo": "Normalizar presión arterial sin depender solo de medicamento",
+       "Recomendaciones generales": "Revisar etiquetas de sodio; evitar embutidos y salsas industrializadas",
+       "Recomendaciones de alimentación": "Dieta tipo DASH, aumentar potasio con frutas y verduras"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "94.2",
+       "Talla (cm)": "176",
+       "Cintura (cm)": "106",
+       "IMC calculado": "30.4",
+       "% Grasa corporal": "28",
+       "Análisis de peso y talla": "Obesidad grado I, asociada a hipertensión"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "biochemical",
+      "payload": {
+       "Estudios": [
+        {
+         "id": "lab-1",
+         "name": "Colesterol total",
+         "unit": "mg/dL",
+         "range": "<200",
+         "value": "228",
+         "status": "Alto"
+        },
+        {
+         "id": "lab-2",
+         "name": "Colesterol LDL",
+         "unit": "mg/dL",
+         "range": "<100",
+         "value": "152",
+         "status": "Alto"
+        },
+        {
+         "id": "lab-3",
+         "name": "Triglicéridos",
+         "unit": "mg/dL",
+         "range": "<150",
+         "value": "187",
+         "status": "Alto"
+        },
+        {
+         "id": "lab-4",
+         "name": "Sodio sérico",
+         "unit": "mEq/L",
+         "range": "135-145",
+         "value": "142",
+         "status": "Normal"
+        }
+       ]
+      },
+      "completionState": "complete"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -42.455,
+      "weightKg": "94.2",
+      "heightCm": "176",
+      "waistCm": "106",
+      "hipCm": null,
+      "abdomenCm": null,
+      "bodyFatPercent": "28",
+      "muscleMassKg": null,
+      "method": "Báscula de bioimpedancia",
+      "notes": null
+     }
+    ],
+    "diagnoses": [
+     {
+      "domain": "CLÍNICOS",
+      "code": "NC-2.1",
+      "problem": "Interacción alimento-medicamento",
+      "etiology": "Consumo alto de sodio en comidas de trabajo, relacionado con hipertensión diagnosticada",
+      "evidence": "Presión arterial 148/94 mmHg en consulta, reporta comer fuera 5 veces por semana"
+     }
+    ],
+    "plans": [
+     {
+      "status": "PUBLISHED",
+      "goal": "Control de sodio y peso para manejo de hipertensión",
+      "formula": "mifflin",
+      "activityMethod": "factor",
+      "activityFactor": "1.375",
+      "targetKcal": 2505,
+      "carbsPercent": "50",
+      "proteinPercent": "25",
+      "fatPercent": "25",
+      "evaluation": {
+       "bmi": 30.4,
+       "bmr": 1822,
+       "flags": [],
+       "inputs": {
+        "age": 45,
+        "sex": "male",
+        "heightCm": 176,
+        "weightKg": 94.2,
+        "bodyFatPercent": null
+       },
+       "bmiCategory": "obesidad_i",
+       "formulaLabel": "Mifflin-St Jeor",
+       "formulaVersion": "mifflin_v1",
+       "idealWeightRange": {
+        "maxKg": 77.1,
+        "minKg": 57.3
+       }
+      },
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": [
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": "Avocado Toast",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": "Portobellos caprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": "Blueberry Pancakes",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": "Enchiladas suizas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": "Burrito o tacos de huevo a la mexicana y frijol",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": "Enchiladas suizas cremosas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": "Smoothie",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": "Chilaquiles fit con huevo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": "Cuernito con jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": "Flautas de pollo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": "French Toast y huevo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": "Gringas con pollo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": "French toast roll ups",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": "Hot Dog",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": "Croissant con jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "status": "IN_PROGRESS",
+    "startedOffsetDays": -10.004,
+    "completedOffsetDays": null,
+    "appointmentIndex": 2,
+    "sections": [],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": []
+   }
+  ]
+ },
+ {
+  "firstName": "Camila",
+  "lastName": "Rosales Iturbe",
+  "email": null,
+  "phone": "+52 55 8890 1123",
+  "sex": "Femenino",
+  "birthDateISO": "2010-05-22",
+  "appointments": [
+   {
+    "startOffsetDays": -29.414,
+    "durationMin": 45,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -16.539,
+    "durationMin": 45,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.714,
+    "completedOffsetDays": -20.368,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "notes",
+      "payload": {
+       "Notas de consulta": "En seguimiento conjunto con psicología. Progreso favorable en la relación con la comida; evitar comentarios sobre peso frente a la paciente."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "47.2",
+       "Talla (cm)": "160",
+       "IMC calculado": "18.4",
+       "Análisis de peso y talla": "Peso dentro de rango saludable, en vigilancia conjunta con psicología"
+      },
+      "completionState": "complete"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -29.455,
+      "weightKg": "47.2",
+      "heightCm": "160",
+      "waistCm": null,
+      "hipCm": null,
+      "abdomenCm": null,
+      "bodyFatPercent": null,
+      "muscleMassKg": null,
+      "method": null,
+      "notes": null
+     }
+    ],
+    "diagnoses": [
+     {
+      "domain": "CONDUCTUALES-AMBIENTALES",
+      "code": "NB-1.5",
+      "problem": "Trastorno de la conducta alimentaria en recuperación",
+      "etiology": "Relacionado con historial de restricción alimentaria y distorsión de la imagen corporal",
+      "evidence": "Reporte de psicología y mejora progresiva en la relación con la comida en las últimas 6 semanas"
+     }
+    ],
+    "plans": []
+   },
+   {
+    "status": "IN_PROGRESS",
+    "startedOffsetDays": -15.963,
+    "completedOffsetDays": null,
+    "appointmentIndex": 1,
+    "sections": [],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": []
+   }
+  ]
+ },
+ {
+  "firstName": "Miguel Ángel",
+  "lastName": "Osorio Bravo",
+  "email": "miguel.osorio@email.com",
+  "phone": "+52 55 4471 2209",
+  "sex": "Masculino",
+  "birthDateISO": "1964-01-30",
+  "appointments": [
+   {
+    "startOffsetDays": -29.58,
+    "durationMin": 60,
+    "type": "INITIAL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -21.247,
+    "durationMin": 30,
+    "type": "QUICK_CONTROL",
+    "status": "SCHEDULED"
+   },
+   {
+    "startOffsetDays": -9.539,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.714,
+    "completedOffsetDays": -20.368,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Objetivo general": "Alcanzar HbA1c menor a 7% en 6 meses",
+       "Objetivos a corto plazo": "Distribuir carbohidratos en 5 tiempos de comida",
+       "Objetivos a largo plazo": "Prevenir complicaciones micro y macrovasculares",
+       "Recomendaciones generales": "Automonitoreo de glucosa capilar 2 veces al día",
+       "Recomendaciones de alimentación": "Conteo de carbohidratos, preferir índice glucémico bajo"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "notes",
+      "payload": {
+       "Notas de consulta": "Diagnóstico de diabetes tipo 2 hace 3 meses. Vive solo, cocina poco, depende de comida preparada del mercado."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "80.6",
+       "Talla (cm)": "168",
+       "Cintura (cm)": "99",
+       "IMC calculado": "28.6",
+       "% Grasa corporal": "29",
+       "Análisis de peso y talla": "Sobrepeso, mejora sostenida desde el diagnóstico de diabetes"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "biochemical",
+      "payload": {
+       "Estudios": [
+        {
+         "id": "lab-1",
+         "name": "Glucosa en ayuno",
+         "unit": "mg/dL",
+         "range": "70-100",
+         "value": "168",
+         "status": "Alto"
+        },
+        {
+         "id": "lab-2",
+         "name": "Hemoglobina glucosilada (HbA1c)",
+         "unit": "%",
+         "range": "<5.7",
+         "value": "7.8",
+         "status": "Alto"
+        },
+        {
+         "id": "lab-3",
+         "name": "Colesterol total",
+         "unit": "mg/dL",
+         "range": "<200",
+         "value": "195",
+         "status": "Normal"
+        }
+       ]
+      },
+      "completionState": "complete"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -47.455,
+      "weightKg": "82.1",
+      "heightCm": "168",
+      "waistCm": "101",
+      "hipCm": null,
+      "abdomenCm": null,
+      "bodyFatPercent": "30",
+      "muscleMassKg": null,
+      "method": "Báscula de bioimpedancia",
+      "notes": null
+     },
+     {
+      "measuredOffsetDays": -30.455,
+      "weightKg": "80.6",
+      "heightCm": "168",
+      "waistCm": "99",
+      "hipCm": null,
+      "abdomenCm": null,
+      "bodyFatPercent": "29",
+      "muscleMassKg": null,
+      "method": "Báscula de bioimpedancia",
+      "notes": null
+     }
+    ],
+    "diagnoses": [
+     {
+      "domain": "CLÍNICOS",
+      "code": "NC-2.2",
+      "problem": "Alteración en los valores de laboratorio relacionados con nutrición",
+      "etiology": "Relacionado con diabetes tipo 2 de reciente diagnóstico y dieta alta en carbohidratos simples",
+      "evidence": "Glucosa en ayuno 168 mg/dL, HbA1c 7.8%"
+     }
+    ],
+    "plans": [
+     {
+      "status": "DRAFT",
+      "goal": "Control glucémico y educación en conteo de carbohidratos",
+      "formula": "mifflin",
+      "activityMethod": "factor",
+      "activityFactor": "1.2",
+      "targetKcal": 1861,
+      "carbsPercent": "40",
+      "proteinPercent": "30",
+      "fatPercent": "30",
+      "evaluation": {
+       "bmi": 28.6,
+       "bmr": 1551,
+       "flags": [],
+       "inputs": {
+        "age": 62,
+        "sex": "male",
+        "heightCm": 168,
+        "weightKg": 80.6,
+        "bodyFatPercent": null
+       },
+       "bmiCategory": "sobrepeso",
+       "formulaLabel": "Mifflin-St Jeor",
+       "formulaVersion": "mifflin_v1",
+       "idealWeightRange": {
+        "maxKg": 70.3,
+        "minKg": 52.2
+       }
+      },
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": [
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": "Portobellos caprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": "Blueberry Pancakes",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": "Enchiladas suizas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": "Burrito o tacos de huevo a la mexicana y frijol",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": "Enchiladas suizas cremosas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": "Smoothie",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": "Chilaquiles fit con huevo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": "Avocado Toast",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": "Cuernito con jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": "Flautas de pollo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": "French Toast y huevo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": "Gringas con pollo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": "French toast roll ups",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": "Hot Dog",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": "Croissant con jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.368,
+    "completedOffsetDays": -20.367,
+    "appointmentIndex": -1,
+    "sections": [],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": []
+   },
+   {
+    "status": "IN_PROGRESS",
+    "startedOffsetDays": -9.253,
+    "completedOffsetDays": null,
+    "appointmentIndex": 2,
+    "sections": [],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": []
+   }
+  ]
+ },
+ {
+  "firstName": "Valentina",
+  "lastName": "Cruz Beltrán",
+  "email": "valentina.cruz@email.com",
+  "phone": "+52 55 6672 3390",
+  "sex": "Femenino",
+  "birthDateISO": "1997-11-09",
+  "appointments": [
+   {
+    "startOffsetDays": -28.497,
+    "durationMin": 60,
+    "type": "INITIAL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -20.539,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "CONFIRMED"
+   },
+   {
+    "startOffsetDays": -17.622,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "CONFIRMED"
+   },
+   {
+    "startOffsetDays": -9.622,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "CONFIRMED"
+   },
+   {
+    "startOffsetDays": -2.622,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": 4.378,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "PENDING_CONFIRMATION"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.714,
+    "completedOffsetDays": -20.368,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Objetivo general": "Ajustar ingesta al gasto energético de entrenamiento para mejorar rendimiento",
+       "Objetivos a corto plazo": "Aumentar carbohidratos antes y después de entrenar",
+       "Objetivos a largo plazo": "Preparación para medio maratón en diciembre",
+       "Recomendaciones generales": "Hidratación con electrolitos en sesiones largas",
+       "Recomendaciones de alimentación": "Carga de carbohidratos 48h antes de competencias"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "notes",
+      "payload": {
+       "Notas de consulta": "Entrena 6 días por semana, doble sesión los martes y jueves. Busca mejorar tiempos para medio maratón."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "58.6",
+       "Talla (cm)": "166",
+       "IMC calculado": "21.3",
+       "Kg de músculo": "44.6",
+       "% Grasa corporal": "18.5",
+       "Análisis de peso y talla": "Peso saludable para composición de atleta de resistencia"
+      },
+      "completionState": "complete"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -40.455,
+      "weightKg": "58.3",
+      "heightCm": "166",
+      "waistCm": null,
+      "hipCm": null,
+      "abdomenCm": null,
+      "bodyFatPercent": "19",
+      "muscleMassKg": "44.1",
+      "method": "DEXA",
+      "notes": null
+     },
+     {
+      "measuredOffsetDays": -26.455,
+      "weightKg": "58.6",
+      "heightCm": "166",
+      "waistCm": null,
+      "hipCm": null,
+      "abdomenCm": null,
+      "bodyFatPercent": "18.5",
+      "muscleMassKg": "44.6",
+      "method": "DEXA",
+      "notes": null
+     }
+    ],
+    "diagnoses": [
+     {
+      "domain": "INGESTIÓN",
+      "code": "NI-1.2",
+      "problem": "Ingesta energética insuficiente para el gasto de entrenamiento",
+      "etiology": "Relacionado con aumento reciente de volumen de entrenamiento sin ajuste de la ingesta",
+      "evidence": "Recordatorio de 24 horas muestra déficit de ~500 kcal en días de doble sesión"
+     }
+    ],
+    "plans": [
+     {
+      "status": "PUBLISHED",
+      "goal": "Periodización de carbohidratos para rendimiento deportivo",
+      "formula": "mifflin",
+      "activityMethod": "factor",
+      "activityFactor": "1.725",
+      "targetKcal": 2273,
+      "carbsPercent": "55",
+      "proteinPercent": "20",
+      "fatPercent": "25",
+      "evaluation": {
+       "bmi": 21.3,
+       "bmr": 1318,
+       "flags": [],
+       "inputs": {
+        "age": 29,
+        "sex": "female",
+        "heightCm": 166,
+        "weightKg": 58.6,
+        "bodyFatPercent": null
+       },
+       "bmiCategory": "normal",
+       "formulaLabel": "Mifflin-St Jeor",
+       "formulaVersion": "mifflin_v1",
+       "idealWeightRange": {
+        "maxKg": 68.6,
+        "minKg": 51
+       }
+      },
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": [
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": "Avocado Toast",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": "Burritas de jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": "Portobellos caprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": "Blueberry Pancakes",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": "Enchiladas suizas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": "Burrito o tacos de huevo a la mexicana y frijol",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": "Enchiladas suizas cremosas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": "Smoothie",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": "Chilaquiles fit con huevo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": "Cuernito con jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": "Flautas de pollo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": "French Toast y huevo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": "Gringas con pollo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": "French toast roll ups",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": "Hot Dog",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": "Croissant con jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       }
+      ]
+     }
+    ]
+   }
+  ]
+ },
+ {
+  "firstName": "Emilio",
+  "lastName": "Duarte Salcido",
+  "email": null,
+  "phone": "+52 55 9012 4456",
+  "sex": "Masculino",
+  "birthDateISO": "2018-02-17",
+  "appointments": [
+   {
+    "startOffsetDays": -24.58,
+    "durationMin": 60,
+    "type": "INITIAL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -13.539,
+    "durationMin": 45,
+    "type": "FOLLOW_UP",
+    "status": "CONFIRMED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.714,
+    "completedOffsetDays": -20.368,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "notes",
+      "payload": {
+       "Notas de consulta": "Percentil de peso bajo para la edad. Madre reporta selectividad alimentaria marcada, rechaza texturas mixtas."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "22.1",
+       "Talla (cm)": "118",
+       "IMC calculado": "15.9",
+       "Análisis de peso y talla": "Peso bajo para la edad, en seguimiento por selectividad alimentaria"
+      },
+      "completionState": "complete"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -29.455,
+      "weightKg": "22.1",
+      "heightCm": "118",
+      "waistCm": null,
+      "hipCm": null,
+      "abdomenCm": null,
+      "bodyFatPercent": null,
+      "muscleMassKg": null,
+      "method": null,
+      "notes": null
+     }
+    ],
+    "diagnoses": [],
+    "plans": []
+   }
+  ]
+ },
+ {
+  "firstName": "Fernanda",
+  "lastName": "Nájera Colín",
+  "email": null,
+  "phone": "+52 55 1123 7789",
+  "sex": "Femenino",
+  "birthDateISO": "1955-09-05",
+  "appointments": [
+   {
+    "startOffsetDays": -27.539,
+    "durationMin": 60,
+    "type": "INITIAL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -17.497,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "CONFIRMED"
+   },
+   {
+    "startOffsetDays": -8.58,
+    "durationMin": 30,
+    "type": "QUICK_CONTROL",
+    "status": "PENDING_CONFIRMATION"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.714,
+    "completedOffsetDays": -20.368,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Objetivo general": "Preservar masa muscular y funcionalidad",
+       "Objetivos a corto plazo": "Aumentar ingesta proteica a 1.2 g/kg/día",
+       "Objetivos a largo plazo": "Mantener independencia funcional",
+       "Recomendaciones generales": "Ejercicio de resistencia ligera 2 veces por semana con supervisión",
+       "Recomendaciones de alimentación": "Distribuir proteína en las 3 comidas principales"
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "notes",
+      "payload": {
+       "Notas de consulta": "Vive sola, hijos la visitan los fines de semana. Reporta poco apetito y dificultad para masticar carnes duras."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "61.5",
+       "Talla (cm)": "155",
+       "Cintura (cm)": "88",
+       "IMC calculado": "25.6",
+       "Kg de músculo": "21.2",
+       "Análisis de peso y talla": "Sobrepeso leve con pérdida de masa muscular asociada a la edad"
+      },
+      "completionState": "complete"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -37.455,
+      "weightKg": "61.5",
+      "heightCm": "155",
+      "waistCm": "88",
+      "hipCm": null,
+      "abdomenCm": null,
+      "bodyFatPercent": null,
+      "muscleMassKg": "21.2",
+      "method": "Báscula de bioimpedancia",
+      "notes": null
+     }
+    ],
+    "diagnoses": [
+     {
+      "domain": "CLÍNICOS",
+      "code": "NC-1.4",
+      "problem": "Disminución de la masa muscular relacionada con la edad",
+      "etiology": "Relacionado con baja ingesta de proteína y sedentarismo progresivo",
+      "evidence": "Masa muscular 21.2 kg, fuerza de prensión disminuida reportada por la paciente"
+     }
+    ],
+    "plans": []
+   }
+  ]
+ },
+ {
+  "firstName": "Tomás",
+  "lastName": "Villareal Peña",
+  "email": "tomas.villareal@email.com",
+  "phone": "+52 55 5540 8871",
+  "sex": "Masculino",
+  "birthDateISO": "2001-06-18",
+  "appointments": [
+   {
+    "startOffsetDays": -24.372,
+    "durationMin": 60,
+    "type": "INITIAL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -14.497,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -6.539,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "PENDING_CONFIRMATION"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.714,
+    "completedOffsetDays": -20.368,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "notes",
+      "payload": {
+       "Notas de consulta": "Busca ganar masa muscular. Entrena pesas 3 veces por semana desde hace 2 meses, trabajo de oficina sedentario el resto del día."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "68.4",
+       "Talla (cm)": "178",
+       "IMC calculado": "21.6",
+       "Análisis de peso y talla": "Peso saludable, en fase de ganancia muscular"
+      },
+      "completionState": "complete"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -29.455,
+      "weightKg": "68.4",
+      "heightCm": "178",
+      "waistCm": null,
+      "hipCm": null,
+      "abdomenCm": null,
+      "bodyFatPercent": null,
+      "muscleMassKg": null,
+      "method": null,
+      "notes": null
+     }
+    ],
+    "diagnoses": [],
+    "plans": [
+     {
+      "status": "PUBLISHED",
+      "goal": "Superávit calórico moderado con alta ingesta proteica para ganancia muscular",
+      "formula": "mifflin",
+      "activityMethod": "factor",
+      "activityFactor": "1.55",
+      "targetKcal": 2599,
+      "carbsPercent": "40",
+      "proteinPercent": "35",
+      "fatPercent": "25",
+      "evaluation": {
+       "bmi": 21.6,
+       "bmr": 1677,
+       "flags": [],
+       "inputs": {
+        "age": 25,
+        "sex": "male",
+        "heightCm": 178,
+        "weightKg": 68.4,
+        "bodyFatPercent": null
+       },
+       "bmiCategory": "normal",
+       "formulaLabel": "Mifflin-St Jeor",
+       "formulaVersion": "mifflin_v1",
+       "idealWeightRange": {
+        "maxKg": 78.9,
+        "minKg": 58.6
+       }
+      },
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": [
+       {
+        "dayOfWeek": 1,
+        "mealType": "breakfast",
+        "recipeName": "Burrito o tacos de huevo a la mexicana y frijol",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "lunch",
+        "recipeName": "Enchiladas suizas cremosas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "snack",
+        "recipeName": "Smoothie",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 1,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "breakfast",
+        "recipeName": "Chilaquiles fit con huevo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "lunch",
+        "recipeName": "Ensalada de nopales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "snack",
+        "recipeName": "Sándwich (pan thin, jamón y queso panela)",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 2,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "breakfast",
+        "recipeName": "Cuernito con jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "lunch",
+        "recipeName": "Flautas de pollo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "snack",
+        "recipeName": "Sándwich Capprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 3,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "breakfast",
+        "recipeName": "French Toast y huevo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "lunch",
+        "recipeName": "Gringas con pollo",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "snack",
+        "recipeName": "Yogur griego con fruta",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 4,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "breakfast",
+        "recipeName": "French toast roll ups",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "lunch",
+        "recipeName": "Hot Dog",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "snack",
+        "recipeName": "Croissant con jamón y queso",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 5,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "breakfast",
+        "recipeName": "Frittata con mix de vegetales",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "lunch",
+        "recipeName": "Kebab",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "snack",
+        "recipeName": "Portobellos caprese",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 6,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "breakfast",
+        "recipeName": "Guacamole toast",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "lunch",
+        "recipeName": "Lasagna de queso panela",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "snack",
+        "recipeName": "Sandwich de pan pita",
+        "servings": "1"
+       },
+       {
+        "dayOfWeek": 7,
+        "mealType": "dinner",
+        "recipeName": "Ensalada tibia de espinacas",
+        "servings": "1"
+       }
+      ]
+     }
+    ]
+   },
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -16.017,
+    "completedOffsetDays": -2.893,
+    "appointmentIndex": 1,
+    "sections": [],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": []
+   }
+  ]
+ },
+ {
+  "firstName": "Itzel",
+  "lastName": "Marroquín Sáenz",
+  "email": "itzel.marroquin@email.com",
+  "phone": "+52 55 9999 0000",
+  "sex": "Femenino",
+  "birthDateISO": "1988-12-01",
+  "appointments": [
+   {
+    "startOffsetDays": -23.539,
+    "durationMin": 60,
+    "type": "INITIAL",
+    "status": "COMPLETED"
+   },
+   {
+    "startOffsetDays": -15.33,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "PENDING_CONFIRMATION"
+   },
+   {
+    "startOffsetDays": -8.414,
+    "durationMin": 30,
+    "type": "EMERGENCY",
+    "status": "CONFIRMED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -20.714,
+    "completedOffsetDays": -20.368,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "notes",
+      "payload": {
+       "Notas de consulta": "Refiere distensión e incomodidad abdominal tras lácteos y trigo. En proceso de identificar desencadenantes con diario de alimentos."
+      },
+      "completionState": "complete"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "64.8",
+       "Talla (cm)": "158",
+       "IMC calculado": "26.0",
+       "Análisis de peso y talla": "Sobrepeso leve, foco actual en identificar desencadenantes digestivos"
+      },
+      "completionState": "complete"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -29.455,
+      "weightKg": "64.8",
+      "heightCm": "158",
+      "waistCm": null,
+      "hipCm": null,
+      "abdomenCm": null,
+      "bodyFatPercent": null,
+      "muscleMassKg": null,
+      "method": null,
+      "notes": null
+     }
+    ],
+    "diagnoses": [
+     {
+      "domain": "INGESTIÓN",
+      "code": "NI-5.8.2",
+      "problem": "Intolerancia a la lactosa y sensibilidad al gluten",
+      "etiology": "Relacionado con distensión e incomodidad abdominal tras el consumo de lácteos y trigo",
+      "evidence": "Diario de alimentos muestra correlación consistente entre síntomas y esos dos grupos"
+     }
+    ],
+    "plans": [
+     {
+      "status": "DRAFT",
+      "goal": null,
+      "formula": null,
+      "activityMethod": null,
+      "activityFactor": null,
+      "targetKcal": null,
+      "carbsPercent": null,
+      "proteinPercent": null,
+      "fatPercent": null,
+      "evaluation": null,
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": []
+     }
+    ]
+   },
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -9.239,
+    "completedOffsetDays": -2.893,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Tricipital (mm)": "-0.1",
+       "Muslo frontal (mm)": "-1.6"
+      },
+      "completionState": "in_progress"
+     }
+    ],
+    "measurements": [],
+    "diagnoses": [],
+    "plans": []
+   }
+  ]
+ },
+ {
+  "firstName": "Alberto",
+  "lastName": "Rdz",
+  "email": "alberto@gmail.com",
+  "phone": "9992244494",
+  "sex": null,
+  "birthDateISO": null,
+  "appointments": [
+   {
+    "startOffsetDays": -15.539,
+    "durationMin": 60,
+    "type": "FOLLOW_UP",
+    "status": "CONFIRMED"
+   }
+  ],
+  "consultations": [
+   {
+    "status": "COMPLETED",
+    "startedOffsetDays": -14.172,
+    "completedOffsetDays": -2.893,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "biochemical",
+      "payload": {
+       "Estudios": [
+        {
+         "id": "1790614328008",
+         "name": "Glucosa",
+         "unit": "mg/dL",
+         "range": "70-100",
+         "value": "110",
+         "status": "Elevado"
+        }
+       ]
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "diagnosis",
+      "payload": {
+       "CESIVA: Completa": true,
+       "CESIVA: Suficiente": "No cumple",
+       "CESIVA: Equilibrada": true
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "general",
+      "payload": {
+       "Diabetes__Abuelos": false
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "clinical",
+      "payload": {
+       "HTA__Tíos": false,
+       "HTA__Abuelos": false,
+       "HTA__Ninguno": true,
+       "Diabetes__Tíos": false,
+       "Obesidad__Tíos": true,
+       "HTA__Mamá/Papá": false,
+       "Diabetes__Abuelos": false,
+       "Diabetes__Ninguno": true,
+       "Obesidad__Ninguno": false,
+       "Exploración: Edema": true,
+       "Exploración: Sarro": false,
+       "Diabetes__Mamá/Papá": false,
+       "Exploración: Caídas": true,
+       "Obesidad__Mamá/Papá": true,
+       "Exploración: Cianosis": true,
+       "Exploración: Glositis": true,
+       "Exploración: Halitosis": true,
+       "Exploración: Petequias": true,
+       "Exploración: Piel seca": true,
+       "Exploración: Queilosis": true,
+       "Exploración: Sialorrea": true,
+       "Exploración: Xantelasma": true,
+       "Exploración: Xerostomía": true,
+       "Exploración: Queratomalacia": true,
+       "Exploración: Atrofia papilar": true,
+       "Exploración: Manchas de Bitot": true,
+       "Exploración: Frágil y delgado": true,
+       "Exploración: Sangrado de encías": true,
+       "Exploración: Xerosis conjuntival": true,
+       "Exploración: Conjuntivas pálidas": true,
+       "Exploración: Dermatitis pelagrosa": true,
+       "Exploración: Deterioro del esmalte": false,
+       "Exploración: Hiperqueratosis folicular": true,
+       "Exploración: Piel quebradiza y escamosa": true,
+       "Exploración: Movilización de piezas dentales": false
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "anthropometric",
+      "payload": {
+       "Peso (kg)": "74.4",
+       "Muslo (cm)": "55",
+       "Talla (cm)": "178",
+       "Cadera (cm)": "96",
+       "Cuello (cm)": "34",
+       "Fémur (cm)": "9.5",
+       "Cintura (cm)": "77",
+       "Húmero (cm)": "7",
+       "Muñeca (cm)": "17",
+       "Tobillo (cm)": "22",
+       "IMC calculado": "23.5",
+       "Pectoral (mm)": "7.9",
+       "Abdominal (mm)": "12.5",
+       "Antebrazo (cm)": "26.9",
+       "Bicipital (mm)": "6",
+       "Cefálico (cm)": "57",
+       "Grasa visceral": "7",
+       "Kg de músculo": "36",
+       "Umbilical (cm)": "84",
+       "Bimaleolar (cm)": "8.7",
+       "Blacromial (cm)": "41",
+       "Peso óseo (kg)": "12",
+       "Tricipital (mm)": "10",
+       "% Grasa corporal": "18",
+       "Edad metabólica": "30",
+       "Muslo medio (cm)": "52",
+       "Pantorrilla (cm)": "37",
+       "Agua corporal (%)": "58",
+       "Biestiloideo (cm)": "5.5",
+       "Mesoesternal (cm)": "96.1",
+       "Subescapular (mm)": "12",
+       "Supraespinal (mm)": "5.2",
+       "Axilar medial (mm)": "10",
+       "Billeocrestal (cm)": "28",
+       "Grasa inferior (%)": "21",
+       "Grasa superior (%)": "15.1",
+       "Longitud mano (cm)": "19",
+       "Muslo frontal (mm)": "15",
+       "Brazo relajado (cm)": "30",
+       "Cresta ilíaca (mm)": "14",
+       "Transverso pie (cm)": "10",
+       "Transverso mano (cm)": "8.5",
+       "Brazo contraído (cm)": "33",
+       "Longitud del pie (cm)": "26",
+       "Transverso tórax (cm)": "30",
+       "Pantorrilla medial (mm)": "9",
+       "Masa libre de grasa (kg)": "56.5",
+       "Embarazo (antropometría)": false,
+       "Anteroposterior tórax (cm)": "21"
+      },
+      "completionState": "in_progress"
+     }
+    ],
+    "measurements": [
+     {
+      "measuredOffsetDays": -9.174,
+      "weightKg": "74.5",
+      "heightCm": "178",
+      "waistCm": "80",
+      "hipCm": "96",
+      "abdomenCm": null,
+      "bodyFatPercent": "18",
+      "muscleMassKg": "36",
+      "method": null,
+      "notes": null
+     }
+    ],
+    "diagnoses": [],
+    "plans": [
+     {
+      "status": "DRAFT",
+      "goal": null,
+      "formula": null,
+      "activityMethod": null,
+      "activityFactor": null,
+      "targetKcal": null,
+      "carbsPercent": null,
+      "proteinPercent": null,
+      "fatPercent": null,
+      "evaluation": null,
+      "hydrationNote": null,
+      "recommendations": null,
+      "mealSlots": []
+     }
+    ]
+   },
+   {
+    "status": "IN_PROGRESS",
+    "startedOffsetDays": -0.258,
+    "completedOffsetDays": null,
+    "appointmentIndex": -1,
+    "sections": [
+     {
+      "sectionKey": "monitoring",
+      "payload": {
+       "Apego al plan": "Buen apego al plan. Apego parcial, con desviaciones puntuales."
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "dietary",
+      "payload": {
+       "Frecuencia de consumo (mapa)": {
+        "azucar-grasa": "2-3 veces por semana",
+        "oa-alto-grasa": "Diario",
+        "oa-bajo-grasa": "4-6 veces por semana",
+        "lacteos-enteros": "Diario"
+       }
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "treatment",
+      "payload": {
+       "Balance energético": "Superávit"
+      },
+      "completionState": "in_progress"
+     },
+     {
+      "sectionKey": "summary",
+      "payload": {
+       "Motivo de consulta": "Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba Texto de prueba. Acude para perder peso. Control nutricional del embarazo. Solicita asesoría sobre suplementos.",
+       "Referencia de la cita": "Recomendación de un paciente."
+      },
+      "completionState": "in_progress"
+     }
+    ],
+    "measurements": [],
+    "diagnoses": [
+     {
+      "domain": "CLÍNICOS",
+      "code": "NC-4.1",
+      "problem": "Malnutrición (desnutrición)",
+      "etiology": null,
+      "evidence": null
+     }
+    ],
+    "plans": []
+   }
+  ]
+ }
+]
