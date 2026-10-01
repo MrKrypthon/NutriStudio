@@ -45,7 +45,7 @@ export const PES_DOMAINS = [
           {
             "code": "NI-2.1",
             "anduid": "10639",
-            "label": "Ingestió vía oral inadecuada (subóptima)"
+            "label": "Ingestión vía oral inadecuada (subóptima)"
           },
           {
             "code": "NI-2.2",
@@ -162,7 +162,7 @@ export const PES_DOMAINS = [
           {
             "code": "NI-4.2.2",
             "anduid": "11085",
-            "label": "Ingestión escesiva de ésteres de esteroles vegetales"
+            "label": "Ingestión excesiva de ésteres de esteroles vegetales"
           },
           {
             "code": "NI-4.2.3",
@@ -172,7 +172,7 @@ export const PES_DOMAINS = [
           {
             "code": "NI-4.2.4",
             "anduid": "11086",
-            "label": "Ingestion excesiva de psyllium"
+            "label": "Ingestión excesiva de psyllium"
           },
           {
             "code": "NI-4.2.5",
@@ -472,7 +472,7 @@ export const PES_DOMAINS = [
           {
             "code": "NI-5.9.2",
             "anduid": "10705",
-            "label": "Ingestión excesiva de vitaminas Ácido pantoténico (12)  Terminología de Diagnóstico Nutricio Código TPAN ANDUID Código TPAN ANDUID 2 Nutrition Care Process Terminology (eNCPT), 2017 Edition. Copyright 2017 Academy of Nutrition and Dietetics.",
+            "label": "Ingestión excesiva de vitaminas Ácido pantoténico",
             "parent": "NI-5.9.2"
           },
           {
@@ -710,9 +710,15 @@ export const PES_DOMAINS = [
           {
             "code": "NI-5.10.2",
             "anduid": "10747",
-            "label": "Ingestión excesiva de minerales Cobalto (18)  Multi-nutrimentos (5.11)",
+            "label": "Ingestión excesiva de minerales Cobalto",
             "parent": "NI-5.10.2"
-          },
+          }
+        ]
+      },
+      {
+        "name": "Multi-nutrimentos",
+        "code": "NI-5.11",
+        "terms": [
           {
             "code": "NI-5.11.1",
             "anduid": "10750",
@@ -721,7 +727,7 @@ export const PES_DOMAINS = [
           {
             "code": "NI-5.11.2",
             "anduid": "10751",
-            "label": "Predicción de ingestión excesiva de nutrimentos"
+            "label": "Predicción de ingestión excesiva de nutrimentos (especificar)"
           }
         ]
       }
@@ -993,15 +999,21 @@ export const PES_DOMAINS = [
             "label": "Acceso limitado a agua potable"
           }
         ]
-      },
+      }
+    ]
+  },
+  {
+    "name": "OTROS",
+    "code": "NO",
+    "categories": [
       {
         "name": "Otros",
-        "code": "NB-1",
+        "code": "NO-1",
         "terms": [
           {
-            "code": "",
+            "code": "NO-1.1",
             "anduid": "10795",
-            "label": "Sin diagnóstico nutricio en este momento NO-1.1"
+            "label": "Sin diagnóstico nutricio en este momento"
           }
         ]
       }
@@ -1010,7 +1022,7 @@ export const PES_DOMAINS = [
 ]
 
 // Mapea el título del dominio de la app al dominio PES por su prefijo de código.
-export const PES_PREFIX_BY_DOMAIN = { 'INGESTIÓN': 'NI', 'CLÍNICOS': 'NC', 'CONDUCTUAL-AMBIENTAL': 'NB', 'CONDUCTUALES-AMBIENTALES': 'NB' }
+export const PES_PREFIX_BY_DOMAIN = { 'INGESTIÓN': 'NI', 'CLÍNICOS': 'NC', 'CONDUCTUAL-AMBIENTAL': 'NB', 'CONDUCTUALES-AMBIENTALES': 'NB', 'OTROS': 'NO' }
 
 export function pesDomainFor(domainTitle) {
   const prefix = PES_PREFIX_BY_DOMAIN[domainTitle]

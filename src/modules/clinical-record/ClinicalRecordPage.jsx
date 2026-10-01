@@ -1204,11 +1204,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           </div>],
           ['dieta', 'Tipo de dieta', <FormCard key="td" title="Tipo de dieta y evaluación" fields={['Tipo de dieta|', 'Evaluación de la alimentación actual|*']} values={currentValues} onFieldChange={updateField} />],
           ['dominios', 'Dominios PES', <div className="sub-stack" key="dm-stack">
-            {/* Buscador por dominio o por el texto de un diagnóstico ya registrado. Sin el catálogo
-                completo de claves PES (NI-#, NC-#, NB-#, NO-#…) no hay un árbol de diagnósticos
-                estandarizados que filtrar — eso queda pendiente del documento que la nutrióloga va
-                a enviar aparte (ver MEJORAS_EXPEDIENTE.md, tanda 6); mientras tanto, el buscador
-                filtra los dominios y lo ya capturado para esta consulta. */}
+            {/* Buscador global: filtra las tarjetas de dominio, el catálogo PES completo (162
+                términos con clave TPAN) y lo ya registrado en esta consulta, los tres a la vez —
+                útil para ir directo a un término sin saber antes en qué dominio vive ("Usar" lo
+                abre ya precargado). Dentro de "Nuevo diagnóstico" hay un segundo buscador que sólo
+                recorre el árbol de categorías del dominio ya elegido (ver más abajo). */}
             <div className="search-field diagnosis-search"><span>⌕</span><input value={diagnosisSearch} onChange={(e) => setDiagnosisSearch(e.target.value)} placeholder="Buscar por dominio o por diagnóstico ya registrado…" /></div>
             <div className="diagnosis-domains">{DIAGNOSIS_DOMAINS.filter(([title, desc]) => !diagnosisSearch.trim() || `${title} ${desc}`.toLowerCase().includes(diagnosisSearch.trim().toLowerCase())).map(([title, desc, color]) => <div className={'domain-card ' + color} key={title} onClick={() => { setSub('registrados'); openDiagnosisForm(title) }} style={{ cursor: 'pointer' }}><span>◉</span><b>{title}</b><small>{desc}</small><strong>{diagnoses.filter((d) => d.domain === title).length} seleccionados</strong></div>)}</div>
             {diagnosisSearch.trim() && <div className="diagnosis-selected">
