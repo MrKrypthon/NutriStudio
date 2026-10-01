@@ -170,6 +170,10 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   const [photoError, setPhotoError] = useState('')
   const selectType = (key) => { setType(key); const first = GROUP_FIELDS[key]?.[0]; if (first) setActiveField(first.key) }
 
+  // El embarazo y su IMC sólo aplican a pacientes mujeres: en hombres no se muestran.
+  const sexKey = String(patientSex || '').trim().toLowerCase()
+  const isMale = sexKey === 'm' || sexKey.startsWith('masc') || sexKey === 'male' || sexKey.startsWith('hombre')
+
   const peso = num(values['Peso (kg)'])
   const talla = num(values['Talla (cm)'])
   const imc = peso && talla ? peso / ((talla / 100) ** 2) : null
@@ -235,6 +239,8 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   }
 
   const renderCalculations = () => {
+    const calcTypes = isMale ? CALC_TYPES.filter(([key]) => key !== 'imc-embarazo') : CALC_TYPES
+    const activeKey = calcTypes.some(([key]) => key === calcType) ? calcType : calcTypes[0][0]
     const fat = bodyFatEstimates(values, { sex: patientSex })
     const composition = bodyComposition(values, { sex: patientSex, fatPercent: fat.average })
     const weights = theoreticalWeights(values['Talla (cm)'], patientSex)
@@ -245,11 +251,11 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
     const gest = peso && talla ? peso / ((talla / 100) ** 2) : null
     const gestZone = gest ? EMBARAZO_GAIN.find((z) => gest < z.to) : null
     return <div className="anthro-layout panel">
-      <aside className="anthro-types"><p className="eyebrow">Tipo</p>{CALC_TYPES.map(([key, label, icon]) => <button type="button" className={'anthro-type' + (calcType === key ? ' active' : '')} key={key} onClick={() => setCalcType(key)}><Icon>{icon}</Icon>{label}</button>)}</aside>
+      <aside className="anthro-types"><p className="eyebrow">Tipo</p>{calcTypes.map(([key, label, icon]) => <button type="button" className={'anthro-type' + (activeKey === key ? ' active' : '')} key={key} onClick={() => setCalcType(key)}><Icon>{icon}</Icon>{label}</button>)}</aside>
       <section className="anthro-main">
-        <h2 className="anthro-title"><Icon>{CALC_TYPES.find((t) => t[0] === calcType)?.[2]}</Icon>{CALC_TYPES.find((t) => t[0] === calcType)?.[1]}</h2>
+        <h2 className="anthro-title"><Icon>{calcTypes.find((t) => t[0] === activeKey)?.[2]}</Icon>{calcTypes.find((t) => t[0] === activeKey)?.[1]}</h2>
 
-        {calcType === 'grasa' && <>
+        {activeKey === 'grasa' && <>
           <p className="anthro-hint">Estimaciones a partir de los pliegues capturados en Mediciones. El promedio reúne las fórmulas con datos disponibles.</p>
           <div className="calc-table">
             <div className="calc-table-head"><span>Autor</span><span>Resultado</span></div>
@@ -261,7 +267,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
           </div>
         </>}
 
-        {calcType === 'componentes' && <div className="calc-components">
+        {activeKey === 'componentes' && <div className="calc-components">
           <div className="calc-table three">
             <div className="calc-table-head"><span>Componente</span><span>Kg</span><span>%</span></div>
             {composition.parts.map((p) => <div className="calc-table-row" key={p.label}>
@@ -273,13 +279,13 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
           <div className="calc-chart"><div className="calc-donut" style={{ background: stops.length ? `conic-gradient(${stops.join(',')})` : '#eef0f4' }}><span>{composition.weight ? `${composition.weight} kg` : '—'}</span></div></div>
         </div>}
 
-        {calcType === 'peso-teorico' && <div className="calc-table">
+        {activeKey === 'peso-teorico' && <div className="calc-table">
           <div className="calc-table-head"><span>Fórmula</span><span>Peso ideal</span></div>
           {weights.length ? weights.map((w) => <div className="calc-table-row" key={w.label}><span className="calc-table-name">{w.label}</span><span className="calc-table-value">{w.value} kg</span></div>) : <p className="anthro-hint">Captura la estatura en Mediciones.</p>}
           {talla && <div className="calc-table-row total"><span className="calc-table-name"><b>Rango saludable (IMC 18.5–24.9)</b></span><span className="calc-table-value"><b>{(18.5 * (talla / 100) ** 2).toFixed(1)}–{(24.9 * (talla / 100) ** 2).toFixed(1)} kg</b></span></div>}
         </div>}
 
-        {calcType === 'frisancho' && <div className="calc-table three">
+        {activeKey === 'frisancho' && <div className="calc-table three">
           <div className="calc-table-head"><span>Indicador</span><span>Valor</span><span>Referencia</span></div>
           {frisanchoRows(values, patientSex).map((row) => <div className="calc-table-row" key={row.label}>
             <span className="calc-table-name">{row.label}</span>
@@ -288,7 +294,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
           </div>)}
         </div>}
 
-        {calcType === 'imc-embarazo' && <>
+        {activeKey === 'imc-embarazo' && <>
           <label className="anthro-inline-field">Semana de gestación<input type="number" min="1" max="42" value={gestWeek} onChange={(event) => setGestWeek(event.target.value)} /></label>
           <div className="calc-table">
             <div className="calc-table-head"><span>Categoría (IMC previo)</span><span>Ganancia total</span></div>
@@ -360,7 +366,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
         <h2 className="anthro-title"><Icon>{TYPES.find((t) => t[0] === type)?.[2]}</Icon>{TYPES.find((t) => t[0] === type)?.[1]}</h2>
 
         {type === 'peso' && <>
-          <div className="anthro-fields">{GROUP_FIELDS.peso.map(renderField)}<label className="anthro-check"><input type="checkbox" checked={Boolean(values['Embarazo (antropometría)'])} onChange={(event) => onFieldChange?.('Embarazo (antropometría)', event.target.checked)} /> Embarazo</label></div>
+          <div className="anthro-fields">{GROUP_FIELDS.peso.map(renderField)}{!isMale && <label className="anthro-check"><input type="checkbox" checked={Boolean(values['Embarazo (antropometría)'])} onChange={(event) => onFieldChange?.('Embarazo (antropometría)', event.target.checked)} /> Embarazo</label>}</div>
           <div className="imc-block">
             <div className="imc-head"><b>Índice de masa corporal</b><span className="imc-value" style={{ color: imc ? category.color : undefined }}>{imc ? `IMC=${imc.toFixed(1)} · ${category.label}` : 'Ingresa peso y estatura'}</span></div>
             <div className="imc-row">
