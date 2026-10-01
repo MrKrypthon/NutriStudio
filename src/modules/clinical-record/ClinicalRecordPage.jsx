@@ -6,6 +6,7 @@ import FormCard from '../../components/FormCard.jsx'
 import Icon from '../../components/Icon.jsx'
 import RecallBuilder from '../../components/RecallBuilder.jsx'
 import SuggestionChips from '../../components/SuggestionChips.jsx'
+import FoodFrequencyBoard from '../../components/FoodFrequencyBoard.jsx'
 import { pesCategoriesFor, searchPesTerms } from '../../lib/pesTerms.js'
 import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
@@ -129,7 +130,6 @@ const INTOLERANCIAS_SUGGESTIONS = [
 ]
 // Evaluación cualitativa del diagnóstico alimentario (CESIVA) y frecuencia de consumo por alimento.
 const CESIVA = [['Completa', 'Incluye todos los grupos de alimentos'], ['Equilibrada', 'Proporción adecuada entre grupos'], ['Suficiente', 'Cubre los requerimientos'], ['Inocua', 'Sin riesgo para la salud'], ['Variada', 'Alterna distintos alimentos'], ['Adecuada', 'Apta para el paciente']]
-const FOOD_FREQUENCY = ['Leche', 'Queso', 'Yogur', 'Avena', 'Carne de res', 'Carne de pollo', 'Pescado', 'Huevo', 'Tortilla', 'Pan', 'Arroz', 'Frijol', 'Verduras', 'Frutas', 'Refresco', 'Jugo', 'Café', 'Dulces o postres', 'Frituras']
 const SYMPTOMS = ['Diarrea', 'Estreñimiento', 'Náusea', 'Úlcera', 'Pirosis', 'Ceguera nocturna', 'Vómito', 'Gastritis', 'Poliuria', 'Polidipsia', 'Polifagia']
 const PHYSICAL_EXAM = [
   ['Piel y ojos', ['Petequias', 'Xerosis conjuntival', 'Piel seca', 'Dermatitis pelagrosa', 'Manchas de Bitot', 'Hiperqueratosis folicular', 'Edema', 'Queratomalacia', 'Conjuntivas pálidas', 'Cianosis', 'Xantelasma', 'Piel quebradiza y escamosa']],
@@ -1442,9 +1442,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               <label>¿Agrega sal a la comida ya preparada?<div className="toggle-pair"><TogglePill active={currentValues['Agrega sal a la comida ya preparada'] === 'Sí'} label="Sí" onClick={() => updateField('Agrega sal a la comida ya preparada', currentValues['Agrega sal a la comida ya preparada'] === 'Sí' ? '' : 'Sí')} /><TogglePill active={currentValues['Agrega sal a la comida ya preparada'] === 'No'} label="No" onClick={() => updateField('Agrega sal a la comida ya preparada', currentValues['Agrega sal a la comida ya preparada'] === 'No' ? '' : 'No')} /></div></label>
             </div></div>
           </div>],
-          ['frecuencia', 'Frecuencia de alimentos', <div className="form-card" key="fr"><h3>Frecuencia de alimentos <small className="freq-hint">días por semana</small></h3><div className="frequency-chips">
-            {FOOD_FREQUENCY.map((food) => <label className="frequency-chip" key={food}><span>{food}</span><input type="number" min="0" max="7" value={currentValues[`Frecuencia: ${food}`] ?? ''} onChange={(e) => updateField(`Frecuencia: ${food}`, e.target.value)} /></label>)}
-          </div></div>],
+          ['frecuencia', 'Frecuencia de consumo', <div key="fr">
+            <p className="subtitle food-frequency-intro">Arrastra cada grupo o alimento a la frecuencia con la que lo consume {patientName} — o, si prefieres, toca el alimento y luego la frecuencia.</p>
+            <FoodFrequencyBoard value={currentValues['Frecuencia de consumo (mapa)']} onChange={(next) => updateField('Frecuencia de consumo (mapa)', next)} disabled={locked} />
+          </div>],
           ['dieta', 'Dieta habitual', <FormCard key="dh" title="Dieta habitual (alimentos, cantidades y horarios)" fields={['Desayuno|*', 'Colación matutina|*', 'Almuerzo o comida|*', 'Colación vespertina|*', 'Cena|*']} values={currentValues} onFieldChange={updateField} />],
           ['recordatorio', 'Recordatorio 24 h', <RecallBuilder key="r24" value={currentValues['Recordatorio 24 h']} onChange={(next) => updateField('Recordatorio 24 h', next)} age={computeAge(patient?.birthDate)} sex={patient?.sex} />],
         ]} />

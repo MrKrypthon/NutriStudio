@@ -1023,3 +1023,35 @@ una página de más). `npm run build` OK y `npm test` 81/81 en cada tanda.
 
 **Pendiente.** Confirmar si la consolidación de botones (Tanda 9) es lo que la nutrióloga tenía en
 mente. Las 9 tandas del PDF quedan completas.
+
+## Fase 86 — Frecuencia de consumo de alimentos: tablero de arrastrar y soltar
+
+Reemplaza la vieja grilla de "Frecuencia de alimentos" (18 alimentos fijos, un número de 0 a 7 días
+por semana cada uno — sin datos capturados todavía, así que no hizo falta migración) por un tablero
+visual: 15 grupos de alimentos (sistema de equivalentes) y 19 alimentos de consumo ocasional, cada
+uno con su icono propio, que se clasifican arrastrándolos —o, sin arrastrar, tocando el alimento y
+luego la frecuencia— a una de seis frecuencias (Diario, 4–6 veces por semana, 2–3 veces por semana,
+Semanalmente, 2–3 veces por mes, Mensualmente o menos).
+
+Un alimento vive en un solo lugar a la vez, como ordenar tarjetas en un tablero: clasificarlo lo saca
+de la paleta de la izquierda y lo manda a su frecuencia; quitarlo de ahí (botón "×") lo devuelve a la
+paleta. Así la paleta muestra, de un vistazo, qué falta por clasificar — más intuitivo que la
+referencia que compartió la nutrióloga, que mantenía todos los iconos siempre visibles sin indicar
+el avance.
+
+Se agregaron 7 alimentos a los de la referencia que no estaban y son de los más preguntados en un
+interrogatorio de frecuencia: huevo, yogur, jugo, agua de sabor, frituras, dulces, embutidos.
+
+**Arquitectura.** `src/lib/foodFrequencyItems.js` (el catálogo), `src/lib/foodFrequencyMap.js`
+(lógica pura de clasificación, con pruebas), `src/components/FoodIcon.jsx` (34 iconos propios en el
+mismo estilo línea-arte de `Icon.jsx`, 24×24, `stroke=currentColor`) y
+`src/components/FoodFrequencyBoard.jsx` (el tablero: arrastrar nativo HTML5 y el modo por clic son
+dos caminos al mismo `assign()`, así que el resultado es idéntico venga de donde venga). Se guarda
+como un solo campo (`Frecuencia de consumo (mapa)`) con un mapa plano `{clave: frecuencia}` en el
+payload de Dietético, igual que el resto de los campos de la sección.
+
+**Verificado** en navegador sobre una instancia aislada: 34 chips con su icono, clasificar por clic
+mueve el alimento de la paleta al bucket y sobrevive a una recarga, el botón "×" lo regresa a la
+paleta, un `DragEvent` HTML5 real (`dataTransfer` de verdad, no un clic) también clasifica
+correctamente, y en una consulta cerrada el tablero queda bloqueado igual que el resto del
+expediente. `npm run build` OK y `npm test` 101/101 (12 pruebas nuevas).
