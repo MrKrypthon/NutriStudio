@@ -1301,9 +1301,33 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       : tab === 'Dietético' ? <div className="panel generic-section">
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Dietético</h1><p className="subtitle">Hábitos alimentarios de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
-          ['patron', 'Patrón de alimentación', <FormCard key="pt" title="Patrón de alimentación" fields={['Núm. de comidas al día|', 'Horario habitual de comidas|', 'Apetito|', 'Hora a la que tiene más hambre|', 'Comidas o bebidas preferidas|', 'Alimentos que no le agradan o le causan malestar|*']} values={currentValues} onFieldChange={updateField} />],
-          ['agua', 'Consumo de agua', <FormCard key="ag" title="Consumo de agua" fields={['Vasos de agua al día|', 'Restricciones dietéticas|', 'Notas dietéticas|*']} values={currentValues} onFieldChange={updateField} />],
-          ['historial', 'Historial', <FormCard key="hi" title="Historial de consultas nutricionales" fields={['¿Ha asistido antes a consulta nutricional?|', 'Tipo de consulta previa|', 'Tiempo que llevó la dieta|', 'Motivo por el que la llevó|', 'Resultados obtenidos|', 'Qué tanto se apegó a la dieta|*']} values={currentValues} onFieldChange={updateField} />],
+          ['patron', 'Patrón de alimentación', <div key="pt" className="sub-stack">
+            <FormCard title="Patrón de alimentación" fields={['Núm. de comidas al día|', 'Horario habitual de comidas|', 'Apetito|', 'Hora a la que tiene más hambre|', 'Comidas o bebidas preferidas|', 'Alimentos que no le agradan o le causan malestar|', 'Restricciones dietéticas|', 'Notas dietéticas|*']} values={currentValues} onFieldChange={updateField} />
+            {/* El consumo de agua dejó de ser su propia subpestaña: va aquí, junto con el resto de
+                lo que se bebe en el día, porque es parte del mismo patrón y no un tema aparte. */}
+            <div className="form-card"><h3>Hidratación y bebidas</h3><div className="form-grid">
+              <label>Vasos o litros de agua al día<input value={currentValues['Vasos de agua al día'] ?? ''} onChange={(e) => updateField('Vasos de agua al día', e.target.value)} /></label>
+              <label>Refrescos, jugos o bebidas azucaradas (frecuencia y tipo)<input value={currentValues['Refrescos, jugos o bebidas azucaradas'] ?? ''} onChange={(e) => updateField('Refrescos, jugos o bebidas azucaradas', e.target.value)} /></label>
+              <label>Bebidas energéticas<input value={currentValues['Consumo de bebidas energéticas'] ?? ''} onChange={(e) => updateField('Consumo de bebidas energéticas', e.target.value)} /></label>
+              <label>Café o té (tazas/día y endulzante)<input value={currentValues['Café o té (tazas/día y endulzante)'] ?? ''} onChange={(e) => updateField('Café o té (tazas/día y endulzante)', e.target.value)} /></label>
+            </div></div>
+          </div>],
+          ['historial', 'Historial', <div key="hi" className="sub-stack">
+            <FormCard title="Historial de consultas nutricionales" fields={['¿Ha asistido antes a consulta nutricional?|', 'Tipo de consulta previa|', 'Tiempo que llevó la dieta|', 'Motivo por el que la llevó|', 'Resultados obtenidos|', 'Qué tanto se apegó a la dieta|*']} values={currentValues} onFieldChange={updateField} />
+            <div className="form-card"><div className="form-grid">
+              <label>¿Ha utilizado medicamentos para bajar de peso?<div className="toggle-pair"><TogglePill active={currentValues['Medicamentos para bajar de peso'] === 'Sí'} label="Sí" onClick={() => updateField('Medicamentos para bajar de peso', currentValues['Medicamentos para bajar de peso'] === 'Sí' ? '' : 'Sí')} /><TogglePill active={currentValues['Medicamentos para bajar de peso'] === 'No'} label="No" onClick={() => updateField('Medicamentos para bajar de peso', currentValues['Medicamentos para bajar de peso'] === 'No' ? '' : 'No')} /></div></label>
+              <label>¿Cuáles?<input value={currentValues['Medicamentos para bajar de peso: cuáles'] ?? ''} onChange={(e) => updateField('Medicamentos para bajar de peso: cuáles', e.target.value)} /></label>
+            </div></div>
+            <div className="form-card"><h3>Historia dietética</h3><div className="form-grid">
+              <label>¿Sabe cocinar?<div className="toggle-pair"><TogglePill active={currentValues['Sabe cocinar'] === 'Sí'} label="Sí" onClick={() => updateField('Sabe cocinar', currentValues['Sabe cocinar'] === 'Sí' ? '' : 'Sí')} /><TogglePill active={currentValues['Sabe cocinar'] === 'No'} label="No" onClick={() => updateField('Sabe cocinar', currentValues['Sabe cocinar'] === 'No' ? '' : 'No')} /></div></label>
+              <label>¿Quién prepara sus alimentos?<input value={currentValues['Quién prepara sus alimentos'] ?? ''} onChange={(e) => updateField('Quién prepara sus alimentos', e.target.value)} /></label>
+              <label>¿Come entre comidas?<div className="toggle-pair"><TogglePill active={currentValues['Come entre comidas'] === 'Sí'} label="Sí" onClick={() => updateField('Come entre comidas', currentValues['Come entre comidas'] === 'Sí' ? '' : 'Sí')} /><TogglePill active={currentValues['Come entre comidas'] === 'No'} label="No" onClick={() => updateField('Come entre comidas', currentValues['Come entre comidas'] === 'No' ? '' : 'No')} /></div></label>
+              <label>¿Con qué electrodomésticos cuenta?<input value={currentValues['Electrodomésticos con los que cuenta'] ?? ''} onChange={(e) => updateField('Electrodomésticos con los que cuenta', e.target.value)} /></label>
+              <label>¿Ha modificado su alimentación en los últimos 6 meses? (trabajo, estudio, actividad)<input value={currentValues['Cambios en la alimentación últimos 6 meses'] ?? ''} onChange={(e) => updateField('Cambios en la alimentación últimos 6 meses', e.target.value)} /></label>
+              <label>¿Su consumo varía cuando está triste, nervioso o ansioso?<input value={currentValues['Variación del consumo con el ánimo'] ?? ''} onChange={(e) => updateField('Variación del consumo con el ánimo', e.target.value)} /></label>
+              <label>¿Agrega sal a la comida ya preparada?<div className="toggle-pair"><TogglePill active={currentValues['Agrega sal a la comida ya preparada'] === 'Sí'} label="Sí" onClick={() => updateField('Agrega sal a la comida ya preparada', currentValues['Agrega sal a la comida ya preparada'] === 'Sí' ? '' : 'Sí')} /><TogglePill active={currentValues['Agrega sal a la comida ya preparada'] === 'No'} label="No" onClick={() => updateField('Agrega sal a la comida ya preparada', currentValues['Agrega sal a la comida ya preparada'] === 'No' ? '' : 'No')} /></div></label>
+            </div></div>
+          </div>],
           ['frecuencia', 'Frecuencia de alimentos', <div className="form-card" key="fr"><h3>Frecuencia de alimentos <small className="freq-hint">días por semana</small></h3><div className="frequency-chips">
             {FOOD_FREQUENCY.map((food) => <label className="frequency-chip" key={food}><span>{food}</span><input type="number" min="0" max="7" value={currentValues[`Frecuencia: ${food}`] ?? ''} onChange={(e) => updateField(`Frecuencia: ${food}`, e.target.value)} /></label>)}
           </div></div>],
