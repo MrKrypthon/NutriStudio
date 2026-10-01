@@ -785,11 +785,6 @@ export const PES_DOMAINS = [
             "code": "NC-2.4",
             "anduid": "10762",
             "label": "Predicción de interacción alimento-medicamento"
-          },
-          {
-            "code": "NC-3.5",
-            "anduid": "10802",
-            "label": "Tasa de crecimiento por debajo de lo esperado"
           }
         ]
       },
@@ -1043,4 +1038,11 @@ export function searchPesTerms(query) {
     }
   }
   return out.slice(0, 60)
+}
+
+// Categorías ("apartados") de un dominio, cada una con sus términos: así la interfaz puede
+// mostrar primero el título y desplegar sus hijos.
+export function pesCategoriesFor(domainTitle) {
+  const domain = pesDomainFor(domainTitle)
+  return domain ? domain.categories : []
 }

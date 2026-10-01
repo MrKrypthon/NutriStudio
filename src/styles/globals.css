@@ -1155,3 +1155,14 @@ html{scroll-behavior:smooth}
 .pes-term:hover{border-color:var(--green)}
 .pes-term.selected{border-color:var(--green);background:var(--mint)}
 .pes-empty{margin:4px 0}
+
+/* Diagnóstico: árbol de apartados (título) con sus diagnósticos (hijos) */
+.pes-tree{display:grid;gap:6px;max-height:300px;overflow-y:auto}
+.pes-cat{border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff}
+.pes-cat-head{width:100%;display:grid;grid-template-columns:16px 1fr auto auto;align-items:center;gap:10px;border:0;background:#fff;padding:9px 12px;cursor:pointer;text-align:left}
+.pes-cat-head.open{background:var(--surface-soft)}
+.pes-cat-head b{font:600 11px 'DM Sans';color:var(--ink)}
+.pes-cat-head code{font:600 9px 'DM Mono';color:var(--green)}
+.pes-cat-head small{font:600 9px 'DM Mono';color:var(--muted);background:var(--mint);border-radius:9px;padding:1px 7px}
+.pes-cat-arrow{color:var(--green);font-size:11px}
+.pes-cat-terms{display:grid;gap:3px;padding:6px 8px 8px;border-top:1px solid var(--line)}
