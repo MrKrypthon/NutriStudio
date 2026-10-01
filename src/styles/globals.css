@@ -1130,3 +1130,14 @@ html{scroll-behavior:smooth}
 /* Par Sí/No dentro de un <label> del form-grid (antecedentes ginecobstétricos, etc). */
 .toggle-pair{display:flex;gap:6px;margin-top:6px}
 .toggle-pair .toggle-pill{margin:0}
+
+/* Buscador sobre los dominios PES de Diagnóstico. */
+.diagnosis-search{margin-bottom:4px;background:#fff}
+
+/* Requerimientos (Tratamiento): balance calórico y objetivo energético calculado en vivo. */
+.balance-toggle{display:flex;gap:8px}
+.requirement-result{margin-top:18px;background:#eaf6ef;border-radius:9px;padding:14px 16px}
+.requirement-result small{display:block;color:#6e6e73;font-size:9px}
+.requirement-result b{display:block;color:#28187b;font:800 24px Manrope;margin:5px 0}
+.requirement-result em{font:400 10px 'DM Sans'}
+.requirement-result span{font-size:10px;color:#3e9974}

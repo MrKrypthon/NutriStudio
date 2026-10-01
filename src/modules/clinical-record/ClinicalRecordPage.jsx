@@ -286,6 +286,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [chartMetric, setChartMetric] = useState('Peso')
   const [diagnoses, setDiagnoses] = useState([])
   const [diagnosisForm, setDiagnosisForm] = useState(null)
+  const [diagnosisSearch, setDiagnosisSearch] = useState('')
   const [diagnosisSaveState, setDiagnosisSaveState] = useState('idle')
   const [labForm, setLabForm] = useState(null)
   const [report, setReport] = useState(null)
@@ -495,6 +496,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       .catch(() => {})
     return () => { cancelled = true }
   }, [consultation, patientId])
+
+  const filteredDiagnoses = useMemo(() => {
+    const q = diagnosisSearch.trim().toLowerCase()
+    if (!q) return diagnoses
+    return diagnoses.filter((d) => `${d.domain} ${d.problem} ${d.etiology || ''} ${d.evidence || ''}`.toLowerCase().includes(q))
+  }, [diagnoses, diagnosisSearch])
 
   const sectionKey = SECTION_KEYS[tab]
   // Lo que se ve en la sección es lo de la consulta con los datos permanentes del paciente encima:
@@ -1138,7 +1145,20 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             </div>
           </div>],
           ['dieta', 'Tipo de dieta', <FormCard key="td" title="Tipo de dieta y evaluación" fields={['Tipo de dieta|', 'Evaluación de la alimentación actual|*']} values={currentValues} onFieldChange={updateField} />],
-          ['dominios', 'Dominios PES', <div className="diagnosis-domains" key="dm">{DIAGNOSIS_DOMAINS.map(([title, desc, color]) => <div className={'domain-card ' + color} key={title} onClick={() => { setSub('registrados'); openDiagnosisForm(title) }} style={{ cursor: 'pointer' }}><span>◉</span><b>{title}</b><small>{desc}</small><strong>{diagnoses.filter((d) => d.domain === title).length} seleccionados</strong></div>)}</div>],
+          ['dominios', 'Dominios PES', <div className="sub-stack" key="dm-stack">
+            {/* Buscador por dominio o por el texto de un diagnóstico ya registrado. Sin el catálogo
+                completo de claves PES (NI-#, NC-#, NB-#, NO-#…) no hay un árbol de diagnósticos
+                estandarizados que filtrar — eso queda pendiente del documento que la nutrióloga va
+                a enviar aparte (ver MEJORAS_EXPEDIENTE.md, tanda 6); mientras tanto, el buscador
+                filtra los dominios y lo ya capturado para esta consulta. */}
+            <div className="search-field diagnosis-search"><span>⌕</span><input value={diagnosisSearch} onChange={(e) => setDiagnosisSearch(e.target.value)} placeholder="Buscar por dominio o por diagnóstico ya registrado…" /></div>
+            <div className="diagnosis-domains">{DIAGNOSIS_DOMAINS.filter(([title, desc]) => !diagnosisSearch.trim() || `${title} ${desc}`.toLowerCase().includes(diagnosisSearch.trim().toLowerCase())).map(([title, desc, color]) => <div className={'domain-card ' + color} key={title} onClick={() => { setSub('registrados'); openDiagnosisForm(title) }} style={{ cursor: 'pointer' }}><span>◉</span><b>{title}</b><small>{desc}</small><strong>{diagnoses.filter((d) => d.domain === title).length} seleccionados</strong></div>)}</div>
+            {diagnosisSearch.trim() && <div className="diagnosis-selected">
+              <p className="eyebrow">DIAGNÓSTICOS QUE COINCIDEN</p>
+              {filteredDiagnoses.length === 0 && <p className="muted">Ningún diagnóstico registrado coincide con "{diagnosisSearch}".</p>}
+              {filteredDiagnoses.map((d) => <div className="diagnosis-entry" key={d.id}><div><b>{d.domain}</b><span>{d.problem}</span></div></div>)}
+            </div>}
+          </div>],
           ['registrados', 'Diagnósticos', <div className="sub-stack" key="rg">
             {diagnosisForm && <div className="diagnosis-form panel">
               <p className="eyebrow">{diagnosisForm._editingId ? 'EDITAR DIAGNÓSTICO' : 'NUEVO DIAGNÓSTICO'} · {diagnosisForm.domain}</p>
@@ -1399,7 +1419,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       </div>
 
       : tab === 'Tratamiento' ? <div className="panel generic-section">
-        <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Tratamiento</h1><p className="subtitle">Plan de intervención acordado con {patientName}: objetivos, educación y seguimiento.</p>
+        <div className="section-heading"><div><p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Tratamiento</h1><p className="subtitle">Plan de intervención acordado con {patientName}: objetivos, educación y seguimiento.</p></div><button className="secondary" onClick={() => setActive('Constructor de plan')}>Ir al plan →</button></div>
         <Subsection value={sub} onChange={setSub} groups={[
           ['objetivos', 'Objetivos', <div key="ob" className="sub-stack">
             <div className="form-card reference-card"><h3>Base del diagnóstico</h3>
@@ -1408,7 +1428,34 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             </div>
             <FormCard title="Objetivos terapéuticos" fields={['Objetivo general|', 'Objetivos a corto plazo|', 'Objetivos a largo plazo|']} values={currentValues} onFieldChange={updateField} />
           </div>],
-          ['recomendaciones', 'Recomendaciones', <FormCard key="rc" title="Recomendaciones" fields={['Recomendaciones generales|', 'Recomendaciones de alimentación|']} values={currentValues} onFieldChange={updateField} />],
+          ['requerimientos', 'Requerimientos', <div key="rq" className="form-card">
+            <h3>Cálculo para balance calórico</h3>
+            <p className="muted" style={{ marginTop: -6, marginBottom: 14 }}>Frecuentemente usado en pacientes para el aumento de masa muscular o la reducción de grasa.</p>
+            <div className="balance-toggle">{['Normocalórico', 'Déficit', 'Superávit'].map((option) => <TogglePill key={option} active={(currentValues['Balance energético'] || 'Normocalórico') === option} label={option} onClick={() => updateField('Balance energético', option)} />)}</div>
+            <div className="form-grid three" style={{ marginTop: 16 }}>
+              <label>Hidratos (g/kg)<input type="number" min="0" step="0.1" value={currentValues['Hidratos (g/kg)'] ?? ''} onChange={(e) => updateField('Hidratos (g/kg)', e.target.value)} /></label>
+              <label>Proteína (g/kg)<input type="number" min="0" step="0.1" value={currentValues['Proteína (g/kg)'] ?? ''} onChange={(e) => updateField('Proteína (g/kg)', e.target.value)} /></label>
+              <label>Lípidos (g/kg)<input type="number" min="0" step="0.1" value={currentValues['Lípidos (g/kg)'] ?? ''} onChange={(e) => updateField('Lípidos (g/kg)', e.target.value)} /></label>
+            </div>
+            {(() => {
+              // Peso más reciente del paciente (la última medición registrada), para no pedirlo de
+              // nuevo aquí: ya se capturó en Antropométrico.
+              const latestWeight = [...measurements].reverse().find((m) => m.weightKg != null)?.weightKg
+              const carbs = Number(currentValues['Hidratos (g/kg)']) || 0
+              const protein = Number(currentValues['Proteína (g/kg)']) || 0
+              const fat = Number(currentValues['Lípidos (g/kg)']) || 0
+              const weight = latestWeight != null ? Number(latestWeight) : null
+              const kcal = weight ? Math.round(weight * (carbs * 4 + protein * 4 + fat * 9)) : null
+              return <div className="requirement-result">
+                {weight == null
+                  ? <p className="muted">Registra un peso en Antropométrico para calcular el objetivo energético.</p>
+                  : <><small>Objetivo energético · con {weight} kg</small><b>{kcal != null ? kcal.toLocaleString() : '—'} <em>kcal</em></b><span>{carbs ? `${Math.round(carbs * weight)} g HC` : null}{protein ? ` · ${Math.round(protein * weight)} g PRO` : null}{fat ? ` · ${Math.round(fat * weight)} g LIP` : null}</span></>}
+              </div>
+            })()}
+          </div>],
+          ['recomendaciones', 'Recomendaciones', <div key="rc" className="sub-stack">
+            <FormCard title="Recomendaciones" fields={['Recomendaciones generales|', 'Recomendaciones de alimentación|', 'Actividad física recomendada|*']} values={currentValues} onFieldChange={updateField} />
+          </div>],
           ['educacion', 'Educación', <FormCard key="ed" title="Educación nutricional" fields={['Temas de educación para el paciente|', 'Material educativo entregado|']} values={currentValues} onFieldChange={updateField} />],
           ['metas', 'Metas y acuerdos', <FormCard key="mt" title="Metas y acuerdos" fields={['Metas SMART|', 'Barreras y soluciones|*', 'Acuerdos con el paciente|']} values={currentValues} onFieldChange={updateField} />],
           ['suplementos', 'Suplementos', <FormCard key="sp" title="Suplementos" fields={['Suplementos recomendados|*', 'Dosis e indicaciones|*']} values={currentValues} onFieldChange={updateField} />],
