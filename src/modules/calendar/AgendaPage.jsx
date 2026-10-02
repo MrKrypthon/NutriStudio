@@ -437,7 +437,18 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       </div>
       <div className="calendar-body">
         {nowLine && <div className="now-line" style={{ top: nowLine.top }}><span /></div>}
-        {hours.map((time) => <div className="calendar-row" style={{ gridTemplateColumns: `68px repeat(${days.length},1fr)` }} key={time}>
+        {hours.map((time, rowIndex) => <div
+          className="calendar-row"
+          // Una cita que no empieza en punto (p. ej. 10:30) se dibuja dentro de la fila de las
+          // 10:00 pero su alto puede sobrepasar esos 63px y seguir hasta bien entrada la fila de
+          // las 11:00 -- eso es intencional (así se ve su duración real). El problema era que la
+          // fila de las 11:00, al venir después en el DOM, se pintaba encima de esa cola y se
+          // comía el recuadro del nombre. Dar a cada fila un z-index que baja con la hora hace que
+          // las filas de antes siempre queden por encima de las de después, así la cita que se
+          // desborda sigue viéndose completa.
+          style={{ gridTemplateColumns: `68px repeat(${days.length},1fr)`, zIndex: hours.length - rowIndex }}
+          key={time}
+        >
           <span className="hour">{time}</span>
           {days.map((day) => {
             const dayEvents = visibleAppointments.filter((a) => { const start = new Date(a.startAt); return toISODate(start) === toISODate(day) && `${String(start.getUTCHours()).padStart(2, '0')}:00` === time })
