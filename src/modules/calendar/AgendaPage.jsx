@@ -446,8 +446,13 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
             // una cita de 09:00 a 09:45 deja libre 09:45, que antes no se podía agendar).
             const rowStart = Number(time.slice(0, 2)) * 60
             const bookable = isBusinessDay(day) && [0, 15, 30, 45].some((offset) => canBookSlot(day, minutesToLabel(rowStart + offset)))
+            // El indicador "+" se centra en toda la celda (inset:0): si la hora ya tiene una cita
+            // que sólo ocupa parte de ella, el "+" caía encima del recuadro del nombre y lo tapaba.
+            // Sigue pudiéndose hacer clic en el hueco libre (el handler ya calcula el minuto exacto
+            // del clic), pero el "+" visual sólo se dibuja cuando la celda está realmente vacía.
+            const showPlus = bookable && dayEvents.length === 0
             return <div
-              className={'slot' + (dragId && dropKey === slotKey ? ' drop-target' : '') + (bookable ? ' slot-bookable' : '')}
+              className={'slot' + (dragId && dropKey === slotKey ? ' drop-target' : '') + (showPlus ? ' slot-bookable' : '') + (bookable ? ' slot-clickable' : '')}
               key={day.toISOString()}
               onClick={bookable ? (e) => handleSlotClick(e, day, time) : undefined}
               title={bookable ? 'Agendar una cita a esta hora' : undefined}
