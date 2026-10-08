@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../../lib/AuthContext.jsx'
+import BrandMark from '../../components/BrandMark.jsx'
 
 export default function LoginPage() {
   const { login } = useAuth()
@@ -23,8 +24,8 @@ export default function LoginPage() {
   return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--surface-soft)' }}>
     <div style={{ width: 'min(380px, calc(100% - 32px))' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28, justifyContent: 'center' }}>
-        <div style={{ height: 34, width: 34, background: 'var(--green)', color: '#fff', borderRadius: 11, display: 'grid', placeItems: 'center', fontFamily: 'Manrope', fontWeight: 800, fontSize: 18, transform: 'rotate(-7deg)' }}>N</div>
-        <strong style={{ font: '800 17px Manrope', letterSpacing: '-.6px', color: 'var(--ink)' }}>nutri·studio</strong>
+        <BrandMark size={34} />
+        <strong style={{ font: '800 17px Manrope', letterSpacing: '-.6px', color: 'var(--ink)' }}>milpa clinical</strong>
       </div>
       <form className="panel login-card" onSubmit={submit} style={{ padding: 28 }}>
         <p className="eyebrow">TU ESPACIO</p>
