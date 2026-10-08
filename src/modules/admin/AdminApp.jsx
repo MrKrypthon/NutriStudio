@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { adminApi, clearAdminToken, getAdminToken, setAdminToken } from '../../lib/adminApi.js'
 import { formatMoney, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, pesosToCents } from '../../lib/finance.js'
+import BrandMark from '../../components/BrandMark.jsx'
 
 const formatDateUTC = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—')
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -89,10 +90,10 @@ export default function AdminApp() {
 
   if (!authed) return <div className="admin-shell admin-login-shell">
     <form className="admin-login panel" onSubmit={login}>
-      <div className="admin-brand"><span className="brand-mark">N</span><div><strong>nutri<span>·</span>studio</strong><small>ADMINISTRACIÓN</small></div></div>
+      <div className="admin-brand"><BrandMark size={30} /><div><strong>milpa</strong><small>ADMINISTRACIÓN</small></div></div>
       <h1>Panel de administración</h1>
       <p className="muted">Acceso exclusivo para la administración del SaaS.</p>
-      <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@nutristudio.local" autoFocus required /></label>
+      <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@milpaclinical.local" autoFocus required /></label>
       <label>Contraseña<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
       {authError && <div className="form-error">⚠ {authError}</div>}
       <button className="primary" disabled={authState === 'loading'}>{authState === 'loading' ? 'Entrando…' : 'Entrar'} <span>→</span></button>
@@ -103,7 +104,7 @@ export default function AdminApp() {
   const suspendedCount = practices.filter((practice) => practice.status === 'SUSPENDED').length
 
   return <div className="admin-shell">
-    <header className="admin-topbar"><div className="admin-brand"><span className="brand-mark">N</span><div><strong>nutri<span>·</span>studio</strong><small>ADMINISTRACIÓN · SAAS</small></div></div><div className="admin-user"><span className="avatar">{(admin?.name || 'A').slice(0, 1)}</span><b>{admin?.name || 'Administrador'}</b><button className="secondary" onClick={logout}>Salir</button></div></header>
+    <header className="admin-topbar"><div className="admin-brand"><BrandMark size={30} /><div><strong>milpa</strong><small>ADMINISTRACIÓN · SAAS</small></div></div><div className="admin-user"><span className="avatar">{(admin?.name || 'A').slice(0, 1)}</span><b>{admin?.name || 'Administrador'}</b><button className="secondary" onClick={logout}>Salir</button></div></header>
     <main className="admin-content">
       <section className="admin-stats">
         <div className="panel admin-stat"><small>Total recaudado</small><b>{formatMoney(totals.totalCents)}</b><span>{totals.count} transacción(es)</span></div>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
+import BrandMark from '../../components/BrandMark.jsx'
 import { documentsApi, patientsApi, plansApi, practiceApi } from '../../lib/api.js'
 import { usePatient } from '../../lib/usePatient.js'
 
@@ -154,7 +155,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
       <section className={'document-preview ' + (preview ? 'preview-focus' : '')}>
         <div className="paper-toolbar"><span>Vista previa del plan</span><small>{plan.status === 'PUBLISHED' ? 'Publicado · no se modificará' : 'Borrador · aún puede cambiar'}</small></div>
         <div className="paper">
-          <div className="paper-brand">{practice?.logoUrl ? <img src={`${practiceApi.logoUrl(practice.id)}?v=${practice.updatedAt}`} alt="" className="brand-mark logo-preview" /> : <div className="brand-mark placeholder">N</div>}<div><b>{practice?.name || 'nutri·studio'}</b><small>PLAN DE ALIMENTACIÓN</small></div></div>
+          <div className="paper-brand">{practice?.logoUrl ? <img src={`${practiceApi.logoUrl(practice.id)}?v=${practice.updatedAt}`} alt="" className="brand-mark logo-preview" /> : <BrandMark size={28} />}<div><b>{practice?.name || 'milpa clinical'}</b><small>PLAN DE ALIMENTACIÓN</small></div></div>
           <div className="paper-meta"><b>Menú semanal</b><span>Paciente: {patientName}</span><span>Nutrióloga: {practice?.user?.name || 'Nutrióloga'}</span></div>
           {plan.targetKcal && <div className="paper-highlight"><b>Objetivo: {plan.goal || 'Sin objetivo registrado'}</b><p>{plan.targetKcal} kcal/día · {plan.carbsPercent}% carbohidratos · {plan.proteinPercent}% proteína · {plan.fatPercent}% grasas</p></div>}
           {!menu.length && <p className="muted">Este plan todavía no tiene recetas asignadas en la distribución semanal.</p>}
