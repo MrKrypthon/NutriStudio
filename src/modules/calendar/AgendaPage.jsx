@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { appointmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
+import { formatPhone } from '../../lib/phone.js'
 
 // All date math here runs in UTC: appointment.startAt is stored and seeded as the practice's
 // wall-clock time tagged with a "Z" suffix (see prisma/seed.js), so reading it back with the
@@ -514,7 +515,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       {!isBlock && <div className="patient-field"><span className="field-label">Paciente</span><div className="patient-select-row"><input list="agenda-patient-options" value={patientQuery} onChange={(e) => { onPatientQueryChange(e.target.value); setShowNewPatient(false) }} placeholder="Buscar paciente…" autoComplete="off" /><datalist id="agenda-patient-options">{patients.map((p) => <option value={patientLabel(p)} key={p.id} />)}</datalist><button type="button" className={showNewPatient ? 'primary' : 'secondary'} onClick={() => setShowNewPatient((value) => !value)}>{showNewPatient ? 'Cancelar' : '＋ Nuevo paciente'}</button></div></div>}
       {!isBlock && showNewPatient && <div className="new-patient-inline">
         <div className="form-row"><label>Nombre(s) *<input value={newPatient.firstName} onChange={(e) => setNewPatient((prev) => ({ ...prev, firstName: e.target.value }))} placeholder="Ej. Mariana" /></label><label>Apellido(s) *<input value={newPatient.lastName} onChange={(e) => setNewPatient((prev) => ({ ...prev, lastName: e.target.value }))} placeholder="Ej. Torres" /></label></div>
-        <div className="form-row"><label>Teléfono<input value={newPatient.phone} onChange={(e) => setNewPatient((prev) => ({ ...prev, phone: e.target.value }))} placeholder="+52 55 1234 5678" /></label><label>Email<input type="email" value={newPatient.email} onChange={(e) => setNewPatient((prev) => ({ ...prev, email: e.target.value }))} placeholder="correo@email.com" /></label></div>
+        <div className="form-row"><label>Teléfono<input type="tel" inputMode="numeric" autoComplete="tel" maxLength={12} value={newPatient.phone} onChange={(e) => setNewPatient((prev) => ({ ...prev, phone: formatPhone(e.target.value) }))} placeholder="999 224 4494" /></label><label>Email<input type="email" value={newPatient.email} onChange={(e) => setNewPatient((prev) => ({ ...prev, email: e.target.value }))} placeholder="correo@email.com" /></label></div>
         {newPatientError && <div className="form-error">⚠ {newPatientError}</div>}
         <button type="button" className="secondary" disabled={newPatientState === 'saving'} onClick={createPatient}>{newPatientState === 'saving' ? 'Creando…' : 'Crear y seleccionar'} <span>→</span></button>
       </div>}
