@@ -23,7 +23,7 @@ const TRANSCRIPT_FIELD = 'Transcripción de la consulta'
 const SAVE_LABELS = { idle: '● Guardado', editing: '● Editando…', saving: '● Guardando…', saved: '● Guardado', error: '⚠ Error al guardar', conflict: '⚠ Se editó en otra sesión, recarga para ver el cambio' }
 const CONSULTATION_STATUS_LABELS = { DRAFT: 'Borrador', IN_PROGRESS: 'En curso', COMPLETED: 'Completada' }
 const APPOINTMENT_TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia', BLOCK: 'Bloqueo' }
-const FOLLOW_UP_TYPE_OPTIONS = [['FOLLOW_UP', 'Seguimiento'], ['INITIAL', 'Primera consulta'], ['QUICK_CONTROL', 'Control rápido'], ['EMERGENCY', 'Emergencia']]
+const FOLLOW_UP_TYPE_OPTIONS = [['INITIAL', 'Primera consulta'], ['FOLLOW_UP', 'Seguimiento'], ['QUICK_CONTROL', 'Control rápido'], ['EMERGENCY', 'Emergencia']]
 const FOLLOW_UP_DURATIONS = [60, 45, 30, 15]
 const defaultFollowUpDate = () => { const d = new Date(); const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 28); return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}` }
 
@@ -321,7 +321,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [completeError, setCompleteError] = useState('')
   // Flujo de cierre: tras registrar el pago se ofrece agendar seguimiento y descargar el expediente.
   const [postComplete, setPostComplete] = useState(false)
-  const [followUp, setFollowUp] = useState({ date: '', time: '09:00', type: 'FOLLOW_UP', duration: 60 })
+  const [followUp, setFollowUp] = useState({ date: '', time: '09:00', type: 'INITIAL', duration: 60 })
   const [followUpState, setFollowUpState] = useState('idle')
   const [followUpError, setFollowUpError] = useState('')
   // Edición de datos del paciente desde el Resumen (fecha de nacimiento y ocupación) en la consulta.
@@ -811,7 +811,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       setCompletionState('idle')
       setCompleteOpen(false)
       // Continúa el flujo: agendar la siguiente cita y descargar el expediente.
-      setFollowUp({ date: defaultFollowUpDate(), time: '09:00', type: 'FOLLOW_UP', duration: 60 })
+      setFollowUp({ date: defaultFollowUpDate(), time: '09:00', type: 'INITIAL', duration: 60 })
       setFollowUpState('idle')
       setFollowUpError('')
       setPostComplete(true)
