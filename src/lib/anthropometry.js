@@ -1,6 +1,7 @@
 // Cálculos antropométricos derivados de las mediciones capturadas.
 // Fórmulas publicadas (Durnin-Womersley/Siri/Brozek, Faulkner, Yuhasz, Slaughter, RFM, Rocha,
 // Matiegka/Wurch, Heath-Carter). Se usan como estimaciones de apoyo, no como diagnóstico.
+import { isFemaleSex } from './sex.js'
 
 const num = (value) => {
   const n = Number(value)
@@ -9,7 +10,9 @@ const num = (value) => {
 
 const pick = (values, key) => num(values?.[key])
 
-export const isFemale = (sex) => String(sex || '').toLowerCase().startsWith('fem')
+// La detección vive en lib/sex.js para que las variantes ('Femenino', 'female', 'F'…) se resuelvan
+// en un solo lugar; aquí se conserva el nombre `isFemale` que ya usaba este módulo.
+export const isFemale = isFemaleSex
 
 // Suma de pliegues (mm). Devuelve null si falta cualquiera de los requeridos.
 const sumFolds = (values, keys) => {

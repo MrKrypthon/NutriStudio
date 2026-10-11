@@ -1796,7 +1796,7 @@ const computeAgeFromBirthDate = (birthDate) => {
   if (now.getUTCMonth() < dob.getUTCMonth() || (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate())) age -= 1
   return age
 }
-const SEX_TEXT = { female: 'Femenino', male: 'Masculino', F: 'Femenino', M: 'Masculino' }
+const SEX_TEXT = { Hombre: 'Hombre', Mujer: 'Mujer', female: 'Mujer', male: 'Hombre', F: 'Mujer', M: 'Hombre' }
 const truthyEntry = ([, value]) => value !== undefined && value !== null && value !== '' && value !== false
 
 function collectRecall(recall) {

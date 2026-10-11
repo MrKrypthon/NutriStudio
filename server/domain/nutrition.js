@@ -126,7 +126,8 @@ function resolveFormula(formula) {
 const PLAUSIBLE_GET_RANGE = { min: 800, max: 6000 }
 
 function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent, formula, activityFactor, mets }) {
-  const male = String(sex).toLowerCase().startsWith('m')
+  const key = String(sex || '').trim().toLowerCase()
+  const male = key.startsWith('homb') || key.startsWith('masc') || key === 'male' || key === 'm'
   const formulaEntry = resolveFormula(formula)
   const bmr = formulaEntry.compute({ age, weightKg, heightCm, bodyFatPercent, male })
 

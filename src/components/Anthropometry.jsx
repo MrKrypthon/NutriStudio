@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import Icon from './Icon.jsx'
 import { bodyComposition, bodyFatEstimates, somatotype, theoreticalWeights } from '../lib/anthropometry.js'
+import { isFemaleSex, isMaleSex } from '../lib/sex.js'
 
 // Módulo antropométrico con el menú superior y el submenú de tipos al estilo de las capturas
 // (Mediciones / Cálculos / Somatocarta / Notas / Fotos). El cálculo de calorías se movió a
@@ -78,7 +79,7 @@ const num = (value) => { const n = Number(value); return Number.isFinite(n) && n
 
 // Indicadores de Frisancho (apoyo): clasifica los valores frente a rangos de referencia adulto.
 const frisanchoRows = (values, sex) => {
-  const female = String(sex || '').toLowerCase().startsWith('fem')
+  const female = isFemaleSex(sex)
   const fold = (a, b) => (num(values[a]) && num(values[b]) ? num(values[a]) + num(values[b]) : null)
   const classify = (value, low, high) => value == null ? ['—', ''] : value < low ? ['Bajo', 'low'] : value > high ? ['Alto', 'high'] : ['Normal', 'ok']
   const mk = (label, raw, low, high, unit) => { const [band, tone] = classify(raw, low, high); return { label, value: raw != null ? `${Math.round(raw * 10) / 10} ${unit}` : null, band, tone } }
@@ -171,8 +172,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   const selectType = (key) => { setType(key); const first = GROUP_FIELDS[key]?.[0]; if (first) setActiveField(first.key) }
 
   // El embarazo y su IMC sólo aplican a pacientes mujeres: en hombres no se muestran.
-  const sexKey = String(patientSex || '').trim().toLowerCase()
-  const isMale = sexKey === 'm' || sexKey.startsWith('masc') || sexKey === 'male' || sexKey.startsWith('hombre')
+  const isMale = isMaleSex(patientSex)
 
   const peso = num(values['Peso (kg)'])
   const talla = num(values['Talla (cm)'])

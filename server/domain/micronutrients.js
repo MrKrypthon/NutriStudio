@@ -43,7 +43,8 @@ const NUTRIENT_KEYS = Object.keys(NUTRIENT_LABELS)
 // "adolescente" y "adulto" fuera de 14-18/19-70) — una edad que no cae en ningún rango no tiene
 // bracket, y se reporta como tal en vez de adivinar uno.
 function resolveIdrBracket(age, sex) {
-  const male = String(sex || '').toLowerCase().startsWith('m')
+  const key = String(sex || '').trim().toLowerCase()
+  const male = key.startsWith('homb') || key.startsWith('masc') || key === 'male' || key === 'm'
   if (age == null || !Number.isFinite(Number(age))) return null
   const a = Number(age)
   if (a >= 1 && a <= 3) return 'children'
