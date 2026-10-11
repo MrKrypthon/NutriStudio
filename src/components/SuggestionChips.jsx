@@ -3,13 +3,14 @@ import { scheduleGrowTextareas } from '../lib/autoGrow.js'
 
 /**
  * Chips de sugerencia para un campo de texto libre: clic en un chip completa el campo con una frase
- * hecha, y "+ Rápido" agrega una sugerencia nueva sin salir del formulario.
+ * hecha, y "+ Agregar" agrega una sugerencia nueva sin salir del formulario.
  *
  * Las sugerencias de arranque (`seed`) son fijas en el código — son las comunes en consulta
- * (Diabetes, Hipertensión, Metformina…). Las que la nutrióloga agrega con "+ Rápido" se guardan en
- * `localStorage` de este navegador bajo `storageKey`: son atajos de redacción propios de quien los
- * crea, no datos clínicos del paciente, así que no hace falta sincronizarlos entre dispositivos ni
- * mandarlos al servidor — igual que un snippet de texto que cada quien arma a su manera.
+ * (Diabetes, Hipertensión, Metformina…). Las que la nutrióloga agrega con "+ Agregar" se guardan en
+ * `localStorage` de este navegador bajo `storageKey` como atajos de redacción propios.
+ *
+ * Al elegir un chip, cada entrada se acomoda en su propia línea con viñeta (· …), para que una lista
+ * de antecedentes o medicamentos quede como lista y no como un párrafo corrido.
  */
 function useLocalSuggestions(storageKey, seed) {
   const [custom, setCustom] = useState(() => {
@@ -41,19 +42,20 @@ function useLocalSuggestions(storageKey, seed) {
  * `seed`        sugerencias de arranque: [{ label, text }].
  * `value`       valor actual del campo (para decidir si se reemplaza o se añade).
  * `onPick(next)` se llama con el valor ya completado al hacer clic en un chip.
- * `joiner`      separador al añadir sobre texto existente (", " para listas, ". " para prosa).
  */
-export default function SuggestionChips({ storageKey, seed, value, onPick, joiner = ', ' }) {
+export default function SuggestionChips({ storageKey, seed, value, onPick }) {
   const [suggestions, addSuggestion, removeSuggestion] = useLocalSuggestions(storageKey, seed)
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [text, setText] = useState('')
 
   const pick = (suggestionText) => {
-    const current = (value || '').trim()
-    if (!current) { onPick(suggestionText); scheduleGrowTextareas(); return }
-    if (current.includes(suggestionText)) return // ya está: evita duplicar al hacer doble clic
-    onPick(`${current}${current.endsWith(joiner.trim()) ? ' ' : joiner}${suggestionText}`)
+    const current = (value || '').replace(/\s+$/, '')
+    if (!current) { onPick(`· ${suggestionText}`); scheduleGrowTextareas(); return }
+    // Cada entrada va en su propia línea con viñeta (·). Si ya está en la lista, no se duplica.
+    const existing = current.split('\n').map((line) => line.replace(/^·\s*/, '').trim())
+    if (existing.includes(suggestionText)) return
+    onPick(`${current}\n· ${suggestionText}`)
     scheduleGrowTextareas()
   }
 
@@ -69,7 +71,7 @@ export default function SuggestionChips({ storageKey, seed, value, onPick, joine
         <button type="button" className="chip" onClick={() => pick(s.text)} title={s.text}>{s.label}</button>
         {s.custom && <button type="button" className="chip-remove" title="Quitar sugerencia" onClick={() => removeSuggestion(i - seed.length)}>×</button>}
       </span>)}
-      <button type="button" className="chip chip-add" onClick={() => setOpen((v) => !v)}>{open ? '× Cancelar' : '+ Rápido'}</button>
+      <button type="button" className="chip chip-add" onClick={() => setOpen((v) => !v)}>{open ? '× Cancelar' : '+ Agregar'}</button>
     </div>
     {open && <div className="chip-quick-form">
       <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Sugerencia (lo que se ve en el chip)" />

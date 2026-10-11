@@ -52,7 +52,7 @@ const RELATIVES = ['Mamá/Papá', 'Abuelos', 'Tíos']
 const SUGGESTED_DISEASES = ['Diabetes', 'Obesidad', 'Cardiopatías', 'Hipertensión arterial', 'Dislipidemias', 'Nefropatías', 'Cáncer', 'Enfermedad cerebrovascular', 'Hipotiroidismo', 'Hipertiroidismo', 'Asma', 'Alergias', 'Anemia', 'Artritis', 'Osteoporosis', 'Depresión', 'Ansiedad', 'Alzheimer', 'Celiaquía', 'Colitis', 'Gastritis', 'Cálculos renales', 'Trombosis', 'Epilepsia']
 
 // Sugerencias de arranque para los campos con chips (SuggestionChips). Las que agregue la
-// nutrióloga con "+ Rápido" se suman a éstas desde localStorage; ver el componente para el porqué.
+// nutrióloga con "+ Agregar" se suman a éstas; ver el componente para el porqué.
 const MOTIVO_CONSULTA_SUGGESTIONS = [
   { label: 'Pérdida de peso', text: 'Acude para perder peso.' },
   { label: 'Ganancia muscular', text: 'Busca ganar masa muscular.' },
@@ -1368,7 +1368,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             <div className="form-grid">
               <label>Interacciones con nutrientes<textarea value={currentValues['Interacciones con nutrientes'] ?? ''} onChange={(e) => updateField('Interacciones con nutrientes', e.target.value)} /></label>
             </div>
-            <SuggestionChips storageKey="chips:interacciones" seed={INTERACCIONES_SUGGESTIONS} value={currentValues['Interacciones con nutrientes']} onPick={(next) => updateField('Interacciones con nutrientes', next)} joiner=" " />
+            <SuggestionChips storageKey="chips:interacciones" seed={INTERACCIONES_SUGGESTIONS} value={currentValues['Interacciones con nutrientes']} onPick={(next) => updateField('Interacciones con nutrientes', next)} />
           </div>],
           ['alergias', 'Alergias y sustancias', <div key="al" className="sub-stack">
             <div className="form-card">
@@ -1434,7 +1434,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             <div className="form-grid">
               <label>Estado de ánimo<input value={currentValues['Estado de ánimo'] ?? ''} onChange={(e) => updateField('Estado de ánimo', e.target.value)} /></label>
               <div className="field-with-chips">
-                <div className="field-with-chips-head"><span>Apego al plan</span><SuggestionChips storageKey="chips:apego-plan" seed={APEGO_SUGGESTIONS} value={currentValues['Apego al plan']} onPick={(next) => updateField('Apego al plan', next)} joiner=". " /></div>
+                <div className="field-with-chips-head"><span>Apego al plan</span><SuggestionChips storageKey="chips:apego-plan" seed={APEGO_SUGGESTIONS} value={currentValues['Apego al plan']} onPick={(next) => updateField('Apego al plan', next)} /></div>
                 <input value={currentValues['Apego al plan'] ?? ''} onChange={(e) => updateField('Apego al plan', e.target.value)} />
               </div>
             </div>
@@ -1539,12 +1539,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             <div className="form-grid">
               <label>Motivo de consulta<textarea value={currentValues['Motivo de consulta'] ?? ''} onChange={(e) => updateField('Motivo de consulta', e.target.value)} /></label>
             </div>
-            <SuggestionChips storageKey="chips:motivo-consulta" seed={MOTIVO_CONSULTA_SUGGESTIONS} value={currentValues['Motivo de consulta']} onPick={(next) => updateField('Motivo de consulta', next)} joiner=". " />
+            <SuggestionChips storageKey="chips:motivo-consulta" seed={MOTIVO_CONSULTA_SUGGESTIONS} value={currentValues['Motivo de consulta']} onPick={(next) => updateField('Motivo de consulta', next)} />
             <div className="form-grid">
               <label>Objetivo<textarea value={currentValues['Objetivo'] ?? ''} onChange={(e) => updateField('Objetivo', e.target.value)} /></label>
               <label>Referencia de la cita<input value={currentValues['Referencia de la cita'] ?? ''} onChange={(e) => updateField('Referencia de la cita', e.target.value)} placeholder="¿Cómo llegó el paciente?" /></label>
             </div>
-            <SuggestionChips storageKey="chips:referencia-cita" seed={REFERENCIA_CITA_SUGGESTIONS} value={currentValues['Referencia de la cita']} onPick={(next) => updateField('Referencia de la cita', next)} joiner=", " />
+            <SuggestionChips storageKey="chips:referencia-cita" seed={REFERENCIA_CITA_SUGGESTIONS} value={currentValues['Referencia de la cita']} onPick={(next) => updateField('Referencia de la cita', next)} />
           </div>],
           ['historial', 'Historial y agenda', <div className="summary-card form-card" key="ha"><h3>Historial y agenda</h3><div className="form-grid">
             <label>Consultas registradas<input value={`${historyCount}`} readOnly /></label>
