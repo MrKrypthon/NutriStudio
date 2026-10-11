@@ -1143,7 +1143,7 @@ html{scroll-behavior:smooth}
 .chip-add:hover{background:var(--mint)}
 .chip-quick-form{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
 .chip-quick-form input{border:1px solid var(--line);border-radius:7px;padding:8px 10px;font:11px 'DM Sans';flex:1;min-width:160px}
-.chip-quick-form button{flex-shrink:0}
+.chip-quick-form button{flex-shrink:0}.chip-autocomplete{display:flex;flex-wrap:wrap;align-items:center;gap:6px;border:1px solid var(--line);border-radius:9px;background:#fbfffd;padding:7px 9px;margin-bottom:8px}.chip-autocomplete>span{font-size:9px;color:var(--muted)}.chip-ac-item{border:1px solid var(--green);background:var(--mint);color:var(--green);border-radius:999px;padding:5px 11px;font-size:10px;cursor:pointer;white-space:nowrap}.chip-ac-item:hover{background:var(--green);color:#fff}
 
 /* Gráficas pequeñas de progreso (Resumen): peso, % grasa, masa muscular, lado a lado. */
 .summary-trends{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}

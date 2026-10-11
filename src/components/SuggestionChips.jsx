@@ -23,6 +23,9 @@ const readLocal = (fieldKey) => {
 }
 const writeLocal = (fieldKey, items) => { try { localStorage.setItem(LOCAL_PREFIX + fieldKey, JSON.stringify(items)) } catch { /* almacenamiento no disponible */ } }
 
+// Compara sin distinguir mayúsculas ni acentos ("Pérdida" ≈ "perdida").
+const normalize = (text) => String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
 function useSuggestions(fieldKey, seed) {
   const [custom, setCustom] = useState([])
 
@@ -81,6 +84,29 @@ export default function SuggestionChips({ fieldKey, seed, value, onPick }) {
     scheduleGrowTextareas()
   }
 
+  // Autocompletado: mientras se escribe la línea actual, se ofrecen las sugerencias que empiezan o
+  // contienen ese texto. Al elegir una, se reemplaza la línea en curso por la entrada completa.
+  const fragment = (() => {
+    const raw = value || ''
+    const nl = raw.lastIndexOf('\n')
+    return (nl >= 0 ? raw.slice(nl + 1) : raw).replace(/^·\s*/, '')
+  })()
+  const matches = (() => {
+    const q = normalize(fragment).trim()
+    if (q.length < 2) return []
+    const used = new Set((value || '').split('\n').map((line) => normalize(line.replace(/^·\s*/, '')).trim()))
+    return suggestions
+      .filter((s) => !used.has(normalize(s.text).trim()) && (normalize(s.label).startsWith(q) || normalize(s.label).includes(q) || normalize(s.text).includes(q)))
+      .slice(0, 6)
+  })()
+  const complete = (suggestion) => {
+    const raw = value || ''
+    const nl = raw.lastIndexOf('\n')
+    const prefix = nl >= 0 ? raw.slice(0, nl + 1) : ''
+    onPick(`${prefix}· ${suggestion.text}`)
+    scheduleGrowTextareas()
+  }
+
   const submitQuick = () => {
     if (!label.trim() || !text.trim()) return
     addSuggestion({ label: label.trim(), text: text.trim() })
@@ -88,6 +114,10 @@ export default function SuggestionChips({ fieldKey, seed, value, onPick }) {
   }
 
   return <div className="chip-suggestions">
+    {fragment.trim().length >= 2 && matches.length > 0 && <div className="chip-autocomplete">
+      <span>Autocompletar:</span>
+      {matches.map((s) => <button type="button" key={s.id || s.label} className="chip-ac-item" title={s.text} onClick={() => complete(s)}>{s.label}</button>)}
+    </div>}
     <div className="chip-row">
       {suggestions.map((s, i) => <span className="chip-wrap" key={s.id || `${s.label}-${i}`}>
         <button type="button" className="chip" onClick={() => pick(s.text)} title={s.text}>{s.label}</button>
