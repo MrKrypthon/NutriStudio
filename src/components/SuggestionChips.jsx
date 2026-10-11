@@ -14,7 +14,8 @@ import { scheduleGrowTextareas } from '../lib/autoGrow.js'
  * menos sobrevivan en este navegador.
  *
  * Al elegir un chip, cada entrada se acomoda en su propia línea con viñeta (· …), para que una lista
- * de antecedentes o medicamentos quede como lista y no como un párrafo corrido.
+ * de antecedentes o medicamentos quede como lista y no como un párrafo corrido. Los chips funcionan
+ * como selección: el que ya está en la lista se ve marcado y, al pulsarlo otra vez, se quita.
  */
 
 const LOCAL_PREFIX = 'suggestion-chips:'
@@ -73,13 +74,25 @@ export default function SuggestionChips({ fieldKey, seed, value, onPick }) {
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
 
-  const pick = (suggestionText) => {
+  // El campo es una lista de entradas (· …). Un chip está "seleccionado" cuando su texto ya es una
+  // entrada: pulsarlo la agrega y pulsarlo de nuevo la quita, así se desmarca sin editar el texto a
+  // mano. El estado se deriva del propio valor del campo, no de un estado aparte que se desincronice.
+  const entries = (value || '').split('\n').map((line) => line.replace(/^·\s*/, '').trim())
+  const isSelected = (text) => entries.includes(text)
+  const appendEntry = (text) => {
     const current = (value || '').replace(/\s+$/, '')
-    if (!current) { onPick(`· ${suggestionText}`); scheduleGrowTextareas(); return }
-    // Cada entrada va en su propia línea con viñeta (·). Si ya está en la lista, no se duplica.
-    const existing = current.split('\n').map((line) => line.replace(/^·\s*/, '').trim())
-    if (existing.includes(suggestionText)) return
-    onPick(`${current}\n· ${suggestionText}`)
+    if (!current) return `· ${text}`
+    if (entries.includes(text)) return current
+    return `${current}\n· ${text}`
+  }
+  const removeEntry = (text) => (value || '')
+    .split('\n')
+    .filter((line) => line.replace(/^·\s*/, '').trim() !== text)
+    .join('\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim()
+  const toggle = (text) => {
+    onPick(isSelected(text) ? removeEntry(text) : appendEntry(text))
     scheduleGrowTextareas()
   }
 
@@ -109,8 +122,11 @@ export default function SuggestionChips({ fieldKey, seed, value, onPick }) {
   const submitQuick = () => {
     const name = label.trim()
     if (!name) return
-    // Sólo se captura el nombre: es lo que se ve en el chip y lo que se escribe al elegirlo.
+    // Sólo se captura el nombre: es lo que se ve en el chip y lo que se escribe al elegirlo. La
+    // sugerencia nueva se agrega automáticamente a la lista (queda seleccionada).
     addSuggestion({ label: name, text: name })
+    onPick(appendEntry(name))
+    scheduleGrowTextareas()
     setLabel(''); setOpen(false)
   }
 
@@ -122,8 +138,8 @@ export default function SuggestionChips({ fieldKey, seed, value, onPick }) {
     <div className="chip-row">
       {suggestions.map((s, i) => <span className="chip-wrap" key={s.id || `${s.label}-${i}`}>
         {s.custom
-          ? <span className="chip chip-removable"><button type="button" className="chip-removable-label" onClick={() => pick(s.text)} title={s.text}>{s.label}</button><button type="button" className="chip-remove" title="Quitar sugerencia" onClick={() => removeSuggestion(s.id)}>×</button></span>
-          : <button type="button" className="chip" onClick={() => pick(s.text)} title={s.text}>{s.label}</button>}
+          ? <span className={'chip chip-removable' + (isSelected(s.text) ? ' chip-selected' : '')} role="button" tabIndex={0} onClick={() => toggle(s.text)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(s.text) } }}><span className="chip-removable-label">{s.label}</span><button type="button" className="chip-remove" title="Quitar sugerencia" onClick={(e) => { e.stopPropagation(); removeSuggestion(s.id) }}>×</button></span>
+          : <button type="button" className={'chip' + (isSelected(s.text) ? ' chip-selected' : '')} onClick={() => toggle(s.text)} title={s.text}>{s.label}</button>}
       </span>)}
       <button type="button" className="chip chip-add" onClick={() => setOpen((v) => !v)}>{open ? '× Cancelar' : '+ Agregar'}</button>
     </div>
