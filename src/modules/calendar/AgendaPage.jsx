@@ -508,6 +508,8 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   {open && <div className="modal-backdrop" onClick={closeModal}><div className="modal appointment-modal" onClick={(e) => e.stopPropagation()}>
     <div className="modal-head"><div><p className="eyebrow">{isBlock ? 'NUEVO BLOQUEO' : 'NUEVA CITA'}</p><h2>{isBlock ? 'Bloquea tu disponibilidad' : 'Programa una consulta'}</h2><span className="modal-subtitle">{isBlock ? 'Ocupa un horario en tu agenda sin asignarlo a un paciente.' : 'La cita quedará visible en tu agenda.'}</span></div><button onClick={closeModal}>×</button></div>
     <form onSubmit={submit}>
+      <div className={'appointment-cols' + (isBlock ? ' single' : '')}>
+      <div className="appointment-col">
       {!isBlock && <div className="form-step active-step"><span>1</span><b>Selecciona el paciente</b></div>}
       {!isBlock && <div className="patient-field"><span className="field-label">Paciente</span><div className="patient-select-row"><input list="agenda-patient-options" value={patientQuery} onChange={(e) => { onPatientQueryChange(e.target.value); setShowNewPatient(false) }} placeholder="Buscar paciente…" autoComplete="off" /><datalist id="agenda-patient-options">{patients.map((p) => <option value={patientLabel(p)} key={p.id} />)}</datalist><button type="button" className={showNewPatient ? 'primary' : 'secondary'} onClick={() => setShowNewPatient((value) => !value)}>{showNewPatient ? 'Cancelar' : '＋ Nuevo paciente'}</button></div></div>}
       {!isBlock && showNewPatient && <div className="new-patient-inline">
@@ -517,14 +519,20 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
         <button type="button" className="secondary" disabled={newPatientState === 'saving'} onClick={createPatient}>{newPatientState === 'saving' ? 'Creando…' : 'Crear y seleccionar'} <span>→</span></button>
       </div>}
       {!isBlock && <div className="notify-box"><b>Notificar al paciente</b><div className="notify-options">{[['whatsapp', 'WhatsApp'], ['email', 'Email'], ['both', 'Ambos'], ['none', 'No notificar']].map(([value, label]) => <label key={value}><input type="radio" name="notify" checked={form.notify === value} onChange={() => update('notify', value)} /> {label}</label>)}</div></div>}
+      {!isBlock && <div className="form-row"><label>Tipo de cita<select value={form.type} onChange={(e) => update('type', e.target.value)}>{TYPE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Duración<select value={form.duration} onChange={(e) => update('duration', Number(e.target.value))}>{DURATION_OPTIONS.map((d) => <option value={d} key={d}>{d} minutos</option>)}</select></label></div>}
+      </div>
+      <div className="appointment-col">
       <div className="form-step"><span>{isBlock ? '1' : '2'}</span><b>Confirma los datos{isBlock ? ' del bloqueo' : ' de la consulta'}</b></div>
       <div className="form-row"><label>Fecha<input type="date" value={form.date} onChange={(e) => update('date', e.target.value)} required /></label><label>Hora<input type="time" value={form.time} onChange={(e) => update('time', e.target.value)} step={300} required /></label></div>
       {!isBlock && suggestedSlots.length > 0 && <div className="suggested-slots"><span>Horarios sugeridos</span><div className="suggested-slot-list">{suggestedSlots.map((slot) => <button type="button" key={slot} className={form.time === slot ? 'selected' : ''} onClick={() => update('time', slot)}>{slot}</button>)}</div></div>}
-      {!isBlock && <div className="form-row"><label>Tipo de cita<select value={form.type} onChange={(e) => update('type', e.target.value)}>{TYPE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Duración<select value={form.duration} onChange={(e) => update('duration', Number(e.target.value))}>{DURATION_OPTIONS.map((d) => <option value={d} key={d}>{d} minutos</option>)}</select></label></div>}
       {isBlock && <div className="form-row"><label>Duración<select value={form.duration} onChange={(e) => update('duration', Number(e.target.value))}>{DURATION_OPTIONS.map((d) => <option value={d} key={d}>{d} minutos</option>)}</select></label></div>}
       <div className="form-row"><label>Repetir<select value={form.recurrence} onChange={(e) => update('recurrence', e.target.value)}><option value="none">No repetir</option><option value="daily">Diaria</option><option value="weekly">Semanal</option></select></label>{form.recurrence !== 'none' && <label>Número de veces<input type="number" min="2" max="30" value={form.recurCount} onChange={(e) => update('recurCount', Number(e.target.value))} /></label>}</div>
+      </div>
+      </div>
+      <div className={'appointment-notes' + (isBlock ? '' : ' two')}>
       <label>Notas internas<textarea placeholder={isBlock ? 'Ej. Bloqueado para junta de equipo' : "Notas que sólo verá tu equipo..."} value={form.internalNote} onChange={(e) => update('internalNote', e.target.value)} /></label>
       {!isBlock && <label>Nota para el paciente<textarea placeholder="Ej. Recuerda traer tus análisis recientes" value={form.patientNote} onChange={(e) => update('patientNote', e.target.value)} /></label>}
+      </div>
       {!isBlock && <label className="consent-check studies-check"><input type="checkbox" checked={form.requestStudies} onChange={(e) => setForm((prev) => ({ ...prev, requestStudies: e.target.checked, patientNote: e.target.checked ? (prev.patientNote || STUDIES_NOTE) : (prev.patientNote === STUDIES_NOTE ? '' : prev.patientNote) }))} /> Pedir que traiga sus estudios (análisis) si tiene</label>}
       {submitError && <div className="form-error">⚠ {submitError}</div>}
       <div className="modal-actions"><button type="button" className="secondary" onClick={closeModal}>Cancelar</button><button className="primary" disabled={submitState === 'saving'}>{submitState === 'saving' ? 'Guardando…' : isBlock ? 'Crear bloqueo' : 'Crear cita'} <span>→</span></button></div>
