@@ -91,6 +91,7 @@ model Practice {
   templates          Template[]
   educationMaterials EducationMaterial[]
   financeEntries     FinanceEntry[]
+  suggestionChips    SuggestionChip[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 }
@@ -519,4 +520,20 @@ model AdminUser {
   passwordHash String
   name         String
   createdAt    DateTime @default(now())
+}
+
+// Sugerencias de redacción que la nutrióloga guarda con "+ Agregar" en los campos con chips del
+// expediente. Son atajos por campo (`fieldKey`), compartidos por toda la práctica — no son datos
+// del paciente, por eso viven aquí y no dentro de la consulta.
+model SuggestionChip {
+  id         String   @id @default(uuid())
+  practiceId String
+  practice   Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  fieldKey   String
+  label      String
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@unique([practiceId, fieldKey, label])
+  @@index([practiceId, fieldKey])
 }

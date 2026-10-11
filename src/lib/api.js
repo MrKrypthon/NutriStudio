@@ -90,6 +90,13 @@ export const patientsApi = {
   saveSection: (id, sectionKey, payload, updatedAt, options = {}) => apiRequest(`/patients/${id}/sections/${sectionKey}`, { method: 'PUT', body: JSON.stringify({ payload, updatedAt }), ...options }),
 }
 
+// Sugerencias de redacción de los campos con chips (SuggestionChips), compartidas por la práctica.
+export const suggestionsApi = {
+  list: (fieldKey) => apiRequest(`/suggestions?fieldKey=${encodeURIComponent(fieldKey)}`),
+  create: (payload) => apiRequest('/suggestions', { method: 'POST', body: JSON.stringify(payload) }),
+  remove: (id) => apiRequest(`/suggestions/${id}`, { method: 'DELETE' }),
+}
+
 export const appointmentsApi = {
   list: (from, to) => apiRequest(`/appointments?from=${from}&to=${to}`),
   create: (payload) => apiRequest('/appointments', { method: 'POST', body: JSON.stringify(payload) }),

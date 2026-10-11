@@ -741,6 +741,35 @@ app.post('/api/v1/tasks/:taskId/complete', async (request, reply) => {
   return prisma.task.update({ where: { id: task.id }, data: { status: 'completed', completedAt: new Date() }, include: { patient: true } })
 })
 
+// Sugerencias de redacción de los campos con chips (SuggestionChips). Son de la práctica, no del
+// paciente: se comparten entre todas sus consultas y dispositivos, por eso viven en el servidor.
+app.get('/api/v1/suggestions', async (request) => {
+  const { fieldKey } = request.query
+  const items = await prisma.suggestionChip.findMany({
+    where: { practiceId: request.practiceId, ...(fieldKey ? { fieldKey } : {}) },
+    orderBy: { createdAt: 'asc' },
+  })
+  return { items }
+})
+
+app.post('/api/v1/suggestions', async (request, reply) => {
+  const { fieldKey, label, text } = request.body || {}
+  if (!fieldKey || !label || !text) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Campo, etiqueta y descripción son obligatorios.', fields: { fieldKey: !fieldKey, label: !label, text: !text } })
+  const chip = await prisma.suggestionChip.upsert({
+    where: { practiceId_fieldKey_label: { practiceId: request.practiceId, fieldKey, label } },
+    create: { practiceId: request.practiceId, fieldKey, label, text },
+    update: { text },
+  })
+  return reply.code(201).send(chip)
+})
+
+app.delete('/api/v1/suggestions/:suggestionId', async (request, reply) => {
+  const chip = await prisma.suggestionChip.findFirst({ where: { id: request.params.suggestionId, practiceId: request.practiceId } })
+  if (!chip) return reply.code(404).send({ code: 'SUGGESTION_NOT_FOUND', message: 'Sugerencia no encontrada.', fields: {} })
+  await prisma.suggestionChip.delete({ where: { id: chip.id } })
+  return reply.code(204).send()
+})
+
 app.get('/api/v1/templates', async (request) => {
   const { type } = request.query
   const templates = await prisma.template.findMany({

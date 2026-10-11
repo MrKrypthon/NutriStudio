@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { suggestionsApi } from '../lib/api.js'
 import { scheduleGrowTextareas } from '../lib/autoGrow.js'
 
 /**
@@ -7,44 +8,65 @@ import { scheduleGrowTextareas } from '../lib/autoGrow.js'
  *
  * Las sugerencias de arranque (`seed`) son fijas en el código — son las comunes en consulta
  * (Diabetes, Hipertensión, Metformina…). Las que la nutrióloga agrega con "+ Agregar" se guardan en
- * `localStorage` de este navegador bajo `storageKey` como atajos de redacción propios.
+ * el **servidor** por `fieldKey`: son atajos de redacción de toda la práctica, así que aparecen en
+ * cualquier paciente y en cualquier dispositivo. No van dentro de la consulta porque no son datos
+ * clínicos del paciente. Si el API no está disponible (modo demo), caen a `localStorage` para que al
+ * menos sobrevivan en este navegador.
  *
  * Al elegir un chip, cada entrada se acomoda en su propia línea con viñeta (· …), para que una lista
  * de antecedentes o medicamentos quede como lista y no como un párrafo corrido.
  */
-function useLocalSuggestions(storageKey, seed) {
-  const [custom, setCustom] = useState(() => {
-    try {
-      const raw = localStorage.getItem(storageKey)
-      const parsed = raw ? JSON.parse(raw) : []
-      return Array.isArray(parsed) ? parsed : []
-    } catch { return [] }
-  })
+
+const LOCAL_PREFIX = 'suggestion-chips:'
+const readLocal = (fieldKey) => {
+  try { const parsed = JSON.parse(localStorage.getItem(LOCAL_PREFIX + fieldKey) || '[]'); return Array.isArray(parsed) ? parsed : [] } catch { return [] }
+}
+const writeLocal = (fieldKey, items) => { try { localStorage.setItem(LOCAL_PREFIX + fieldKey, JSON.stringify(items)) } catch { /* almacenamiento no disponible */ } }
+
+function useSuggestions(fieldKey, seed) {
+  const [custom, setCustom] = useState([])
+
+  useEffect(() => {
+    let alive = true
+    setCustom([])
+    suggestionsApi.list(fieldKey)
+      .then((data) => { if (alive) setCustom(data?.items || []) })
+      .catch(() => { if (alive) setCustom(readLocal(fieldKey)) })
+    return () => { alive = false }
+  }, [fieldKey])
+
   const add = (suggestion) => {
-    setCustom((prev) => {
-      const next = [...prev, suggestion]
-      try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* almacenamiento no disponible: el chip no persiste, pero no rompe la pantalla */ }
-      return next
-    })
+    const temp = { id: `local-${Date.now()}-${Math.random().toString(36).slice(2)}`, label: suggestion.label, text: suggestion.text }
+    setCustom((prev) => [...prev, temp])
+    suggestionsApi.create({ fieldKey, label: suggestion.label, text: suggestion.text })
+      .then((created) => setCustom((cur) => cur.map((s) => (s.id === temp.id ? created : s))))
+      .catch(() => writeLocal(fieldKey, [...readLocal(fieldKey), { label: suggestion.label, text: suggestion.text }]))
   }
-  const remove = (index) => {
-    setCustom((prev) => {
-      const next = prev.filter((_, i) => i !== index)
-      try { localStorage.setItem(storageKey, JSON.stringify(next)) } catch { /* ídem */ }
-      return next
-    })
+
+  const remove = (id) => {
+    setCustom((prev) => prev.filter((s) => s.id !== id))
+    if (!String(id).startsWith('local-')) suggestionsApi.remove(id).catch(() => { /* ya no está en el servidor */ })
   }
-  return [[...seed.map((s) => ({ ...s, custom: false })), ...custom.map((s) => ({ ...s, custom: true }))], add, remove]
+
+  return useMemo(() => {
+    const seedLabels = new Set(seed.map((s) => s.label))
+    const merged = [
+      ...seed.map((s) => ({ ...s, custom: false })),
+      ...custom.filter((s) => !seedLabels.has(s.label)).map((s) => ({ id: s.id, label: s.label, text: s.text, custom: true })),
+    ]
+    return [merged, add, remove]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed, custom])
 }
 
 /**
- * `storageKey`  clave única de localStorage para las sugerencias agregadas a mano en este campo.
+ * `fieldKey`    clave del campo (agrupa sus sugerencias en el servidor).
  * `seed`        sugerencias de arranque: [{ label, text }].
  * `value`       valor actual del campo (para decidir si se reemplaza o se añade).
  * `onPick(next)` se llama con el valor ya completado al hacer clic en un chip.
  */
-export default function SuggestionChips({ storageKey, seed, value, onPick }) {
-  const [suggestions, addSuggestion, removeSuggestion] = useLocalSuggestions(storageKey, seed)
+export default function SuggestionChips({ fieldKey, seed, value, onPick }) {
+  const [suggestions, addSuggestion, removeSuggestion] = useSuggestions(fieldKey, seed)
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
   const [text, setText] = useState('')
@@ -67,9 +89,9 @@ export default function SuggestionChips({ storageKey, seed, value, onPick }) {
 
   return <div className="chip-suggestions">
     <div className="chip-row">
-      {suggestions.map((s, i) => <span className="chip-wrap" key={`${s.label}-${i}`}>
+      {suggestions.map((s, i) => <span className="chip-wrap" key={s.id || `${s.label}-${i}`}>
         <button type="button" className="chip" onClick={() => pick(s.text)} title={s.text}>{s.label}</button>
-        {s.custom && <button type="button" className="chip-remove" title="Quitar sugerencia" onClick={() => removeSuggestion(i - seed.length)}>×</button>}
+        {s.custom && <button type="button" className="chip-remove" title="Quitar sugerencia" onClick={() => removeSuggestion(s.id)}>×</button>}
       </span>)}
       <button type="button" className="chip chip-add" onClick={() => setOpen((v) => !v)}>{open ? '× Cancelar' : '+ Agregar'}</button>
     </div>
