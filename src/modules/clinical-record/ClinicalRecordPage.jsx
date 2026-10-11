@@ -12,6 +12,7 @@ import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
 import { shouldAutoClose } from '../../lib/consultationSession.js'
+import { SEX_OPTIONS, normalizeSex } from '../../lib/sex.js'
 import { mergeValues, splitUpdates } from '../../lib/patientFields.js'
 import { PES_CATALOG, searchPesDiagnoses } from '../../lib/pesDiagnoses.js'
 
@@ -27,7 +28,6 @@ const FOLLOW_UP_TYPE_OPTIONS = [['INITIAL', 'Primera consulta'], ['FOLLOW_UP', '
 const FOLLOW_UP_DURATIONS = [60, 45, 30, 15]
 const defaultFollowUpDate = () => { const d = new Date(); const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 28); return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}` }
 
-const SEX_LABELS = { female: 'Femenino', male: 'Masculino', F: 'Femenino', M: 'Masculino' }
 function computeAge(birthDate) {
   if (!birthDate) return null
   const dob = new Date(birthDate)
@@ -37,9 +37,6 @@ function computeAge(birthDate) {
   return age
 }
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—')
-// Fechas de calendario (fecha de nacimiento) guardadas a medianoche UTC: se muestran con getters UTC
-// para que no se corran un día en husos negativos como el de México.
-const formatDateUTC = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—')
 const formatAppointmentTime = (iso) => { const d = new Date(iso); return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` }
 
 const DIAGNOSIS_DOMAINS = [
@@ -325,8 +322,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const [followUpState, setFollowUpState] = useState('idle')
   const [followUpError, setFollowUpError] = useState('')
   // Edición de datos del paciente desde el Resumen (fecha de nacimiento y ocupación) en la consulta.
-  const [patientEdit, setPatientEdit] = useState(false)
-  const [patientForm, setPatientForm] = useState({ birthDate: '', occupation: '' })
+  const [patientForm, setPatientForm] = useState({ sex: '', birthDate: '', occupation: '' })
   const [patientSaveState, setPatientSaveState] = useState('idle')
   const [attachments, setAttachments] = useState([])
   const [uploadState, setUploadState] = useState('idle')
@@ -854,17 +850,27 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     }
   }
 
-  // Datos del paciente capturables durante la consulta (fecha de nacimiento y ocupación).
-  const startPatientEdit = () => {
-    setPatientForm({ birthDate: patient?.birthDate ? new Date(patient.birthDate).toISOString().slice(0, 10) : '', occupation: patient?.occupation || '' })
-    setPatientSaveState('idle')
-    setPatientEdit(true)
+  // Datos del paciente capturables durante la consulta. La tarjeta del Resumen los edita directo
+  // (sexo, fecha de nacimiento y ocupación) y se guardan con el botón cuando hay cambios.
+  const patientSaved = {
+    sex: normalizeSex(patient?.sex) || '',
+    birthDate: patient?.birthDate ? new Date(patient.birthDate).toISOString().slice(0, 10) : '',
+    occupation: patient?.occupation || '',
   }
+  useEffect(() => {
+    setPatientForm({
+      sex: normalizeSex(patient?.sex) || '',
+      birthDate: patient?.birthDate ? new Date(patient.birthDate).toISOString().slice(0, 10) : '',
+      occupation: patient?.occupation || '',
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [patient?.id, patient?.sex, patient?.birthDate, patient?.occupation])
+  const patientDirty = patientForm.sex !== patientSaved.sex || patientForm.birthDate !== patientSaved.birthDate || patientForm.occupation !== patientSaved.occupation
+  const resetPatientForm = () => { setPatientForm(patientSaved); setPatientSaveState('idle') }
   const savePatientEdit = async () => {
     setPatientSaveState('saving')
     try {
-      await patientsApi.update(patientId, { birthDate: patientForm.birthDate || null, occupation: patientForm.occupation })
-      setPatientEdit(false)
+      await patientsApi.update(patientId, { sex: patientForm.sex || null, birthDate: patientForm.birthDate || null, occupation: patientForm.occupation })
       setPatientSaveState('idle')
       reloadPatient()
     } catch {
@@ -1508,14 +1514,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <p className="eyebrow">SECCIÓN {TABS.indexOf(tab) + 1} DE 12</p><h1>Resumen</h1><p className="subtitle">Motivo de consulta, datos generales y contexto de {patientName}.</p>
         <Subsection value={sub} onChange={setSub} groups={[
           ['datos', 'Datos del paciente', <div className="sub-stack" key="dp-stack">
-            <div className="summary-card form-card"><div className="summary-card-head"><h3>Datos del paciente</h3>{!patientEdit
-              ? <button type="button" className="link-button" onClick={startPatientEdit}>Editar fecha de nacimiento y ocupación</button>
-              : <div className="summary-card-actions"><button type="button" className="link-button" onClick={() => setPatientEdit(false)}>Cancelar</button><button type="button" className="link-button" disabled={patientSaveState === 'saving'} onClick={savePatientEdit}>{patientSaveState === 'saving' ? 'Guardando…' : 'Guardar'}</button></div>}</div><div className="form-grid three">
+            <div className="summary-card form-card"><div className="summary-card-head"><h3>Datos del paciente</h3><div className="summary-card-actions">{patientDirty && <button type="button" className="link-button" onClick={resetPatientForm}>Descartar</button>}<button type="button" className="link-button" disabled={!patientDirty || patientSaveState === 'saving'} onClick={savePatientEdit}>{patientSaveState === 'saving' ? 'Guardando…' : 'Guardar'}</button></div></div><div className="form-grid three">
               <label>Nombre<input value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} readOnly /></label>
-              <label>Sexo<input value={patient?.sex ? (SEX_LABELS[patient.sex] || patient.sex) : '—'} readOnly /></label>
-              <label>Fecha de nacimiento{patientEdit ? <input type="date" value={patientForm.birthDate} onChange={(e) => setPatientForm((prev) => ({ ...prev, birthDate: e.target.value }))} /> : <input value={patient?.birthDate ? formatDateUTC(patient.birthDate) : '—'} readOnly />}</label>
-              <label>Edad<input value={computeAge(patient?.birthDate) != null ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label>
-              <label>Ocupación{patientEdit ? <input value={patientForm.occupation} onChange={(e) => setPatientForm((prev) => ({ ...prev, occupation: e.target.value }))} placeholder="Ej. Diseñadora" /> : <input value={patient?.occupation || '—'} readOnly />}</label>
+              <label>Sexo<select value={patientForm.sex} onChange={(e) => setPatientForm((prev) => ({ ...prev, sex: e.target.value }))}><option value="">Selecciona…</option>{SEX_OPTIONS.map((option) => <option value={option} key={option}>{option}</option>)}</select></label>
+              <label>Fecha de nacimiento<input type="date" value={patientForm.birthDate} onChange={(e) => setPatientForm((prev) => ({ ...prev, birthDate: e.target.value }))} /></label>
+              <label>Edad<input value={computeAge(patientForm.birthDate) != null ? `${computeAge(patientForm.birthDate)} años` : '—'} readOnly /></label>
+              <label>Ocupación<input value={patientForm.occupation} onChange={(e) => setPatientForm((prev) => ({ ...prev, occupation: e.target.value }))} placeholder="Ej. Diseñadora" /></label>
               <label>Contacto<input value={[patient?.phone, patient?.email].filter(Boolean).join(' · ') || '—'} readOnly /></label>
             </div>{patientSaveState === 'error' && <div className="form-error">⚠ No se pudieron guardar los datos.</div>}</div>
             {summaryTrends.some((t) => t.points.length) && <div className="summary-trends">
