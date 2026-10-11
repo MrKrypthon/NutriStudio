@@ -72,7 +72,6 @@ export default function SuggestionChips({ fieldKey, seed, value, onPick }) {
   const [suggestions, addSuggestion, removeSuggestion] = useSuggestions(fieldKey, seed)
   const [open, setOpen] = useState(false)
   const [label, setLabel] = useState('')
-  const [text, setText] = useState('')
 
   const pick = (suggestionText) => {
     const current = (value || '').replace(/\s+$/, '')
@@ -108,9 +107,11 @@ export default function SuggestionChips({ fieldKey, seed, value, onPick }) {
   }
 
   const submitQuick = () => {
-    if (!label.trim() || !text.trim()) return
-    addSuggestion({ label: label.trim(), text: text.trim() })
-    setLabel(''); setText(''); setOpen(false)
+    const name = label.trim()
+    if (!name) return
+    // Sólo se captura el nombre: es lo que se ve en el chip y lo que se escribe al elegirlo.
+    addSuggestion({ label: name, text: name })
+    setLabel(''); setOpen(false)
   }
 
   return <div className="chip-suggestions">
@@ -126,9 +127,8 @@ export default function SuggestionChips({ fieldKey, seed, value, onPick }) {
       <button type="button" className="chip chip-add" onClick={() => setOpen((v) => !v)}>{open ? '× Cancelar' : '+ Agregar'}</button>
     </div>
     {open && <div className="chip-quick-form">
-      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Sugerencia (lo que se ve en el chip)" />
-      <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Descripción (lo que se completa al hacer clic)" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitQuick() } }} />
-      <button type="button" className="secondary" onClick={submitQuick} disabled={!label.trim() || !text.trim()}>Agregar</button>
+      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Nueva sugerencia…" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); submitQuick() } }} />
+      <button type="button" className="secondary" onClick={submitQuick} disabled={!label.trim()}>Agregar</button>
     </div>}
   </div>
 }
