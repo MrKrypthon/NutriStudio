@@ -1139,6 +1139,10 @@ html{scroll-behavior:smooth}
 .chip:hover{border-color:var(--green);color:var(--green);background:var(--mint)}
 .chip-remove{border:0;background:none;color:var(--muted);font-size:12px;cursor:pointer;margin-left:-6px;padding:0 6px 0 2px}
 .chip-remove:hover{color:var(--danger)}
+.chip-removable{display:inline-flex;align-items:center;padding:0 6px 0 11px;cursor:default}
+.chip-removable:hover{border-color:var(--green);color:var(--green);background:var(--mint)}
+.chip-removable-label{border:0;background:none;color:inherit;font:inherit;padding:5px 0;cursor:pointer;white-space:nowrap}
+.chip-removable .chip-remove{margin:0;padding:0 2px;font-size:13px;line-height:1}
 .chip-add{background:#fff;color:var(--green);border:1px dashed #9fcdba}
 .chip-add:hover{background:var(--mint)}
 .chip-quick-form{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}

@@ -121,8 +121,9 @@ export default function SuggestionChips({ fieldKey, seed, value, onPick }) {
     </div>}
     <div className="chip-row">
       {suggestions.map((s, i) => <span className="chip-wrap" key={s.id || `${s.label}-${i}`}>
-        <button type="button" className="chip" onClick={() => pick(s.text)} title={s.text}>{s.label}</button>
-        {s.custom && <button type="button" className="chip-remove" title="Quitar sugerencia" onClick={() => removeSuggestion(s.id)}>×</button>}
+        {s.custom
+          ? <span className="chip chip-removable"><button type="button" className="chip-removable-label" onClick={() => pick(s.text)} title={s.text}>{s.label}</button><button type="button" className="chip-remove" title="Quitar sugerencia" onClick={() => removeSuggestion(s.id)}>×</button></span>
+          : <button type="button" className="chip" onClick={() => pick(s.text)} title={s.text}>{s.label}</button>}
       </span>)}
       <button type="button" className="chip chip-add" onClick={() => setOpen((v) => !v)}>{open ? '× Cancelar' : '+ Agregar'}</button>
     </div>
