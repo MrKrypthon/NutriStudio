@@ -17,7 +17,7 @@ const DAY_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia', BLOCK: 'Bloqueo' }
 const TYPE_COLORS = { INITIAL: 'coral', FOLLOW_UP: 'blue', QUICK_CONTROL: 'yellow', EMERGENCY: 'purple', BLOCK: 'purple' }
-const TYPE_OPTIONS = [['FOLLOW_UP', 'Seguimiento'], ['INITIAL', 'Primera consulta'], ['QUICK_CONTROL', 'Control rápido'], ['EMERGENCY', 'Emergencia']]
+const TYPE_OPTIONS = [['INITIAL', 'Primera consulta'], ['FOLLOW_UP', 'Seguimiento'], ['QUICK_CONTROL', 'Control rápido'], ['EMERGENCY', 'Emergencia']]
 const DURATION_OPTIONS = [60, 45, 30, 15]
 // Granularidad al agendar: 15 min, en vez de sólo :00/:30. Así se puede ocupar un hueco que no cae
 // en una hora exacta (p. ej. justo donde terminó la cita anterior).
@@ -34,7 +34,7 @@ const DEMO_APPOINTMENTS = [
 const startOfWeek = (date) => { const d = new Date(date); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d }
 const addDays = (date, amount) => { const d = new Date(date); d.setUTCDate(d.getUTCDate() + amount); return d }
 const toISODate = (date) => date.toISOString().slice(0, 10)
-const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'FOLLOW_UP', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '', requestStudies: false, recurrence: 'none', recurCount: 10 })
+const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'INITIAL', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '', requestStudies: false, recurrence: 'none', recurCount: 10 })
 const STUDIES_NOTE = 'Recuerda traer tus análisis o estudios recientes si los tienes.'
 const EMPTY_NEW_PATIENT = { firstName: '', lastName: '', phone: '', email: '' }
 
