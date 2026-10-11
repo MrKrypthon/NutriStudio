@@ -1535,16 +1535,43 @@ app.get('/api/v1/documents', async (request) => {
   return { items: documents }
 })
 
-function drawDocumentBrand(file, subtitle, practice, logoBuffer) {
-  if (logoBuffer) {
-    file.image(logoBuffer, 48, file.y, { height: 30 })
-    file.fontSize(9).fillColor('#7b7d87').text(subtitle, 48, file.y + 34)
-    file.y += 44
-  } else {
-    file.fontSize(20).fillColor('#7267ef').text(practice?.name || 'nutri·studio')
-    file.fontSize(9).fillColor('#7b7d87').text(subtitle)
-    file.moveDown(2)
+// Paleta de marca para los PDFs clínicos — espejo de los tokens de src/styles/globals.css
+// (Monte/Milpa/Hoja/Maíz) para que los documentos se vean consistentes con la app.
+const INK = '#10231A'
+const MUTED = '#4B5F52'
+const FAINT = '#5F7164'
+const PRIMARY = '#1F5A3A'
+const ACCENT = '#F2B705'
+const TINT = '#E4F0DD'
+const TINT_LINE = '#cfe3d4'
+const SUCCESS = '#5FA052'
+const DANGER = '#B4442C'
+
+// Ícono de marca (cuadrícula 3×3) para cuando la práctica no subió su propio logo — mismo patrón
+// que src/components/BrandMark.jsx, dibujado a mano con las primitivas de pdfkit.
+function drawBrandMark(file, x, y, size = 24) {
+  const corners = new Set(['0-0', '0-2', '2-0', '2-2'])
+  const gap = size * 0.08
+  const cell = (size - gap * 2) / 3
+  for (let row = 0; row < 3; row++) {
+    for (let col = 0; col < 3; col++) {
+      file.roundedRect(x + col * (cell + gap), y + row * (cell + gap), cell, cell, cell * 0.3).fill(corners.has(`${row}-${col}`) ? PRIMARY : ACCENT)
+    }
   }
+}
+
+function drawDocumentBrand(file, subtitle, practice, logoBuffer) {
+  const startY = file.y
+  if (logoBuffer) {
+    file.image(logoBuffer, 48, startY, { height: 30 })
+    file.font('Helvetica').fontSize(9).fillColor(FAINT).text(subtitle, 48, startY + 34, { width: 516 })
+  } else {
+    drawBrandMark(file, 48, startY + 3, 26)
+    file.font('Helvetica-Bold').fontSize(15).fillColor(INK).text(practice?.name || 'milpa clinical', 84, startY, { width: 480 })
+    file.font('Helvetica').fontSize(9).fillColor(FAINT).text(subtitle, 84, startY + 19, { width: 480 })
+  }
+  file.y = startY + 44
+  file.moveDown(0.8)
 }
 
 // Values in section payloads can be nested (e.g. Bioquímico "Estudios" is an array of objects);
@@ -1558,25 +1585,93 @@ const stringifyEntry = (value) => {
   return value
 }
 const diagnosisLine = (d) => [`${d.code || ''}`, `(${d.domain}) — ${d.problem}`, d.etiology ? `Causa: ${d.etiology}` : null, d.evidence ? `Evidencia: ${d.evidence}` : null].filter(Boolean).join(' ').trim()
-// Renderiza un payload como un solo párrafo "clave: valor · clave: valor". Evita una línea por
-// campo (que llenaba páginas enteras) y omite los toggle en false, mostrando sólo los activos.
-const compactPayload = (payload, skip = []) => Object.entries(payload || {})
-  .filter(([key, value]) => value !== undefined && value !== null && value !== '' && value !== false && !skip.includes(key))
-  .map(([key, value]) => (value === true ? key.replace(/__/g, ' · ') : `${key}: ${stringifyEntry(value)}`))
-  .join('  ·  ')
-const signatureFor = (user, practice) => [user?.name || practice?.name || 'Nutri Studio', user?.specialty || null].filter(Boolean).join(' · ')
+const signatureFor = (user, practice) => [user?.name || practice?.name || 'milpa clinical', user?.specialty || null].filter(Boolean).join(' · ')
+
+// Una línea de texto corrida (para hechos sueltos como "Nombre: ..." o mensajes "Sin datos…").
+const drawLineText = (file, text, color = MUTED) => { file.font('Helvetica').fontSize(9).fillColor(color).text(text, 48, file.y, { width: 516 }); file.moveDown(0.12) }
+
+// "Etiqueta: valor" en una sola línea, etiqueta en negritas. pdfkit's `continued: true` deja que la
+// segunda llamada a .text() siga exactamente donde terminó la primera (con su propio color/fuente),
+// así que no hay que medir el ancho de la etiqueta a mano.
+function drawFieldRow(file, label, value) {
+  file.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(`${label}: `, 48, file.y, { width: 516, continued: true })
+  file.font('Helvetica').fontSize(9).fillColor(MUTED).text(String(value))
+  file.moveDown(0.12)
+}
+
+// Fila de "chips" (píldoras) para los campos booleanos en true (condiciones, alergias…), con wrap
+// manual cuando no caben en el ancho de la página — pdfkit no tiene flex-wrap.
+function drawChips(file, labels) {
+  const x0 = 48; const maxX = 564; const rowH = 16; const gapX = 6; const gapY = 5; const padX = 8
+  let x = x0; let y = file.y
+  file.font('Helvetica').fontSize(8)
+  for (const label of labels) {
+    const w = file.widthOfString(label) + padX * 2
+    if (x + w > maxX && x !== x0) { x = x0; y += rowH + gapY }
+    file.roundedRect(x, y, w, rowH, 8).fill(TINT)
+    // A width tight to the label (even with lineBreak:false) still made pdfkit wrap some labels
+    // onto a second line — passing a generous width that the short chip text never reaches avoids
+    // the wrap; the pill itself is still sized from the real measured `w` above.
+    file.fillColor(PRIMARY).text(label, x + padX, y + 4.5, { width: 500, lineBreak: false })
+    x += w + gapX
+  }
+  file.y = y + rowH + 8
+}
+
+// Reemplaza a la antigua compactPayload(): en vez de unir TODOS los campos de una sección en un
+// solo párrafo (lo que hacía que el informe se viera saturado y sin formato), separa los toggles en
+// true como chips y dibuja cada campo restante en su propia línea. Devuelve true si dibujó algo, para
+// que el llamador pueda decidir si mostrar un mensaje de "sin datos" quien además depende de otra
+// fuente (p. ej. el recordatorio de 24 h del informe clínico).
+function drawFieldList(file, payload, { skip = [], empty = 'Sin datos registrados.' } = {}) {
+  const entries = Object.entries(payload || {}).filter(([key, value]) => value !== undefined && value !== null && value !== '' && !skip.includes(key))
+  const chips = entries.filter(([, value]) => value === true).map(([key]) => key.replace(/__/g, ' · '))
+  const rows = entries.filter(([, value]) => value !== true && value !== false)
+  if (!chips.length && !rows.length) { if (empty) drawLineText(file, empty, FAINT); return false }
+  if (chips.length) drawChips(file, chips)
+  for (const [key, value] of rows) drawFieldRow(file, key, stringifyEntry(value))
+  return true
+}
+
+// Título de sección numerado (círculo relleno + número en blanco), igual que los pasos del
+// constructor de plan en la app (.plan-steps button span). Salta de página si no queda espacio para
+// el título y al menos una línea debajo, para no huerfanarlo al fondo de la hoja.
+function drawSectionTitle(file, index, titleText) {
+  if (file.y > file.page.height - file.page.margins.bottom - 90) file.addPage()
+  file.moveDown(0.5)
+  const y = file.y; const r = 9
+  file.circle(48 + r, y + r, r).fill(PRIMARY)
+  file.font('Helvetica-Bold').fontSize(9).fillColor('#fff').text(String(index), 48, y + r - 4.5, { width: r * 2, align: 'center' })
+  file.font('Helvetica-Bold').fontSize(12).fillColor(INK).text(titleText, 48 + r * 2 + 8, y + r - 7, { width: 490 })
+  file.moveTo(48, y + r * 2 + 6).lineTo(564, y + r * 2 + 6).strokeColor(TINT_LINE).stroke()
+  file.y = y + r * 2 + 14
+}
+
+// Caja de resumen (motivo/objetivo) con alto dinámico: mide el texto antes de fijar la altura de la
+// caja, porque un "Motivo de consulta" largo se desbordaba de un alto fijo y el título de la
+// siguiente sección se dibujaba encimado sobre el texto.
+function drawSummaryBox(file, title, text) {
+  file.font('Helvetica').fontSize(9)
+  const textHeight = file.heightOfString(text, { width: 480 })
+  const boxTop = file.y
+  const boxHeight = Math.max(58, textHeight + 43)
+  file.roundedRect(48, boxTop, 516, boxHeight, 6).fill(TINT)
+  file.font('Helvetica-Bold').fontSize(11).fillColor(PRIMARY).text(title, 62, boxTop + 12)
+  file.font('Helvetica').fontSize(9).fillColor(MUTED).text(text, 62, boxTop + 31, { width: 480 })
+  file.y = boxTop + boxHeight + 14
+}
 
 // Aviso de confidencialidad al pie del informe, el informe clínico y el expediente completo: son
 // los tres documentos del historial clínico nutricio, por eso citan la NOM-004-SSA3-2012 (expediente
 // clínico) y la Ley Federal de Protección de Datos Personales en Posesión de los Particulares. El
 // PDF de alimentación (menú semanal) no lleva este aviso porque no es el expediente clínico.
 const CONFIDENTIALITY_NOTICE = 'Documento del expediente clínico (NOM-004-SSA3-2012). Contiene datos personales sensibles protegidos por la Ley Federal de Protección de Datos Personales en Posesión de los Particulares: uso exclusivo del paciente y del personal de salud autorizado.'
-const drawConfidentialityNotice = (file) => { file.moveDown(0.3); file.fillColor('#a7a8b3').fontSize(7).text(CONFIDENTIALITY_NOTICE, 48, file.y, { width: 516, align: 'center' }) }
+const drawConfidentialityNotice = (file) => { file.moveDown(0.3); file.font('Helvetica').fillColor(FAINT).fontSize(7).text(CONFIDENTIALITY_NOTICE, 48, file.y, { width: 516, align: 'center' }) }
 
 function drawConsultationReport(file, document, practice, user, logoBuffer) {
-  drawDocumentBrand(file, 'EXPEDIENTE DE CONSULTA NUTRICIONAL', practice, logoBuffer)
-  file.fontSize(18).fillColor('#1c232f').text('Informe de consulta')
-  file.fontSize(10).fillColor('#6e6e73').text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
+  drawDocumentBrand(file, 'RESUMEN DE CONSULTA NUTRICIONAL', practice, logoBuffer)
+  file.font('Helvetica-Bold').fontSize(18).fillColor(INK).text('Informe de consulta')
+  file.font('Helvetica').fontSize(10).fillColor(MUTED).text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
   file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`)
   file.moveDown()
 
@@ -1592,45 +1687,32 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   const summary = payloadOf('summary')
   const reason = summary?.reason || summary?.['Motivo de consulta']
   const goal = summary?.goal || summary?.Objetivo
-  const boxTop = file.y
-  file.roundedRect(48, boxTop, 516, 58, 6).fill('#eeecfd')
-  file.fillColor('#7267ef').fontSize(11).text('Resumen de la consulta', 62, boxTop + 12)
   const summaryLine = reason || goal
     ? [reason && `Motivo: ${reason}`, goal && `Objetivo: ${goal}`].filter(Boolean).join('   ·   ')
-    : 'Documento generado desde la valoración clínica de Nutri Studio.'
-  file.fillColor('#4c4e5b').fontSize(9).text(summaryLine, 62, boxTop + 31, { width: 480 })
-  file.y = boxTop + 72
+    : 'Documento generado desde la valoración clínica de milpa clinical.'
+  drawSummaryBox(file, 'Resumen de la consulta', summaryLine)
 
   let sectionIndex = 0
-  const drawTitle = (title) => { sectionIndex += 1; file.moveDown(0.5); file.fillColor('#7267ef').fontSize(13).text(`${sectionIndex}. ${title}`, 48, file.y, { width: 516 }); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#ddd6fa').stroke(); file.moveDown(0.4) }
-  const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, 48, file.y, { width: 516 })
+  const title = (text) => { sectionIndex += 1; drawSectionTitle(file, sectionIndex, text) }
 
-  drawTitle('Antecedentes y clínico')
-  const clinicalText = compactPayload({ ...payloadOf('general'), ...payloadOf('clinical') }, ['Notas clínicas', 'Notas de antecedentes'])
-  drawLine(clinicalText || 'Sin antecedentes registrados.')
+  title('Antecedentes y clínico')
+  drawFieldList(file, { ...payloadOf('general'), ...payloadOf('clinical') }, { skip: ['Notas clínicas', 'Notas de antecedentes'], empty: 'Sin antecedentes registrados.' })
 
+  title('Antropometría')
+  if (measurement) drawFieldRow(file, 'Medición más reciente', `Peso ${measurement.weightKg ?? '—'} kg · Talla ${measurement.heightCm ?? '—'} cm · Cintura ${measurement.waistCm ?? '—'} cm · Cadera ${measurement.hipCm ?? '—'} cm · % grasa ${measurement.bodyFatPercent ?? '—'}%`)
+  drawFieldList(file, payloadOf('anthropometric'), { skip: ['Peso (kg)', 'Talla (cm)', 'IMC calculado'], empty: measurement ? null : 'Sin mediciones registradas.' })
+
+  title('Diagnóstico nutricio')
+  if (diagnoses.length) for (const d of diagnoses) drawLineText(file, diagnosisLine(d))
+  else drawLineText(file, 'Sin diagnóstico registrado.', FAINT)
+
+  title('Tratamiento')
+  drawFieldList(file, payloadOf('treatment'), { empty: 'Sin recomendaciones registradas.' })
   file.moveDown(0.6)
-  drawTitle('Antropometría')
-  if (measurement) {
-    drawLine(`Peso: ${measurement.weightKg ?? '—'} kg · Talla: ${measurement.heightCm ?? '—'} cm · Cintura: ${measurement.waistCm ?? '—'} cm · Cadera: ${measurement.hipCm ?? '—'} cm · % grasa: ${measurement.bodyFatPercent ?? '—'}%`)
-  }
-  const anthroText = compactPayload(payloadOf('anthropometric'), ['Peso (kg)', 'Talla (cm)', 'IMC calculado'])
-  if (anthroText) drawLine(anthroText)
-  else if (!measurement) drawLine('Sin mediciones registradas.')
-
-  file.moveDown(0.6)
-  drawTitle('Diagnóstico nutricio')
-  if (diagnoses.length) for (const d of diagnoses) drawLine(diagnosisLine(d))
-  else drawLine('Sin diagnóstico registrado.')
-
-  file.moveDown(0.6)
-  drawTitle('Tratamiento')
-  drawLine(compactPayload(payloadOf('treatment')) || 'Sin recomendaciones registradas.')
-  file.moveDown(0.8)
 
   // Explicit width: pdfkit persists the last text() box, so a bare { align: 'center' } would pin
   // the footer to whatever width/x the previous line used (see the menu footer fix).
-  file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
+  file.font('Helvetica').fontSize(9).fillColor(FAINT).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
   drawConfidentialityNotice(file)
 }
 
@@ -1650,8 +1732,8 @@ const EXPORT_SECTION_KEYS = [
 
 function drawConsultationExport(file, document, practice, user, logoBuffer) {
   drawDocumentBrand(file, 'EXPEDIENTE CLÍNICO COMPLETO', practice, logoBuffer)
-  file.fontSize(18).fillColor('#1c232f').text('Expediente clínico nutricio')
-  file.fontSize(10).fillColor('#6e6e73').text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
+  file.font('Helvetica-Bold').fontSize(18).fillColor(INK).text('Expediente clínico nutricio')
+  file.font('Helvetica').fontSize(10).fillColor(MUTED).text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
   file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`)
   file.moveDown()
 
@@ -1664,21 +1746,15 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
   const summary = payloadOf('summary')
   const reason = summary?.reason || summary?.['Motivo de consulta']
   const goal = summary?.goal || summary?.Objetivo
-  const boxTop = file.y
-  file.roundedRect(48, boxTop, 516, 58, 6).fill('#eeecfd')
-  file.fillColor('#7267ef').fontSize(11).text('Expediente completo', 62, boxTop + 12)
   const summaryLine = reason || goal
     ? [reason && `Motivo: ${reason}`, goal && `Objetivo: ${goal}`].filter(Boolean).join('   ·   ')
     : 'Todas las secciones del expediente clínico de esta consulta, tal como quedaron registradas.'
-  file.fillColor('#4c4e5b').fontSize(9).text(summaryLine, 62, boxTop + 31, { width: 480 })
-  file.y = boxTop + 72
+  drawSummaryBox(file, 'Expediente completo', summaryLine)
 
   let sectionIndex = 0
-  const drawTitle = (title) => { sectionIndex += 1; file.moveDown(0.5); file.fillColor('#7267ef').fontSize(13).text(`${sectionIndex}. ${title}`, 48, file.y, { width: 516 }); file.moveTo(48, file.y + 4).lineTo(564, file.y + 4).strokeColor('#ddd6fa').stroke(); file.moveDown(0.4) }
-  const drawLine = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, 48, file.y, { width: 516 })
-
   for (const [key, label] of EXPORT_SECTION_KEYS) {
-    drawTitle(label)
+    sectionIndex += 1
+    drawSectionTitle(file, sectionIndex, label)
     if (key === 'anthropometric') {
       const parts = [
         measurement?.weightKg != null && `Peso: ${measurement.weightKg} kg`,
@@ -1690,27 +1766,22 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
         measurement?.muscleMassKg != null && `Masa muscular: ${measurement.muscleMassKg} kg`,
         measurement?.method && `Método: ${measurement.method}`,
       ].filter(Boolean)
-      if (parts.length) drawLine(parts.join(' · '))
-      const anthroText = compactPayload(payloadOf('anthropometric'), ['Peso (kg)', 'Talla (cm)', 'IMC calculado'])
-      if (anthroText) drawLine(anthroText)
-      if (!parts.length && !anthroText) drawLine('Sin mediciones registradas.')
+      if (parts.length) drawFieldRow(file, 'Medición más reciente', parts.join(' · '))
+      drawFieldList(file, payloadOf('anthropometric'), { skip: ['Peso (kg)', 'Talla (cm)', 'IMC calculado'], empty: parts.length ? null : 'Sin mediciones registradas.' })
     } else if (key === 'biochemical') {
       const labs = Array.isArray(payloadOf('biochemical')['Estudios']) ? payloadOf('biochemical')['Estudios'] : []
-      for (const lab of labs) drawLine(`${lab.name}: ${lab.value ?? '—'} ${lab.unit || ''}${lab.range ? ` (ref. ${lab.range})` : ''}${lab.status ? ` · ${lab.status}` : ''}`)
-      const bioText = compactPayload(payloadOf('biochemical'), ['Estudios'])
-      if (bioText) drawLine(bioText)
-      if (!labs.length && !bioText) drawLine('Sin estudios registrados.')
+      for (const lab of labs) drawLineText(file, `${lab.name}: ${lab.value ?? '—'} ${lab.unit || ''}${lab.range ? ` (ref. ${lab.range})` : ''}${lab.status ? ` · ${lab.status}` : ''}`)
+      drawFieldList(file, payloadOf('biochemical'), { skip: ['Estudios'], empty: labs.length ? null : 'Sin estudios registrados.' })
     } else if (key === 'diagnosis') {
-      if (diagnoses.length) for (const d of diagnoses) drawLine(diagnosisLine(d))
-      else drawLine('Sin diagnóstico registrado.')
-      const diagText = compactPayload(payloadOf(key))
-      if (diagText) drawLine(diagText)
+      if (diagnoses.length) for (const d of diagnoses) drawLineText(file, diagnosisLine(d))
+      else drawLineText(file, 'Sin diagnóstico registrado.', FAINT)
+      drawFieldList(file, payloadOf(key), { empty: null })
     } else {
-      drawLine(compactPayload(payloadOf(key)) || 'Sin datos registrados.')
+      drawFieldList(file, payloadOf(key), { empty: 'Sin datos registrados.' })
     }
-    file.moveDown(0.6)
+    file.moveDown(0.4)
   }
-  file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
+  file.font('Helvetica').fontSize(9).fillColor(FAINT).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
   drawConfidentialityNotice(file)
 }
 
@@ -1756,17 +1827,14 @@ function drawClinicalReport(file, document, practice, user, logoBuffer) {
   const measurement = [...(consultation?.measurements || [])].sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
   const diagnoses = consultation?.diagnoses || []
 
-  file.fontSize(18).fillColor('#1c232f').text('Informe clínico nutricio', 48, file.y, { width: 516 })
+  file.font('Helvetica-Bold').fontSize(18).fillColor(INK).text('Informe clínico nutricio', 48, file.y, { width: 516 })
   const age = computeAgeFromBirthDate(patient.birthDate)
-  file.fontSize(9).fillColor('#6e6e73').text(`Paciente: ${patient.firstName} ${patient.lastName}${age != null ? ` · ${age} años` : ''}${patient.sex ? ` · ${SEX_TEXT[patient.sex] || patient.sex}` : ''}`, 48, file.y, { width: 516 })
+  file.font('Helvetica').fontSize(9).fillColor(MUTED).text(`Paciente: ${patient.firstName} ${patient.lastName}${age != null ? ` · ${age} años` : ''}${patient.sex ? ` · ${SEX_TEXT[patient.sex] || patient.sex}` : ''}`, 48, file.y, { width: 516 })
   file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`, 48, file.y, { width: 516 })
 
-  // x explícito: pdfkit conserva la última x/width usadas (p. ej. la columna "Interpretación" de
-  // la tabla de laboratorio), así que sin esto el texto siguiente se dibujaría en una columna
-  // angosta a la derecha.
   let index = 0
-  const title = (text) => { index += 1; file.moveDown(0.6); file.fillColor('#7267ef').fontSize(12).text(`${index}. ${text}`, 48, file.y, { width: 516 }); file.moveTo(48, file.y + 3).lineTo(564, file.y + 3).strokeColor('#ddd6fa').stroke(); file.moveDown(0.5) }
-  const line = (text) => file.fillColor('#4c4e5b').fontSize(9).text(text, 48, file.y, { width: 516 })
+  const title = (text) => { index += 1; drawSectionTitle(file, index, text) }
+  const line = (text) => drawLineText(file, text)
 
   title('Identificación del paciente')
   line(`Nombre: ${patient.firstName} ${patient.lastName}`)
@@ -1788,52 +1856,49 @@ function drawClinicalReport(file, document, practice, user, logoBuffer) {
     const extra = [measurement.waistCm != null && `Cintura: ${measurement.waistCm} cm`, measurement.hipCm != null && `Cadera: ${measurement.hipCm} cm`, measurement.abdomenCm != null && `Abdomen: ${measurement.abdomenCm} cm`, measurement.bodyFatPercent != null && `% grasa: ${measurement.bodyFatPercent}%`, measurement.muscleMassKg != null && `Masa muscular: ${measurement.muscleMassKg} kg`].filter(Boolean)
     if (extra.length) line(extra.join(' · '))
   } else line('Sin mediciones registradas.')
-  const anthroText = compactPayload(payloadOf('anthropometric'), ['Peso (kg)', 'Talla (cm)', 'IMC calculado'])
-  if (anthroText) line(anthroText)
+  drawFieldList(file, payloadOf('anthropometric'), { skip: ['Peso (kg)', 'Talla (cm)', 'IMC calculado'], empty: null })
 
   const labs = Array.isArray(payloadOf('biochemical')['Estudios']) ? payloadOf('biochemical')['Estudios'] : []
   title('Bioquímico')
   if (labs.length) {
     drawLabTable(file, labs)
   } else line('Sin estudios de laboratorio registrados.')
-  const bioNotes = compactPayload(payloadOf('biochemical'), ['Estudios'])
-  if (bioNotes) line(bioNotes)
+  drawFieldList(file, payloadOf('biochemical'), { skip: ['Estudios'], empty: null })
 
   title('Clínico')
-  line(compactPayload(payloadOf('clinical')) || 'Sin datos clínicos registrados.')
+  drawFieldList(file, payloadOf('clinical'), { empty: 'Sin datos clínicos registrados.' })
 
   title('Dietético')
-  const dietaryText = compactPayload(payloadOf('dietary'), ['Recordatorio 24 h'])
-  if (dietaryText) line(dietaryText)
+  const hadDietaryNotes = drawFieldList(file, payloadOf('dietary'), { skip: ['Recordatorio 24 h'], empty: null })
   const recall = payloadOf('dietary')['Recordatorio 24 h']
-  if (recall?.meals?.length) { file.moveDown(0.3); file.fillColor('#1c232f').fontSize(10).text('Recordatorio de 24 horas', 48, file.y, { width: 516 }); drawRecallTable(file, recall) }
-  else if (!dietaryText) line('Sin datos dietéticos registrados.')
+  if (recall?.meals?.length) { file.moveDown(0.3); file.font('Helvetica-Bold').fontSize(10).fillColor(INK).text('Recordatorio de 24 horas', 48, file.y, { width: 516 }); drawRecallTable(file, recall) }
+  else if (!hadDietaryNotes) line('Sin datos dietéticos registrados.')
 
   title('Estilo de vida')
-  line(compactPayload(payloadOf('lifestyle')) || 'Sin datos registrados.')
+  drawFieldList(file, payloadOf('lifestyle'), { empty: 'Sin datos registrados.' })
 
   title('Sociocultural')
-  line(compactPayload(payloadOf('sociocultural')) || 'Sin datos registrados.')
+  drawFieldList(file, payloadOf('sociocultural'), { empty: 'Sin datos registrados.' })
 
   title('Diagnóstico nutricio')
   if (diagnoses.length) for (const d of diagnoses) line(diagnosisLine(d))
   else line('Sin diagnóstico registrado.')
 
   title('Tratamiento e intervención')
-  line(compactPayload(payloadOf('treatment')) || 'Sin recomendaciones registradas.')
+  drawFieldList(file, payloadOf('treatment'), { empty: 'Sin recomendaciones registradas.' })
 
   title('Monitoreo y notas')
-  line(compactPayload({ ...payloadOf('monitoring'), ...payloadOf('notes') }) || 'Sin datos registrados.')
+  drawFieldList(file, { ...payloadOf('monitoring'), ...payloadOf('notes') }, { empty: 'Sin datos registrados.' })
 
-  file.moveDown(1)
-  file.fillColor('#8e8f9a').fontSize(9).text(`Elaboró: ${signatureFor(user, practice)}`, 48, file.y, { width: 516, align: 'center' })
-  file.fillColor('#b0b1ba').fontSize(7).text('Documento clínico de apoyo. Las estimaciones antropométricas son orientativas y no sustituyen al juicio profesional.', 48, file.y, { width: 516, align: 'center' })
+  file.moveDown(0.8)
+  file.font('Helvetica').fontSize(9).fillColor(FAINT).text(`Elaboró: ${signatureFor(user, practice)}`, 48, file.y, { width: 516, align: 'center' })
+  file.font('Helvetica').fontSize(7).fillColor(FAINT).text('Documento clínico de apoyo. Las estimaciones antropométricas son orientativas y no sustituyen al juicio profesional.', 48, file.y, { width: 516, align: 'center' })
   drawConfidentialityNotice(file)
 }
 
 function drawLabTable(file, labs) {
   const x = { name: 48, value: 220, unit: 305, range: 370, status: 460 }
-  file.fontSize(8).fillColor('#8b8d9c')
+  file.font('Helvetica-Bold').fontSize(8).fillColor(FAINT)
   file.text('Estudio', x.name, file.y, { width: 165 })
   file.text('Resultado', x.value, file.y, { width: 80 })
   file.text('Unidad', x.unit, file.y, { width: 60 })
@@ -1842,13 +1907,13 @@ function drawLabTable(file, labs) {
   file.moveDown(0.5)
   for (const lab of labs) {
     const y = file.y
-    const tone = lab.status === 'Normal' ? '#2b9674' : lab.status === 'Elevado' || lab.status === 'Bajo' ? '#c0564f' : '#8b8d9c'
-    file.fontSize(9).fillColor('#4c4e5b')
+    const tone = lab.status === 'Normal' ? SUCCESS : lab.status === 'Elevado' || lab.status === 'Bajo' ? DANGER : FAINT
+    file.font('Helvetica').fontSize(9).fillColor(MUTED)
     file.text(String(lab.name || '—'), x.name, y, { width: 165 })
     file.text(String(lab.value ?? '—'), x.value, y, { width: 80 })
     file.text(String(lab.unit || ''), x.unit, y, { width: 60 })
     file.text(String(lab.range || '—'), x.range, y, { width: 85 })
-    file.fillColor(tone).text(String(lab.status || '—'), x.status, y, { width: 100 })
+    file.font('Helvetica-Bold').fillColor(tone).text(String(lab.status || '—'), x.status, y, { width: 100 })
     file.moveDown(1)
     file.moveTo(48, file.y - 4).lineTo(564, file.y - 4).strokeColor('#eeeeee').stroke()
   }
@@ -1857,12 +1922,12 @@ function drawLabTable(file, labs) {
 function drawRecallTable(file, recall) {
   const { meals, totals } = collectRecall(recall)
   for (const meal of meals) {
-    file.fontSize(9).fillColor('#1c232f').text(`${meal.label}${meal.items.length ? ` · ${meal.kcal} kcal` : ''}`, 48, file.y, { width: 516 })
-    if (meal.note) file.fontSize(8).fillColor('#6e6e73').text(meal.note, 56, file.y, { width: 508 })
-    for (const item of meal.items) file.fontSize(8).fillColor('#4c4e5b').text(`• ${item.name}: ${item.grams} g`, 56, file.y, { width: 508 })
+    file.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(`${meal.label}${meal.items.length ? ` · ${meal.kcal} kcal` : ''}`, 48, file.y, { width: 516 })
+    if (meal.note) file.font('Helvetica').fontSize(8).fillColor(FAINT).text(meal.note, 56, file.y, { width: 508 })
+    for (const item of meal.items) file.font('Helvetica').fontSize(8).fillColor(MUTED).text(`• ${item.name}: ${item.grams} g`, 56, file.y, { width: 508 })
     file.moveDown(0.3)
   }
-  if (totals.kcal != null) file.fontSize(9).fillColor('#7267ef').text(`Totales del día: ${totals.kcal} kcal · Proteína ${totals.protein ?? 0} g · Carbohidratos ${totals.carbs ?? 0} g · Grasas ${totals.fat ?? 0} g`, 48, file.y, { width: 516 })
+  if (totals.kcal != null) file.font('Helvetica-Bold').fontSize(9).fillColor(PRIMARY).text(`Totales del día: ${totals.kcal} kcal · Proteína ${totals.protein ?? 0} g · Carbohidratos ${totals.carbs ?? 0} g · Grasas ${totals.fat ?? 0} g`, 48, file.y, { width: 516 })
 }
 
 function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
@@ -1876,9 +1941,9 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
 
   if (plan?.targetKcal) {
     const macros = computeMacros({ kcal: plan.targetKcal, carbsPercent: plan.carbsPercent, proteinPercent: plan.proteinPercent, fatPercent: plan.fatPercent })
-    file.roundedRect(48, file.y, 516, 70, 6).fill('#eeecfd')
-    file.fillColor('#7267ef').fontSize(11).text(`Requerimiento: ${plan.targetKcal} kcal/día`, 62, file.y + 14)
-    file.fillColor('#4c4e5b').fontSize(9).text(`Carbohidratos ${macros.macros.carbs.grams} g · Proteína ${macros.macros.protein.grams} g · Grasas ${macros.macros.fat.grams} g`, 62, file.y + 33, { width: 480 })
+    file.roundedRect(48, file.y, 516, 70, 6).fill(TINT)
+    file.font('Helvetica-Bold').fontSize(11).fillColor(PRIMARY).text(`Requerimiento: ${plan.targetKcal} kcal/día`, 62, file.y + 14)
+    file.font('Helvetica').fontSize(9).fillColor(MUTED).text(`Carbohidratos ${macros.macros.carbs.grams} g · Proteína ${macros.macros.protein.grams} g · Grasas ${macros.macros.fat.grams} g`, 62, file.y + 33, { width: 480 })
     // Tight gap: landscape has less vertical room than portrait, and a larger advance pushed the
     // footer onto a second page.
     file.y += 80
@@ -1886,8 +1951,8 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
 
   const menu = plan?.menuSnapshot || []
   if (!menu.length) {
-    file.fillColor('#6e6e73').fontSize(10).text('Este plan no tiene recetas asignadas.')
-    file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
+    file.fillColor(MUTED).fontSize(10).text('Este plan no tiene recetas asignadas.')
+    file.fillColor(FAINT).fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
     return
   }
 
@@ -1961,7 +2026,7 @@ function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
   // the footer onto a second, almost-empty page. Also pass an explicit width: pdfkit persists the
   // last text() width/x, so a bare { align: 'center' } after the cell loop inherited the last
   // cell's narrow box and pinned the footer to the far right.
-  file.fillColor('#8e8f9a').fontSize(9).text(signatureFor(user, practice), x0, file.y, { width: contentW, align: 'center' })
+  file.fillColor(FAINT).fontSize(9).text(signatureFor(user, practice), x0, file.y, { width: contentW, align: 'center' })
 }
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
