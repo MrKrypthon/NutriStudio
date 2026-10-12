@@ -1261,13 +1261,6 @@ html{scroll-behavior:smooth}
 @media(max-width:1000px){.food-frequency-board{grid-template-columns:1fr}}
 @media(max-width:600px){.food-chip-grid{grid-template-columns:repeat(auto-fill,minmax(72px,1fr))}}
 
-/* Campo con chips de sugerencia al lado del rótulo */
-.field-with-chips{display:flex;flex-direction:column;min-width:0}
-.field-with-chips-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.field-with-chips-head>span{font-size:10px;color:#737680;white-space:nowrap}
-.field-with-chips-head .chip-suggestions{margin:0;flex:1;min-width:0}
-.field-with-chips-head .chip-row{flex-wrap:wrap;margin:0}
-
 /* Los textarea ajustan su alto al contenido (Chrome/Edge lo hacen por CSS; los demás navegadores
    usan el respaldo en JS). Se limita el alto máximo y se permite scroll si crece de más. */
 textarea{field-sizing:content;max-height:340px;overflow-y:auto}
