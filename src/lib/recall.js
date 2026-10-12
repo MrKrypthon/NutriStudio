@@ -7,6 +7,7 @@
 // (DRI/AMDR del IOM y valores de referencia de la FDA) a pedido de la usuaria, y quedan aquí
 // marcados para que la nutrióloga los revise o los ajuste.
 import { IDR_TABLE, resolveIdrBracket } from '../../server/domain/micronutrients.js'
+import { isMaleSex } from './sex.js'
 
 export const RECALL_MEALS = [
   { key: 'breakfast', label: 'Desayuno', time: '08:00' },
@@ -72,7 +73,7 @@ export const adequacyStatus = (percent) => (percent == null ? null : percent < 9
 
 // Adecuación = (consumo ÷ ideal) × 100; <95% Bajo, 95–105% Normal, >105% Alto.
 export function recallAdequacy(totals, age, sex) {
-  const bracketKey = resolveIdrBracket(age, sex)
+  const bracketKey = resolveIdrBracket(age, isMaleSex(sex) ? 'male' : 'female')
   const idr = bracketKey ? IDR_TABLE[bracketKey] : null
   const macros = bracketKey ? MACRO_REFERENCE[bracketKey] : null
   return RECALL_NUTRIENTS.map((nutrient) => {
@@ -84,6 +85,6 @@ export function recallAdequacy(totals, age, sex) {
 }
 
 export const recallBracketLabel = (age, sex) => {
-  const bracketKey = resolveIdrBracket(age, sex)
+  const bracketKey = resolveIdrBracket(age, isMaleSex(sex) ? 'male' : 'female')
   return bracketKey ? IDR_TABLE[bracketKey].label : null
 }

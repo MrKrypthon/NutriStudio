@@ -10,7 +10,8 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
-import { MEAL_TYPE_LABELS, MEAL_TYPE_ORDER, buildMenuSnapshot } from './domain/documents.js'
+import { buildMenuSnapshot, normalizeMealTimes, sanitizeJpeg } from './domain/documents.js'
+import { drawNutritionPlan } from './domain/planPdf.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
@@ -31,7 +32,7 @@ const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login'])
 // Practice logos and recipe photos are branding/content, not patient data, and need to load in a
 // plain <img src> (which can't send an Authorization header) both in-app and inside generated
 // PDFs/emails — so these routes are public by design, scoped by unguessable ids/file names.
-const PUBLIC_ROUTE_PATTERNS = [/^\/api\/v1\/practice\/[^/]+\/logo$/, /^\/api\/v1\/recipes\/images\/[^/]+$/]
+const PUBLIC_ROUTE_PATTERNS = [/^\/api\/v1\/practice\/[^/]+\/logo$/, /^\/api\/v1\/recipes\/images\/[^/]+$/, /^\/api\/v1\/ingredients\/images\/[^/]+$/]
 
 // Estado de cada práctica (tenant) del SaaS, cacheado 30 s para no consultar en cada petición.
 const practiceStatusCache = new Map()
@@ -132,9 +133,9 @@ app.get('/api/v1/practice', async (request, reply) => {
 })
 
 app.put('/api/v1/practice', async (request, reply) => {
-  const { name, timeZone, userName, userEmail, userSpecialty, userPhone, businessHours, fees } = request.body || {}
+  const { name, timeZone, address, userName, userEmail, userSpecialty, userPhone, userLicenseNumber, businessHours, fees } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
-  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(address !== undefined ? { address: String(address).trim() || null } : {}), ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
   let user = await prisma.user.findUnique({ where: { id: request.userId } })
   if (user) {
     user = await prisma.user.update({
@@ -144,6 +145,7 @@ app.put('/api/v1/practice', async (request, reply) => {
         email: userEmail || user.email,
         ...(userSpecialty !== undefined ? { specialty: userSpecialty } : {}),
         ...(userPhone !== undefined ? { phone: userPhone } : {}),
+        ...(userLicenseNumber !== undefined ? { licenseNumber: String(userLicenseNumber).trim() || null } : {}),
       },
     })
   }
@@ -277,17 +279,58 @@ app.get('/api/v1/practice/:practiceId/logo', async (request, reply) => {
 
 // Public for the same reason as the logo route above: recipe cards use these directly as <img
 // src>. The strict file-name pattern blocks path traversal. Files live in storage/recipes, which
-// prisma/import-recetario.js fills from the ebook's embedded photos.
+// prisma/import-recetario.js fills from the ebook's embedded photos; the ones the nutritionist
+// uploads herself (POST /recipes/:id/image) are named `u-<recipe id>-<stamp>.jpg`.
+const recipeImageDir = () => path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH || './storage/recipes')
+// La app reduce la foto antes de subirla (1600 px), así que estos topes sólo frenan lo que llegue
+// por fuera de ella. Se limita el total de pixeles, no sólo cada lado: es lo que cuesta memoria a
+// quien la descomprime.
+const RECIPE_IMAGE_MAX_BYTES = 3 * 1024 * 1024
+const RECIPE_IMAGE_MAX_SIDE = 2400
+const RECIPE_IMAGE_MAX_PIXELS = 4_000_000
+
 app.get('/api/v1/recipes/images/:fileName', async (request, reply) => {
   const { fileName } = request.params
   if (!/^[a-z0-9][a-z0-9-]*\.jpg$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
-  const directory = path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH || './storage/recipes')
   try {
-    const file = await readFile(path.join(directory, fileName))
-    return reply.type('image/jpeg').header('Cache-Control', 'public, max-age=86400').send(file)
+    const file = await readFile(path.join(recipeImageDir(), fileName))
+    return reply.type('image/jpeg').header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'public, max-age=86400').send(file)
   } catch {
     return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
   }
+})
+
+// Sólo se borran del disco las fotos subidas a mano; las del recetario importado se conservan
+// porque el importador las vuelve a vincular por nombre de archivo.
+const removeUploadedRecipeImage = (imageFile) => (imageFile?.startsWith('u-') ? unlink(path.join(recipeImageDir(), imageFile)).catch(() => {}) : Promise.resolve())
+
+// Foto de una receta. Sale en la tarjeta de la receta y en el plan de alimentación entregado. Sólo
+// JPEG, comprobado con los bytes del archivo y no con el tipo declarado (ver sanitizeJpeg). El
+// nombre lleva una marca de tiempo para que al cambiarla no se quede la anterior en la caché.
+app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
+  const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
+  const { dataUrl } = request.body || {}
+  const match = typeof dataUrl === 'string' && dataUrl.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/)
+  if (!match) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen JPG.', fields: { dataUrl: true } })
+  // Tope sobre el texto base64 antes de decodificarlo, para no reservar memoria de más.
+  if (match[1].length > Math.ceil(RECIPE_IMAGE_MAX_BYTES / 3) * 4) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La imagen no puede pesar más de 3 MB.', fields: { dataUrl: true } })
+  // Lo que se guarda es la versión reescrita sin metadatos, no los bytes recibidos.
+  const size = sanitizeJpeg(Buffer.from(match[1], 'base64'))
+  if (!size) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El archivo no es una imagen JPG válida.', fields: { dataUrl: true } })
+  if (size.width > RECIPE_IMAGE_MAX_SIDE || size.height > RECIPE_IMAGE_MAX_SIDE || size.width * size.height > RECIPE_IMAGE_MAX_PIXELS) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: `La imagen es demasiado grande: máximo ${RECIPE_IMAGE_MAX_SIDE} px por lado.`, fields: { dataUrl: true } })
+  const storageKey = `u-${recipe.id}-${Date.now().toString(36)}.jpg`
+  await mkdir(recipeImageDir(), { recursive: true })
+  await writeFile(path.join(recipeImageDir(), storageKey), size.data)
+  await removeUploadedRecipeImage(recipe.imageFile)
+  return prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey } })
+})
+
+app.delete('/api/v1/recipes/:recipeId/image', async (request, reply) => {
+  const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
+  await removeUploadedRecipeImage(recipe.imageFile)
+  return prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: null } })
 })
 
 app.get('/api/v1/patients', async (request) => {
@@ -741,6 +784,35 @@ app.post('/api/v1/tasks/:taskId/complete', async (request, reply) => {
   return prisma.task.update({ where: { id: task.id }, data: { status: 'completed', completedAt: new Date() }, include: { patient: true } })
 })
 
+// Sugerencias de redacción de los campos con chips (SuggestionChips). Son de la práctica, no del
+// paciente: se comparten entre todas sus consultas y dispositivos, por eso viven en el servidor.
+app.get('/api/v1/suggestions', async (request) => {
+  const { fieldKey } = request.query
+  const items = await prisma.suggestionChip.findMany({
+    where: { practiceId: request.practiceId, ...(fieldKey ? { fieldKey } : {}) },
+    orderBy: { createdAt: 'asc' },
+  })
+  return { items }
+})
+
+app.post('/api/v1/suggestions', async (request, reply) => {
+  const { fieldKey, label, text } = request.body || {}
+  if (!fieldKey || !label || !text) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Campo, etiqueta y descripción son obligatorios.', fields: { fieldKey: !fieldKey, label: !label, text: !text } })
+  const chip = await prisma.suggestionChip.upsert({
+    where: { practiceId_fieldKey_label: { practiceId: request.practiceId, fieldKey, label } },
+    create: { practiceId: request.practiceId, fieldKey, label, text },
+    update: { text },
+  })
+  return reply.code(201).send(chip)
+})
+
+app.delete('/api/v1/suggestions/:suggestionId', async (request, reply) => {
+  const chip = await prisma.suggestionChip.findFirst({ where: { id: request.params.suggestionId, practiceId: request.practiceId } })
+  if (!chip) return reply.code(404).send({ code: 'SUGGESTION_NOT_FOUND', message: 'Sugerencia no encontrada.', fields: {} })
+  await prisma.suggestionChip.delete({ where: { id: chip.id } })
+  return reply.code(204).send()
+})
+
 app.get('/api/v1/templates', async (request) => {
   const { type } = request.query
   const templates = await prisma.template.findMany({
@@ -1053,6 +1125,45 @@ app.delete('/api/v1/education-materials/:materialId/attachment', async (request,
     data: { attachmentFileName: null, attachmentStorageKey: null, attachmentFileSize: null, attachmentMime: null },
   })
   return updated
+})
+
+const ingredientImageDir = () => path.resolve(process.env.INGREDIENT_IMAGE_STORAGE_PATH || './storage/ingredients')
+
+// Foto opcional de un ingrediente (útil para los de supermercado). Mismo patrón de data URL que
+// logos/adjuntos. Se sirve pública porque se usa como <img src>, igual que las imágenes de recetas.
+app.post('/api/v1/ingredients/:ingredientId/image', async (request, reply) => {
+  const ingredient = await prisma.ingredient.findFirst({ where: { id: request.params.ingredientId, practiceId: request.practiceId } })
+  if (!ingredient) return reply.code(404).send({ code: 'INGREDIENT_NOT_FOUND', message: 'Ingrediente no encontrado.', fields: {} })
+  const { dataUrl } = request.body || {}
+  const match = typeof dataUrl === 'string' && dataUrl.match(/^data:([a-z/]+);base64,(.+)$/)
+  const ext = match && LOGO_MIME_EXT[match[1]]
+  if (!match || !ext) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen PNG, JPG o WebP.', fields: { dataUrl: true } })
+  const buffer = Buffer.from(match[2], 'base64')
+  if (buffer.byteLength > 3 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La imagen no puede pesar más de 3 MB.', fields: { dataUrl: true } })
+  const storageKey = `${ingredient.id}.${ext}`
+  await mkdir(ingredientImageDir(), { recursive: true })
+  await writeFile(path.join(ingredientImageDir(), storageKey), buffer)
+  return prisma.ingredient.update({ where: { id: ingredient.id }, data: { imageFile: storageKey } })
+})
+
+app.get('/api/v1/ingredients/images/:fileName', async (request, reply) => {
+  const { fileName } = request.params
+  if (!/^[a-z0-9][a-z0-9-]*\.(png|jpg|webp)$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
+  const ext = fileName.split('.').pop()
+  const mime = Object.entries(LOGO_MIME_EXT).find(([, value]) => value === ext)?.[0] || 'application/octet-stream'
+  try {
+    const file = await readFile(path.join(ingredientImageDir(), fileName))
+    return reply.type(mime).header('Cache-Control', 'public, max-age=86400').send(file)
+  } catch {
+    return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
+  }
+})
+
+app.delete('/api/v1/ingredients/:ingredientId/image', async (request, reply) => {
+  const ingredient = await prisma.ingredient.findFirst({ where: { id: request.params.ingredientId, practiceId: request.practiceId } })
+  if (!ingredient) return reply.code(404).send({ code: 'INGREDIENT_NOT_FOUND', message: 'Ingrediente no encontrado.', fields: {} })
+  if (ingredient.imageFile) await unlink(path.join(ingredientImageDir(), ingredient.imageFile)).catch(() => {})
+  return prisma.ingredient.update({ where: { id: ingredient.id }, data: { imageFile: null } })
 })
 
 app.get('/api/v1/ingredients', async (request) => {
@@ -1402,12 +1513,13 @@ app.patch('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados no pueden modificarse.', fields: {} })
-  const { hydrationNote, recommendations } = request.body || {}
+  const { hydrationNote, recommendations, mealTimes } = request.body || {}
   const updated = await prisma.nutritionPlan.update({
     where: { id: plan.id },
     data: {
       ...(hydrationNote !== undefined ? { hydrationNote } : {}),
       ...(recommendations !== undefined ? { recommendations } : {}),
+      ...(mealTimes !== undefined ? { mealTimes: normalizeMealTimes(mealTimes) } : {}),
     },
   })
   await logAudit(request, { action: 'updated', entity: 'NutritionPlan', entityId: updated.id, patientId: plan.patientId, metadata: { section: 'indicaciones' } })
@@ -1473,7 +1585,7 @@ app.put('/api/v1/plans/:planId/distribution', async (request, reply) => {
 
 app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
   const practiceId = request.practiceId
-  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId } }, include: { mealSlots: { include: { recipe: true } } } })
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId } }, include: { mealSlots: { include: { recipe: { include: { ingredients: { include: { ingredient: true } } } } } } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_ALREADY_PUBLISHED', message: 'Este plan ya fue publicado.', fields: {} })
   if (!plan.mealSlots.length) return reply.code(400).send({ code: 'EMPTY_PLAN', message: 'Agrega al menos un tiempo de comida antes de publicar.', fields: {} })
@@ -1481,9 +1593,15 @@ app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
   // Entrega preview and the PDF would then lack the kcal/macro box. Require the calculation.
   if (plan.targetKcal == null || plan.carbsPercent == null) return reply.code(400).send({ code: 'PLAN_WITHOUT_CALCULATION', message: 'Guarda el cálculo de requerimientos en el paso "Plan alimentario" antes de publicar.', fields: {} })
   const menuSnapshot = buildMenuSnapshot(plan.mealSlots)
-  const published = await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'PUBLISHED', publishedAt: new Date(), menuSnapshot } })
+  await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'PUBLISHED', publishedAt: new Date(), menuSnapshot } })
   await logAudit(request, { action: 'published', entity: 'NutritionPlan', entityId: plan.id, patientId: plan.patientId })
-  return published
+  // Publicar deja el PDF listo para entregar. Si la generación falla, el plan ya quedó publicado y
+  // la pantalla de Entrega ofrece "Generar PDF" para reintentarlo.
+  try {
+    const document = await prisma.document.create({ data: { patientId: plan.patientId, consultationId: plan.consultationId, planId: plan.id, type: 'nutrition_plan', sections: { menu: true, macros: true, recommendations: true }, version: 0 } })
+    await generateDocumentFile(document.id, practiceId, request.userId)
+  } catch (error) { request.log.error(error) }
+  return prisma.nutritionPlan.findUnique({ where: { id: plan.id }, include: { documents: true } })
 })
 
 app.post('/api/v1/documents/nutrition-plan', async (request, reply) => {
@@ -1567,7 +1685,7 @@ function drawDocumentBrand(file, subtitle, practice, logoBuffer) {
     file.font('Helvetica').fontSize(9).fillColor(FAINT).text(subtitle, 48, startY + 34, { width: 516 })
   } else {
     drawBrandMark(file, 48, startY + 3, 26)
-    file.font('Helvetica-Bold').fontSize(15).fillColor(INK).text(practice?.name || 'milpa clinical', 84, startY, { width: 480 })
+    file.font('Helvetica-Bold').fontSize(15).fillColor(INK).text(practice?.name || 'Milpa', 84, startY, { width: 480 })
     file.font('Helvetica').fontSize(9).fillColor(FAINT).text(subtitle, 84, startY + 19, { width: 480 })
   }
   file.y = startY + 44
@@ -1585,7 +1703,7 @@ const stringifyEntry = (value) => {
   return value
 }
 const diagnosisLine = (d) => [`${d.code || ''}`, `(${d.domain}) — ${d.problem}`, d.etiology ? `Causa: ${d.etiology}` : null, d.evidence ? `Evidencia: ${d.evidence}` : null].filter(Boolean).join(' ').trim()
-const signatureFor = (user, practice) => [user?.name || practice?.name || 'milpa clinical', user?.specialty || null].filter(Boolean).join(' · ')
+const signatureFor = (user, practice) => [user?.name || practice?.name || 'Milpa', user?.specialty || null].filter(Boolean).join(' · ')
 
 // Una línea de texto corrida (para hechos sueltos como "Nombre: ..." o mensajes "Sin datos…").
 const drawLineText = (file, text, color = MUTED) => { file.font('Helvetica').fontSize(9).fillColor(color).text(text, 48, file.y, { width: 516 }); file.moveDown(0.12) }
@@ -1689,7 +1807,7 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   const goal = summary?.goal || summary?.Objetivo
   const summaryLine = reason || goal
     ? [reason && `Motivo: ${reason}`, goal && `Objetivo: ${goal}`].filter(Boolean).join('   ·   ')
-    : 'Documento generado desde la valoración clínica de milpa clinical.'
+    : 'Documento generado desde la valoración clínica de Milpa · Atención Integral.'
   drawSummaryBox(file, 'Resumen de la consulta', summaryLine)
 
   let sectionIndex = 0
@@ -1796,7 +1914,7 @@ const computeAgeFromBirthDate = (birthDate) => {
   if (now.getUTCMonth() < dob.getUTCMonth() || (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate())) age -= 1
   return age
 }
-const SEX_TEXT = { female: 'Femenino', male: 'Masculino', F: 'Femenino', M: 'Masculino' }
+const SEX_TEXT = { Hombre: 'Hombre', Mujer: 'Mujer', female: 'Mujer', male: 'Hombre', F: 'Mujer', M: 'Hombre' }
 const truthyEntry = ([, value]) => value !== undefined && value !== null && value !== '' && value !== false
 
 function collectRecall(recall) {
@@ -1930,135 +2048,130 @@ function drawRecallTable(file, recall) {
   if (totals.kcal != null) file.font('Helvetica-Bold').fontSize(9).fillColor(PRIMARY).text(`Totales del día: ${totals.kcal} kcal · Proteína ${totals.protein ?? 0} g · Carbohidratos ${totals.carbs ?? 0} g · Grasas ${totals.fat ?? 0} g`, 48, file.y, { width: 516 })
 }
 
-function drawNutritionPlanMenu(file, document, practice, user, logoBuffer) {
-  const plan = document.plan
-  drawDocumentBrand(file, 'PLAN DE ALIMENTACIÓN', practice, logoBuffer)
-  file.fontSize(18).fillColor('#1c232f').text('Menú semanal')
-  file.fontSize(10).fillColor('#6e6e73').text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
-  file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`)
-  if (plan?.goal) file.text(`Objetivo: ${plan.goal}`)
-  file.moveDown()
-
-  if (plan?.targetKcal) {
-    const macros = computeMacros({ kcal: plan.targetKcal, carbsPercent: plan.carbsPercent, proteinPercent: plan.proteinPercent, fatPercent: plan.fatPercent })
-    file.roundedRect(48, file.y, 516, 70, 6).fill(TINT)
-    file.font('Helvetica-Bold').fontSize(11).fillColor(PRIMARY).text(`Requerimiento: ${plan.targetKcal} kcal/día`, 62, file.y + 14)
-    file.font('Helvetica').fontSize(9).fillColor(MUTED).text(`Carbohidratos ${macros.macros.carbs.grams} g · Proteína ${macros.macros.protein.grams} g · Grasas ${macros.macros.fat.grams} g`, 62, file.y + 33, { width: 480 })
-    // Tight gap: landscape has less vertical room than portrait, and a larger advance pushed the
-    // footer onto a second page.
-    file.y += 80
+// Menú del plan con todo lo que el PDF dibuja de cada receta (foto, ingredientes, equivalentes).
+// Publicado: se lee el snapshot congelado; los planes publicados antes de que el snapshot guardara
+// esos campos, y los borradores (vista previa), se completan con la receta viva.
+async function loadPlanMenu(plan) {
+  const snapshot = Array.isArray(plan.menuSnapshot) ? plan.menuSnapshot : []
+  if (plan.status === 'PUBLISHED' && snapshot.length && snapshot.every((entry) => Array.isArray(entry.ingredients))) {
+    // La foto es lo único que no se congela: si la receta recibe (o cambia) su foto después de
+    // publicar, el plan la muestra al regenerarse.
+    const photos = await prisma.recipe.findMany({ where: { id: { in: snapshot.map((entry) => entry.recipeId).filter(Boolean) } }, select: { id: true, imageFile: true } })
+    return snapshot.map((entry) => ({ ...entry, imageFile: photos.find((recipe) => recipe.id === entry.recipeId)?.imageFile || entry.imageFile || null }))
   }
-
-  const menu = plan?.menuSnapshot || []
-  if (!menu.length) {
-    file.fillColor(MUTED).fontSize(10).text('Este plan no tiene recetas asignadas.')
-    file.fillColor(FAINT).fontSize(9).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
-    return
+  const recipeInclude = { ingredients: { include: { ingredient: true } } }
+  if (plan.status === 'PUBLISHED' && snapshot.length) {
+    const recipes = await prisma.recipe.findMany({ where: { id: { in: snapshot.map((entry) => entry.recipeId).filter(Boolean) } }, include: recipeInclude })
+    const live = buildMenuSnapshot(snapshot.map((entry) => ({ ...entry, recipe: recipes.find((recipe) => recipe.id === entry.recipeId) || null })))
+    // El nombre y las kcal congelados mandan sobre los de la receta viva.
+    return live.map((entry) => { const frozen = snapshot.find((item) => item.dayOfWeek === entry.dayOfWeek && item.mealType === entry.mealType); return { ...entry, recipeName: frozen?.recipeName || entry.recipeName, kcal: frozen?.kcal ?? entry.kcal } })
   }
-
-  // Weekly table (tiempos de comida × días) replicating the on-screen "Vista previa del plan"
-  // (`.paper-week`): clean white rows, thin separators, centered full recipe names + kcal per
-  // cell. Landscape page gives each day column enough width that names aren't truncated.
-  const DAY_SHORT = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom' }
-  const DAYS = [1, 2, 3, 4, 5, 6, 7]
-  const byKey = new Map()
-  for (const entry of menu) byKey.set(`${entry.dayOfWeek}|${entry.mealType}`, entry)
-
-  const pageW = 792
-  const x0 = 40
-  const contentW = pageW - 80
-  const colTime = 64
-  const colW = (contentW - colTime) / DAYS.length
-  const headerH = 22
-  const rowH = 48
-
-  const headerY = file.y
-  file.font('Helvetica').fontSize(7).fillColor('#8b8d9c')
-  file.text('Tiempo', x0 + 6, headerY + 7, { width: colTime - 12 })
-  DAYS.forEach((day, i) => {
-    // Use headerY (snapshot), not file.y: pdfkit advances the cursor on every text() call, so
-    // reading file.y again would stack the day labels vertically instead of one header row.
-    file.text(DAY_SHORT[day], x0 + colTime + i * colW + 2, headerY + 7, { width: colW - 4, align: 'center' })
-  })
-  file.moveTo(x0, headerY + headerH - 2).lineTo(x0 + contentW, headerY + headerH - 2).strokeColor('#dbe9df').stroke()
-  file.y = headerY + headerH
-
-  // Wrap a recipe name to at most `maxLines` lines within the cell, measuring with the real font.
-  const wrapName = (name, maxLines) => {
-    const maxW = colW - 8
-    const words = String(name).split(' ')
-    const lines = []
-    let current = ''
-    for (const word of words) {
-      const candidate = current ? `${current} ${word}` : word
-      if (file.widthOfString(candidate, { fontSize: 6 }) <= maxW) current = candidate
-      else { if (current) lines.push(current); current = word }
-    }
-    if (current) lines.push(current)
-    const shown = lines.slice(0, maxLines)
-    if (lines.length > maxLines) shown[maxLines - 1] = `${shown[maxLines - 1]}…`
-    return shown
-  }
-
-  MEAL_TYPE_ORDER.forEach((mealType, mi) => {
-    const rowY = file.y
-    file.font('Helvetica-Bold').fontSize(6).fillColor('#202137')
-    file.text(MEAL_TYPE_LABELS[mealType] || mealType, x0 + 6, rowY + 7, { width: colTime - 12 })
-    DAYS.forEach((day, i) => {
-      const cx = x0 + colTime + i * colW
-      const entry = byKey.get(`${day}|${mealType}`)
-      if (entry) {
-        const lines = wrapName(entry.recipeName, 3)
-        file.font('Helvetica-Bold').fontSize(6).fillColor('#202137')
-        lines.forEach((ln, li) => file.text(ln, cx + 4, rowY + 5 + li * 8.5, { width: colW - 8, align: 'center' }))
-        file.font('Helvetica').fontSize(5.5).fillColor('#8d8f9b')
-        file.text(`${entry.kcal} kcal`, cx + 4, rowY + rowH - 11, { width: colW - 8, align: 'center' })
-      } else {
-        file.font('Helvetica').fontSize(6).fillColor('#c3c4cb')
-        file.text('—', cx + colW / 2 - 2, rowY + rowH / 2 - 4, { width: 4 })
-      }
-    })
-    file.moveTo(x0, rowY + rowH).lineTo(x0 + contentW, rowY + rowH).strokeColor('#eef2ee').stroke()
-    file.y = rowY + rowH
-  })
-
-  // No moveDown here: in landscape the bottom margin is tight and even a small advance pushed
-  // the footer onto a second, almost-empty page. Also pass an explicit width: pdfkit persists the
-  // last text() width/x, so a bare { align: 'center' } after the cell loop inherited the last
-  // cell's narrow box and pinned the footer to the far right.
-  file.fillColor(FAINT).fontSize(9).text(signatureFor(user, practice), x0, file.y, { width: contentW, align: 'center' })
+  const mealSlots = await prisma.mealSlot.findMany({ where: { planId: plan.id }, include: { recipe: { include: recipeInclude } } })
+  return buildMenuSnapshot(mealSlots)
 }
 
-app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
-  const practiceId = request.practiceId
-  const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } }, include: { patient: true, consultation: { include: { measurements: true, diagnoses: true, sections: true } }, plan: true } })
-  if (!document) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
+// Reúne lo que necesita drawNutritionPlan: lo asíncrono (archivos de fotos, medición más reciente)
+// se resuelve aquí porque el dibujo con pdfkit es síncrono.
+async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) {
+  const menu = await loadPlanMenu(plan)
+  const imageDirectory = recipeImageDir()
+  const images = new Map()
+  for (const imageFile of new Set(menu.map((entry) => entry.imageFile).filter(Boolean))) {
+    // Mismo patrón estricto que la ruta pública de fotos: el nombre viene de la base, pero no debe
+    // poder salir de la carpeta.
+    if (!/^[a-z0-9][a-z0-9-]*\.jpg$/.test(imageFile)) continue
+    try { images.set(imageFile, await readFile(path.join(imageDirectory, imageFile))) } catch { /* foto faltante: la celda sale sin ella */ }
+  }
+  const measurement = await prisma.measurement.findFirst({ where: { patientId: patient.id, weightKg: { not: null } }, orderBy: { measuredAt: 'desc' } })
+  return {
+    patientName: `${patient.firstName} ${patient.lastName}`.trim(),
+    nutritionistName: user?.name || practice?.name || '',
+    weightKg: measurement?.weightKg != null ? Number(measurement.weightKg) : null,
+    bodyFatPercent: measurement?.bodyFatPercent != null ? Number(measurement.bodyFatPercent) : null,
+    muscleMassKg: measurement?.muscleMassKg != null ? Number(measurement.muscleMassKg) : null,
+    menu,
+    mealTimes: plan.mealTimes,
+    recommendations: plan.recommendations,
+    hydrationNote: plan.hydrationNote,
+    licenseNumber: user?.licenseNumber || null,
+    contact: [{ kind: 'phone', text: user?.phone }, { kind: 'address', text: practice?.address }, { kind: 'email', text: user?.email }].filter((item) => item.text),
+    logo: logoBuffer,
+    images,
+  }
+}
+
+async function loadPracticeBranding(practiceId, userId) {
   const [practice, user] = await Promise.all([
     prisma.practice.findUnique({ where: { id: practiceId } }),
-    prisma.user.findUnique({ where: { id: request.userId } }),
+    prisma.user.findUnique({ where: { id: userId } }),
   ])
   let logoBuffer = null
   if (practice?.logoUrl) {
     try { logoBuffer = await readFile(path.join(path.resolve(process.env.LOGO_STORAGE_PATH || './storage/logos'), practice.logoUrl)) }
     catch { logoBuffer = null }
   }
-  const pdf = await new Promise((resolve, reject) => {
+  return { practice, user, logoBuffer }
+}
+
+// El plan de alimentación va en carta apaisada y con margen 0: su tabla se posiciona a mano y parte
+// las filas entre hojas (ver server/domain/planPdf.js).
+function renderNutritionPlanPdf(planData) {
+  return new Promise((resolve, reject) => {
     const chunks = []
-    // The weekly menu needs horizontal room for 7 full recipe names (matching the on-screen
-    // preview), so it renders landscape; the clinical documents stay portrait.
-    const file = document.type === 'nutrition_plan'
-      ? new PDFDocument({ size: 'LETTER', layout: 'landscape', margin: 40 })
-      : new PDFDocument({ size: 'LETTER', margin: 48 })
+    const file = new PDFDocument({ size: 'LETTER', layout: 'landscape', margin: 0 })
     file.on('data', (chunk) => chunks.push(chunk))
     file.on('end', () => resolve(Buffer.concat(chunks)))
     file.on('error', reject)
-    if (document.type === 'nutrition_plan') drawNutritionPlanMenu(file, document, practice, user, logoBuffer)
-    else if (document.type === 'consultation_export') drawConsultationExport(file, document, practice, user, logoBuffer)
-    else if (document.type === 'consultation_clinical') drawClinicalReport(file, document, practice, user, logoBuffer)
-    else drawConsultationReport(file, document, practice, user, logoBuffer)
+    drawNutritionPlan(file, planData)
     file.end()
   })
-  const directory = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents'); await mkdir(directory, { recursive: true }); const fileName = `${document.id}-v${document.version + 1}.pdf`; const filePath = path.join(directory, fileName); await writeFile(filePath, pdf); const checksum = createHash('sha256').update(pdf).digest('hex'); const generated = await prisma.document.update({ where: { id: document.id }, data: { generatedAt: new Date(), version: { increment: 1 }, checksum, storageKey: fileName } }); return { ...generated, downloadUrl: `/api/v1/documents/${document.id}/download` }
+}
+
+// Genera (o regenera) el archivo PDF de un documento y lo deja guardado con una versión nueva.
+async function generateDocumentFile(documentId, practiceId, userId) {
+  const document = await prisma.document.findFirst({ where: { id: documentId, patient: { practiceId } }, include: { patient: true, consultation: { include: { measurements: true, diagnoses: true, sections: true } }, plan: true } })
+  if (!document) return null
+  const { practice, user, logoBuffer } = await loadPracticeBranding(practiceId, userId)
+  let pdf
+  if (document.type === 'nutrition_plan') {
+    pdf = await renderNutritionPlanPdf(await loadNutritionPlanData(document.plan, document.patient, practice, user, logoBuffer))
+  } else {
+    pdf = await new Promise((resolve, reject) => {
+      const chunks = []
+      const file = new PDFDocument({ size: 'LETTER', margin: 48 })
+      file.on('data', (chunk) => chunks.push(chunk))
+      file.on('end', () => resolve(Buffer.concat(chunks)))
+      file.on('error', reject)
+      if (document.type === 'consultation_export') drawConsultationExport(file, document, practice, user, logoBuffer)
+      else if (document.type === 'consultation_clinical') drawClinicalReport(file, document, practice, user, logoBuffer)
+      else drawConsultationReport(file, document, practice, user, logoBuffer)
+      file.end()
+    })
+  }
+  const directory = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents')
+  await mkdir(directory, { recursive: true })
+  const fileName = `${document.id}-v${document.version + 1}.pdf`
+  await writeFile(path.join(directory, fileName), pdf)
+  const checksum = createHash('sha256').update(pdf).digest('hex')
+  const generated = await prisma.document.update({ where: { id: document.id }, data: { generatedAt: new Date(), version: { increment: 1 }, checksum, storageKey: fileName } })
+  return { ...generated, downloadUrl: `/api/v1/documents/${document.id}/download` }
+}
+
+// Vista previa del plan: el mismo PDF que se entrega, generado al vuelo y sin guardarse, para que
+// la pantalla de Entrega muestre exactamente lo que recibirá la paciente — también en borrador.
+app.get('/api/v1/plans/:planId/preview-pdf', async (request, reply) => {
+  const practiceId = request.practiceId
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId } }, include: { patient: true } })
+  if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
+  const { practice, user, logoBuffer } = await loadPracticeBranding(practiceId, request.userId)
+  const pdf = await renderNutritionPlanPdf(await loadNutritionPlanData(plan, plan.patient, practice, user, logoBuffer))
+  return reply.type('application/pdf').header('Content-Disposition', 'inline; filename="plan-de-alimentacion.pdf"').header('Cache-Control', 'no-store').send(pdf)
+})
+
+app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
+  const generated = await generateDocumentFile(request.params.documentId, request.practiceId, request.userId)
+  if (!generated) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
+  return generated
 })
 
 app.get('/api/v1/documents/:documentId/download', async (request, reply) => { const practiceId = request.practiceId; const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } }); if (!document?.storageKey) return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'Genera el documento antes de descargarlo.', fields: {} }); const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey); const file = await readFile(filePath); return reply.type('application/pdf').header('Content-Disposition', `attachment; filename="${document.storageKey}"`).send(file) })

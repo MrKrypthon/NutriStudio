@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { patientsApi } from '../../lib/api.js'
+import { normalizeSex, sexLabel } from '../../lib/sex.js'
 
 const patients = [
-  ['MT', 'Mariana Torres', '28 años · Femenino', 'Hoy, 09:00', 'Primera consulta', 'coral', null],
-  ['DR', 'Diego Ramírez', '34 años · Masculino', 'Hoy, 10:30', 'Seguimiento', 'blue', null],
-  ['SH', 'Sofía Hernández', '31 años · Femenino', 'Hoy, 12:00', 'Por confirmar', 'purple', null],
-  ['JC', 'Jorge Castillo', '42 años · Masculino', '28 ago, 16:30', 'Control rápido', 'yellow', null],
-  ['AR', 'Ana Rodríguez', '26 años · Femenino', 'Sin cita', 'Plan pendiente', 'coral', null],
+  ['MT', 'Mariana Torres', '28 años · Mujer', 'Hoy, 09:00', 'Primera consulta', 'coral', null],
+  ['DR', 'Diego Ramírez', '34 años · Hombre', 'Hoy, 10:30', 'Seguimiento', 'blue', null],
+  ['SH', 'Sofía Hernández', '31 años · Mujer', 'Hoy, 12:00', 'Por confirmar', 'purple', null],
+  ['JC', 'Jorge Castillo', '42 años · Hombre', '28 ago, 16:30', 'Control rápido', 'yellow', null],
+  ['AR', 'Ana Rodríguez', '26 años · Mujer', 'Sin cita', 'Plan pendiente', 'coral', null],
 ]
 
 const APPOINTMENT_TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia', BLOCK: 'Bloqueo' }
@@ -57,7 +58,7 @@ function describeEvent(event) {
   return { icon: '▧', label: `${DOCUMENT_TYPE_LABELS[event.subtype] || 'Documento'} · ${DOCUMENT_STATUS_LABELS[event.status] || event.status}` }
 }
 
-const emptyEditForm = (patient) => ({ firstName: patient?.firstName || '', lastName: patient?.lastName || '', email: patient?.email || '', phone: patient?.phone || '', birthDate: patient?.birthDate ? patient.birthDate.slice(0, 10) : '', sex: patient?.sex || 'Femenino', occupation: patient?.occupation || '' })
+const emptyEditForm = (patient) => ({ firstName: patient?.firstName || '', lastName: patient?.lastName || '', email: patient?.email || '', phone: patient?.phone || '', birthDate: patient?.birthDate ? patient.birthDate.slice(0, 10) : '', sex: normalizeSex(patient?.sex) || 'Mujer', occupation: patient?.occupation || '' })
 
 export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient, onNewAppointment }) {
   const [rows, setRows] = useState(patients)
@@ -79,7 +80,7 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
     const isNoNext = statusFilter === 'NO_NEXT'
     patientsApi.list(`?status=${isNoNext ? 'ACTIVE' : statusFilter}${isNoNext ? '&noNext=1' : ''}`)
       .then((payload) => {
-        setRows(payload?.items?.length ? payload.items.map((p, i) => [p.firstName.slice(0, 1) + p.lastName.slice(0, 1), `${p.firstName} ${p.lastName}`, `${p.sex || 'Paciente'}`, p.nextAppointmentAt ? formatNextAppointment(p.nextAppointmentAt) : '—', p.nextAppointmentAt ? (APPOINTMENT_TYPE_LABELS[p.nextAppointmentType] || p.nextAppointmentType) : 'Sin cita próxima', ['coral', 'blue', 'purple', 'yellow'][i % 4], p.id, p]) : [])
+        setRows(payload?.items?.length ? payload.items.map((p, i) => [p.firstName.slice(0, 1) + p.lastName.slice(0, 1), `${p.firstName} ${p.lastName}`, `${sexLabel(p.sex) || 'Paciente'}`, p.nextAppointmentAt ? formatNextAppointment(p.nextAppointmentAt) : '—', p.nextAppointmentAt ? (APPOINTMENT_TYPE_LABELS[p.nextAppointmentType] || p.nextAppointmentType) : 'Sin cita próxima', ['coral', 'blue', 'purple', 'yellow'][i % 4], p.id, p]) : [])
         setStatus('online')
       })
       .catch(() => setStatus('demo'))
@@ -134,7 +135,7 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
     setEditError('')
     try {
       const updated = await patientsApi.update(selected[6], editForm)
-      const nextRow = [updated.firstName.slice(0, 1) + updated.lastName.slice(0, 1), `${updated.firstName} ${updated.lastName}`, `${updated.sex || 'Paciente'}`, selected[3], selected[4], selected[5], selected[6], updated]
+      const nextRow = [updated.firstName.slice(0, 1) + updated.lastName.slice(0, 1), `${updated.firstName} ${updated.lastName}`, `${sexLabel(updated.sex) || 'Paciente'}`, selected[3], selected[4], selected[5], selected[6], updated]
       setRows((prev) => prev.map((row) => (row[6] === selected[6] ? nextRow : row)))
       setSelected(nextRow)
       setEditing(false)
@@ -190,7 +191,7 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
         <label>Nombre(s)<input value={editForm.firstName} onChange={(e) => updateField('firstName', e.target.value)} required /></label>
         <label>Apellidos<input value={editForm.lastName} onChange={(e) => updateField('lastName', e.target.value)} required /></label>
         <label>Fecha de nacimiento<input type="date" value={editForm.birthDate} onChange={(e) => updateField('birthDate', e.target.value)} /></label>
-        <label>Sexo<select value={editForm.sex} onChange={(e) => updateField('sex', e.target.value)}><option>Femenino</option><option>Masculino</option><option>Prefiero no decirlo</option></select></label>
+        <label>Sexo<select value={editForm.sex} onChange={(e) => updateField('sex', e.target.value)}><option>Hombre</option><option>Mujer</option></select></label>
         <label>Email<input type="email" value={editForm.email} onChange={(e) => updateField('email', e.target.value)} /></label>
         <label>Teléfono<input value={editForm.phone} onChange={(e) => updateField('phone', e.target.value)} /></label>
         <label>Ocupación<input value={editForm.occupation} onChange={(e) => updateField('occupation', e.target.value)} /></label>

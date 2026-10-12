@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import Icon from './Icon.jsx'
 import { bodyComposition, bodyFatEstimates, somatotype, theoreticalWeights } from '../lib/anthropometry.js'
+import { isFemaleSex, isMaleSex } from '../lib/sex.js'
 
 // Módulo antropométrico con el menú superior y el submenú de tipos al estilo de las capturas
 // (Mediciones / Cálculos / Somatocarta / Notas / Fotos). El cálculo de calorías se movió a
@@ -38,7 +39,7 @@ const GROUP_FIELDS = {
     F('Grasa en sección superior', 'Grasa superior (%)', '%'),
     F('Grasa en sección inferior', 'Grasa inferior (%)', '%'),
     F('Grasa visceral', 'Grasa visceral', 'rating'),
-    F('Masa libre de grasa', 'Masa libre de grasa (kg)', 'kg'),
+    { ...F('Masa libre de grasa', 'Masa libre de grasa (kg)', 'kg'), computed: 'fatFreeKg' },
     { ...F('Masa muscular', 'Kg de músculo', 'kg'), derived: 'musclePct' },
     F('Peso óseo', 'Peso óseo (kg)', 'kg'),
     F('Agua corporal', 'Agua corporal (%)', '%'),
@@ -78,7 +79,7 @@ const num = (value) => { const n = Number(value); return Number.isFinite(n) && n
 
 // Indicadores de Frisancho (apoyo): clasifica los valores frente a rangos de referencia adulto.
 const frisanchoRows = (values, sex) => {
-  const female = String(sex || '').toLowerCase().startsWith('fem')
+  const female = isFemaleSex(sex)
   const fold = (a, b) => (num(values[a]) && num(values[b]) ? num(values[a]) + num(values[b]) : null)
   const classify = (value, low, high) => value == null ? ['—', ''] : value < low ? ['Bajo', 'low'] : value > high ? ['Alto', 'high'] : ['Normal', 'ok']
   const mk = (label, raw, low, high, unit) => { const [band, tone] = classify(raw, low, high); return { label, value: raw != null ? `${Math.round(raw * 10) / 10} ${unit}` : null, band, tone } }
@@ -171,8 +172,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   const selectType = (key) => { setType(key); const first = GROUP_FIELDS[key]?.[0]; if (first) setActiveField(first.key) }
 
   // El embarazo y su IMC sólo aplican a pacientes mujeres: en hombres no se muestran.
-  const sexKey = String(patientSex || '').trim().toLowerCase()
-  const isMale = sexKey === 'm' || sexKey.startsWith('masc') || sexKey === 'male' || sexKey.startsWith('hombre')
+  const isMale = isMaleSex(patientSex)
 
   const peso = num(values['Peso (kg)'])
   const talla = num(values['Talla (cm)'])
@@ -180,14 +180,20 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   const category = imc ? imcCategory(imc) : null
   const markerPct = imc ? Math.min(100, Math.max(0, ((imc - 4) / (40 - 4)) * 100)) : 0
 
+  // Masa libre de grasa = peso total − masa grasa (peso × %grasa). Se calcula sola a partir de la
+  // bioimpedancia, así que se muestra de sólo lectura en lugar de capturarse a mano.
+  const fatPct = num(values['% Grasa corporal'])
+  const fatFreeKg = peso && fatPct ? peso * (1 - fatPct / 100) : null
+
   const renderField = (field, index) => {
-    const value = values[field.key] ?? ''
+    const computed = field.computed === 'fatFreeKg'
+    const value = computed ? (fatFreeKg != null ? fatFreeKg.toFixed(1) : '') : (values[field.key] ?? '')
     let derived = null
     if (field.derived === 'fatKg' && peso && num(value)) derived = `${((peso * Number(value)) / 100).toFixed(1)} kg`
     if (field.derived === 'musclePct' && peso && num(value)) derived = `${((Number(value) / peso) * 100).toFixed(0)} %`
-    return <div className={'anthro-field' + (activeField === field.key ? ' active' : '')} key={field.key + index}>
+    return <div className={'anthro-field' + (computed ? ' anthro-field-computed' : '') + (activeField === field.key ? ' active' : '')} key={field.key + index}>
       <span className="anthro-field-label">{field.label}</span>
-      <input className="anthro-field-input" type="number" step="0.1" value={value} onFocus={() => setActiveField(field.key)} onChange={(event) => onFieldChange?.(field.key, event.target.value)} />
+      <input className="anthro-field-input" type="number" step="0.1" value={value} readOnly={computed} title={computed ? 'Se calcula como peso total − masa grasa' : undefined} onFocus={() => setActiveField(field.key)} onChange={(event) => { if (!computed) onFieldChange?.(field.key, event.target.value) }} />
       <span className="anthro-unit">{field.unit}</span>
       <span className="anthro-derived">{derived || ''}</span>
     </div>
@@ -244,7 +250,6 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
     const fat = bodyFatEstimates(values, { sex: patientSex })
     const composition = bodyComposition(values, { sex: patientSex, fatPercent: fat.average })
     const weights = theoreticalWeights(values['Talla (cm)'], patientSex)
-    const maxFat = Math.max(1, ...fat.rows.filter((r) => r.value != null).map((r) => r.value))
     const totalPct = composition.parts.reduce((a, p) => a + (p.pct || 0), 0) || 1
     let acc = 0
     const stops = composition.parts.filter((p) => p.pct).map((p) => { const from = acc; acc += (p.pct / totalPct) * 100; return `${p.color} ${from}% ${acc}%` })
@@ -256,14 +261,13 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
         <h2 className="anthro-title"><Icon>{calcTypes.find((t) => t[0] === activeKey)?.[2]}</Icon>{calcTypes.find((t) => t[0] === activeKey)?.[1]}</h2>
 
         {activeKey === 'grasa' && <>
-          <p className="anthro-hint">Estimaciones a partir de los pliegues capturados en Mediciones. El promedio reúne las fórmulas con datos disponibles.</p>
+          <p className="anthro-hint">Estimaciones a partir de los pliegues capturados en Mediciones.</p>
           <div className="calc-table">
-            <div className="calc-table-head"><span>Autor</span><span>Resultado</span></div>
+            <div className="calc-table-head"><span>Autor</span><span className="calc-result-head"><span>Resultado</span><span className="calc-scale"><span>0%</span><span>100%</span></span></span></div>
             {fat.rows.map((r) => <div className="calc-table-row" key={r.label}>
               <span className="calc-table-name">{r.label}<small>{r.detail}</small></span>
-              <span className="calc-table-value">{r.value != null ? `${r.value} %` : '—'}{r.value != null && <i style={{ width: `${Math.min(100, (r.value / maxFat) * 100)}%` }} />}</span>
+              <span className="calc-table-value">{r.value != null ? `${r.value} %` : '—'}<span className="calc-bar"><i style={{ width: `${r.value != null ? Math.min(100, Math.max(0, r.value)) : 0}%` }} /></span></span>
             </div>)}
-            <div className="calc-table-row total"><span className="calc-table-name"><b>Promedio</b></span><span className="calc-table-value"><b>{fat.average != null ? `${fat.average} %` : '—'}</b></span></div>
           </div>
         </>}
 

@@ -33,7 +33,7 @@ export default function SettingsPage({ setActive }) {
   const [loadState, setLoadState] = useState('loading')
   const [practiceName, setPracticeName] = useState('')
   const [practiceId, setPracticeId] = useState('')
-  const [form, setForm] = useState({ timeZone: 'America/Mexico_City', userName: '', userEmail: '', userSpecialty: '', userPhone: '', businessHours: DEFAULT_HOURS })
+  const [form, setForm] = useState({ timeZone: 'America/Mexico_City', userName: '', userEmail: '', userSpecialty: '', userPhone: '', userLicenseNumber: '', address: '', businessHours: DEFAULT_HOURS })
   const [saveState, setSaveState] = useState('idle')
   const [error, setError] = useState('')
   const [logoState, setLogoState] = useState('idle')
@@ -60,6 +60,8 @@ export default function SettingsPage({ setActive }) {
           userEmail: practice.user?.email || '',
           userSpecialty: practice.user?.specialty || '',
           userPhone: practice.user?.phone || '',
+          userLicenseNumber: practice.user?.licenseNumber || '',
+          address: practice.address || '',
           businessHours: practice.businessHours || DEFAULT_HOURS,
         })
         setLoadState('ready')
@@ -157,6 +159,8 @@ export default function SettingsPage({ setActive }) {
             <label>Especialidad<input value={form.userSpecialty} onChange={(e) => update('userSpecialty', e.target.value)} placeholder="Ej. Nutrióloga clínica" /></label>
             <label>Email de trabajo<input value={form.userEmail} onChange={(e) => update('userEmail', e.target.value)} /></label>
             <label>Teléfono<input value={form.userPhone} onChange={(e) => update('userPhone', e.target.value)} placeholder="Ej. +52 55 1234 5678" /></label>
+            <label>Cédula profesional<input value={form.userLicenseNumber} onChange={(e) => update('userLicenseNumber', e.target.value)} placeholder="Ej. 1489853" /></label>
+            <label>Dirección del consultorio<input value={form.address} onChange={(e) => update('address', e.target.value)} placeholder="Ej. C. 131 x 146, Fracc. Los Héroes" /></label>
           </div>
         </div>
         <div className="panel settings-card" ref={sectionRefs.identity}>

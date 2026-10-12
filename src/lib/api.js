@@ -90,6 +90,13 @@ export const patientsApi = {
   saveSection: (id, sectionKey, payload, updatedAt, options = {}) => apiRequest(`/patients/${id}/sections/${sectionKey}`, { method: 'PUT', body: JSON.stringify({ payload, updatedAt }), ...options }),
 }
 
+// Sugerencias de redacción de los campos con chips (SuggestionChips), compartidas por la práctica.
+export const suggestionsApi = {
+  list: (fieldKey) => apiRequest(`/suggestions?fieldKey=${encodeURIComponent(fieldKey)}`),
+  create: (payload) => apiRequest('/suggestions', { method: 'POST', body: JSON.stringify(payload) }),
+  remove: (id) => apiRequest(`/suggestions/${id}`, { method: 'DELETE' }),
+}
+
 export const appointmentsApi = {
   list: (from, to) => apiRequest(`/appointments?from=${from}&to=${to}`),
   create: (payload) => apiRequest('/appointments', { method: 'POST', body: JSON.stringify(payload) }),
@@ -132,6 +139,8 @@ export const plansApi = {
   evaluate: (id, payload) => apiRequest(`/plans/${id}/evaluation`, { method: 'PUT', body: JSON.stringify(payload) }),
   saveDistribution: (id, mealSlots) => apiRequest(`/plans/${id}/distribution`, { method: 'PUT', body: JSON.stringify({ mealSlots }) }),
   publish: (id) => apiRequest(`/plans/${id}/publish`, { method: 'POST' }),
+  // El PDF del plan tal como se entregará (también en borrador); requiere sesión, por eso es Blob.
+  previewPdfBlob: (id) => downloadBlobRequest(`/plans/${id}/preview-pdf`, 'No se pudo cargar la vista previa.'),
   adequacy: (id) => apiRequest(`/plans/${id}/adequacy`),
   cancel: (id) => apiRequest(`/plans/${id}/cancel`, { method: 'POST' }),
   reactivate: (id) => apiRequest(`/plans/${id}/reactivate`, { method: 'POST' }),
@@ -197,6 +206,8 @@ export const recipesApi = {
   // Imported cookbook recipes store only the file name (see prisma/import-recetario.js); build
   // the public URL here so the same relative API base works in dev and production.
   imageUrl: (file) => (file ? `${API_BASE}/recipes/images/${file}` : null),
+  uploadImage: (id, dataUrl) => apiRequest(`/recipes/${id}/image`, { method: 'POST', body: JSON.stringify({ dataUrl }) }),
+  removeImage: (id) => apiRequest(`/recipes/${id}/image`, { method: 'DELETE' }),
 }
 
 export const educationApi = {
@@ -214,6 +225,9 @@ export const ingredientsApi = {
   list: (query = '') => apiRequest(`/ingredients${query}`),
   import: (payload) => apiRequest('/ingredients/import', { method: 'POST', body: JSON.stringify(payload) }),
   create: (payload) => apiRequest('/ingredients', { method: 'POST', body: JSON.stringify(payload) }),
+  imageUrl: (file) => (file ? `${API_BASE}/ingredients/images/${file}` : null),
+  uploadImage: (id, dataUrl) => apiRequest(`/ingredients/${id}/image`, { method: 'POST', body: JSON.stringify({ dataUrl }) }),
+  removeImage: (id) => apiRequest(`/ingredients/${id}/image`, { method: 'DELETE' }),
 }
 
 export const foodApi = {

@@ -73,6 +73,8 @@ model Practice {
   locale             String              @default("es-MX")
   defaultPalette     String              @default("minimal")
   logoUrl            String?
+  // Dirección del consultorio; sale en el pie del plan de alimentación entregado.
+  address            String?
   businessHours      Json?
   // Tarifas por tipo de cita, en centavos: { INITIAL, FOLLOW_UP, QUICK_CONTROL, EMERGENCY }.
   fees               Json?
@@ -91,6 +93,7 @@ model Practice {
   templates          Template[]
   educationMaterials EducationMaterial[]
   financeEntries     FinanceEntry[]
+  suggestionChips    SuggestionChip[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 }
@@ -104,6 +107,8 @@ model User {
   passwordHash   String
   specialty      String?
   phone          String?
+  // Cédula profesional; sale en el encabezado del plan de alimentación entregado.
+  licenseNumber  String?
   role           UserRole        @default(NUTRITIONIST)
   status         RecordStatus    @default(ACTIVE)
   consultations  Consultation[]
@@ -318,6 +323,9 @@ model NutritionPlan {
   fatPercent      Decimal?     @db.Decimal(5, 2)
   evaluation      Json?
   menuSnapshot    Json?
+  // Hora de cada tiempo de comida, "HH:MM" por clave (breakfast, lunch, snack, snack2, dinner); sale junto
+  // al nombre del tiempo en el plan entregado.
+  mealTimes       Json?
   hydrationNote   String?
   recommendations String?
   publishedAt     DateTime?
@@ -408,6 +416,7 @@ model Ingredient {
   unit        String
   nutrition   Json
   equivalence Json?
+  imageFile   String?
   status      RecordStatus       @default(ACTIVE)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
@@ -519,4 +528,20 @@ model AdminUser {
   passwordHash String
   name         String
   createdAt    DateTime @default(now())
+}
+
+// Sugerencias de redacción que la nutrióloga guarda con "+ Agregar" en los campos con chips del
+// expediente. Son atajos por campo (`fieldKey`), compartidos por toda la práctica — no son datos
+// del paciente, por eso viven aquí y no dentro de la consulta.
+model SuggestionChip {
+  id         String   @id @default(uuid())
+  practiceId String
+  practice   Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  fieldKey   String
+  label      String
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@unique([practiceId, fieldKey, label])
+  @@index([practiceId, fieldKey])
 }

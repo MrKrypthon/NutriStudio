@@ -3,6 +3,7 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { patientsApi } from '../../lib/api.js'
 import { usePatient } from '../../lib/usePatient.js'
+import { sexLabel } from '../../lib/sex.js'
 
 const STATUS_LABELS = { IN_PROGRESS: 'En progreso', COMPLETED: 'Completada', DRAFT: 'Borrador' }
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
@@ -40,7 +41,7 @@ export default function ConsultationsPage({ setActive, patientId, onSelectPatien
 
   return <AppChrome active="Consultas" setActive={setActive}><div className="content consultation-content">
     <ModuleHeader eyebrow="CONSULTAS · SESIÓN DE HOY" title="Nueva sesión" subtitle="Registra la consulta y crea el siguiente paso para tu paciente." action={selectedIsReal ? <button className="secondary" onClick={() => historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Historial de sesiones</button> : undefined} />
-    <div className="session-selector panel"><span className="person-avatar coral">{patientInitials}</span><div><p className="eyebrow">PACIENTE</p><b>{patient}</b><small>{selectedIsReal ? `${patientRecord?.sex || 'Paciente'}${lastSession ? ` · Última consulta: ${formatUTCDate(lastSession.startedAt || lastSession.createdAt)}` : ' · Sin consultas previas'}` : 'Elige a quién vas a atender'}</small></div><label className="patient-switch">Paciente<select value={selectedIsReal ? patientId || '' : ''} onChange={(e) => onSelectPatient?.(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>
+    <div className="session-selector panel"><span className="person-avatar coral">{patientInitials}</span><div><p className="eyebrow">PACIENTE</p><b>{patient}</b><small>{selectedIsReal ? `${sexLabel(patientRecord?.sex) || 'Paciente'}${lastSession ? ` · Última consulta: ${formatUTCDate(lastSession.startedAt || lastSession.createdAt)}` : ' · Sin consultas previas'}` : 'Elige a quién vas a atender'}</small></div><label className="patient-switch">Paciente<select value={selectedIsReal ? patientId || '' : ''} onChange={(e) => onSelectPatient?.(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>
 
     {patientsState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando pacientes…</h3></div>}
     {patientsState === 'error' && <div className="form-error">⚠ No se pudo cargar la lista de pacientes.</div>}

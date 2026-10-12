@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { appointmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
+import { formatPhone } from '../../lib/phone.js'
+import { EMAIL_MAX_LENGTH, isValidEmail, normalizeEmail } from '../../lib/email.js'
 
 // All date math here runs in UTC: appointment.startAt is stored and seeded as the practice's
 // wall-clock time tagged with a "Z" suffix (see prisma/seed.js), so reading it back with the
@@ -15,7 +17,7 @@ const DAY_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia', BLOCK: 'Bloqueo' }
 const TYPE_COLORS = { INITIAL: 'coral', FOLLOW_UP: 'blue', QUICK_CONTROL: 'yellow', EMERGENCY: 'purple', BLOCK: 'purple' }
-const TYPE_OPTIONS = [['FOLLOW_UP', 'Seguimiento'], ['INITIAL', 'Primera consulta'], ['QUICK_CONTROL', 'Control rápido'], ['EMERGENCY', 'Emergencia']]
+const TYPE_OPTIONS = [['INITIAL', 'Primera consulta'], ['FOLLOW_UP', 'Seguimiento'], ['QUICK_CONTROL', 'Control rápido'], ['EMERGENCY', 'Emergencia']]
 const DURATION_OPTIONS = [60, 45, 30, 15]
 // Granularidad al agendar: 15 min, en vez de sólo :00/:30. Así se puede ocupar un hueco que no cae
 // en una hora exacta (p. ej. justo donde terminó la cita anterior).
@@ -32,7 +34,7 @@ const DEMO_APPOINTMENTS = [
 const startOfWeek = (date) => { const d = new Date(date); const day = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - day); return d }
 const addDays = (date, amount) => { const d = new Date(date); d.setUTCDate(d.getUTCDate() + amount); return d }
 const toISODate = (date) => date.toISOString().slice(0, 10)
-const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'FOLLOW_UP', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '', requestStudies: false, recurrence: 'none', recurCount: 10 })
+const emptyForm = (defaultDate, defaultPatientId = '') => ({ patientId: defaultPatientId, date: toISODate(defaultDate), time: '09:00', type: 'INITIAL', duration: 60, notify: 'whatsapp', internalNote: '', patientNote: '', requestStudies: false, recurrence: 'none', recurCount: 10 })
 const STUDIES_NOTE = 'Recuerda traer tus análisis o estudios recientes si los tienes.'
 const EMPTY_NEW_PATIENT = { firstName: '', lastName: '', phone: '', email: '' }
 
@@ -78,6 +80,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   const [newPatientState, setNewPatientState] = useState('idle')
   const [newPatientError, setNewPatientError] = useState('')
   const [showNewPatient, setShowNewPatient] = useState(false)
+  const [emailTouched, setEmailTouched] = useState(false)
   const [businessHours, setBusinessHours] = useState(DEFAULT_BUSINESS_HOURS)
   const [statusFilter, setStatusFilter] = useState(() => (autoFilter && ['pending', 'confirmed', 'blocks'].includes(autoFilter) ? autoFilter : 'all'))
   // Drag & drop: which appointment is being dragged, its duration (to keep it on the move), and
@@ -278,7 +281,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   }
   const openBlockModal = () => { setIsBlock(true); setForm({ ...emptyForm(anchor), type: 'BLOCK', notify: 'none' }); setResetNewPatient(); setPatientQuery(''); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
   const openSlotModal = (day, time) => { setIsBlock(false); setForm({ ...emptyForm(day), date: toISODate(day), time, duration: fitDuration(day, time) }); setResetNewPatient(); setPatientQuery(''); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
-  const setResetNewPatient = () => { setNewPatient(EMPTY_NEW_PATIENT); setNewPatientState('idle'); setNewPatientError(''); setShowNewPatient(false) }
+  const setResetNewPatient = () => { setNewPatient(EMPTY_NEW_PATIENT); setNewPatientState('idle'); setNewPatientError(''); setShowNewPatient(false); setEmailTouched(false) }
 
   // El buscador de pacientes admite texto (filtra mientras se escribe) en vez de obligar a abrir un
   // <select> largo. Se resuelve a un patientId sólo cuando el texto coincide con un paciente real;
@@ -297,12 +300,14 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     setNewPatient(EMPTY_NEW_PATIENT)
     setNewPatientState('idle')
     setShowNewPatient(false)
+    setEmailTouched(false)
     return created
   }
 
   // "Crear y seleccionar" del formulario inline.
   const createPatient = async () => {
     if (!newPatient.firstName.trim() || !newPatient.lastName.trim()) { setNewPatientState('error'); setNewPatientError('Nombre y apellido son obligatorios.'); return }
+    if (newPatient.email && !isValidEmail(newPatient.email)) { setEmailTouched(true); return }
     setNewPatientState('saving')
     setNewPatientError('')
     try {
@@ -514,7 +519,8 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       {!isBlock && <div className="patient-field"><span className="field-label">Paciente</span><div className="patient-select-row"><input list="agenda-patient-options" value={patientQuery} onChange={(e) => { onPatientQueryChange(e.target.value); setShowNewPatient(false) }} placeholder="Buscar paciente…" autoComplete="off" /><datalist id="agenda-patient-options">{patients.map((p) => <option value={patientLabel(p)} key={p.id} />)}</datalist><button type="button" className={showNewPatient ? 'primary' : 'secondary'} onClick={() => setShowNewPatient((value) => !value)}>{showNewPatient ? 'Cancelar' : '＋ Nuevo paciente'}</button></div></div>}
       {!isBlock && showNewPatient && <div className="new-patient-inline">
         <div className="form-row"><label>Nombre(s) *<input value={newPatient.firstName} onChange={(e) => setNewPatient((prev) => ({ ...prev, firstName: e.target.value }))} placeholder="Ej. Mariana" /></label><label>Apellido(s) *<input value={newPatient.lastName} onChange={(e) => setNewPatient((prev) => ({ ...prev, lastName: e.target.value }))} placeholder="Ej. Torres" /></label></div>
-        <div className="form-row"><label>Teléfono<input value={newPatient.phone} onChange={(e) => setNewPatient((prev) => ({ ...prev, phone: e.target.value }))} placeholder="+52 55 1234 5678" /></label><label>Email<input type="email" value={newPatient.email} onChange={(e) => setNewPatient((prev) => ({ ...prev, email: e.target.value }))} placeholder="correo@email.com" /></label></div>
+        <div className="form-row"><label>Teléfono<input type="tel" inputMode="numeric" autoComplete="tel" maxLength={12} value={newPatient.phone} onChange={(e) => setNewPatient((prev) => ({ ...prev, phone: formatPhone(e.target.value) }))} placeholder="999 224 4494" /></label><label>Email<input type="email" autoComplete="email" maxLength={EMAIL_MAX_LENGTH} value={newPatient.email} onChange={(e) => setNewPatient((prev) => ({ ...prev, email: normalizeEmail(e.target.value) }))} onBlur={() => setEmailTouched(true)} placeholder="correo@email.com" /></label></div>
+        {newPatient.email && emailTouched && !isValidEmail(newPatient.email) && <div className="form-error">⚠ Ingresa un correo válido (ej. correo@dominio.com).</div>}
         {newPatientError && <div className="form-error">⚠ {newPatientError}</div>}
         <button type="button" className="secondary" disabled={newPatientState === 'saving'} onClick={createPatient}>{newPatientState === 'saving' ? 'Creando…' : 'Crear y seleccionar'} <span>→</span></button>
       </div>}

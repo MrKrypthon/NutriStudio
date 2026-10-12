@@ -2,6 +2,9 @@ const MEAL_TYPE_LABELS = {
   breakfast: 'Desayuno',
   lunch: 'Comida',
   snack: 'Colación',
+  // Segunda colación (vespertina). En el plan entregado las dos se llaman "Colación" y se
+  // distinguen por su hora, como en el formato en papel.
+  snack2: 'Colación',
   dinner: 'Cena',
 }
 
@@ -15,23 +18,183 @@ const DAY_LABELS = {
   7: 'Domingo',
 }
 
-const MEAL_TYPE_ORDER = ['breakfast', 'lunch', 'snack', 'dinner']
+const MEAL_TYPE_ORDER = ['breakfast', 'lunch', 'snack', 'snack2', 'dinner']
+
+// Grupos de equivalentes que el plan impreso muestra como "porciones" (los círculos de color junto
+// a cada tiempo de comida). El catálogo trae el grupo con varios nombres según su origen (SMAE:
+// "AOA MBAG", "Cereales S/G"; semilla: "AOA muy bajo en grasa", "Cereal con grasa"), así que se
+// reconoce por el texto en vez de por una tabla exacta.
+const EQUIVALENT_GROUPS = [
+  { code: 'V', label: 'Verduras' },
+  { code: 'F', label: 'Frutas' },
+  { code: 'C', label: 'Cereales' },
+  { code: 'LEG', label: 'Leguminosas' },
+  { code: 'AOA_MB', label: 'AOA Muy Bajo' },
+  { code: 'AOA_B', label: 'AOA Bajo' },
+  { code: 'AOA_M', label: 'AOA Moderado' },
+  { code: 'AOA_A', label: 'AOA Alto' },
+  { code: 'LAC', label: 'Lácteos' },
+  { code: 'G_CP', label: 'Grasa Con Proteína' },
+  { code: 'G_SP', label: 'Grasa Sin Proteína' },
+]
+
+function equivalentGroupCode(group) {
+  const name = String(group || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  if (!name) return null
+  if (name.startsWith('verdura')) return 'V'
+  if (name.startsWith('fruta')) return 'F'
+  if (name.startsWith('cereal')) return 'C'
+  if (name.startsWith('leguminosa')) return 'LEG'
+  if (name.startsWith('aoa')) {
+    if (name.includes('mbag') || name.includes('muy bajo')) return 'AOA_MB'
+    if (name.includes('mag') || name.includes('moderado')) return 'AOA_M'
+    if (name.includes('aag') || name.includes('alto')) return 'AOA_A'
+    return 'AOA_B'
+  }
+  if (name.startsWith('leche') || name.startsWith('lacteo')) return 'LAC'
+  if (name.startsWith('grasa')) return name.includes('con prote') ? 'G_CP' : 'G_SP'
+  return null
+}
+
+// Equivalentes por grupo de UNA porción de la receta, a partir de sus ingredientes vinculados al
+// catálogo: gramos usados ÷ gramos de un equivalente. No se usa `RecipeIngredient.equivalence`
+// (en las recetas importadas guarda la cantidad del renglón original, no equivalentes) ni los
+// ingredientes "aproximados", cuya porción de 100 g no es un equivalente SMAE.
+function recipeEquivalents(recipe) {
+  const totals = {}
+  for (const item of recipe?.ingredients || []) {
+    const equivalence = item.ingredient?.equivalence || {}
+    const grams = Number(equivalence.grams)
+    if (!grams || equivalence.source === 'APPROX_500') continue
+    const code = equivalentGroupCode(equivalence.group) || equivalentGroupCode(item.ingredient?.group)
+    if (!code) continue
+    totals[code] = (totals[code] || 0) + Number(item.quantity) / grams
+  }
+  const portions = Number(recipe?.portions) || 1
+  return Object.fromEntries(Object.entries(totals).map(([code, value]) => [code, Math.round((value / portions) * 100) / 100]))
+}
+
+const trimNumber = (value) => String(Math.round(Number(value) * 10) / 10)
+
+// Renglones de ingredientes como los lee la paciente: las recetas importadas traen su texto en
+// medidas caseras ("1/2 taza de…"); las hechas en la app sólo tienen los ingredientes del catálogo.
+function recipeIngredientLines(recipe) {
+  const text = Array.isArray(recipe?.ingredientsText) ? recipe.ingredientsText.map((line) => String(line).trim()).filter(Boolean) : []
+  if (text.length) return text
+  return (recipe?.ingredients || []).filter((item) => item.ingredient?.name).map((item) => `${trimNumber(item.quantity)} ${item.unit || 'g'} de ${item.ingredient.name}`)
+}
 
 // Congela la semana asignada al momento de publicar: los MealSlot solo guardan un recipeId
 // (referencia viva), así que si la receta se edita después, el PDF de un plan ya publicado no
 // debe cambiar. Este snapshot es lo único que la generación de PDF debe leer para ese plan.
+// Los campos de receta (foto, ingredientes, equivalentes) sólo salen completos si los slots
+// llegan con `recipe.ingredients.ingredient` incluido.
 function buildMenuSnapshot(mealSlots) {
   return mealSlots
     .filter((slot) => slot.recipeId)
-    .map((slot) => ({
-      dayOfWeek: slot.dayOfWeek,
-      mealType: slot.mealType,
-      recipeId: slot.recipeId,
-      recipeName: slot.recipe?.name || 'Receta',
-      servings: slot.servings ? Number(slot.servings) : 1,
-      kcal: Math.round((slot.recipe?.nutrition?.kcal || 0) * (slot.servings ? Number(slot.servings) : 1)),
-    }))
+    .map((slot) => {
+      const servings = slot.servings ? Number(slot.servings) : 1
+      return {
+        dayOfWeek: slot.dayOfWeek,
+        mealType: slot.mealType,
+        recipeId: slot.recipeId,
+        recipeName: slot.recipe?.name || 'Receta',
+        servings,
+        kcal: Math.round(((slot.recipe?.calculatedNutrition || slot.recipe?.nutrition)?.kcal || 0) * servings),
+        imageFile: slot.recipe?.imageFile || null,
+        portions: Number(slot.recipe?.portions) || 1,
+        ingredients: recipeIngredientLines(slot.recipe),
+        equivalents: Object.fromEntries(Object.entries(recipeEquivalents(slot.recipe)).map(([code, value]) => [code, Math.round(value * servings * 100) / 100])),
+      }
+    })
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek || MEAL_TYPE_ORDER.indexOf(a.mealType) - MEAL_TYPE_ORDER.indexOf(b.mealType))
 }
 
-export { MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, buildMenuSnapshot }
+// Horas de los tiempos de comida tal como se guardan en el plan: sólo las claves conocidas y sólo
+// valores "HH:MM" de 24 h; lo demás se descarta.
+function normalizeMealTimes(value) {
+  const times = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return times
+  for (const mealType of MEAL_TYPE_ORDER) {
+    const time = typeof value[mealType] === 'string' ? value[mealType].trim() : ''
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) times[mealType] = time
+  }
+  return times
+}
+
+// "10:00" → "10 am", "14:30" → "2:30 pm", como se escribe en el plan en papel.
+function formatMealTime(time) {
+  const match = /^(\d{2}):(\d{2})$/.exec(String(time || ''))
+  if (!match) return ''
+  const hours = Number(match[1])
+  const hour12 = hours % 12 || 12
+  return `${hour12}${match[2] === '00' ? '' : `:${match[2]}`} ${hours < 12 ? 'am' : 'pm'}`
+}
+
+// El plan entregado no va por día sino por opciones intercambiables: por cada tiempo de comida,
+// las recetas distintas de la semana en el orden en que aparecen (lunes → domingo). Repetir una
+// receta varios días no genera opciones repetidas. Las porciones del tiempo de comida son los
+// equivalentes de su primera opción (la receta base de la Distribución).
+function buildMealOptions(menu, mealTimes) {
+  const times = normalizeMealTimes(mealTimes)
+  return MEAL_TYPE_ORDER.map((mealType) => {
+    const options = []
+    const seen = new Set()
+    for (const entry of [...(menu || [])].filter((item) => item.mealType === mealType).sort((a, b) => a.dayOfWeek - b.dayOfWeek)) {
+      const key = `${entry.recipeId || entry.recipeName}|${entry.servings || 1}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      options.push(entry)
+    }
+    const equivalents = options[0]?.equivalents || {}
+    const portions = EQUIVALENT_GROUPS
+      .map((group) => ({ ...group, quantity: Math.round((equivalents[group.code] || 0) * 2) / 2 }))
+      .filter((group) => group.quantity > 0)
+    return { mealType, label: MEAL_TYPE_LABELS[mealType] || mealType, time: formatMealTime(times[mealType]), options, portions }
+  }).filter((row) => row.options.length)
+}
+
+// Revisa un JPEG subido y lo devuelve reescrito sin metadatos: { data, width, height }, o null si no
+// es un JPEG bien formado. Las fotos de receta sólo se aceptan en JPEG a propósito: se sirven
+// públicamente y luego las incrusta pdfkit, que un PNG lo descomprime (y uno dañado puede tumbar el
+// proceso) mientras que al JPEG sólo le recorre los segmentos de cabecera.
+//
+// El recorrido es deliberadamente igual de simple que el de pdfkit —marcador de 2 bytes, largo de 2
+// bytes, siguiente segmento— y más estricto: cualquier cosa que otro lector pudiera interpretar
+// distinto (bytes de relleno, largos que se salen del archivo, dos SOF) se rechaza en vez de
+// tolerarse. Y se quitan los segmentos APPn y COM: ahí viven EXIF/XMP/ICC, que pdfkit le pasa a un
+// lector de EXIF aparte, y no hacen falta para mostrar la foto. Así lo que se guarda es lo que se
+// validó y los dos lectores ven exactamente la misma estructura.
+function sanitizeJpeg(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null
+  const parts = [buffer.subarray(0, 2)]
+  let size = null
+  let offset = 2
+  while (offset + 4 <= buffer.length) {
+    const marker = buffer[offset + 1]
+    // Antes de los datos de imagen sólo se admiten segmentos con largo (nada de RSTn, SOI, EOI, TEM
+    // ni relleno 0xFF).
+    if (buffer[offset] !== 0xff || marker < 0xc0 || marker === 0xff || (marker >= 0xd0 && marker <= 0xd9)) return null
+    const length = buffer.readUInt16BE(offset + 2)
+    const end = offset + 2 + length
+    if (length < 2 || end > buffer.length) return null
+    // SOF0–SOF15 llevan el tamaño, salvo DHT (C4), JPG (C8) y DAC (CC).
+    if (marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      if (size || length < 8) return null
+      size = { height: buffer.readUInt16BE(offset + 5), width: buffer.readUInt16BE(offset + 7) }
+      if (!size.width || !size.height) return null
+    }
+    const isMetadata = (marker >= 0xe0 && marker <= 0xef) || marker === 0xfe
+    if (!isMetadata) parts.push(buffer.subarray(offset, end))
+    if (marker === 0xda) {
+      // SOS: de aquí en adelante son los datos comprimidos, que se copian tal cual.
+      if (!size || end >= buffer.length) return null
+      parts.push(buffer.subarray(end))
+      return { data: Buffer.concat(parts), ...size }
+    }
+    offset = end
+  }
+  return null
+}
+
+export { normalizeMealTimes, formatMealTime, sanitizeJpeg, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }

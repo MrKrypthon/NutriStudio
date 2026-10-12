@@ -1,14 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
-import BrandMark from '../../components/BrandMark.jsx'
-import { documentsApi, patientsApi, plansApi, practiceApi } from '../../lib/api.js'
+import { documentsApi, patientsApi, plansApi } from '../../lib/api.js'
 import { usePatient } from '../../lib/usePatient.js'
-
-const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', lunch: 'Comida', snack: 'Colación', dinner: 'Cena' }
-const DAY_LABELS = { 1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves', 5: 'Viernes', 6: 'Sábado', 7: 'Domingo' }
-
-const DAYS_ORDER = [1, 2, 3, 4, 5, 6, 7]
-const MEAL_TYPES_ORDER = ['breakfast', 'lunch', 'snack', 'dinner']
 
 export default function DocumentPage({ setActive, patientId, embedded = false, onPublished }) {
   const { patient } = usePatient(patientId)
@@ -21,9 +14,9 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
   const [genState, setGenState] = useState('idle')
   const [deliverState, setDeliverState] = useState('idle')
   const [error, setError] = useState('')
-  const [practice, setPractice] = useState(null)
-
-  useEffect(() => { practiceApi.get().then(setPractice).catch(() => {}) }, [])
+  const [previewUrl, setPreviewUrl] = useState('')
+  const [previewState, setPreviewState] = useState('idle')
+  const previewFrame = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -54,13 +47,34 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
     return () => { cancelled = true }
   }, [patientId, embedded])
 
+  // La vista previa es el PDF real (el mismo que se entrega), pedido al servidor: así lo que se ve
+  // aquí y lo que se descarga no pueden diferir. Se vuelve a pedir al publicar o regenerar.
+  useEffect(() => {
+    if (!plan?.id) return undefined
+    let cancelled = false
+    let url = ''
+    setPreviewState('loading')
+    plansApi.previewPdfBlob(plan.id)
+      .then((blob) => {
+        if (cancelled) return
+        url = URL.createObjectURL(blob)
+        setPreviewUrl(url)
+        setPreviewState('ready')
+      })
+      .catch(() => { if (!cancelled) setPreviewState('error') })
+    return () => { cancelled = true; if (url) URL.revokeObjectURL(url) }
+  }, [plan?.id, plan?.status, document?.version])
+
   const publishPlan = async () => {
     if (!plan) return
     setPublishState('publishing')
     setError('')
     try {
+      // Publicar también genera el PDF en el servidor; el plan regresa con su documento.
       const published = await plansApi.publish(plan.id)
       setPlan(published)
+      const generated = (published.documents || []).find((doc) => doc.type === 'nutrition_plan' && doc.storageKey)
+      if (generated) setDocument(generated)
       setPublishState('published')
       onPublished?.()
     } catch (err) {
@@ -114,16 +128,14 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
     }
   }
 
-  // A DRAFT plan has no menuSnapshot yet (that only gets frozen at publish time) — fall back to
-  // building the same shape live from mealSlots so the preview/print isn't blocked on publishing.
-  const draftMenu = (plan?.mealSlots || []).filter((slot) => slot.recipeId).map((slot) => ({
-    dayOfWeek: slot.dayOfWeek,
-    mealType: slot.mealType,
-    recipeName: slot.recipe?.name || 'Receta',
-    kcal: Math.round((slot.recipe?.nutrition?.kcal || 0) * Number(slot.servings || 1)),
-  }))
-  const menu = plan?.menuSnapshot?.length ? plan.menuSnapshot : draftMenu
-  const entryFor = (day, mealType) => menu.find((entry) => entry.dayOfWeek === day && entry.mealType === mealType)
+  // El PDF se imprime desde su propio visor; si el navegador no lo permite, se abre aparte.
+  const printPdf = () => {
+    try { previewFrame.current.contentWindow.print() } catch { if (previewUrl) window.open(previewUrl, '_blank', 'noopener') }
+  }
+
+  // A DRAFT plan has no menuSnapshot yet (that only gets frozen at publish time) — count the live
+  // mealSlots instead.
+  const mealCount = plan?.menuSnapshot?.length || (plan?.mealSlots || []).filter((slot) => slot.recipeId).length
 
   const body = <div className={embedded ? 'document-content' : 'content document-content'}>
     <div className="document-top">
@@ -135,7 +147,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
       </div>
       <div>
         <button className="secondary" onClick={() => setPreview(!preview)}>{preview ? 'Editar' : 'Vista previa'}</button>
-        <button className="secondary" disabled={!menu.length} onClick={() => window.print()}>⎙ Imprimir</button>
+        <button className="secondary" disabled={previewState !== 'ready'} onClick={printPdf}>⎙ Imprimir</button>
         {document?.storageKey
           ? <>
               <button className="secondary" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Regenerando…' : 'Regenerar'}</button>
@@ -143,7 +155,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
             </>
           : plan?.status === 'PUBLISHED'
             ? <button className="primary" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Generando…' : 'Generar PDF'}</button>
-            : <button className="primary" disabled={!plan || publishState === 'publishing' || !menu.length || !plan.targetKcal} onClick={publishPlan}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar plan'}</button>}
+            : <button className="primary" disabled={!plan || publishState === 'publishing' || !mealCount || !plan.targetKcal} onClick={publishPlan}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar plan'}</button>}
       </div>
     </div>
 
@@ -154,28 +166,17 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
     {loadState === 'ready' && plan && <div className="document-workspace">
       <section className={'document-preview ' + (preview ? 'preview-focus' : '')}>
         <div className="paper-toolbar"><span>Vista previa del plan</span><small>{plan.status === 'PUBLISHED' ? 'Publicado · no se modificará' : 'Borrador · aún puede cambiar'}</small></div>
-        <div className="paper">
-          <div className="paper-brand">{practice?.logoUrl ? <img src={`${practiceApi.logoUrl(practice.id)}?v=${practice.updatedAt}`} alt="" className="brand-mark logo-preview" /> : <BrandMark size={28} />}<div><b>{practice?.name || 'milpa clinical'}</b><small>PLAN DE ALIMENTACIÓN</small></div></div>
-          <div className="paper-meta"><b>Menú semanal</b><span>Paciente: {patientName}</span><span>Nutrióloga: {practice?.user?.name || 'Nutrióloga'}</span></div>
-          {plan.targetKcal && <div className="paper-highlight"><b>Objetivo: {plan.goal || 'Sin objetivo registrado'}</b><p>{plan.targetKcal} kcal/día · {plan.carbsPercent}% carbohidratos · {plan.proteinPercent}% proteína · {plan.fatPercent}% grasas</p></div>}
-          {!menu.length && <p className="muted">Este plan todavía no tiene recetas asignadas en la distribución semanal.</p>}
-          {menu.length > 0 && <div className="paper-week">
-            <div className="paper-week-head"><span>Tiempo</span>{DAYS_ORDER.map((d) => <b key={d}>{DAY_LABELS[d]}</b>)}</div>
-            {MEAL_TYPES_ORDER.map((mealType) => <div className="paper-week-row" key={mealType}>
-              <span>{MEAL_TYPE_LABELS[mealType]}</span>
-              {DAYS_ORDER.map((d) => { const entry = entryFor(d, mealType); return <div className="paper-week-cell" key={d}>{entry ? <><b>{entry.recipeName}</b><small>{entry.kcal} kcal</small></> : <small className="muted">—</small>}</div> })}
-            </div>)}
-          </div>}
-          <div className="paper-signature">{practice?.user?.name || 'Nutrióloga'}</div>
-        </div>
+        {previewState === 'loading' && !previewUrl && <div className="result-empty"><span className="loading-dot">●</span><h3>Preparando la vista previa…</h3></div>}
+        {previewState === 'error' && <div className="result-empty"><span>◌</span><h3>No se pudo cargar la vista previa</h3><p>Revisa la conexión con el servidor e inténtalo de nuevo.</p></div>}
+        {previewUrl && previewState !== 'error' && <iframe ref={previewFrame} className="plan-pdf-frame" title="Vista previa del plan de alimentación" src={`${previewUrl}#toolbar=0&navpanes=0&view=FitH`} />}
       </section>
       <aside className="document-options panel">
         <p className="eyebrow">ESTADO DE LA ENTREGA</p>
         <h2>{plan.status === 'PUBLISHED' ? 'Plan publicado' : 'Plan en borrador'}</h2>
-        <p className="muted">{plan.status === 'PUBLISHED' ? 'El menú quedó congelado: aunque edites una receta después, este documento no cambiará.' : 'Publica el plan para congelar el menú y poder generar su PDF.'}</p>
-        <div className="document-summary"><span>{menu.length} comidas asignadas</span><b>{plan.status === 'PUBLISHED' ? (document?.storageKey ? (document.deliveredAt ? 'Entregado' : 'PDF listo') : 'Falta generar el PDF') : 'Falta publicar'}</b></div>
+        <p className="muted">{plan.status === 'PUBLISHED' ? 'El menú quedó congelado: aunque edites una receta después, este documento no cambiará.' : 'Así se verá el PDF de la paciente. Al publicar, el menú queda congelado y el PDF se genera listo para entregar.'}</p>
+        <div className="document-summary"><span>{mealCount} comidas asignadas</span><b>{plan.status === 'PUBLISHED' ? (document?.storageKey ? (document.deliveredAt ? 'Entregado' : 'PDF listo') : 'Falta generar el PDF') : 'Falta publicar'}</b></div>
         {!plan.targetKcal && <p className="muted">Falta guardar el cálculo de requerimientos: vuelve al paso "Plan alimentario" para poder publicar el plan.</p>}
-        {plan.status !== 'PUBLISHED' && <button className="primary full-button" disabled={publishState === 'publishing' || !menu.length} onClick={publishPlan}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar plan'} <span>→</span></button>}
+        {plan.status !== 'PUBLISHED' && <button className="primary full-button" disabled={publishState === 'publishing' || !mealCount} onClick={publishPlan}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar plan'} <span>→</span></button>}
         {plan.status === 'PUBLISHED' && !document?.storageKey && <button className="primary full-button" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Generando…' : 'Generar PDF'} <span>→</span></button>}
         {plan.status === 'PUBLISHED' && document?.storageKey && <button className="primary full-button" onClick={downloadPdf}>Descargar PDF <span>→</span></button>}
         {plan.status === 'PUBLISHED' && document?.storageKey && <button className="secondary full-button" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Regenerando…' : 'Regenerar PDF (actualizar formato)'}</button>}
