@@ -250,7 +250,6 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
     const fat = bodyFatEstimates(values, { sex: patientSex })
     const composition = bodyComposition(values, { sex: patientSex, fatPercent: fat.average })
     const weights = theoreticalWeights(values['Talla (cm)'], patientSex)
-    const maxFat = Math.max(1, ...fat.rows.filter((r) => r.value != null).map((r) => r.value))
     const totalPct = composition.parts.reduce((a, p) => a + (p.pct || 0), 0) || 1
     let acc = 0
     const stops = composition.parts.filter((p) => p.pct).map((p) => { const from = acc; acc += (p.pct / totalPct) * 100; return `${p.color} ${from}% ${acc}%` })
@@ -264,10 +263,10 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
         {activeKey === 'grasa' && <>
           <p className="anthro-hint">Estimaciones a partir de los pliegues capturados en Mediciones.</p>
           <div className="calc-table">
-            <div className="calc-table-head"><span>Autor</span><span>Resultado</span></div>
+            <div className="calc-table-head"><span>Autor</span><span className="calc-result-head"><span>Resultado</span><span className="calc-scale"><span>0%</span><span>100%</span></span></span></div>
             {fat.rows.map((r) => <div className="calc-table-row" key={r.label}>
               <span className="calc-table-name">{r.label}<small>{r.detail}</small></span>
-              <span className="calc-table-value">{r.value != null ? `${r.value} %` : '—'}{r.value != null && <i style={{ width: `${Math.min(100, (r.value / maxFat) * 100)}%` }} />}</span>
+              <span className="calc-table-value">{r.value != null ? `${r.value} %` : '—'}<span className="calc-bar"><i style={{ width: `${r.value != null ? Math.min(100, Math.max(0, r.value)) : 0}%` }} /></span></span>
             </div>)}
           </div>
         </>}
