@@ -26,3 +26,6 @@ Mejoras_del_MVP_-_Seccion_Expediente.pdf
 toaz.info-*.pdf
 nuevasRecetas/
 prisma/data/link-smae-unmatched.json
+
+# Libro fuente del SMAE (escaneo con derechos de autor): se lee con prisma/tools/smae-libro/, no se versiona
+SMAE*.pdf
