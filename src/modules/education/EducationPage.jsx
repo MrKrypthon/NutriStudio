@@ -17,6 +17,9 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
   const [status, setStatus] = useState('loading')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
+  // Categorías para el filtro: se acumulan de todos los listados (el backend filtra por categoría,
+  // así que derivarlas de `items` dejaba el <select> atrapado en la categoría elegida).
+  const [categoryOptions, setCategoryOptions] = useState(() => [...new Set(FALLBACK.map((item) => item.category))])
   const [detail, setDetail] = useState(null)
   const [archiveState, setArchiveState] = useState('idle')
   const [archiveError, setArchiveError] = useState('')
@@ -33,7 +36,7 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
     if (category) params.set('category', category)
     const query = params.toString() ? `?${params}` : ''
     educationApi.list(query)
-      .then((response) => { setItems(response.items || []); setStatus('online') })
+      .then((response) => { const list = response.items || []; setItems(list); setStatus('online'); setCategoryOptions((prev) => [...new Set([...prev, ...list.map((item) => item.category).filter(Boolean)])]) })
       .catch(() => setStatus('demo'))
   }
 
@@ -43,7 +46,6 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, category])
 
-  const categoryOptions = [...new Set(items.map((item) => item.category))]
   const isReal = status === 'online'
 
   const startCreate = () => { onSelectMaterial?.(null); setActive('Nuevo material') }

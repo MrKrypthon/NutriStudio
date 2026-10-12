@@ -14,7 +14,6 @@ import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../.
 import { shouldAutoClose } from '../../lib/consultationSession.js'
 import { SEX_OPTIONS, normalizeSex } from '../../lib/sex.js'
 import { mergeValues, splitUpdates } from '../../lib/patientFields.js'
-import { PES_CATALOG, searchPesDiagnoses } from '../../lib/pesDiagnoses.js'
 
 const TABS = ['Resumen', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
 // Los antecedentes familiares viven ahora en Clínico (ver flujo-consulta-nutricional.md), así que
@@ -433,6 +432,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     let cancelled = false
     async function load() {
       setLoadState('loading')
+      setAutoClosed(null)
       try {
         // Las secciones del paciente se piden a la vez que su historial: son independientes de qué
         // consulta se acabe abriendo, así que no hay razón para encadenar las dos peticiones.
@@ -523,14 +523,17 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   useEffect(() => {
     if (!consultation) return
     let cancelled = false
+    // Limpiar primero: al cambiar de consulta, los documentos de la visita anterior quedaban
+    // "pegados" y el menú ofrecía Actualizar/Descargar el documento equivocado.
+    setReport(null); setExportDoc(null); setClinicalReport(null)
     documentsApi.list(`?patientId=${patientId}&type=consultation_report`)
-      .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); if (existing) setReport(existing) } })
+      .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); setReport(existing || null) } })
       .catch(() => {})
     documentsApi.list(`?patientId=${patientId}&type=consultation_export`)
-      .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); if (existing) setExportDoc(existing) } })
+      .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); setExportDoc(existing || null) } })
       .catch(() => {})
     documentsApi.list(`?patientId=${patientId}&type=consultation_clinical`)
-      .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); if (existing) setClinicalReport(existing) } })
+      .then((response) => { if (!cancelled) { const existing = (response.items || []).find((doc) => doc.consultationId === consultation.id); setClinicalReport(existing || null) } })
       .catch(() => {})
     return () => { cancelled = true }
   }, [consultation, patientId])
@@ -609,7 +612,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           pendingRef.current[scoped] = { payload }
           scheduleFlush()
         } catch { /* leave the conflict banner visible */ }
+      } else if (error.code === 'DEMO_MODE') {
+        setSaveState('error')
       } else {
+        // No perder el cambio ante un error de red/500: se reencola (el `finally` reintenta).
+        // Antes, un fallo que no fuera 409 descartaba el payload en cola y la captura se perdía.
+        pendingRef.current[scoped] = { payload }
         setSaveState('error')
       }
     } finally {

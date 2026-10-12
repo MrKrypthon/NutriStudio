@@ -93,6 +93,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   // no se confirme por accidente al rozar el recuadro.
   const [confirmTarget, setConfirmTarget] = useState(null)
   const [confirmSaving, setConfirmSaving] = useState(false)
+  const [confirmError, setConfirmError] = useState('')
   // Texto libre del buscador de pacientes del modal: se guarda aparte de `form.patientId` porque lo
   // que escribe la nutrióloga no siempre coincide (todavía) con un paciente real.
   const [patientQuery, setPatientQuery] = useState('')
@@ -189,7 +190,8 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   // the now-line, instead of the viewer's system date.
   const todayISO = practiceNow?.date || toISODate(TODAY)
 
-  const isWithinBusinessHours = (time) => businessHours.ranges.some((range) => toMinutes(time) >= toMinutes(range.start) && toMinutes(time) < toMinutes(range.end))
+  // La cita completa debe caber en el horario: el inicio dentro del rango Y el fin antes del cierre.
+  const fitsBusinessHours = (time, durationMinutes) => businessHours.ranges.some((range) => toMinutes(time) >= toMinutes(range.start) && toMinutes(time) + durationMinutes <= toMinutes(range.end))
 
   // A slot is free when no appointment overlaps [time, time + duration). Checked against ALL
   // appointments (including blocks and filtered-out ones) so a hidden block still occupies its time.
@@ -205,7 +207,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   // Bookable: business day, inside the configured hours, in the future, and free of overlaps.
   const canBookSlot = (day, time, durationMinutes = SLOT_STEP_MINUTES) => {
     if (!isBusinessDay(day)) return false
-    if (!isWithinBusinessHours(time)) return false
+    if (!fitsBusinessHours(time, durationMinutes)) return false
     if (!(Date.parse(`${toISODate(day)}T${time}:00.000Z`) > nowMs)) return false
     return slotIsFree(day, time, durationMinutes)
   }
@@ -255,17 +257,23 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     try {
       const updated = await appointmentsApi.confirm(id)
       setAppointments((prev) => prev.map((a) => (a.id === id ? updated : a)))
-    } catch { /* The list keeps its previous state; the professional can retry. */ }
+      return true
+    } catch {
+      // Se propaga el fallo: el diálogo no debe cerrarse como si hubiera confirmado.
+      return false
+    }
   }
   // Un clic en una cita "por confirmar" ya no confirma directo: pide "¿Deseas confirmar la cita?"
   // y recién al aceptar llama a la API, para que un clic accidental no cambie el estado de la cita.
-  const askConfirm = (appointment) => setConfirmTarget(appointment)
+  const askConfirm = (appointment) => { setConfirmError(''); setConfirmTarget(appointment) }
   const resolveConfirm = async () => {
     if (!confirmTarget) return
     setConfirmSaving(true)
-    await confirmAppointment(confirmTarget.id)
+    setConfirmError('')
+    const ok = await confirmAppointment(confirmTarget.id)
     setConfirmSaving(false)
-    setConfirmTarget(null)
+    if (ok) setConfirmTarget(null)
+    else setConfirmError('No se pudo confirmar la cita. Intenta de nuevo.')
   }
 
   const openModal = (defaultPatientId) => {
@@ -547,6 +555,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
 
   {confirmTarget && <div className="modal-backdrop" onClick={() => !confirmSaving && setConfirmTarget(null)}><div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
     <div className="modal-head"><div><p className="eyebrow">POR CONFIRMAR</p><h2>¿Deseas confirmar la cita?</h2><span className="modal-subtitle">{confirmTarget.patient ? `${confirmTarget.patient.firstName} ${confirmTarget.patient.lastName}` : 'Paciente'} · {new Date(confirmTarget.startAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', timeZone: 'UTC' })} · {String(new Date(confirmTarget.startAt).getUTCHours()).padStart(2, '0')}:{String(new Date(confirmTarget.startAt).getUTCMinutes()).padStart(2, '0')}</span></div><button onClick={() => !confirmSaving && setConfirmTarget(null)}>×</button></div>
+    {confirmError && <div className="form-error">⚠ {confirmError}</div>}
     <div className="modal-actions"><button type="button" className="secondary" onClick={() => setConfirmTarget(null)} disabled={confirmSaving}>Cancelar</button><button type="button" className="primary" onClick={resolveConfirm} disabled={confirmSaving}>{confirmSaving ? 'Confirmando…' : 'Confirmar cita'} <span>→</span></button></div>
   </div></div>}
   </AppChrome>

@@ -6,13 +6,23 @@ const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
  * Small fetch boundary for all future modules. Components should not build
  * URLs or handle auth headers directly.
  */
+const REQUEST_TIMEOUT_MS = 20000
+// `fetch` puede quedarse colgado (red muerta, servidor que no responde): sin timeout el spinner
+// queda infinito. Se aborta a los 20 s y el error se propaga al llamador.
+async function fetchWithTimeout(url, options = {}, ms = REQUEST_TIMEOUT_MS) {
+  if (options.signal) return fetch(url, options)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try { return await fetch(url, { ...options, signal: controller.signal }) } finally { clearTimeout(timer) }
+}
+
 export async function apiRequest(path, options = {}) {
   // Plain `npm run dev` stays in demo mode when no API URL is set.
   if (import.meta.env.DEV && !import.meta.env.VITE_API_URL) {
     throw Object.assign(new Error('API no configurada: usando datos de demostración.'), { code: 'DEMO_MODE' })
   }
   const token = getToken()
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetchWithTimeout(`${API_BASE}${path}`, {
     ...options,
     headers: {
       ...(options.body ? { 'Content-Type': 'application/json' } : {}),
@@ -24,9 +34,9 @@ export async function apiRequest(path, options = {}) {
   if (!response.ok) {
     let error = { code: 'REQUEST_FAILED', message: 'No fue posible completar la solicitud.', fields: {} }
     try { error = await response.json() } catch { /* Response may not contain JSON. */ }
-    // Only a dead/invalid session (our own UNAUTHORIZED code) should force a logout — a
-    // rejected login attempt (INVALID_CREDENTIALS) is also a 401 but isn't a session loss.
-    if (error.code === 'UNAUTHORIZED') notifyUnauthorized()
+    // A rejected login attempt is also a 401 but isn't a session loss; any other 401 (even without
+    // our JSON code) means the session is dead and should close.
+    if (response.status === 401 && error.code !== 'INVALID_CREDENTIALS') notifyUnauthorized()
     throw Object.assign(new Error(error.message), error)
   }
 
@@ -39,7 +49,7 @@ export async function apiRequest(path, options = {}) {
 // failing silently.
 async function downloadBlobRequest(path, fallbackMessage) {
   const token = getToken()
-  const response = await fetch(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  const response = await fetchWithTimeout(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
   if (!response.ok) {
     let error = null
     try { error = await response.json() } catch { /* body may not be JSON */ }
