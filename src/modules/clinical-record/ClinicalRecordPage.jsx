@@ -908,7 +908,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const closeLabForm = () => setLabForm(null)
   const updateLabForm = (key, value) => setLabForm((prev) => ({ ...prev, [key]: value }))
   const saveLab = () => {
-    if (!labForm?.name || !labForm?.value) return
+    if (!labForm?.name) return
     updateField('Estudios', [...labs, { ...labForm, status: interpretLab(labForm.value, labForm.range) || labForm.status, id: `${Date.now()}` }])
     setLabForm(null)
   }
@@ -1206,7 +1206,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
                   <label>Estado<select value={labForm.status} onChange={(e) => updateLabForm('status', e.target.value)}><option>Normal</option><option>Elevado</option><option>Bajo</option><option>Pendiente</option></select></label>
                 </div>
                 {interpretLab(labForm.value, labForm.range) && <p className="lab-hint">Interpretación automática según el rango: <b>{interpretLab(labForm.value, labForm.range)}</b>. Puedes cambiarla en “Estado”.</p>}
-                <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name || !labForm.value} onClick={saveLab}>Guardar estudio</button></div>
+                <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name} onClick={saveLab}>Guardar estudio</button></div>
               </div>}
               {labsEvaluated.length > 0 && <div className="lab-list">{labsEvaluated.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
             </div>],
