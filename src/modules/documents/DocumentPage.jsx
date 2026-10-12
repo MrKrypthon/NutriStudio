@@ -3,7 +3,9 @@ import AppChrome from '../../components/AppChrome.jsx'
 import { documentsApi, patientsApi, plansApi } from '../../lib/api.js'
 import { usePatient } from '../../lib/usePatient.js'
 
-export default function DocumentPage({ setActive, patientId, embedded = false, onPublished }) {
+// `planId` (sólo embebido en el Constructor): el plan que se está editando. Sin él, la pantalla
+// elegía "el primer plan no publicado" de la paciente, que podía ser otro borrador o uno cancelado.
+export default function DocumentPage({ setActive, patientId, planId = null, embedded = false, onPublished }) {
   const { patient } = usePatient(patientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const [preview, setPreview] = useState(false)
@@ -22,16 +24,19 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
     let cancelled = false
     async function load() {
       try {
-        const plansResponse = await patientsApi.plans(patientId)
-        const items = plansResponse.items || []
-        // Embedded (plan wizard step 4) must work on the SAME plan PlanStudio is editing — the
-        // draft that's not yet published — not a previously published one. Standalone (/Documento)
-        // shows the published plan to download/deliver.
-        const activePlan = embedded
-          ? items.find((item) => item.status !== 'PUBLISHED') || items[0] || null
-          : items.find((item) => item.status === 'PUBLISHED') || items[0] || null
+        // Embedded (plan wizard, step Entrega) must work on exactly the plan PlanStudio is editing,
+        // so it is loaded by id. Standalone (/Documento) shows the published plan to
+        // download/deliver.
+        let activePlan = null
+        if (embedded) {
+          activePlan = planId ? await plansApi.get(planId) : null
+        } else {
+          const items = (await patientsApi.plans(patientId)).items || []
+          activePlan = items.find((item) => item.status === 'PUBLISHED') || items[0] || null
+        }
         if (cancelled) return
         setPlan(activePlan)
+        setDocument(null)
         if (activePlan?.status === 'PUBLISHED') {
           const documentsResponse = await documentsApi.list(`?patientId=${patientId}&type=nutrition_plan`)
           if (cancelled) return
@@ -45,7 +50,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
     }
     load()
     return () => { cancelled = true }
-  }, [patientId, embedded])
+  }, [patientId, embedded, planId])
 
   // La vista previa es el PDF real (el mismo que se entrega), pedido al servidor: así lo que se ve
   // aquí y lo que se descarga no pueden diferir. Se vuelve a pedir al publicar o regenerar.
@@ -72,11 +77,12 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
     try {
       // Publicar también genera el PDF en el servidor; el plan regresa con su documento.
       const published = await plansApi.publish(plan.id)
-      setPlan(published)
+      // La respuesta no trae las comidas asignadas: se conservan las ya cargadas.
+      setPlan((prev) => ({ ...prev, ...published }))
       const generated = (published.documents || []).find((doc) => doc.type === 'nutrition_plan' && doc.storageKey)
       if (generated) setDocument(generated)
       setPublishState('published')
-      onPublished?.()
+      onPublished?.(published)
     } catch (err) {
       setPublishState('error')
       setError(err.message || 'No se pudo publicar el plan.')
@@ -162,6 +168,7 @@ export default function DocumentPage({ setActive, patientId, embedded = false, o
     {error && <div className="form-error">⚠ {error}</div>}
     {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando plan…</h3></div>}
     {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan para esta paciente</h3><p>Crea una evaluación y una distribución semanal antes de publicar.</p></div>}
+    {loadState === 'error' && <div className="form-error" style={{ margin: '0 0 16px' }}>⚠ No se pudo cargar el plan. Intenta de nuevo más tarde.</div>}
 
     {loadState === 'ready' && plan && <div className="document-workspace">
       <section className={'document-preview ' + (preview ? 'preview-focus' : '')}>

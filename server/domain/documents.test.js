@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMealOptions, buildMenuSnapshot, equivalentGroupCode, recipeEquivalents, recipeIngredientLines, sanitizeJpeg, normalizeMealTimes, formatMealTime } from './documents.js'
+import { buildMealOptions, buildMenuSnapshot, equivalentGroupCode, recipeEquivalents, recipeIngredientLines, sanitizeJpeg, normalizeMealTimes, formatMealTime, normalizeRecipeAdjustments, applyRecipeAdjustments, adjustmentFactor } from './documents.js'
 
 describe('buildMenuSnapshot', () => {
   const slot = (overrides) => ({ dayOfWeek: 1, mealType: 'breakfast', recipeId: 'r1', servings: 1, recipe: { name: 'Avena', nutrition: { kcal: 200 } }, ...overrides })
@@ -184,5 +184,70 @@ describe('second snack', () => {
 
   it('is left out of the plan when it has no recipes', () => {
     expect(buildMealOptions([entry()]).map((row) => row.mealType)).toEqual(['snack'])
+  })
+})
+
+describe('prescribed equivalents in the delivered plan', () => {
+  const menu = [{ dayOfWeek: 1, mealType: 'breakfast', recipeId: 'r1', recipeName: 'Avena', servings: 1, equivalents: { C: 3, F: 1 } }, { dayOfWeek: 1, mealType: 'dinner', recipeId: 'r2', recipeName: 'Cuernito', servings: 1, equivalents: { C: 2 } }]
+
+  it('shows what the nutritionist distributed instead of the recipe estimate', () => {
+    const rows = buildMealOptions(menu, {}, { groups: {}, distribution: { breakfast: { C_SG: 1.5, C_CG: 0.5, LAC_D: 1, AZ_SG: 1 } } })
+    expect(rows[0].portions.map((portion) => [portion.code, portion.quantity])).toEqual([['C', 2], ['LAC', 1], ['AZ', 1]])
+  })
+
+  it('leaves a meal without circles when the plan has a prescription but that meal got none', () => {
+    const rows = buildMealOptions(menu, {}, { groups: {}, distribution: { breakfast: { V: 1 } } })
+    expect(rows[1].portions).toEqual([])
+  })
+
+  it('estimates from the recipe only when the plan has no prescription at all', () => {
+    const rows = buildMealOptions(menu, {}, { groups: {}, distribution: {} })
+    expect(rows[1].portions.map((portion) => [portion.code, portion.quantity])).toEqual([['C', 2]])
+  })
+})
+
+describe('recipe adjustments per plan', () => {
+  const recipeId = '0f64b6b4-7599-4bdc-8e31-3492605d3499'
+  const menu = [{ dayOfWeek: 1, mealType: 'breakfast', recipeId, recipeName: 'Avena', servings: 1, portions: 2, ingredients: ['1 taza de avena'] }, { dayOfWeek: 1, mealType: 'dinner', recipeId, recipeName: 'Avena', servings: 1, portions: 2, ingredients: ['1 taza de avena'] }]
+
+  it('replaces the lines of that recipe only in the meal it was adjusted for', () => {
+    const adjusted = applyRecipeAdjustments(menu, { [`breakfast|${recipeId}`]: { lines: ['1/2 taza de avena', ' 1 fruta '] } })
+    expect(adjusted[0]).toMatchObject({ ingredients: ['1/2 taza de avena', '1 fruta'], adjusted: true })
+    expect(adjusted[1].ingredients).toEqual(['1 taza de avena'])
+    expect(adjusted[1].adjusted).toBeUndefined()
+    // La receta original (el menú de entrada) no cambia.
+    expect(menu[0].ingredients).toEqual(['1 taza de avena'])
+  })
+
+  it('drops malformed adjustments', () => {
+    expect(normalizeRecipeAdjustments({ [`brunch|${recipeId}`]: { lines: ['x'] }, 'breakfast|not-an-id': { lines: ['x'] }, [`lunch|${recipeId}`]: { lines: [] }, [`dinner|${recipeId}`]: { lines: [3, '', 'ok'] } })).toEqual({ [`dinner|${recipeId}`]: { lines: ['ok'], factor: 1 } })
+    expect(normalizeRecipeAdjustments(null)).toEqual({})
+  })
+})
+
+describe('adjustment factor', () => {
+  const recipeId = '0f64b6b4-7599-4bdc-8e31-3492605d3499'
+  const adjustments = { [`lunch|${recipeId}`]: { lines: ['3 tortillas'], factor: 1.75 } }
+
+  it('is 1 unless that recipe was adjusted in that meal, and stays within sane bounds', () => {
+    expect(adjustmentFactor(adjustments, 'lunch', recipeId)).toBe(1.75)
+    expect(adjustmentFactor(adjustments, 'dinner', recipeId)).toBe(1)
+    expect(adjustmentFactor(null, 'lunch', recipeId)).toBe(1)
+    expect(normalizeRecipeAdjustments({ [`lunch|${recipeId}`]: { lines: ['x'], factor: 999 } })[`lunch|${recipeId}`].factor).toBe(10)
+    expect(normalizeRecipeAdjustments({ [`lunch|${recipeId}`]: { lines: ['x'], factor: 'abc' } })[`lunch|${recipeId}`].factor).toBe(1)
+  })
+
+  it('scales the energy and the estimated equivalents of the adjusted option', () => {
+    const [entry] = applyRecipeAdjustments([{ dayOfWeek: 1, mealType: 'lunch', recipeId, recipeName: 'Quesadillas', servings: 1, kcal: 344, equivalents: { C: 2, AOA_B: 1 }, ingredients: ['2 tortillas'] }], adjustments)
+    expect(entry.kcal).toBe(602)
+    expect(entry.equivalents).toEqual({ C: 3.5, AOA_B: 1.75 })
+  })
+})
+
+describe('adjustment limits', () => {
+  it('caps valid adjustments without letting junk keys push them out', () => {
+    const junk = Object.fromEntries(Array.from({ length: 300 }, (_, index) => [`junk-${index}`, { lines: ['x'] }]))
+    const id = '0f64b6b4-7599-4bdc-8e31-3492605d3499'
+    expect(Object.keys(normalizeRecipeAdjustments({ ...junk, [`lunch|${id}`]: { lines: ['ok'] } }))).toEqual([`lunch|${id}`])
   })
 })

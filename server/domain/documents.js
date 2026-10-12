@@ -1,12 +1,10 @@
-const MEAL_TYPE_LABELS = {
-  breakfast: 'Desayuno',
-  lunch: 'Comida',
-  snack: 'Colación',
-  // Segunda colación (vespertina). En el plan entregado las dos se llaman "Colación" y se
-  // distinguen por su hora, como en el formato en papel.
-  snack2: 'Colación',
-  dinner: 'Cena',
-}
+import { mealBadgePortions } from './equivalents.js'
+import { PLAN_MEALS, PLAN_MEAL_KEYS, formatMealTime, normalizeMealTimes } from './planMeals.js'
+
+// Nombre de cada tiempo de comida en el plan entregado (todas las colaciones son "Colación" y se
+// distinguen por su hora, como en el formato en papel) y su orden en el día.
+const MEAL_TYPE_LABELS = Object.fromEntries(PLAN_MEALS.map((meal) => [meal.key, meal.printLabel]))
+const MEAL_TYPE_ORDER = PLAN_MEAL_KEYS
 
 const DAY_LABELS = {
   1: 'Lunes',
@@ -17,8 +15,6 @@ const DAY_LABELS = {
   6: 'Sábado',
   7: 'Domingo',
 }
-
-const MEAL_TYPE_ORDER = ['breakfast', 'lunch', 'snack', 'snack2', 'dinner']
 
 // Grupos de equivalentes que el plan impreso muestra como "porciones" (los círculos de color junto
 // a cada tiempo de comida). El catálogo trae el grupo con varios nombres según su origen (SMAE:
@@ -36,6 +32,7 @@ const EQUIVALENT_GROUPS = [
   { code: 'LAC', label: 'Lácteos' },
   { code: 'G_CP', label: 'Grasa Con Proteína' },
   { code: 'G_SP', label: 'Grasa Sin Proteína' },
+  { code: 'AZ', label: 'Azúcares' },
 ]
 
 function equivalentGroupCode(group) {
@@ -53,6 +50,7 @@ function equivalentGroupCode(group) {
   }
   if (name.startsWith('leche') || name.startsWith('lacteo')) return 'LAC'
   if (name.startsWith('grasa')) return name.includes('con prote') ? 'G_CP' : 'G_SP'
+  if (name.startsWith('azucar')) return 'AZ'
   return null
 }
 
@@ -110,32 +108,57 @@ function buildMenuSnapshot(mealSlots) {
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek || MEAL_TYPE_ORDER.indexOf(a.mealType) - MEAL_TYPE_ORDER.indexOf(b.mealType))
 }
 
-// Horas de los tiempos de comida tal como se guardan en el plan: sólo las claves conocidas y sólo
-// valores "HH:MM" de 24 h; lo demás se descarta.
-function normalizeMealTimes(value) {
-  const times = {}
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return times
-  for (const mealType of MEAL_TYPE_ORDER) {
-    const time = typeof value[mealType] === 'string' ? value[mealType].trim() : ''
-    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) times[mealType] = time
-  }
-  return times
+// Ajustes de receta propios de un plan: la nutrióloga reescribe las cantidades de una receta para
+// esta paciente (según sus equivalentes) sin tocar la receta del catálogo. Se guardan por tiempo de
+// comida y receta: { "<tiempo>|<recipeId>": { lines: [...], factor } }. `lines` es lo que lee la
+// paciente; `factor` es por cuánto se multiplicaron las cantidades respecto a la receta en las
+// porciones del tiempo (1 = sin cambio) y es lo que permite que energía, macros y micronutrientes
+// del plan sigan al ajuste, porque del texto libre no se pueden recalcular.
+const adjustmentKey = (mealType, recipeId) => `${mealType}|${recipeId}`
+
+const MAX_ADJUSTMENTS = 60
+const normalizeFactor = (value) => { const number = Number(value); return Number.isFinite(number) && number > 0 ? Math.min(10, Math.max(0.1, Math.round(number * 100) / 100)) : 1 }
+
+// Factor nutrimental del ajuste de una receta en un tiempo de comida (1 si no tiene ajuste).
+function adjustmentFactor(adjustments, mealType, recipeId) {
+  const adjustment = adjustments?.[adjustmentKey(mealType, recipeId)]
+  return adjustment ? normalizeFactor(adjustment.factor) : 1
 }
 
-// "10:00" → "10 am", "14:30" → "2:30 pm", como se escribe en el plan en papel.
-function formatMealTime(time) {
-  const match = /^(\d{2}):(\d{2})$/.exec(String(time || ''))
-  if (!match) return ''
-  const hours = Number(match[1])
-  const hour12 = hours % 12 || 12
-  return `${hour12}${match[2] === '00' ? '' : `:${match[2]}`} ${hours < 12 ? 'am' : 'pm'}`
+function normalizeRecipeAdjustments(value) {
+  const result = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return result
+  for (const [key, adjustment] of Object.entries(value)) {
+    // Como mucho 7 tiempos × 7 recetas distintas; el tope se aplica a los ajustes válidos.
+    if (Object.keys(result).length >= MAX_ADJUSTMENTS) break
+    const [mealType, recipeId, ...rest] = String(key).split('|')
+    if (rest.length || !MEAL_TYPE_ORDER.includes(mealType) || !/^[0-9a-f-]{36}$/i.test(recipeId || '')) continue
+    if (!Array.isArray(adjustment?.lines)) continue
+    const lines = adjustment.lines.filter((line) => typeof line === 'string').map((line) => line.trim().slice(0, 240)).filter(Boolean).slice(0, 40)
+    if (lines.length) result[adjustmentKey(mealType, recipeId)] = { lines, factor: normalizeFactor(adjustment.factor) }
+  }
+  return result
+}
+
+// Aplica los ajustes del plan al menú: la opción ajustada muestra los renglones reescritos, que ya
+// son "lo que le toca" a la paciente (por eso deja de aplicar el aviso de rendimiento/porciones).
+function applyRecipeAdjustments(menu, adjustments) {
+  const clean = normalizeRecipeAdjustments(adjustments)
+  return (menu || []).map((entry) => {
+    const adjustment = clean[adjustmentKey(entry.mealType, entry.recipeId)]
+    if (!adjustment) return entry
+    const scale = (value) => Math.round((Number(value) || 0) * adjustment.factor * 100) / 100
+    return { ...entry, ingredients: adjustment.lines, adjusted: true, kcal: Math.round((Number(entry.kcal) || 0) * adjustment.factor), equivalents: Object.fromEntries(Object.entries(entry.equivalents || {}).map(([code, value]) => [code, scale(value)])) }
+  })
 }
 
 // El plan entregado no va por día sino por opciones intercambiables: por cada tiempo de comida,
 // las recetas distintas de la semana en el orden en que aparecen (lunes → domingo). Repetir una
-// receta varios días no genera opciones repetidas. Las porciones del tiempo de comida son los
-// equivalentes de su primera opción (la receta base de la Distribución).
-function buildMealOptions(menu, mealTimes) {
+// receta varios días no genera opciones repetidas. Las porciones del tiempo de comida son las que
+// la nutrióloga repartió en el paso Equivalentes; si el plan no tiene ese cálculo, se estiman con
+// los equivalentes de su primera opción (la receta base de la Distribución).
+function buildMealOptions(menu, mealTimes, equivalentPlan) {
+  const hasPrescription = Object.values(equivalentPlan?.distribution || {}).some((meal) => mealBadgePortions(meal).length > 0)
   const times = normalizeMealTimes(mealTimes)
   return MEAL_TYPE_ORDER.map((mealType) => {
     const options = []
@@ -146,7 +169,10 @@ function buildMealOptions(menu, mealTimes) {
       seen.add(key)
       options.push(entry)
     }
-    const equivalents = options[0]?.equivalents || {}
+    // Con reparto de equivalentes en el plan, las porciones son sólo las prescritas: un tiempo al
+    // que no se le repartió nada sale sin círculos, no con una estimación que nadie indicó.
+    const prescribed = mealBadgePortions(equivalentPlan?.distribution?.[mealType])
+    const equivalents = hasPrescription ? Object.fromEntries(prescribed.map((portion) => [portion.code, portion.quantity])) : options[0]?.equivalents || {}
     const portions = EQUIVALENT_GROUPS
       .map((group) => ({ ...group, quantity: Math.round((equivalents[group.code] || 0) * 2) / 2 }))
       .filter((group) => group.quantity > 0)
@@ -197,4 +223,4 @@ function sanitizeJpeg(buffer) {
   return null
 }
 
-export { normalizeMealTimes, formatMealTime, sanitizeJpeg, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }
+export { normalizeMealTimes, formatMealTime, normalizeRecipeAdjustments, applyRecipeAdjustments, adjustmentKey, adjustmentFactor, sanitizeJpeg, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }

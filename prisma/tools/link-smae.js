@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 import { PrismaClient } from '@prisma/client'
 import { normalize, parseLine, tokensOf, variants, VOLUME_ML, WEIGHT_UNITS, COUNT_GRAMS } from './ingredientMatch.js'
 import { FOODS, DEFAULT_FOOD, APPROX_GROUP } from './recetarioFoods.js'
+import { perServingFromIngredients } from '../../server/domain/recipeNutrition.js'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '../..')
@@ -272,10 +273,9 @@ const write = async () => {
     const links = [...merged.values()].map((link) => ({ ...link, quantity: Math.max(1, Math.round(link.quantity)) }))
     const used = links.length ? await prisma.ingredient.findMany({ where: { id: { in: links.map((link) => link.ingredientId) } } }) : []
     const nutritionById = new Map(used.map((item) => [item.id, item.nutrition || {}]))
-    const totals = { kcal: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 }
-    for (const link of links) { const nutrition = nutritionById.get(link.ingredientId) || {}; const factor = link.quantity / 100; for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor }
-    const servings = Number(recipe.servings) || 1
-    const calculatedNutrition = Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round((value / servings) * 10) / 10]))
+    // Mismo cálculo que usa el servidor (macros Y micronutrientes): con una copia propia que sólo
+    // sumaba macros, el % de adecuación de todo el recetario salía en 0.
+    const calculatedNutrition = perServingFromIngredients(links.map((link) => ({ quantity: link.quantity, ingredient: { nutrition: nutritionById.get(link.ingredientId) } })), recipe.servings)
     await prisma.$transaction([
       prisma.recipeIngredient.deleteMany({ where: { recipeId: row.id } }),
       ...(links.length ? [prisma.recipeIngredient.createMany({ data: links.map((link) => ({ recipeId: row.id, ingredientId: link.ingredientId, quantity: link.quantity, unit: link.unit, equivalence: link.equivalence })) })] : []),

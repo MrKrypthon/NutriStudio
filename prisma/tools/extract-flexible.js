@@ -1,12 +1,19 @@
 // Extrae las recetas de "RECETARIOFLEXIBLE_MI DIETA FLEXIBLE.pdf": una receta por página con
-// INGREDIENTES / Información Nutricional (Energía + Macros) / INSTRUCCIONES, y una foto por página.
-// Salida: JSON con { source, mealType, name, nutrition, ingredientsText, instructions, imageFile }
-// y las imágenes normalizadas en storage/recipes/.
+// INGREDIENTES / Información Nutricional (Energía + Macros) / INSTRUCCIONES.
+// Salida: JSON con { source, mealType, page, name, servings, nutrition, ingredientsText, instructions, imageFile }.
+//
+// La página es un collage de marcos de texto independientes (ingredientes, cuadro nutricional,
+// insignias "Post Workout" / "1 porcion", instrucciones, notas) cuya posición cambia de una página
+// a otra. `pdftotext -layout` los aplana por renglón físico y mezcla marcos vecinos, así que aquí
+// se lee `pdftotext -bbox-layout` y cada dato se toma por coordenadas.
+//
+// El PDF no trae fotos de comida: las únicas imágenes de cada página son el fondo de madera y la
+// marca de agua del logo, por eso imageFile siempre es null.
 //
 // Uso: node prisma/tools/extract-flexible.js [pdfPath] [outJson]
 
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, copyFileSync, rmSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -14,134 +21,172 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '../..')
 const pdfPath = process.argv[2] || path.join(root, 'nuevasRecetas/RECETARIOFLEXIBLE_MI DIETA FLEXIBLE.pdf')
 const outJson = process.argv[3] || '/tmp/opencode/recetas/flexible.json'
-const outDir = path.join(root, 'storage/recipes')
-const tmpDir = path.join(root, '.tmp-flexible-images')
 
 const SECTION_MEAL = [
-  [/^desayuno/i, 'breakfast'],
-  [/^almuerzo/i, 'lunch'],
-  [/^cena/i, 'dinner'],
-  [/^treat/i, 'dessert'],
-  [/^smoothie/i, 'snack'],
-  [/^ensalada/i, 'base'],
+  [/^desayunos/i, 'breakfast'],
+  [/^almuerzos/i, 'lunch'],
+  [/^cenas/i, 'dinner'],
+  [/^treats/i, 'dessert'],
+  [/^smoothies/i, 'snack'],
+  [/^ensaladas/i, 'base'],
 ]
 
-const slugify = (value) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
-const clean = (value) => value.replace(/[·�]/g, '').replace(/\s+/g, ' ').trim()
-const stripMarker = (value) => value.replace(/^[⁞•\s]+/, '').trim()
-const num = (raw) => { const m = String(raw).match(/(\d+(?:[.,]\d+)?)/); return m ? Number(m[1].replace(',', '.')) : 0 }
+const clean = (value) => value.replace(/[·\uFFFD]/g, '').replace(/\s+/g, ' ').trim()
+const unescapeXml = (value) => value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&')
+const round2 = (value) => Math.round(value * 100) / 100
+const byY = (a, b) => a.y0 - b.y0 || a.x0 - b.x0
 
-const pages = execFileSync('pdftotext', ['-layout', pdfPath, '-'], { maxBuffer: 128 * 1024 * 1024 }).toString('utf8').split('\f')
+// Une renglones de un mismo párrafo; el corte silábico de fin de renglón ("endul-" + "zar") se cierra.
+const joinWrapped = (parts) => parts.reduce((text, part) => {
+  if (!text) return part
+  return /\p{Ll}-$/u.test(text) && /^\p{Ll}/u.test(part) ? text.slice(0, -1) + part : `${text} ${part}`
+}, '')
 
-const imageByPage = () => {
-  const out = execFileSync('pdfimages', ['-list', pdfPath], { maxBuffer: 64 * 1024 * 1024 }).toString('utf8')
-  const byPage = new Map()
-  for (const line of out.split('\n')) {
-    const cells = line.trim().split(/\s+/)
-    if (cells.length < 12 || !/^\d+$/.test(cells[0])) continue
-    const [page, imgNum, type, width, height] = cells
-    if (type === 'smask') continue
-    const area = Number(width) * Number(height)
-    const list = byPage.get(Number(page)) || []
-    list.push({ imgNum, area })
-    byPage.set(Number(page), list)
-  }
-  return byPage
+// Renglones de cada página con su caja: { x0, y0, x1, y1, text }.
+const readPages = () => {
+  const xml = execFileSync('pdftotext', ['-bbox-layout', pdfPath, '-'], { maxBuffer: 256 * 1024 * 1024 }).toString('utf8')
+  return xml.split(/<page /).slice(1).map((pageXml) => {
+    const lines = []
+    for (const m of pageXml.matchAll(/<line xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="([\d.]+)">([\s\S]*?)<\/line>/g)) {
+      const words = [...m[5].matchAll(/<word[^>]*>([\s\S]*?)<\/word>/g)].map((w) => unescapeXml(w[1]))
+      const text = clean(words.join(' '))
+      if (text) lines.push({ x0: Number(m[1]), y0: Number(m[2]), x1: Number(m[3]), y1: Number(m[4]), text })
+    }
+    return lines
+  })
 }
 
-const parseRecipe = (raw, pageNumber) => {
-  const lines = raw.split('\n').map(clean).filter(Boolean)
-  const ingIdx = lines.findIndex((line) => /INGREDIENTES/i.test(line))
-  if (ingIdx < 0) return null
+const isMark = (line) => /^[⁞•\s]+$/.test(line.text)
+const isStepNumber = (line) => /^\d+\.$/.test(line.text)
 
-  const BOILER = /^(post|out|workout|º|1 porcion|1 porción|porcion|porci[oó]n)$/i
-  const titleLines = lines.slice(0, ingIdx).filter((line) => !BOILER.test(line) && !/^\d+$/.test(line) && !/toppings?:/i.test(line) && !/informaci[oó]n nutricional/i.test(line))
-  const name = titleLines.join(' ').trim().replace(/\b([A-Z])/g, (m) => m)
-  if (!name || name.length < 3) return null
+const parseRecipe = (lines, pageNumber) => {
+  const header = (re) => lines.find((line) => re.test(line.text))
+  const ingHeader = header(/^INGREDIENTES$/i)
+  const instHeader = header(/^INSTRUCCIONES$/i)
+  const nutHeader = header(/^Informaci[oó]n Nutricional:?$/i)
+  const marks = lines.filter(isMark).sort(byY)
+  // Descarta portadillas, la guía de meal prep y la página de toppings: no son recetas completas.
+  if (!ingHeader || !instHeader || marks.length < 2) return null
 
-  // Ingredientes: líneas marcadas con "⁞⁞"; las continuaciones (líneas sin marca, que no parecen
-  // instrucción/encabezado) se pegan a la anterior.
-  const ingredientsText = []
-  const NOISE = /INSTRUCCIONES|Informaci[oó]n Nutricional|Energ[ií]a|Macros|kcal|\d\s*g\s*(HCO|Prote|L[ií]pidos)|^\d+[.)]\s|^(Post|Workout|porcion|porci[oó]n|NOTA)/i
-  for (const line of lines.slice(ingIdx + 1)) {
-    if (/⁞|•/.test(line)) { ingredientsText.push(stripMarker(line)); continue }
-    if (!ingredientsText.length) continue
-    if (NOISE.test(line) || /^(Desayunos?|Almuerzos?|Cenas?|Treats|Smoothies|Ensaladas)/i.test(line)) continue
-    ingredientsText[ingredientsText.length - 1] += ` ${line}`
+  // Título: los renglones en tipografía grande sobre el encabezado INGREDIENTES.
+  const name = lines.filter((line) => line.y0 < ingHeader.y0 && line.y1 - line.y0 > 25).sort(byY).map((line) => line.text).join(' ').trim()
+  if (name.length < 3) return null
+
+  // Ingredientes: una viñeta "⁞⁞" por ingrediente. El texto vive en la columna pegada a la derecha
+  // de las viñetas; un renglón alineado con una viñeta abre ingrediente y los siguientes sin viñeta
+  // son su continuación. La columna termina en el encabezado INSTRUCCIONES cuando éste queda debajo.
+  const markX = Math.max(...marks.map((mark) => mark.x1))
+  const columnBottom = instHeader.y0 > marks[0].y0 ? instHeader.y0 : Infinity
+  const column = lines
+    .filter((line) => !isMark(line) && !isStepNumber(line) && line.x0 > markX && line.x0 < markX + 45 && line.y0 >= marks[0].y0 - 6 && line.y0 < columnBottom)
+    .sort(byY)
+  const items = []
+  let previous = null
+  for (const line of column) {
+    if (marks.some((mark) => Math.abs(mark.y0 - line.y0) < 6)) items.push([line.text])
+    else if (items.length && previous && line.y0 - previous.y0 < 22) items[items.length - 1].push(line.text)
+    else if (items.length) break
+    else continue
+    previous = line
   }
+  const ingredientsText = items.map(joinWrapped)
+  if (ingredientsText.length !== marks.length) throw new Error(`Página ${pageNumber} (${name}): ${marks.length} viñetas pero ${ingredientsText.length} ingredientes.`)
 
-  // Nutrición: regex estrictas sobre toda la página (las columnas se mezclan con -layout).
-  const nutrition = { kcal: 0, carbs: 0, protein: 0, fat: 0 }
-  const all = lines.slice(ingIdx)
-  const findNum = (re) => { for (const line of all) { const m = line.match(re); if (m) return Number(m[1].replace(',', '.')) } return 0 }
-  nutrition.kcal = findNum(/(\d+(?:[.,]\d+)?)\s*kcal/i) || findNum(/Energ[ií]a:?\s*(\d+(?:[.,]\d+)?)/i)
-  nutrition.carbs = findNum(/(\d+(?:[.,]\d+)?)\s*g\s*(?:HCO|carbohidratos?)/i)
-  nutrition.protein = findNum(/(\d+(?:[.,]\d+)?)\s*g\s*prote[ií]na/i)
-  nutrition.fat = findNum(/(\d+(?:[.,]\d+)?)\s*g\s*l[ií]pidos?/i)
+  // Instrucciones: los números "1." "2." van en su propio marco; el texto de cada paso es la columna
+  // a su derecha, desde la altura del número hasta el siguiente número. Tras el último número el
+  // paso termina en el primer salto de renglón mayor al interlineado (ahí empiezan notas y pie).
+  const numbers = lines.filter((line) => isStepNumber(line) && line.y0 > instHeader.y0 - 6).sort(byY)
+  const numberX = Math.min(...numbers.map((line) => line.x0))
+  const body = lines
+    .filter((line) => !isStepNumber(line) && !isMark(line) && line.x0 > numberX + 18 && line.x0 < numberX + 42 && line.y0 > instHeader.y0)
+    .sort(byY)
+  const steps = numbers.map((number, index) => {
+    const end = index + 1 < numbers.length ? numbers[index + 1].y0 - 4 : Infinity
+    const parts = []
+    let last = null
+    for (const line of body) {
+      if (line.y0 < number.y0 - 4 || line.y0 >= end) continue
+      if (last && line.y0 - last.y0 > 24) break
+      parts.push(line.text)
+      last = line
+    }
+    return `${number.text} ${joinWrapped(parts)}`.trim()
+  })
+  const instructions = steps.join(' ')
 
-  const instIdx = lines.findIndex((line) => /INSTRUCCIONES/i.test(line))
-  const instructions = instIdx >= 0 ? lines.slice(instIdx + 1).filter((line) => /^\d+[.)]\s/.test(line)).join(' ').replace(/\s*NOTA:.*$/i, '').trim() : ''
+  // Nutrición: sólo los renglones centrados bajo "Informacion Nutricional" (el cuadro), para no
+  // tomar cifras de las notas ("+45g HCO"). Algunas cifras vienen sin la "g".
+  const centre = (line) => (line.x0 + line.x1) / 2
+  const boxBottom = instHeader.y0 > nutHeader?.y0 && Math.abs(centre(instHeader) - centre(nutHeader)) < 90 ? instHeader.y0 : Infinity
+  const box = nutHeader
+    ? lines.filter((line) => line !== nutHeader && Math.abs(centre(line) - centre(nutHeader)) < 70 && line.y0 > nutHeader.y0 && line.y0 < Math.min(nutHeader.y0 + 280, boxBottom)).sort(byY).map((line) => line.text)
+    : []
+  const findNum = (re) => { for (const text of box) { const m = text.match(re); if (m) return Number(m[1].replace(',', '.')) } return 0 }
+  const nutrition = {
+    kcal: findNum(/(\d+(?:[.,]\d+)?)\s*kcal/i),
+    carbs: findNum(/(\d+(?:[.,]\d+)?)\s*g?\s*HCO/i),
+    protein: findNum(/(\d+(?:[.,]\d+)?)\s*g?\s*prote[ií]na/i),
+    fat: findNum(/(\d+(?:[.,]\d+)?)\s*g?\s*l[ií]pidos?/i),
+  }
+  const fiber = findNum(/(\d+(?:[.,]\d+)?)\s*g?\s*fibra/i)
+  if (fiber) nutrition.fiber = fiber
 
-  // Descarta páginas-intro (guía de meal prep, portadillas de sección): no traen ingredientes.
-  if (ingredientsText.length < 2) return null
+  // Porciones: la insignia "N porcion(es)". wholePreparation indica que el cuadro nutricional es
+  // de toda la preparación y no de una porción.
+  const badge = lines.map((line) => line.text.match(/^(\d+)\s*porci[oó]n(?:es)?$/i)).find(Boolean)
+  const servings = badge ? Number(badge[1]) : 1
+  const wholePreparation = box.some((text) => /por toda la preparaci[oó]n/i.test(text))
 
-  return { page: pageNumber, name, nutrition, ingredientsText, instructions }
+  return { page: pageNumber, name, servings, wholePreparation, nutrition, ingredientsText, instructions }
+}
+
+// Correcciones puntuales de ligaduras en títulos y de erratas del cuadro nutricional del PDF.
+const NAME_FIX = {
+  'Hamburguesas de atUn': 'Hamburguesas de atún',
+  'Pollo con chIcharos': 'Pollo con chícharos',
+  'Muffins Choco-PlAtano': 'Muffins choco-plátano',
+  'CafE Frappuccino': 'Café frappuccino',
+  'Ensalada PakistanI': 'Ensalada pakistaní',
+  'Ensalada de Manzana y Brocoli': 'Ensalada de manzana y brócoli',
+  'Crema de Espinaca': 'Crema de espinaca',
+  'Sandwich Montecristo': 'Sándwich Montecristo',
+  'Pancakes de avena': 'Pancakes de avena',
+}
+const NUT_FIX = {
+  'Pro-oats': { fat: 3.85 }, // impreso "3-85g"
+  'Apple&Carrot Cream Salad': { carbs: 25.2 }, // impreso "252g"
+}
+// Páginas cuyo contenido impreso es de otra receta: no se importan hasta que alguien las revise.
+const SKIP = {
+  'Greek Salad': 'la página repite los ingredientes e instrucciones de "Apple&Carrot Cream Salad"',
 }
 
 const main = () => {
-  const byPage = imageByPage()
-  mkdirSync(outDir, { recursive: true })
-  mkdirSync(tmpDir, { recursive: true })
-  execFileSync('pdfimages', ['-j', '-p', pdfPath, path.join(tmpDir, 'all')], { stdio: 'ignore' })
-  const listing = readdirSync(tmpDir)
-
   const recipes = []
   let mealType = 'breakfast'
-  pages.forEach((raw, i) => {
+  readPages().forEach((lines, i) => {
     const pageNumber = i + 1
-    const head = clean(raw.split('\n').find((line) => clean(line)) || '')
-    for (const [re, meal] of SECTION_MEAL) if (re.test(head) && /^(Desayunos|Almuerzos|Cenas|treats|Smoothies|Ensaladas)/i.test(head)) mealType = meal
-    const parsed = parseRecipe(raw, pageNumber)
+    // Las portadillas de sección llevan su título en una tipografía mayor que la de las recetas.
+    const cover = lines.find((line) => line.y1 - line.y0 > 45)
+    if (cover) for (const [re, meal] of SECTION_MEAL) if (re.test(cover.text)) mealType = meal
+    const parsed = parseRecipe(lines, pageNumber)
     if (!parsed) return
-    const images = byPage.get(pageNumber) || []
-    let imageFile = null
-    if (images.length) {
-      const best = images.reduce((a, b) => (a.area >= b.area ? a : b))
-      const prefix = `all-${String(pageNumber).padStart(3, '0')}-${String(best.imgNum).padStart(3, '0')}`
-      const sourceName = listing.find((n) => n.startsWith(prefix))
-      if (sourceName) {
-        const target = `flex-${slugify(parsed.name)}.jpg`
-        const sourcePath = path.join(tmpDir, sourceName)
-        try { execFileSync('convert', [sourcePath, '-resize', '1000x1000>', '-quality', '82', path.join(outDir, target)]) } catch { }
-        if (existsSync(path.join(outDir, target))) imageFile = target
-      }
+    if (SKIP[parsed.name]) { console.warn(`Omitida p.${pageNumber} "${parsed.name}": ${SKIP[parsed.name]}.`); return }
+
+    const { wholePreparation, ...recipe } = parsed
+    let nutrition = { ...recipe.nutrition, ...(NUT_FIX[recipe.name] || {}) }
+    // En la app `nutrition` es de UNA porción y los ingredientes son de toda la receta: si el cuadro
+    // del libro es "por toda la preparación" y rinde N porciones, se divide entre N.
+    if (wholePreparation && recipe.servings > 1) {
+      nutrition = Object.fromEntries(Object.entries(nutrition).map(([key, value]) => [key, round2(value / recipe.servings)]))
+      console.log(`p.${pageNumber} "${recipe.name}": nutrición de toda la preparación dividida entre ${recipe.servings}.`)
     }
-    // Correcciones puntuales de OCR/ligaduras y de valores mal capturados por el texto del PDF.
-    const NAME_FIX = {
-      'Hamburguesas de atUn': 'Hamburguesas de atún',
-      'Pollo con chIcharos': 'Pollo con chícharos',
-      'Muffins Choco-PlAtano': 'Muffins choco-plátano',
-      'CafE Frappuccino': 'Café frappuccino',
-      'Ensalada PakistanI': 'Ensalada pakistaní',
-      'Ensalada de Manzana y Brocoli': 'Ensalada de manzana y brócoli',
-      'Crema de Espinaca': 'Crema de espinaca',
-      'Sandwich Montecristo': 'Sándwich Montecristo',
-      'Pancakes de avena': 'Pancakes de avena',
-    }
-    const NUT_FIX = {
-      'Pro-oats': { fat: 3.85 },
-      'Crepa de Espinaca': { fat: 11.2 },
-      'Chicken Bakes': { fat: 13.3 },
-      'Apple&Carrot Cream Salad': { carbs: 25.2 },
-    }
-    const fixed = { ...parsed, name: NAME_FIX[parsed.name] || parsed.name, nutrition: { ...parsed.nutrition, ...(NUT_FIX[parsed.name] || {}) } }
-    recipes.push({ source: 'recetario-flexible', mealType, ...fixed, imageFile })
+    recipes.push({ source: 'recetario-flexible', mealType, ...recipe, name: NAME_FIX[recipe.name] || recipe.name, nutrition, imageFile: null })
   })
 
-  rmSync(tmpDir, { recursive: true, force: true })
+  mkdirSync(path.dirname(outJson), { recursive: true })
   writeFileSync(outJson, JSON.stringify(recipes, null, 2))
   console.log(`Recetas: ${recipes.length} -> ${outJson}`)
-  console.log(`Con imagen: ${recipes.filter((r) => r.imageFile).length}`)
 }
 
 main()

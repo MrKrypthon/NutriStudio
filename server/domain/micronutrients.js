@@ -86,7 +86,10 @@ function computeMicronutrientAdequacy(mealSlots, age, sex) {
     .map((key) => {
       const target = bracket[key]
       const value = dailyTotals[key]
-      return { key, label: NUTRIENT_LABELS[key].label, unit: NUTRIENT_LABELS[key].unit, value, target, percent: Math.round((value / target) * 1000) / 10 }
+      // Un total de exactamente 0 no es una ingesta real: quiere decir que ninguna receta del menú
+      // trae ese dato (el catálogo SMAE no incluye vitamina D, E, K, B12, zinc, yodo ni selenio).
+      // Se marca para que la pantalla diga "sin dato" en vez de alarmar con un 0 %.
+      return { key, label: NUTRIENT_LABELS[key].label, unit: NUTRIENT_LABELS[key].unit, value, target, percent: Math.round((value / target) * 1000) / 10, noData: value === 0 }
     })
   return { bracket: bracketKey, bracketLabel: bracket.label, nutrients }
 }
