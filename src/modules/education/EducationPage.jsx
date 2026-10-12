@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { educationApi } from '../../lib/api.js'
+import { saveBlob } from '../../lib/download.js'
 
 const CATEGORY_COLORS = { 'Guías prácticas': 'mint', 'Material para paciente': 'yellow', 'Hábitos saludables': 'blue', 'Infografía': 'coral', 'Guía de consulta': 'purple' }
 
@@ -70,9 +71,12 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
 
   const onPickFile = (e) => {
     const file = e.target.files && e.target.files[0]
+    // Limpiar siempre (antes del `return`): reintentar con el MISMO archivo debe volver a disparar change.
+    e.target.value = ''
     if (!file) return
     const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
     if (!allowed.includes(file.type)) { setAttachError('Solo se admiten archivos PDF, PNG, JPG y WebP.'); return }
+    if (file.size > 10 * 1024 * 1024) { setAttachError('El archivo no puede pesar más de 10 MB.'); return }
     const reader = new FileReader()
     reader.onload = async () => {
       setAttachState('uploading')
@@ -85,7 +89,6 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
       } catch (error) { setAttachState('idle'); setAttachError(error.message || 'No se pudo subir el archivo.') }
     }
     reader.readAsDataURL(file)
-    e.target.value = ''
   }
 
   const downloadAttachment = async () => {
@@ -93,12 +96,8 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
     setAttachState('downloading')
     try {
       const blob = await educationApi.downloadAttachmentBlob(detail.id)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = detail.attachmentFileName || 'material'
-      a.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, detail.attachmentFileName || 'material')
+      setAttachState('idle')
       setAttachState('idle')
     } catch { setAttachState('idle') }
   }

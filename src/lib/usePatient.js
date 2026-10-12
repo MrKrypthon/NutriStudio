@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { patientsApi } from './api.js'
 
 // Shared by every patient-scoped screen so each one doesn't repeat the same fetch-by-id effect.
@@ -19,5 +19,6 @@ export function usePatient(patientId) {
     return () => { cancelled = true }
   }, [patientId, tick])
 
-  return { patient, loadState, reload: () => setTick((n) => n + 1) }
+  const reload = useCallback(() => setTick((n) => n + 1), [])
+  return { patient, loadState, reload }
 }
