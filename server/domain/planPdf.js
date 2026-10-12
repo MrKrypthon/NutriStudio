@@ -130,9 +130,17 @@ function fitText(file, font, text, max, min, width) {
   let size = max
   file.font(font).fontSize(size)
   while (size > min && file.widthOfString(text) > width) { size -= 0.5; file.fontSize(size) }
-  let fitted = text
-  while (fitted.length > 1 && file.widthOfString(fitted) > width) fitted = `${fitted.slice(0, -2).trimEnd()}…`
-  return fitted
+  return truncateToWidth(file, text, width)
+}
+
+// Recorta `text` con "…" para que quepa en `width` con la fuente activa. El corte se estima por
+// proporción y se afina unas letras: medir quitando de a una letra sería cuadrático en el largo.
+function truncateToWidth(file, text, width) {
+  const total = file.widthOfString(text)
+  if (total <= width) return text
+  let keep = Math.max(1, Math.floor((text.length * width) / total) - 1)
+  while (keep > 1 && file.widthOfString(`${text.slice(0, keep).trimEnd()}…`) > width) keep -= 1
+  return `${text.slice(0, keep).trimEnd()}…`
 }
 
 function drawWaves(file) {
@@ -215,7 +223,7 @@ function drawPatientLine(file, data, y) {
   const totalWidth = () => fields.reduce((sum, text) => sum + file.widthOfString(text), 0) + gap * (fields.length - 1)
   while (size > 7 && totalWidth() > right - left) { size -= 0.5; file.fontSize(size) }
   // Si ni con la letra mínima caben, el que cede es el nombre.
-  while (totalWidth() > right - left && fields[0].length > 12) fields[0] = `${fields[0].slice(0, -2).trimEnd()}…`
+  if (totalWidth() > right - left) fields[0] = truncateToWidth(file, fields[0], Math.max(60, right - left - (totalWidth() - file.widthOfString(fields[0]))))
   const rest = fields.slice(1)
   const start = left + file.widthOfString(fields[0]) + gap
   file.text(fields[0], left, y, { lineBreak: false })
@@ -517,7 +525,31 @@ function drawEquivalentPages(file, data) {
 // menu, mealTimes, equivalents, recommendations, hydrationNote, contact: [{ kind: 'phone'|'address'|'email', text }], logo,
 // images: Map<imageFile, Buffer> }.
 // `file` debe ser un PDFDocument carta apaisado con margen 0 y su primera hoja ya creada.
-function drawNutritionPlan(file, input) {
+// Topes de lo que se dibuja. El dibujo es síncrono, así que su costo tiene que estar acotado aquí
+// mismo y no depender de que cada ruta que guarda estos textos los haya limitado: nombres y
+// direcciones vienen de varias pantallas, y hay datos guardados antes de que existieran los topes.
+const LIMITS = { name: 160, contact: 160, notes: 6000, recipeName: 200, ingredient: 300, ingredients: 60, entries: 60, contacts: 3 }
+const clip = (value, max) => String(value ?? '').slice(0, max)
+
+function boundInput(input) {
+  return {
+    ...input,
+    patientName: clip(input.patientName, LIMITS.name),
+    nutritionistName: clip(input.nutritionistName, LIMITS.name),
+    licenseNumber: input.licenseNumber ? clip(input.licenseNumber, 40) : null,
+    recommendations: clip(input.recommendations, LIMITS.notes),
+    hydrationNote: clip(input.hydrationNote, LIMITS.notes),
+    contact: (Array.isArray(input.contact) ? input.contact : []).slice(0, LIMITS.contacts).map((item) => ({ kind: item?.kind, text: clip(item?.text, LIMITS.contact) })),
+    menu: (Array.isArray(input.menu) ? input.menu : []).slice(0, LIMITS.entries).map((entry) => ({
+      ...entry,
+      recipeName: clip(entry.recipeName, LIMITS.recipeName),
+      ingredients: (Array.isArray(entry.ingredients) ? entry.ingredients : []).slice(0, LIMITS.ingredients).map((line) => clip(line, LIMITS.ingredient)),
+    })),
+  }
+}
+
+function drawNutritionPlan(file, rawInput) {
+  const input = boundInput(rawInput)
   // El logo va en todas las hojas: se abre una sola vez para no incrustarlo una vez por hoja.
   let logo = null
   if (input.logo) { try { logo = file.openImage(input.logo) } catch { logo = null } }

@@ -145,7 +145,7 @@ app.get('/api/v1/practice', async (request, reply) => {
 app.put('/api/v1/practice', async (request, reply) => {
   const { name, timeZone, address, userName, userEmail, userSpecialty, userPhone, userLicenseNumber, businessHours, fees } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
-  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(address !== undefined ? { address: String(address).trim() || null } : {}), ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(address !== undefined ? { address: String(address).trim().slice(0, 200) || null } : {}), ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
   let user = await prisma.user.findUnique({ where: { id: request.userId }, select: USER_PUBLIC_SELECT })
   if (user) {
     user = await prisma.user.update({
@@ -155,7 +155,7 @@ app.put('/api/v1/practice', async (request, reply) => {
         email: userEmail || user.email,
         ...(userSpecialty !== undefined ? { specialty: userSpecialty } : {}),
         ...(userPhone !== undefined ? { phone: userPhone } : {}),
-        ...(userLicenseNumber !== undefined ? { licenseNumber: String(userLicenseNumber).trim() || null } : {}),
+        ...(userLicenseNumber !== undefined ? { licenseNumber: String(userLicenseNumber).trim().slice(0, 40) || null } : {}),
       },
       select: USER_PUBLIC_SELECT,
     })
