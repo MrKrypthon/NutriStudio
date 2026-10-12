@@ -139,6 +139,8 @@ export const plansApi = {
   evaluate: (id, payload) => apiRequest(`/plans/${id}/evaluation`, { method: 'PUT', body: JSON.stringify(payload) }),
   saveDistribution: (id, mealSlots) => apiRequest(`/plans/${id}/distribution`, { method: 'PUT', body: JSON.stringify({ mealSlots }) }),
   publish: (id) => apiRequest(`/plans/${id}/publish`, { method: 'POST' }),
+  // El PDF del plan tal como se entregará (también en borrador); requiere sesión, por eso es Blob.
+  previewPdfBlob: (id) => downloadBlobRequest(`/plans/${id}/preview-pdf`, 'No se pudo cargar la vista previa.'),
   adequacy: (id) => apiRequest(`/plans/${id}/adequacy`),
   cancel: (id) => apiRequest(`/plans/${id}/cancel`, { method: 'POST' }),
   reactivate: (id) => apiRequest(`/plans/${id}/reactivate`, { method: 'POST' }),
