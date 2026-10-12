@@ -760,6 +760,7 @@ html{scroll-behavior:smooth}
 .anthro-fields{display:grid;gap:0;max-width:680px}
 .anthro-field{display:grid;grid-template-columns:210px 108px 44px auto;justify-content:start;align-items:center;gap:12px;min-height:28px;padding:0}
 .anthro-field-label{font-size:11px;color:#3d3e51}
+.anthro-field-computed .anthro-field-input{background:#f1f6f2;color:var(--green);font-weight:600;cursor:default}
 .anthro-field-input,.anthro-unit,.anthro-derived{border:1px solid var(--line);border-radius:7px;background:#fbfcfc;font:12px 'DM Sans';color:#343444}
 .anthro-field-input{width:100%;min-width:0;padding:5px 10px;text-align:right}
 .anthro-unit{display:flex;align-items:center;justify-content:center;min-width:44px;padding:5px 6px;font-size:10px;color:var(--muted)}

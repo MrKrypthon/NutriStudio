@@ -39,7 +39,7 @@ const GROUP_FIELDS = {
     F('Grasa en sección superior', 'Grasa superior (%)', '%'),
     F('Grasa en sección inferior', 'Grasa inferior (%)', '%'),
     F('Grasa visceral', 'Grasa visceral', 'rating'),
-    F('Masa libre de grasa', 'Masa libre de grasa (kg)', 'kg'),
+    { ...F('Masa libre de grasa', 'Masa libre de grasa (kg)', 'kg'), computed: 'fatFreeKg' },
     { ...F('Masa muscular', 'Kg de músculo', 'kg'), derived: 'musclePct' },
     F('Peso óseo', 'Peso óseo (kg)', 'kg'),
     F('Agua corporal', 'Agua corporal (%)', '%'),
@@ -180,14 +180,20 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   const category = imc ? imcCategory(imc) : null
   const markerPct = imc ? Math.min(100, Math.max(0, ((imc - 4) / (40 - 4)) * 100)) : 0
 
+  // Masa libre de grasa = peso total − masa grasa (peso × %grasa). Se calcula sola a partir de la
+  // bioimpedancia, así que se muestra de sólo lectura en lugar de capturarse a mano.
+  const fatPct = num(values['% Grasa corporal'])
+  const fatFreeKg = peso && fatPct ? peso * (1 - fatPct / 100) : null
+
   const renderField = (field, index) => {
-    const value = values[field.key] ?? ''
+    const computed = field.computed === 'fatFreeKg'
+    const value = computed ? (fatFreeKg != null ? fatFreeKg.toFixed(1) : '') : (values[field.key] ?? '')
     let derived = null
     if (field.derived === 'fatKg' && peso && num(value)) derived = `${((peso * Number(value)) / 100).toFixed(1)} kg`
     if (field.derived === 'musclePct' && peso && num(value)) derived = `${((Number(value) / peso) * 100).toFixed(0)} %`
-    return <div className={'anthro-field' + (activeField === field.key ? ' active' : '')} key={field.key + index}>
+    return <div className={'anthro-field' + (computed ? ' anthro-field-computed' : '') + (activeField === field.key ? ' active' : '')} key={field.key + index}>
       <span className="anthro-field-label">{field.label}</span>
-      <input className="anthro-field-input" type="number" step="0.1" value={value} onFocus={() => setActiveField(field.key)} onChange={(event) => onFieldChange?.(field.key, event.target.value)} />
+      <input className="anthro-field-input" type="number" step="0.1" value={value} readOnly={computed} title={computed ? 'Se calcula como peso total − masa grasa' : undefined} onFocus={() => setActiveField(field.key)} onChange={(event) => { if (!computed) onFieldChange?.(field.key, event.target.value) }} />
       <span className="anthro-unit">{field.unit}</span>
       <span className="anthro-derived">{derived || ''}</span>
     </div>
