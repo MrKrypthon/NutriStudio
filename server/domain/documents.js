@@ -129,24 +129,22 @@ function buildMealOptions(menu) {
   }).filter((row) => row.options.length)
 }
 
-// Lee el tipo y el tamaño reales de una imagen subida a partir de sus bytes (no del tipo que dice
-// el navegador). Devuelve null si no es un JPG o PNG bien formado: lo que se guarda como foto de
-// receta se sirve públicamente y luego lo incrusta pdfkit, así que no debe entrar nada más.
-function readImageInfo(buffer) {
-  if (!Buffer.isBuffer(buffer) || buffer.length < 24) return null
-  if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-    if (buffer.toString('latin1', 12, 16) !== 'IHDR') return null
-    return { ext: 'png', width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) }
-  }
-  if (buffer[0] !== 0xff || buffer[1] !== 0xd8) return null
+// Lee el tamaño real de un JPEG a partir de sus bytes (no del tipo que dice el navegador). Devuelve
+// null si no es un JPEG bien formado. Las fotos de receta sólo se aceptan en JPEG a propósito: se
+// sirven públicamente y luego las incrusta pdfkit, que al JPEG sólo le lee estos mismos marcadores
+// (no lo descomprime), mientras que un PNG lo descomprime y uno dañado puede tumbar el proceso.
+function readJpegSize(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null
   let offset = 2
-  while (offset + 9 < buffer.length) {
+  while (offset + 9 <= buffer.length) {
     if (buffer[offset] !== 0xff) return null
     const marker = buffer[offset + 1]
     if (marker === 0xff) { offset += 1; continue }
     // SOF0–SOF15 llevan el tamaño, salvo DHT (C4), JPG (C8) y DAC (CC).
     if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-      return { ext: 'jpg', height: buffer.readUInt16BE(offset + 5), width: buffer.readUInt16BE(offset + 7) }
+      const height = buffer.readUInt16BE(offset + 5)
+      const width = buffer.readUInt16BE(offset + 7)
+      return width && height ? { width, height } : null
     }
     const length = buffer.readUInt16BE(offset + 2)
     if (length < 2) return null
@@ -155,4 +153,4 @@ function readImageInfo(buffer) {
   return null
 }
 
-export { readImageInfo, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }
+export { readJpegSize, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }

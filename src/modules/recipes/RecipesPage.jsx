@@ -58,6 +58,29 @@ const scaleIngredientLine = (line, factor) => {
   return `${scaled}${line.slice(consumed)}`
 }
 
+// Las fotos de receta se guardan siempre como JPEG de a lo más 1600 px: es de sobra para la tarjeta
+// y para el plan impreso, y el servidor sólo acepta JPEG. Así una foto del celular (varios MB) se
+// puede subir tal cual.
+const RECIPE_PHOTO_MAX_SIDE = 1600
+async function shrinkToJpeg(file) {
+  const url = URL.createObjectURL(file)
+  try {
+    const image = await new Promise((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error('No se pudo leer la imagen.')); img.src = url })
+    const scale = Math.min(1, RECIPE_PHOTO_MAX_SIDE / Math.max(image.naturalWidth, image.naturalHeight))
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
+    const context = canvas.getContext('2d')
+    // Fondo blanco: el JPEG no tiene transparencia y un PNG recortado saldría con fondo negro.
+    context.fillStyle = '#fff'
+    context.fillRect(0, 0, canvas.width, canvas.height)
+    context.drawImage(image, 0, 0, canvas.width, canvas.height)
+    return canvas.toDataURL('image/jpeg', 0.86)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
+}
+
 const RecipeImage = ({ recipe, colorIndex, className }) => {
   const src = recipe.imageFile ? recipesApi.imageUrl(recipe.imageFile) : null
   if (src) return <div className={className + ' has-photo'}><img src={src} alt={recipe.name} loading="lazy" /></div>
@@ -126,11 +149,11 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   const uploadRecipeImage = async (file) => {
     if (!file || !isReal) return
     setImageError('')
-    if (!/^image\/(png|jpe?g)$/.test(file.type)) { setImageError('Sube una imagen JPG o PNG.'); return }
-    if (file.size > 3 * 1024 * 1024) { setImageError('La imagen no puede pesar más de 3 MB.'); return }
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { setImageError('Sube una imagen JPG, PNG o WebP.'); return }
+    if (file.size > 20 * 1024 * 1024) { setImageError('La imagen no puede pesar más de 20 MB.'); return }
     setImageState('saving')
     try {
-      const dataUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('No se pudo leer la imagen.')); reader.readAsDataURL(file) })
+      const dataUrl = await shrinkToJpeg(file)
       const updated = await recipesApi.uploadImage(selected.id, dataUrl)
       applyImage(selected.id, updated.imageFile)
     } catch (error) {
@@ -204,7 +227,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
         <RecipeImage recipe={selected} colorIndex={items.indexOf(selected)} className="detail-image" />
         <div className="detail-content">
           {isReal && <div className="recipe-photo-actions">
-            <label className="secondary ingredient-upload">{imageState === 'saving' ? 'Subiendo…' : selected.imageFile ? 'Cambiar foto' : 'Subir foto'}<input type="file" accept="image/png,image/jpeg" style={{ display: 'none' }} disabled={imageState === 'saving'} onChange={(event) => { uploadRecipeImage(event.target.files?.[0]); event.target.value = '' }} /></label>
+            <label className="secondary ingredient-upload">{imageState === 'saving' ? 'Subiendo…' : selected.imageFile ? 'Cambiar foto' : 'Subir foto'}<input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} disabled={imageState === 'saving'} onChange={(event) => { uploadRecipeImage(event.target.files?.[0]); event.target.value = '' }} /></label>
             {selected.imageFile && <button type="button" className="link-button" disabled={imageState === 'saving'} onClick={removeRecipeImage}>Quitar</button>}
             {!selected.imageFile && <small className="muted">La foto sale en el plan de alimentación de la paciente.</small>}
           </div>}

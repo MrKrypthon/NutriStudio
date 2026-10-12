@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
-import { buildMenuSnapshot, readImageInfo } from './domain/documents.js'
+import { buildMenuSnapshot, readJpegSize } from './domain/documents.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
@@ -280,17 +280,21 @@ app.get('/api/v1/practice/:practiceId/logo', async (request, reply) => {
 // Public for the same reason as the logo route above: recipe cards use these directly as <img
 // src>. The strict file-name pattern blocks path traversal. Files live in storage/recipes, which
 // prisma/import-recetario.js fills from the ebook's embedded photos; the ones the nutritionist
-// uploads herself (POST /recipes/:id/image) are named `u-<recipe id>-<stamp>` and may be PNG.
+// uploads herself (POST /recipes/:id/image) are named `u-<recipe id>-<stamp>.jpg`.
 const recipeImageDir = () => path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH || './storage/recipes')
-const RECIPE_IMAGE_MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png' }
-const RECIPE_IMAGE_MAX_SIDE = 4000
+// La app reduce la foto antes de subirla (1600 px), así que estos topes sólo frenan lo que llegue
+// por fuera de ella. Se limita el total de pixeles, no sólo cada lado: es lo que cuesta memoria a
+// quien la descomprime.
+const RECIPE_IMAGE_MAX_BYTES = 3 * 1024 * 1024
+const RECIPE_IMAGE_MAX_SIDE = 2400
+const RECIPE_IMAGE_MAX_PIXELS = 4_000_000
 
 app.get('/api/v1/recipes/images/:fileName', async (request, reply) => {
   const { fileName } = request.params
-  if (!/^[a-z0-9][a-z0-9-]*\.(jpg|png)$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
+  if (!/^[a-z0-9][a-z0-9-]*\.jpg$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
   try {
     const file = await readFile(path.join(recipeImageDir(), fileName))
-    return reply.type(fileName.endsWith('.png') ? 'image/png' : 'image/jpeg').header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'public, max-age=86400').send(file)
+    return reply.type('image/jpeg').header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'public, max-age=86400').send(file)
   } catch {
     return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
   }
@@ -300,25 +304,22 @@ app.get('/api/v1/recipes/images/:fileName', async (request, reply) => {
 // porque el importador las vuelve a vincular por nombre de archivo.
 const removeUploadedRecipeImage = (imageFile) => (imageFile?.startsWith('u-') ? unlink(path.join(recipeImageDir(), imageFile)).catch(() => {}) : Promise.resolve())
 
-// Foto de una receta. Sale en la tarjeta de la receta y en el plan de alimentación entregado, por
-// eso sólo JPG o PNG: es lo que pdfkit sabe incrustar. El nombre lleva una marca de tiempo para que
-// al cambiarla no se quede la anterior en la caché del navegador.
+// Foto de una receta. Sale en la tarjeta de la receta y en el plan de alimentación entregado. Sólo
+// JPEG, comprobado con los bytes del archivo y no con el tipo declarado (ver readJpegSize). El
+// nombre lleva una marca de tiempo para que al cambiarla no se quede la anterior en la caché.
 app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   const { dataUrl } = request.body || {}
-  const match = typeof dataUrl === 'string' && dataUrl.match(/^data:([a-z/]+);base64,(.+)$/)
-  const ext = match && RECIPE_IMAGE_MIME_EXT[match[1]]
-  if (!match || !ext) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen JPG o PNG.', fields: { dataUrl: true } })
-  const buffer = Buffer.from(match[2], 'base64')
-  if (buffer.byteLength > 3 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La imagen no puede pesar más de 3 MB.', fields: { dataUrl: true } })
-  // El tipo declarado no basta: se comprueba con los bytes que de verdad es ese JPG/PNG, y se
-  // limita su tamaño en pixeles porque una imagen pequeña en bytes puede descomprimirse enorme al
-  // generar el PDF.
-  const info = readImageInfo(buffer)
-  if (!info || info.ext !== ext) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El archivo no es una imagen JPG o PNG válida.', fields: { dataUrl: true } })
-  if (!info.width || !info.height || info.width > RECIPE_IMAGE_MAX_SIDE || info.height > RECIPE_IMAGE_MAX_SIDE) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: `La imagen no puede medir más de ${RECIPE_IMAGE_MAX_SIDE} px por lado.`, fields: { dataUrl: true } })
-  const storageKey = `u-${recipe.id}-${Date.now().toString(36)}.${ext}`
+  const match = typeof dataUrl === 'string' && dataUrl.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/)
+  if (!match) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen JPG.', fields: { dataUrl: true } })
+  // Tope sobre el texto base64 antes de decodificarlo, para no reservar memoria de más.
+  if (match[1].length > Math.ceil(RECIPE_IMAGE_MAX_BYTES / 3) * 4) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La imagen no puede pesar más de 3 MB.', fields: { dataUrl: true } })
+  const buffer = Buffer.from(match[1], 'base64')
+  const size = readJpegSize(buffer)
+  if (!size) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El archivo no es una imagen JPG válida.', fields: { dataUrl: true } })
+  if (size.width > RECIPE_IMAGE_MAX_SIDE || size.height > RECIPE_IMAGE_MAX_SIDE || size.width * size.height > RECIPE_IMAGE_MAX_PIXELS) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: `La imagen es demasiado grande: máximo ${RECIPE_IMAGE_MAX_SIDE} px por lado.`, fields: { dataUrl: true } })
+  const storageKey = `u-${recipe.id}-${Date.now().toString(36)}.jpg`
   await mkdir(recipeImageDir(), { recursive: true })
   await writeFile(path.join(recipeImageDir(), storageKey), buffer)
   await removeUploadedRecipeImage(recipe.imageFile)
@@ -2077,7 +2078,7 @@ async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) 
   for (const imageFile of new Set(menu.map((entry) => entry.imageFile).filter(Boolean))) {
     // Mismo patrón estricto que la ruta pública de fotos: el nombre viene de la base, pero no debe
     // poder salir de la carpeta.
-    if (!/^[a-z0-9][a-z0-9._-]*$/i.test(imageFile)) continue
+    if (!/^[a-z0-9][a-z0-9-]*\.jpg$/.test(imageFile)) continue
     try { images.set(imageFile, await readFile(path.join(imageDirectory, imageFile))) } catch { /* foto faltante: la celda sale sin ella */ }
   }
   const measurement = await prisma.measurement.findFirst({ where: { patientId: patient.id, weightKg: { not: null } }, orderBy: { measuredAt: 'desc' } })

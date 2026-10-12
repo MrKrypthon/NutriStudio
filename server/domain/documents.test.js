@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMealOptions, buildMenuSnapshot, equivalentGroupCode, recipeEquivalents, recipeIngredientLines, readImageInfo } from './documents.js'
+import { buildMealOptions, buildMenuSnapshot, equivalentGroupCode, recipeEquivalents, recipeIngredientLines, readJpegSize } from './documents.js'
 
 describe('buildMenuSnapshot', () => {
   const slot = (overrides) => ({ dayOfWeek: 1, mealType: 'breakfast', recipeId: 'r1', servings: 1, recipe: { name: 'Avena', nutrition: { kcal: 200 } }, ...overrides })
@@ -101,18 +101,20 @@ describe('buildMealOptions', () => {
   })
 })
 
-describe('readImageInfo', () => {
-  const png = (width, height) => { const buffer = Buffer.alloc(33); Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(buffer); buffer.writeUInt32BE(13, 8); buffer.write('IHDR', 12, 'latin1'); buffer.writeUInt32BE(width, 16); buffer.writeUInt32BE(height, 20); return buffer }
+describe('readJpegSize', () => {
   const jpeg = (width, height) => { const buffer = Buffer.alloc(40); Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]).copy(buffer); Buffer.from([0xff, 0xc0, 0x00, 0x11, 0x08]).copy(buffer, 20); buffer.writeUInt16BE(height, 25); buffer.writeUInt16BE(width, 27); return buffer }
 
-  it('reads the real type and size of PNG and JPEG files', () => {
-    expect(readImageInfo(png(800, 600))).toEqual({ ext: 'png', width: 800, height: 600 })
-    expect(readImageInfo(jpeg(1024, 768))).toEqual({ ext: 'jpg', width: 1024, height: 768 })
+  it('reads the real size of a JPEG', () => {
+    expect(readJpegSize(jpeg(1024, 768))).toEqual({ width: 1024, height: 768 })
   })
 
-  it('rejects anything that is not a well-formed JPG or PNG', () => {
-    expect(readImageInfo(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>'))).toBeNull()
-    expect(readImageInfo(Buffer.alloc(64))).toBeNull()
-    expect(readImageInfo(Buffer.from([0xff, 0xd8, 0xff]))).toBeNull()
+  it('rejects anything that is not a well-formed JPEG', () => {
+    expect(readJpegSize(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>'))).toBeNull()
+    expect(readJpegSize(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]))).toBeNull()
+    expect(readJpegSize(Buffer.alloc(64))).toBeNull()
+    expect(readJpegSize(Buffer.from([0xff, 0xd8, 0xff]))).toBeNull()
+    expect(readJpegSize(jpeg(0, 768))).toBeNull()
+    // Segmento que declara más largo del que tiene el archivo: no debe leer fuera del buffer.
+    expect(readJpegSize(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0]))).toBeNull()
   })
 })
