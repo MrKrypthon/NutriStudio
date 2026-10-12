@@ -27,6 +27,7 @@ export const navGroups = [
     label: 'Biblioteca',
     items: [
       ['cap', 'Educación'],
+      ['ruler', 'Equivalencias'],
     ],
   },
 ]

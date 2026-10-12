@@ -1368,3 +1368,32 @@ textarea{field-sizing:content;max-height:340px;overflow-y:auto}
 .adequacy-row.no-data>span{color:var(--muted)}
 .adequacy-note{margin-top:10px;line-height:1.5}
 .wizard-footer>span .link-button{font-size:inherit}
+
+/* Módulo Equivalencias (SMAE 5ª ed.): tabla ancha con encabezado y primera columna fijos. */
+.smae-toolbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 14px;margin-bottom:12px}
+.smae-toolbar .search-field{flex:1 1 240px}
+.smae-toolbar select{border:1px solid var(--line);background:#fff;border-radius:7px;padding:9px 12px;font-size:11px;color:var(--ink)}
+.smae-check{display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--ink);white-space:nowrap}.smae-check input{accent-color:var(--green)}
+.smae-table-panel{padding:0;overflow:hidden;display:flex;flex-direction:column;min-height:0;max-height:100%}
+.smae-table-scroll{overflow:auto;flex:1 1 auto;min-height:0}
+.smae-table{border-collapse:separate;border-spacing:0;font-size:11px;width:max-content;min-width:100%}
+.smae-table th{position:sticky;top:0;z-index:2;background:#fafafc;color:var(--muted);font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.4px;padding:9px 8px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+.smae-table td{padding:7px 8px;text-align:right;border-bottom:1px solid var(--line);color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+.smae-table th.smae-name,.smae-table td.smae-name{position:sticky;left:0;text-align:left;background:#fff;min-width:230px;max-width:290px;white-space:normal;border-right:1px solid var(--line)}
+.smae-table th.smae-name{z-index:3;background:#fafafc}
+.smae-table td.smae-name b{display:block;font-weight:600}.smae-table td.smae-name small{display:block;color:var(--muted);font-size:9px;margin-top:1px}
+.smae-table th:nth-child(2),.smae-table td:nth-child(2),.smae-table th:nth-child(3),.smae-table td:nth-child(3){text-align:left}
+.smae-table tbody tr{cursor:pointer}.smae-table tbody tr:hover td{background:var(--mint)}
+.smae-table td.nd{color:#a9b3ab}
+.smae-table td.flagged{background:#fdf0cf;color:#8a5b00;font-weight:600}.smae-table tbody tr:hover td.flagged{background:#f8e3ab}
+.smae-empty{padding:18px}
+.smae-pager{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line);font-size:10px}
+.smae-pager>div{display:flex;align-items:center;gap:10px}.smae-pager .secondary{padding:6px 11px;font-size:10px}.smae-pager b{font-size:11px}
+.smae-detail{width:min(760px,calc(100% - 32px));max-height:calc(100vh - 40px);overflow:auto}
+.smae-review-note{background:#fdf0cf;color:#6b4700;border-radius:9px;padding:10px 13px;font-size:11px;line-height:1.5;margin-bottom:14px}
+.smae-fields{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px 14px}
+.smae-detail .smae-field{display:block;font-size:11px;color:var(--ink);margin:0}.smae-field>span{display:block;font-weight:600;margin-bottom:4px}.smae-field>span small{font-weight:400;color:var(--muted)}
+.smae-field input{width:100%;border:1px solid var(--line);border-radius:7px;height:32px;padding:0 10px;font:12px 'DM Sans';color:var(--ink)}
+.smae-field.flagged input{border-color:#e0a81f;background:#fffaf0}.smae-field.edited input{border-color:var(--green)}
+.smae-flag{display:block;color:#8a5b00;font-size:10px;line-height:1.4;margin-top:4px}
+.smae-flag button{border:1px solid #e0a81f;background:#fff;border-radius:10px;padding:1px 8px;margin-left:4px;font-size:10px;color:#6b4700;cursor:pointer}

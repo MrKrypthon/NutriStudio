@@ -1,6 +1,6 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import 'dotenv/config'
 import PDFDocument from 'pdfkit'
 import { createHash } from 'node:crypto'
@@ -2233,6 +2233,72 @@ app.post('/api/v1/documents/:documentId/deliver', async (request, reply) => {
   const delivered = await prisma.document.update({ where: { id: document.id }, data: { deliveredAt: new Date() } })
   await logAudit(request, { action: 'delivered', entity: 'Document', entityId: document.id, patientId: document.patientId, metadata: { type: document.type } })
   return delivered
+})
+
+// ── Equivalencias: alimentos del libro SMAE 5ª ed. (tabla SmaeFood) ─────────────────────────────
+const SMAE_NUTRIENT_KEYS = ['grossWeight', 'netWeight', 'kcal', 'protein', 'fat', 'carbs', 'satFat', 'monoFat', 'polyFat', 'cholesterol', 'sugar', 'fiber', 'vitA', 'vitC', 'folicAcid', 'calcium', 'iron', 'potassium', 'sodium', 'phosphorus', 'ethanol', 'gi', 'gl']
+
+app.get('/api/v1/smae-foods/groups', async (request) => {
+  const practiceId = request.practiceId
+  const [groups, pending] = await Promise.all([
+    prisma.smaeFood.groupBy({ by: ['group'], where: { practiceId }, _count: true }),
+    prisma.smaeFood.groupBy({ by: ['group'], where: { practiceId, review: { not: Prisma.AnyNull } }, _count: true }),
+  ])
+  const pendingByGroup = new Map(pending.map((item) => [item.group, item._count]))
+  return { items: groups.map((item) => ({ group: item.group, count: item._count, pending: pendingByGroup.get(item.group) || 0 })) }
+})
+
+app.get('/api/v1/smae-foods', async (request) => {
+  const { search = '', group, review, page, pageSize } = request.query
+  const where = {
+    practiceId: request.practiceId,
+    ...(group ? { group: String(group) } : {}),
+    ...(search ? { name: { contains: String(search).slice(0, 80), mode: 'insensitive' } } : {}),
+    ...(review === '1' ? { review: { not: Prisma.AnyNull } } : {}),
+  }
+  const currentPage = Math.max(Number(page) || 1, 1)
+  const take = Math.min(Math.max(Number(pageSize) || 50, 1), 200)
+  const [items, total] = await prisma.$transaction([
+    prisma.smaeFood.findMany({ where, orderBy: [{ page: 'asc' }, { row: 'asc' }], skip: (currentPage - 1) * take, take }),
+    prisma.smaeFood.count({ where }),
+  ])
+  return { items, total, page: currentPage, pageSize: take }
+})
+
+// Corrige o confirma celdas de un alimento. `values` trae sólo los campos tocados; un valor null
+// en un nutrimento significa "ND". Cada campo enviado deja de estar marcado para revisión y queda
+// anotado en `corrections`, que el importador respeta.
+app.patch('/api/v1/smae-foods/:foodId', async (request, reply) => {
+  const food = await prisma.smaeFood.findFirst({ where: { id: request.params.foodId, practiceId: request.practiceId } })
+  if (!food) return reply.code(404).send({ code: 'SMAE_FOOD_NOT_FOUND', message: 'Alimento no encontrado.', fields: {} })
+  const values = request.body?.values
+  if (!values || typeof values !== 'object' || Array.isArray(values)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Indica los valores a guardar.', fields: { values: true } })
+  const nutrients = { ...(food.nutrients || {}) }
+  const review = { ...(food.review || {}) }
+  const corrections = { ...(food.corrections || {}) }
+  const data = {}
+  for (const [field, raw] of Object.entries(values).slice(0, 40)) {
+    if (SMAE_NUTRIENT_KEYS.includes(field)) {
+      const number = raw === null || raw === '' ? null : Number(raw)
+      if (number !== null && (!Number.isFinite(number) || number < 0 || number > 100000)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Los valores deben ser números positivos (o vacío para ND).', fields: { [field]: true } })
+      nutrients[field] = number === null ? null : Math.round(number * 100) / 100
+      corrections[field] = nutrients[field]
+    } else if (field === 'name' || field === 'unit') {
+      const text = typeof raw === 'string' ? raw.trim().slice(0, 160) : ''
+      if (!text) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El texto no puede quedar vacío.', fields: { [field]: true } })
+      data[field] = text
+      corrections[field] = text
+    } else if (field === 'qty') {
+      const number = Number(raw)
+      if (!Number.isFinite(number) || number <= 0 || number > 10000) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La cantidad debe ser un número positivo.', fields: { qty: true } })
+      data.qty = Math.round(number * 1000) / 1000
+      corrections.qty = data.qty
+    } else continue
+    delete review[field]
+  }
+  const updated = await prisma.smaeFood.update({ where: { id: food.id }, data: { ...data, nutrients, corrections, review: Object.keys(review).length ? review : Prisma.DbNull } })
+  await logAudit(request, { action: 'updated', entity: 'SmaeFood', entityId: food.id, metadata: { fields: Object.keys(values).slice(0, 40) } })
+  return updated
 })
 
 app.setErrorHandler((error, request, reply) => {

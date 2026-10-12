@@ -25,6 +25,7 @@ export const MODULE_SLUGS = {
   'Plantillas': 'plantillas',
   'Documentos': 'documentos',
   'Educación': 'educacion',
+  'Equivalencias': 'equivalencias',
   'Nuevo paciente': 'nuevo-paciente',
   'Configuración': 'configuracion',
   'Importar alimentos': 'importar-alimentos',

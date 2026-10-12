@@ -94,6 +94,7 @@ model Practice {
   educationMaterials EducationMaterial[]
   financeEntries     FinanceEntry[]
   suggestionChips    SuggestionChip[]
+  smaeFoods          SmaeFood[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
 }
@@ -556,4 +557,36 @@ model SuggestionChip {
 
   @@unique([practiceId, fieldKey, label])
   @@index([practiceId, fieldKey])
+}
+
+// Alimento del libro "Sistema Mexicano de Alimentos Equivalentes" (5ª ed.), tal como viene en sus
+// tablas: una fila por renglón impreso, con la hoja y el renglón de donde salió. Es la referencia
+// de equivalencias (módulo Equivalencias); el catálogo de Ingredientes sigue siendo lo que usan las
+// recetas. Se carga con prisma/import-smae-libro.js desde prisma/data/smae-libro.json, que a su vez
+// sale de leer el PDF escaneado (prisma/tools/smae-libro/).
+//
+// `nutrients` guarda los valores por equivalente; null = "ND" (no determinado) en el libro, que no
+// es lo mismo que 0. `review` lista las celdas cuya lectura automática no es segura
+// ({ campo: { reason, alt, catalog } }): se resuelven a mano en la app y entonces se quitan.
+model SmaeFood {
+  id          String    @id @default(uuid())
+  practiceId  String
+  practice    Practice  @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  edition     String    @default("5")
+  page        Int
+  row         Int
+  group       String
+  name        String
+  qty         Decimal?  @db.Decimal(8, 3)
+  qtyText     String?
+  unit        String?
+  nutrients   Json
+  review      Json?
+  // Celdas corregidas a mano: el importador no las vuelve a pisar.
+  corrections Json?
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+
+  @@unique([practiceId, edition, page, row])
+  @@index([practiceId, group])
 }
