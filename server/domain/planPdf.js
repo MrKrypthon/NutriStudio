@@ -242,7 +242,9 @@ function buildCellLines(file, data, layout, option, width) {
   return lines
 }
 
-function drawTimeLabel(file, fonts, label, x, y, height) {
+// Nombre del tiempo de comida girado y, si el plan la tiene, su hora en un segundo renglón (a la
+// derecha del nombre, como en el formato en papel).
+function drawTimeLabel(file, fonts, label, time, x, y, height) {
   file.rect(x, y, TIME_W - 1, height).fill(TIME_FILL)
   let size = 14
   const text = cleanText(label)
@@ -251,9 +253,17 @@ function drawTimeLabel(file, fonts, label, x, y, height) {
   if (file.widthOfString(text) > height - 4) return
   const cx = x + (TIME_W - 1) / 2
   const cy = y + height / 2
+  const hour = cleanText(time)
   file.save()
   file.rotate(-90, { origin: [cx, cy] })
-  file.fillColor(TIME_TEXT).text(text, cx - file.widthOfString(text) / 2, cy - file.currentLineHeight() / 2, { lineBreak: false })
+  file.fillColor(TIME_TEXT)
+  const lineH = file.currentLineHeight()
+  // Girado -90°, "abajo" en el texto es la derecha de la columna.
+  file.text(text, cx - file.widthOfString(text) / 2, cy - lineH / 2 - (hour ? 9 : 0), { lineBreak: false })
+  if (hour) {
+    file.fontSize(Math.min(size, 11.5))
+    file.text(hour, cx - file.widthOfString(hour) / 2, cy + 3, { lineBreak: false })
+  }
   file.restore()
 }
 
@@ -318,7 +328,7 @@ function drawMealRow(file, data, layout, row, startY) {
     // La fila crece para que quepan sus porciones; si se parte, la primera parte llena la hoja.
     if (first) height = Math.max(height, Math.min(badgesH, available))
     if (offset + count < maxLines) height = available
-    drawTimeLabel(file, fonts, row.label, X0, y, height)
+    drawTimeLabel(file, fonts, row.label, row.time, X0, y, height)
     if (first) {
       row.portions.forEach((portion, index) => {
         const cy = y + 8 + BADGE_STEP * index + BADGE_RADIUS
@@ -445,7 +455,7 @@ function drawEquivalentPages(file, data) {
 }
 
 // `input`: { patientName, nutritionistName, licenseNumber, weightKg, bodyFatPercent, muscleMassKg,
-// menu, recommendations, hydrationNote, contact: [{ kind: 'phone'|'address'|'email', text }], logo,
+// menu, mealTimes, recommendations, hydrationNote, contact: [{ kind: 'phone'|'address'|'email', text }], logo,
 // images: Map<imageFile, Buffer> }.
 // `file` debe ser un PDFDocument carta apaisado con margen 0 y su primera hoja ya creada.
 function drawNutritionPlan(file, input) {
@@ -455,7 +465,7 @@ function drawNutritionPlan(file, input) {
   const data = { ...input, logo, fonts: registerFonts(file) }
   drawPageChrome(file, data)
   let y = drawPatientLine(file, data, FIRST_TOP)
-  const rows = buildMealOptions(data.menu)
+  const rows = buildMealOptions(data.menu, data.mealTimes)
   if (!rows.length) {
     file.font(data.fonts.regular).fontSize(10.5).fillColor(SOFT).text('Este plan todavía no tiene recetas asignadas.', X0 + 6, y + 10, { lineBreak: false })
   } else {

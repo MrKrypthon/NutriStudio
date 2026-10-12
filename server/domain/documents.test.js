@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMealOptions, buildMenuSnapshot, equivalentGroupCode, recipeEquivalents, recipeIngredientLines, sanitizeJpeg } from './documents.js'
+import { buildMealOptions, buildMenuSnapshot, equivalentGroupCode, recipeEquivalents, recipeIngredientLines, sanitizeJpeg, normalizeMealTimes, formatMealTime } from './documents.js'
 
 describe('buildMenuSnapshot', () => {
   const slot = (overrides) => ({ dayOfWeek: 1, mealType: 'breakfast', recipeId: 'r1', servings: 1, recipe: { name: 'Avena', nutrition: { kcal: 200 } }, ...overrides })
@@ -146,5 +146,26 @@ describe('sanitizeJpeg', () => {
     expect(sanitizeJpeg(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0xff, 0xff, 0, 0, 0, 0, 0, 0, 0, 0]))).toBeNull()
     // Largo menor que el mínimo (un lector ingenuo se quedaría sin avanzar).
     expect(sanitizeJpeg(Buffer.concat([SOI, Buffer.from([0xff, 0xdb, 0, 0]), sof(10, 10), segment(0xda, [0, 0, 0]), SCAN]))).toBeNull()
+  })
+})
+
+describe('meal times', () => {
+  it('keeps only known meals with a valid 24 h time', () => {
+    expect(normalizeMealTimes({ breakfast: '10:00', lunch: '25:00', snack: ' 16:30 ', dinner: '', other: '09:00' })).toEqual({ breakfast: '10:00', snack: '16:30' })
+    expect(normalizeMealTimes(null)).toEqual({})
+    expect(normalizeMealTimes(['10:00'])).toEqual({})
+  })
+
+  it('formats the time the way the printed plan writes it', () => {
+    expect(formatMealTime('10:00')).toBe('10 am')
+    expect(formatMealTime('14:30')).toBe('2:30 pm')
+    expect(formatMealTime('00:00')).toBe('12 am')
+    expect(formatMealTime('12:00')).toBe('12 pm')
+    expect(formatMealTime('')).toBe('')
+  })
+
+  it('attaches the time to its meal row', () => {
+    const rows = buildMealOptions([{ dayOfWeek: 1, mealType: 'breakfast', recipeId: 'r1', recipeName: 'Avena', servings: 1 }], { breakfast: '10:00' })
+    expect(rows[0].time).toBe('10 am')
   })
 })

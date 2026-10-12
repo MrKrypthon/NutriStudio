@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
-import { buildMenuSnapshot, sanitizeJpeg } from './domain/documents.js'
+import { buildMenuSnapshot, normalizeMealTimes, sanitizeJpeg } from './domain/documents.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
@@ -1513,12 +1513,13 @@ app.patch('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados no pueden modificarse.', fields: {} })
-  const { hydrationNote, recommendations } = request.body || {}
+  const { hydrationNote, recommendations, mealTimes } = request.body || {}
   const updated = await prisma.nutritionPlan.update({
     where: { id: plan.id },
     data: {
       ...(hydrationNote !== undefined ? { hydrationNote } : {}),
       ...(recommendations !== undefined ? { recommendations } : {}),
+      ...(mealTimes !== undefined ? { mealTimes: normalizeMealTimes(mealTimes) } : {}),
     },
   })
   await logAudit(request, { action: 'updated', entity: 'NutritionPlan', entityId: updated.id, patientId: plan.patientId, metadata: { section: 'indicaciones' } })
@@ -2089,6 +2090,7 @@ async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) 
     bodyFatPercent: measurement?.bodyFatPercent != null ? Number(measurement.bodyFatPercent) : null,
     muscleMassKg: measurement?.muscleMassKg != null ? Number(measurement.muscleMassKg) : null,
     menu,
+    mealTimes: plan.mealTimes,
     recommendations: plan.recommendations,
     hydrationNote: plan.hydrationNote,
     licenseNumber: user?.licenseNumber || null,

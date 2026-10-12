@@ -107,11 +107,33 @@ function buildMenuSnapshot(mealSlots) {
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek || MEAL_TYPE_ORDER.indexOf(a.mealType) - MEAL_TYPE_ORDER.indexOf(b.mealType))
 }
 
+// Horas de los tiempos de comida tal como se guardan en el plan: sólo las claves conocidas y sólo
+// valores "HH:MM" de 24 h; lo demás se descarta.
+function normalizeMealTimes(value) {
+  const times = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return times
+  for (const mealType of MEAL_TYPE_ORDER) {
+    const time = typeof value[mealType] === 'string' ? value[mealType].trim() : ''
+    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) times[mealType] = time
+  }
+  return times
+}
+
+// "10:00" → "10 am", "14:30" → "2:30 pm", como se escribe en el plan en papel.
+function formatMealTime(time) {
+  const match = /^(\d{2}):(\d{2})$/.exec(String(time || ''))
+  if (!match) return ''
+  const hours = Number(match[1])
+  const hour12 = hours % 12 || 12
+  return `${hour12}${match[2] === '00' ? '' : `:${match[2]}`} ${hours < 12 ? 'am' : 'pm'}`
+}
+
 // El plan entregado no va por día sino por opciones intercambiables: por cada tiempo de comida,
 // las recetas distintas de la semana en el orden en que aparecen (lunes → domingo). Repetir una
 // receta varios días no genera opciones repetidas. Las porciones del tiempo de comida son los
 // equivalentes de su primera opción (la receta base de la Distribución).
-function buildMealOptions(menu) {
+function buildMealOptions(menu, mealTimes) {
+  const times = normalizeMealTimes(mealTimes)
   return MEAL_TYPE_ORDER.map((mealType) => {
     const options = []
     const seen = new Set()
@@ -125,7 +147,7 @@ function buildMealOptions(menu) {
     const portions = EQUIVALENT_GROUPS
       .map((group) => ({ ...group, quantity: Math.round((equivalents[group.code] || 0) * 2) / 2 }))
       .filter((group) => group.quantity > 0)
-    return { mealType, label: MEAL_TYPE_LABELS[mealType] || mealType, options, portions }
+    return { mealType, label: MEAL_TYPE_LABELS[mealType] || mealType, time: formatMealTime(times[mealType]), options, portions }
   }).filter((row) => row.options.length)
 }
 
@@ -172,4 +194,4 @@ function sanitizeJpeg(buffer) {
   return null
 }
 
-export { sanitizeJpeg, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }
+export { normalizeMealTimes, formatMealTime, sanitizeJpeg, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }

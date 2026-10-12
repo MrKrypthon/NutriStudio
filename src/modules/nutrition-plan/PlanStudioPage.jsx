@@ -143,7 +143,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [view, setView] = useState('list')
   const [planActionState, setPlanActionState] = useState('idle')
   const [previewPlan, setPreviewPlan] = useState(null)
-  const [notesForm, setNotesForm] = useState({ hydrationNote: '', recommendations: '' })
+  const [notesForm, setNotesForm] = useState({ hydrationNote: '', recommendations: '', mealTimes: {} })
   const [notesSaveState, setNotesSaveState] = useState('idle')
   const notesSaveTimer = useRef(null)
   const notesPendingRef = useRef(null)
@@ -183,7 +183,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       proteinPercent: plan.proteinPercent != null ? String(plan.proteinPercent) : prev.proteinPercent,
       fatPercent: plan.fatPercent != null ? String(plan.fatPercent) : prev.fatPercent,
     }))
-    setNotesForm({ hydrationNote: plan.hydrationNote || '', recommendations: plan.recommendations || '' })
+    setNotesForm({ hydrationNote: plan.hydrationNote || '', recommendations: plan.recommendations || '', mealTimes: plan.mealTimes || {} })
   }, [plan?.id])
 
   const loadPlanData = useCallback(async () => {
@@ -374,7 +374,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
           weightKg: savedInputs.weightKg != null ? String(savedInputs.weightKg) : prev.weightKg,
           heightCm: savedInputs.heightCm != null ? String(savedInputs.heightCm) : prev.heightCm,
         }))
-        setNotesForm({ hydrationNote: full.hydrationNote || '', recommendations: full.recommendations || '' })
+        setNotesForm({ hydrationNote: full.hydrationNote || '', recommendations: full.recommendations || '', mealTimes: full.mealTimes || {} })
         setStep(0)
         setView('wizard')
       } else {
@@ -734,6 +734,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
           <div className="distribution-meal-head">
             {recipeThumb(base, mealIndex, 'distribution-meal-image')}
             <div className="distribution-meal-info"><span className="distribution-meal-label">{meal.label} · base de la semana</span><b>{base ? base.name : 'Sin receta base'}</b><small>{kcal != null ? `${kcal} kcal promedio al día` : 'Sin recetas asignadas'}</small></div>
+            <label className="meal-time-field"><small>Hora</small><input type="time" disabled={plan?.status === 'PUBLISHED'} value={notesForm.mealTimes?.[meal.key] || ''} onChange={(event) => updateNotes('mealTimes', { ...notesForm.mealTimes, [meal.key]: event.target.value })} aria-label={`Hora de ${meal.label}`} /></label>
             <div className="portion-stepper"><small>Porciones</small><div><button type="button" onClick={() => changeServings(meal.key, -0.5)} aria-label="Menos porciones">−</button><b>{mealServingsFor(meal.key)}</b><button type="button" onClick={() => changeServings(meal.key, 0.5)} aria-label="Más porciones">+</button></div></div>
             <button type="button" className="secondary" onClick={() => openPicker(meal.key)}>{base ? 'Cambiar' : 'Elegir receta'}</button>
           </div>
