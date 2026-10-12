@@ -178,16 +178,25 @@ function drawPatientLine(file, data, y) {
     ['Céd. Prof', data.licenseNumber],
   ].filter(([, value]) => value).map(([label, value]) => `${label}: ${cleanText(value)}`)
   if (!fields.length) return y
-  file.font(data.fonts.regular).fontSize(10.5).fillColor(TEXT)
   const left = X0 + 6
   const right = X0 + TABLE_W - 12
-  fields.forEach((text, index) => {
-    const width = file.widthOfString(text)
-    let x = left
-    if (index > 0 && index === fields.length - 1) x = right - width
-    else if (index > 0) x = left + ((right - left) * index) / (fields.length - 1) - width / 2
+  const gap = 18
+  // Un nombre largo empuja a los demás datos en vez de encimarse; si aun así no caben, baja la letra.
+  let size = 10.5
+  file.font(data.fonts.regular).fontSize(size).fillColor(TEXT)
+  const totalWidth = () => fields.reduce((sum, text) => sum + file.widthOfString(text), 0) + gap * (fields.length - 1)
+  while (size > 7 && totalWidth() > right - left) { size -= 0.5; file.fontSize(size) }
+  const rest = fields.slice(1)
+  const start = left + file.widthOfString(fields[0]) + gap
+  file.text(fields[0], left, y, { lineBreak: false })
+  // Los demás se reparten entre el final del nombre y el borde derecho; el último queda a la derecha.
+  const restWidth = rest.reduce((sum, text) => sum + file.widthOfString(text), 0)
+  const spacing = rest.length > 1 ? Math.max(gap, (right - start - restWidth) / (rest.length - 1)) : 0
+  let x = rest.length === 1 ? right - restWidth : start
+  for (const text of rest) {
     file.text(text, x, y, { lineBreak: false })
-  })
+    x += file.widthOfString(text) + spacing
+  }
   return y + 16
 }
 
@@ -210,6 +219,7 @@ const CELL_PAD = 6
 const ROW_GAP = 3
 const BADGE_RADIUS = 10.5
 const BADGE_STEP = 27
+const MIN_CARRIED_LINES = 3
 
 function drawTableHeader(file, data, layout, y) {
   const { fonts } = data
@@ -317,29 +327,38 @@ function drawMealRow(file, data, layout, row, startY) {
   const photoH = Math.round(textW * 0.68)
   const headH = photoH + 5
   const maxLines = Math.max(0, ...cells.map((cell) => cell.lines.length))
-  const badgesH = row.portions.length ? row.portions.length * BADGE_STEP + 8 : 0
   let offset = 0
+  let badgeIndex = 0
   let first = true
-  while (first || offset < maxLines) {
-    // Una fila nueva necesita lugar para la foto y unos renglones; una continuación, para tres.
-    const needed = first ? CELL_PAD + headH + Math.min(maxLines, 3) * lineH + CELL_PAD : CELL_PAD * 2 + Math.min(maxLines - offset, 3) * lineH
+  // La fila sigue mientras queden renglones o círculos de porciones por dibujar: si se parte entre
+  // hojas, los círculos que no cupieron en la primera parte continúan en la siguiente.
+  while (first || offset < maxLines || badgeIndex < row.portions.length) {
+    const pendingBadges = row.portions.length - badgeIndex
+    // Una fila nueva necesita lugar para la foto y unos renglones; una continuación, para tres
+    // renglones o para un círculo.
+    const needed = first
+      ? CELL_PAD + headH + Math.min(maxLines, 3) * lineH + CELL_PAD
+      : Math.max(offset < maxLines ? CELL_PAD * 2 + Math.min(maxLines - offset, 3) * lineH : 0, pendingBadges ? BADGE_STEP + 8 : 0)
     if (CONTENT_BOTTOM - y < needed) y = addPage(file, data)
     const available = CONTENT_BOTTOM - y
     const fits = Math.max(0, Math.floor((available - CELL_PAD * 2 - (first ? headH : 0)) / lineH))
-    const count = Math.min(maxLines - offset, fits)
+    let count = Math.min(maxLines - offset, fits)
+    // Al partir la fila no se dejan uno o dos renglones sueltos para la hoja siguiente: se pasan
+    // al menos tres.
+    const left = maxLines - offset - count
+    if (left > 0 && left < MIN_CARRIED_LINES && count > MIN_CARRIED_LINES - left) count -= MIN_CARRIED_LINES - left
     let height = CELL_PAD + (first ? headH : 0) + count * lineH + CELL_PAD
-    // La fila crece para que quepan sus porciones; si se parte, la primera parte llena la hoja.
-    if (first) height = Math.max(height, Math.min(badgesH, available))
+    // La fila crece para que quepan sus porciones; si se parte, esta parte llena la hoja.
+    height = Math.max(height, Math.min(pendingBadges * BADGE_STEP + 8, available))
     if (offset + count < maxLines) height = available
     drawTimeLabel(file, fonts, row.label, row.time, X0, y, height)
-    if (first) {
-      row.portions.forEach((portion, index) => {
-        const cy = y + 8 + BADGE_STEP * index + BADGE_RADIUS
-        if (cy + BADGE_RADIUS > y + height) return
-        file.font(fonts.regular).fontSize(10.5).fillColor(TEXT)
-        file.text(formatQuantity(portion.quantity), X0 + TIME_W + 2, cy - file.currentLineHeight() / 2, { width: 22, align: 'center', lineBreak: false })
-        drawBadge(file, fonts, portion.code, X0 + TIME_W + 38, cy, BADGE_RADIUS)
-      })
+    for (let slot = 0; badgeIndex < row.portions.length; slot++) {
+      const cy = y + 8 + BADGE_STEP * slot + BADGE_RADIUS
+      if (cy + BADGE_RADIUS > y + height) break
+      const portion = row.portions[badgeIndex++]
+      file.font(fonts.regular).fontSize(10.5).fillColor(TEXT)
+      file.text(formatQuantity(portion.quantity), X0 + TIME_W + 2, cy - file.currentLineHeight() / 2, { width: 22, align: 'center', lineBreak: false })
+      drawBadge(file, fonts, portion.code, X0 + TIME_W + 38, cy, BADGE_RADIUS)
     }
     cells.forEach((cell, index) => {
       const x = layout.optionX(index)
@@ -353,8 +372,6 @@ function drawMealRow(file, data, layout, row, startY) {
     y += height
     offset += count
     first = false
-    // Hoja llena sin haber podido escribir ni un renglón: se sigue en la siguiente.
-    if (offset < maxLines && count === 0) y = CONTENT_BOTTOM
   }
   return y + ROW_GAP
 }

@@ -125,7 +125,16 @@ function resolveFormula(formula) {
 // nunca se corrige ni se rechaza silenciosamente (regla de negocio documentada en el proyecto).
 const PLAUSIBLE_GET_RANGE = { min: 800, max: 6000 }
 
-function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent, formula, activityFactor, mets }) {
+// Ajuste de energía por objetivo (déficit para bajar de peso, superávit para subir), en kcal/día
+// sobre el gasto total. Fuera de ±1500 no se considera un ajuste clínico razonable.
+const ENERGY_ADJUST_LIMIT = 1500
+function normalizeEnergyAdjust(value) {
+  const number = Math.round(Number(value))
+  if (!Number.isFinite(number)) return 0
+  return Math.max(-ENERGY_ADJUST_LIMIT, Math.min(ENERGY_ADJUST_LIMIT, number))
+}
+
+function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent, formula, activityFactor, mets, energyAdjustKcal }) {
   const key = String(sex || '').trim().toLowerCase()
   const male = key.startsWith('homb') || key.startsWith('masc') || key === 'male' || key === 'm'
   const formulaEntry = resolveFormula(formula)
@@ -142,6 +151,13 @@ function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent
     flags.push({ code: 'GET_OUT_OF_RANGE', message: 'El gasto energético calculado está fuera del rango plausible para un adulto y requiere revisión profesional.' })
   }
 
+  // El requerimiento del plan es el gasto total más el ajuste por objetivo.
+  const adjust = normalizeEnergyAdjust(energyAdjustKcal)
+  const targetKcal = Math.round(get) + adjust
+  if (adjust && targetKcal < Math.round(bmr)) {
+    flags.push({ code: 'TARGET_BELOW_BMR', message: 'Con este déficit el requerimiento del plan queda por debajo del metabolismo basal: requiere revisión profesional.' })
+  }
+
   return {
     formula,
     formulaVersion: formulaEntry.version,
@@ -149,6 +165,8 @@ function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent
     bmr: Math.round(bmr),
     activityKcal: Math.round(get - bmr),
     get: Math.round(get),
+    energyAdjustKcal: adjust,
+    targetKcal,
     activityMethod: metsKcal ? 'mets' : 'factor',
     bmi: round1(bmi),
     bmiCategory: classifyBmi(bmi),

@@ -125,3 +125,27 @@ describe('computeMacros', () => {
     expect(() => computeMacros({ kcal: 0, carbsPercent: 50, proteinPercent: 25, fatPercent: 25 })).toThrow(NutritionEngineError)
   })
 })
+
+describe('energy adjustment by goal', () => {
+  const base = { sex: 'female', age: 38, weightKg: 78, heightCm: 160, formula: 'mifflin', activityFactor: 1.375 }
+
+  it('keeps the total expenditure and subtracts the deficit for the plan requirement', () => {
+    const result = computeEnergyRequirement({ ...base, energyAdjustKcal: -500 })
+    expect(result.get).toBe(1965)
+    expect(result.energyAdjustKcal).toBe(-500)
+    expect(result.targetKcal).toBe(1465)
+    expect(result.flags).toEqual([])
+  })
+
+  it('uses the expenditure as the requirement when there is no adjustment', () => {
+    const result = computeEnergyRequirement(base)
+    expect(result.targetKcal).toBe(result.get)
+    expect(result.energyAdjustKcal).toBe(0)
+  })
+
+  it('flags a requirement that falls below the basal metabolism and clamps absurd values', () => {
+    expect(computeEnergyRequirement({ ...base, energyAdjustKcal: -700 }).flags.map((flag) => flag.code)).toEqual(['TARGET_BELOW_BMR'])
+    expect(computeEnergyRequirement({ ...base, energyAdjustKcal: -99999 }).energyAdjustKcal).toBe(-1500)
+    expect(computeEnergyRequirement({ ...base, energyAdjustKcal: 'abc' }).energyAdjustKcal).toBe(0)
+  })
+})

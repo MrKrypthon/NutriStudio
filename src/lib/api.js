@@ -112,7 +112,7 @@ export const nutritionApi = {
     const fatPercent = Number(payload.fatPercent) || 25
     try {
       const result = await apiRequest('/nutrition-plans/calculate', { method: 'POST', body: JSON.stringify(payload) })
-      const macros = await apiRequest('/nutrition-plans/macros', { method: 'POST', body: JSON.stringify({ kcal: result.get, carbsPercent, proteinPercent, fatPercent }) })
+      const macros = await apiRequest('/nutrition-plans/macros', { method: 'POST', body: JSON.stringify({ kcal: result.targetKcal ?? result.get, carbsPercent, proteinPercent, fatPercent }) })
       return { ...result, macros: macros.macros }
     } catch (error) {
       if (error.code !== 'DEMO_MODE') throw error

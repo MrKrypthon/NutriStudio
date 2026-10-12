@@ -1440,13 +1440,13 @@ app.delete('/api/v1/finance/entries/:entryId', async (request, reply) => {
 })
 
 app.post('/api/v1/nutrition-plans/calculate', async (request, reply) => {
-  const { sex, age, weightKg, heightCm, bodyFatPercent, formula = 'mifflin', activityFactor = 1.375, mets } = request.body || {}
+  const { sex, age, weightKg, heightCm, bodyFatPercent, formula = 'mifflin', activityFactor = 1.375, mets, energyAdjustKcal } = request.body || {}
   const values = { age: Number(age), weightKg: Number(weightKg), heightCm: Number(heightCm) }
   const invalid = Object.entries(values).filter(([, value]) => !Number.isFinite(value) || value <= 0).map(([key]) => key)
   if (invalid.length) return reply.code(400).send({ code: 'INVALID_MEASUREMENTS', message: 'Edad, peso y talla deben ser valores positivos.', fields: Object.fromEntries(invalid.map((key) => [key, 'invalid'])) })
   if (values.age < 1 || values.age > 120 || values.weightKg > 500 || values.heightCm > 250 || values.weightKg < 5 || values.heightCm < 40) return reply.code(400).send({ code: 'OUT_OF_RANGE', message: 'Revisa que las medidas estén dentro de un rango plausible.', fields: {} })
   try {
-    return computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor, mets })
+    return computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor, mets, energyAdjustKcal })
   } catch (error) {
     if (error instanceof NutritionEngineError) return reply.code(400).send({ code: error.code, message: error.message, fields: error.fields })
     throw error
@@ -1541,7 +1541,7 @@ app.get('/api/v1/plans/:planId/adequacy', async (request, reply) => {
 })
 
 app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
-  const { sex, age, weightKg, heightCm, bodyFatPercent, formula = 'mifflin', activityFactor, mets, carbsPercent, proteinPercent, fatPercent, goal } = request.body || {}
+  const { sex, age, weightKg, heightCm, bodyFatPercent, formula = 'mifflin', activityFactor, mets, energyAdjustKcal, carbsPercent, proteinPercent, fatPercent, goal } = request.body || {}
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados no pueden modificarse.', fields: {} })
@@ -1552,8 +1552,9 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
   if (values.age < 1 || values.age > 120 || values.weightKg > 500 || values.heightCm > 250 || values.weightKg < 5 || values.heightCm < 40) return reply.code(400).send({ code: 'OUT_OF_RANGE', message: 'Revisa que las medidas estén dentro de un rango plausible.', fields: {} })
 
   try {
-    const energy = computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor, mets })
-    const macros = computeMacros({ kcal: energy.get, carbsPercent, proteinPercent, fatPercent })
+    const energy = computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor, mets, energyAdjustKcal })
+    // El requerimiento del plan (y sus macros) ya incluye el ajuste por objetivo: déficit o superávit.
+    const macros = computeMacros({ kcal: energy.targetKcal, carbsPercent, proteinPercent, fatPercent })
     const updated = await prisma.nutritionPlan.update({
       where: { id: plan.id },
       data: {
@@ -1562,14 +1563,14 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
         activityMethod: energy.activityMethod,
         activityFactor: energy.activityMethod === 'factor' ? Number(activityFactor) : null,
         metsPayload: energy.activityMethod === 'mets' ? mets : null,
-        targetKcal: energy.get,
+        targetKcal: energy.targetKcal,
         carbsPercent: macros.macros.carbs.percent,
         proteinPercent: macros.macros.protein.percent,
         fatPercent: macros.macros.fat.percent,
-        evaluation: { formulaVersion: energy.formulaVersion, formulaLabel: energy.formulaLabel, bmr: energy.bmr, bmi: energy.bmi, bmiCategory: energy.bmiCategory, idealWeightRange: energy.idealWeightRange, flags: energy.flags, inputs: energy.inputs },
+        evaluation: { formulaVersion: energy.formulaVersion, formulaLabel: energy.formulaLabel, get: energy.get, energyAdjustKcal: energy.energyAdjustKcal, bmr: energy.bmr, bmi: energy.bmi, bmiCategory: energy.bmiCategory, idealWeightRange: energy.idealWeightRange, flags: energy.flags, inputs: energy.inputs },
       },
     })
-    await logAudit(request, { action: 'updated', entity: 'NutritionPlan', entityId: updated.id, patientId: plan.patientId, metadata: { section: 'evaluación', kcal: energy.get } })
+    await logAudit(request, { action: 'updated', entity: 'NutritionPlan', entityId: updated.id, patientId: plan.patientId, metadata: { section: 'evaluación', kcal: energy.targetKcal } })
     return { ...updated, macros: macros.macros }
   } catch (error) {
     if (error instanceof NutritionEngineError) return reply.code(400).send({ code: error.code, message: error.message, fields: error.fields })
