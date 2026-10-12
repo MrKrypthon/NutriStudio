@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
-import { buildMenuSnapshot } from './domain/documents.js'
+import { buildMenuSnapshot, readImageInfo } from './domain/documents.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
@@ -283,13 +283,14 @@ app.get('/api/v1/practice/:practiceId/logo', async (request, reply) => {
 // uploads herself (POST /recipes/:id/image) are named `u-<recipe id>-<stamp>` and may be PNG.
 const recipeImageDir = () => path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH || './storage/recipes')
 const RECIPE_IMAGE_MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png' }
+const RECIPE_IMAGE_MAX_SIDE = 4000
 
 app.get('/api/v1/recipes/images/:fileName', async (request, reply) => {
   const { fileName } = request.params
   if (!/^[a-z0-9][a-z0-9-]*\.(jpg|png)$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
   try {
     const file = await readFile(path.join(recipeImageDir(), fileName))
-    return reply.type(fileName.endsWith('.png') ? 'image/png' : 'image/jpeg').header('Cache-Control', 'public, max-age=86400').send(file)
+    return reply.type(fileName.endsWith('.png') ? 'image/png' : 'image/jpeg').header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'public, max-age=86400').send(file)
   } catch {
     return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
   }
@@ -311,6 +312,12 @@ app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
   if (!match || !ext) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen JPG o PNG.', fields: { dataUrl: true } })
   const buffer = Buffer.from(match[2], 'base64')
   if (buffer.byteLength > 3 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La imagen no puede pesar más de 3 MB.', fields: { dataUrl: true } })
+  // El tipo declarado no basta: se comprueba con los bytes que de verdad es ese JPG/PNG, y se
+  // limita su tamaño en pixeles porque una imagen pequeña en bytes puede descomprimirse enorme al
+  // generar el PDF.
+  const info = readImageInfo(buffer)
+  if (!info || info.ext !== ext) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El archivo no es una imagen JPG o PNG válida.', fields: { dataUrl: true } })
+  if (!info.width || !info.height || info.width > RECIPE_IMAGE_MAX_SIDE || info.height > RECIPE_IMAGE_MAX_SIDE) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: `La imagen no puede medir más de ${RECIPE_IMAGE_MAX_SIDE} px por lado.`, fields: { dataUrl: true } })
   const storageKey = `u-${recipe.id}-${Date.now().toString(36)}.${ext}`
   await mkdir(recipeImageDir(), { recursive: true })
   await writeFile(path.join(recipeImageDir(), storageKey), buffer)
