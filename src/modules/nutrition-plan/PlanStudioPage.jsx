@@ -640,6 +640,9 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio">
       <ModuleHeader eyebrow="PLANIFICACIÓN · CONSTRUCTOR" title="Planes alimenticios" subtitle="Todos los planes de tu consulta: retoma un borrador donde lo dejaste o revisa los anteriores." action={<button className="primary" onClick={() => setChooserOpen(true)}><span>+</span> Nuevo plan</button>} />
       <div className="hub-toolbar panel"><div className="search-field">⌕ <input value={hubQuery} onChange={(event) => setHubQuery(event.target.value)} placeholder="Buscar por paciente..." /></div></div>
+      {/* En escritorio el contenido no scrollea como página: sólo este cuerpo lo hace (ver el layout
+          de altura completa en globals.css). Sin él, los grupos de planes se recortaban abajo. */}
+      <div className="module-body plans-scroll">
       {hubState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando planes…</h3></div>}
       {hubState === 'error' && <div className="form-error">⚠ No se pudieron cargar los planes.</div>}
       {hubState === 'ready' && filtered.length === 0 && <div className="result-empty panel"><span>◌</span><h3>{query ? 'Sin planes de ese paciente' : 'Todavía no hay planes'}</h3><p>Crea el primero con "+ Nuevo plan".</p></div>}
@@ -655,6 +658,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
           </div>
         </article> })}</div>
       </section>)}
+      </div>
       {chooserOpen && <div className="modal-backdrop" onClick={() => setChooserOpen(false)}><div className="modal" onClick={(event) => event.stopPropagation()}>
         <div className="modal-head"><div><p className="eyebrow">NUEVO PLAN</p><h2>¿Para quién es el plan?</h2><span className="modal-subtitle">Se crea un borrador y se guarda solo.</span></div><button onClick={() => setChooserOpen(false)}>×</button></div>
         <div className="patient-chooser">{patients.map((p) => <button type="button" className="chooser-item" key={p.id} onClick={() => startNewPlanFor(p.id)}><span className="person-avatar coral">{`${p.firstName[0] || ''}${p.lastName[0] || ''}`}</span><b>{p.firstName} {p.lastName}</b></button>)}
