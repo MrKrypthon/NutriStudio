@@ -401,6 +401,12 @@ html{scroll-behavior:smooth}
   .wizard-footer .primary span{font-size:13px;margin-left:4px}
   .plan-studio .plan-steps{margin-bottom:18px;padding:10px}
   .plan-studio .patient-context{margin-bottom:12px}
+  /* Ingredientes: la lista y el detalle scrollean por separado, así el panel del detalle (que puede
+     tener muchas filas de nutrición) no se corta por abajo: cada columna ocupa el alto disponible. */
+  .ingredient-workspace > .ingredient-layout{overflow:hidden;align-items:stretch}
+  .ingredient-workspace .ingredient-layout > section{display:flex;flex-direction:column;min-height:0;overflow:hidden}
+  .ingredient-workspace .ingredient-list{flex:1 1 auto;min-height:0;overflow:auto}
+  .ingredient-workspace .ingredient-detail{position:static;max-height:100%;overflow:auto}
 }
 @media print{
   .app-shell,.main{height:auto;min-height:0;overflow:visible;display:block}
