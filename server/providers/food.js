@@ -18,7 +18,13 @@ function nutrientMap(nutrients = []) {
   const map = {}
   for (const nutrient of nutrients) {
     const key = String(nutrient.nutrientName || nutrient.name || '').toLowerCase()
-    if (key.includes('energy')) map.kcal = nutrient.value || nutrient.amount || 0
+    // USDA puede devolver "Energy" en kJ y en kcal para el mismo alimento: hay que distinguirlas
+    // (si no, el valor en kJ, ~4.18×, se guardaba como kcal). Se prefiere kcal y se convierte kJ.
+    if (key.includes('energy')) {
+      const unit = String(nutrient.unitName || '').toUpperCase()
+      const value = Number(nutrient.value ?? nutrient.amount ?? 0)
+      if (unit === 'KJ') { if (map.kcal == null) map.kcal = value / 4.184 } else map.kcal = value
+    }
     if (key === 'protein') map.protein = nutrient.value || nutrient.amount || 0
     if (key.includes('carbohydrate')) map.carbs = nutrient.value || nutrient.amount || 0
     if (key.includes('total lipid') || key === 'fat') map.fat = nutrient.value || nutrient.amount || 0
@@ -39,7 +45,7 @@ export async function searchUsda(query, pageSize = 20) {
 export async function searchOpenFoodFacts(query, pageSize = 20) {
   const params = new URLSearchParams({ search_terms: query, search_simple: '1', action: 'process', json: '1', page_size: String(Math.min(pageSize, 30)), fields: 'code,product_name,brands,nutriments,image_front_url,allergens_tags,categories_tags' })
   const data = await requestJson(`${OFF_URL}/cgi/search.pl?${params}`)
-  return { source: 'openfoodfacts', total: data.count || 0, items: (data.products || []).filter((product) => product.product_name).map((product) => ({ externalId: product.code, source: 'openfoodfacts', name: product.product_name, brand: product.brands || null, serving: { quantity: 100, unit: 'g' }, nutrition: { kcal: product.nutriments?.['energy-kcal_100g'] || 0, protein: product.nutriments?.proteins_100g || 0, carbs: product.nutriments?.carbohydrates_100g || 0, fat: product.nutriments?.fat_100g || 0, fiber: product.nutriments?.fiber_100g || 0, sugar: product.nutriments?.sugars_100g || 0, sodium: product.nutriments?.sodium_100g || 0 }, allergens: product.allergens_tags || [], imageUrl: product.image_front_url || null, attribution: 'Open Food Facts (ODbL / CC BY-SA para imágenes)', confidence: 'medium' })) }
+  return { source: 'openfoodfacts', total: data.count || 0, items: (data.products || []).filter((product) => product.product_name).map((product) => ({ externalId: product.code, source: 'openfoodfacts', name: product.product_name, brand: product.brands || null, serving: { quantity: 100, unit: 'g' }, nutrition: { kcal: product.nutriments?.['energy-kcal_100g'] || 0, protein: product.nutriments?.proteins_100g || 0, carbs: product.nutriments?.carbohydrates_100g || 0, fat: product.nutriments?.fat_100g || 0, fiber: product.nutriments?.fiber_100g || 0, sugar: product.nutriments?.sugars_100g || 0, sodium: Number(product.nutriments?.sodium_100g || 0) * 1000 }, allergens: product.allergens_tags || [], imageUrl: product.image_front_url || null, attribution: 'Open Food Facts (ODbL / CC BY-SA para imágenes)', confidence: 'medium' })) }
 }
 
 export async function searchFoods(source, rawQuery, pageSize = 20) {

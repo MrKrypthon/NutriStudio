@@ -137,13 +137,22 @@ function normalizeEnergyAdjust(value) {
 function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent, formula, activityFactor, mets, energyAdjustKcal }) {
   const key = String(sex || '').trim().toLowerCase()
   const male = key.startsWith('homb') || key.startsWith('masc') || key === 'male' || key === 'm'
+  // Cunningham y Katch-McArdle calculan sobre la masa magra: sin % de grasa válido, `leanMassKg`
+  // trataba el peso total como libre de grasa y el BMR salía muy sobreestimado (o negativo con >100).
+  if (formula === 'cunningham' || formula === 'katch-mcardle') {
+    const bf = Number(bodyFatPercent)
+    if (!Number.isFinite(bf) || bf <= 0 || bf >= 100) throw new NutritionEngineError('MISSING_BODY_FAT', 'Esta fórmula requiere el % de grasa corporal (un valor entre 1 y 99).')
+  }
   const formulaEntry = resolveFormula(formula)
   const bmr = formulaEntry.compute({ age, weightKg, heightCm, bodyFatPercent, male })
 
   const metsKcal = mets?.met && mets?.minutes && mets?.sessionsPerWeek
     ? (Number(mets.met) * 3.5 * weightKg / 200 * Number(mets.minutes) * Number(mets.sessionsPerWeek)) / 7
     : null
-  const get = metsKcal || bmr * Number(activityFactor || ACTIVITY_FACTORS.sedentary)
+  // El gasto total = metabolismo basal + energía de la actividad. Con METS, la actividad es la
+  // energía del ejercicio (que se SUMA al BMR); con factor de actividad, el factor ya multiplica al
+  // BMR. Antes `get = metsKcal || ...` descartaba el BMR cuando había METS (GET ≈ kcal del ejercicio).
+  const get = metsKcal != null ? bmr + metsKcal : bmr * Number(activityFactor || ACTIVITY_FACTORS.sedentary)
 
   const bmi = calculateBmi(weightKg, heightCm)
   const flags = []

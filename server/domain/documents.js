@@ -50,6 +50,7 @@ function equivalentGroupCode(group) {
   }
   if (name.startsWith('leche') || name.startsWith('lacteo')) return 'LAC'
   if (name.startsWith('grasa')) return name.includes('con prote') ? 'G_CP' : 'G_SP'
+  if (name.startsWith('azucar')) return 'AZ'
   return null
 }
 
@@ -109,8 +110,19 @@ function buildMenuSnapshot(mealSlots) {
 
 // Ajustes de receta propios de un plan: la nutrióloga reescribe las cantidades de una receta para
 // esta paciente (según sus equivalentes) sin tocar la receta del catálogo. Se guardan por tiempo de
-// comida y receta: { "<tiempo>|<recipeId>": { lines: [...] } }.
+// comida y receta: { "<tiempo>|<recipeId>": { lines: [...], factor } }. `lines` es lo que lee la
+// paciente; `factor` es por cuánto se multiplicaron las cantidades respecto a la receta en las
+// porciones del tiempo (1 = sin cambio) y es lo que permite que energía, macros y micronutrientes
+// del plan sigan al ajuste, porque del texto libre no se pueden recalcular.
 const adjustmentKey = (mealType, recipeId) => `${mealType}|${recipeId}`
+
+const normalizeFactor = (value) => { const number = Number(value); return Number.isFinite(number) && number > 0 ? Math.min(10, Math.max(0.1, Math.round(number * 100) / 100)) : 1 }
+
+// Factor nutrimental del ajuste de una receta en un tiempo de comida (1 si no tiene ajuste).
+function adjustmentFactor(adjustments, mealType, recipeId) {
+  const adjustment = adjustments?.[adjustmentKey(mealType, recipeId)]
+  return adjustment ? normalizeFactor(adjustment.factor) : 1
+}
 
 function normalizeRecipeAdjustments(value) {
   const result = {}
@@ -120,7 +132,7 @@ function normalizeRecipeAdjustments(value) {
     if (rest.length || !MEAL_TYPE_ORDER.includes(mealType) || !/^[0-9a-f-]{36}$/i.test(recipeId || '')) continue
     if (!Array.isArray(adjustment?.lines)) continue
     const lines = adjustment.lines.filter((line) => typeof line === 'string').map((line) => line.trim().slice(0, 240)).filter(Boolean).slice(0, 60)
-    if (lines.length) result[adjustmentKey(mealType, recipeId)] = { lines }
+    if (lines.length) result[adjustmentKey(mealType, recipeId)] = { lines, factor: normalizeFactor(adjustment.factor) }
   }
   return result
 }
@@ -131,7 +143,9 @@ function applyRecipeAdjustments(menu, adjustments) {
   const clean = normalizeRecipeAdjustments(adjustments)
   return (menu || []).map((entry) => {
     const adjustment = clean[adjustmentKey(entry.mealType, entry.recipeId)]
-    return adjustment ? { ...entry, ingredients: adjustment.lines, adjusted: true } : entry
+    if (!adjustment) return entry
+    const scale = (value) => Math.round((Number(value) || 0) * adjustment.factor * 100) / 100
+    return { ...entry, ingredients: adjustment.lines, adjusted: true, kcal: Math.round((Number(entry.kcal) || 0) * adjustment.factor), equivalents: Object.fromEntries(Object.entries(entry.equivalents || {}).map(([code, value]) => [code, scale(value)])) }
   })
 }
 
@@ -203,4 +217,4 @@ function sanitizeJpeg(buffer) {
   return null
 }
 
-export { normalizeMealTimes, formatMealTime, normalizeRecipeAdjustments, applyRecipeAdjustments, adjustmentKey, sanitizeJpeg, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }
+export { normalizeMealTimes, formatMealTime, normalizeRecipeAdjustments, applyRecipeAdjustments, adjustmentKey, adjustmentFactor, sanitizeJpeg, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }

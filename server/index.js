@@ -10,10 +10,11 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
-import { applyRecipeAdjustments, buildMenuSnapshot, normalizeRecipeAdjustments, sanitizeJpeg } from './domain/documents.js'
+import { adjustmentFactor, applyRecipeAdjustments, buildMenuSnapshot, normalizeRecipeAdjustments, sanitizeJpeg } from './domain/documents.js'
 import { normalizeActiveMeals, normalizeMealTimes } from './domain/planMeals.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
 import { normalizeEquivalentPlan } from './domain/equivalents.js'
+import { emptyNutritionTotals, perServingFromIngredients } from './domain/recipeNutrition.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
@@ -43,10 +44,14 @@ async function isPracticeActive(practiceId) {
   const cached = practiceStatusCache.get(practiceId)
   if (cached && cached.expires > Date.now()) return cached.active
   const practice = await prisma.practice.findUnique({ where: { id: practiceId }, select: { status: true } }).catch(() => null)
-  const active = !practice || practice.status === 'ACTIVE'
+  const active = practice?.status === 'ACTIVE'
   practiceStatusCache.set(practiceId, { active, expires: Date.now() + 30000 })
   return active
 }
+
+// Campos públicos del usuario. Nunca exponer `passwordHash`: GET/PUT /practice devolvían el
+// usuario completo (con el hash bcrypt) al cliente.
+const USER_PUBLIC_SELECT = { id: true, name: true, email: true, role: true, specialty: true, phone: true, licenseNumber: true }
 
 // @fastify/cors defaults `methods` to 'GET,HEAD,POST' only (the CORS-spec "simple methods"),
 // so without this every PUT here has silently failed preflight for any cross-origin caller
@@ -75,6 +80,9 @@ app.addHook('onRequest', async (request, reply) => {
   if (!header?.startsWith('Bearer ')) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Inicia sesión para continuar.', fields: {} })
   try {
     const payload = jwt.verify(header.slice(7), JWT_SECRET)
+    // Un token de admin no lleva practiceId; si llegara por aquí, Prisma ignoraría el `practiceId:
+    // undefined` y las consultas devolverían datos de TODAS las prácticas. Solo usuarios de práctica.
+    if (payload.admin || !payload.practiceId) throw new Error('not a practice user')
     request.userId = payload.sub
     request.practiceId = payload.practiceId
     request.userRole = payload.role
@@ -130,7 +138,7 @@ app.get('/api/v1/auth/me', async (request, reply) => {
 app.get('/api/v1/practice', async (request, reply) => {
   const practice = await prisma.practice.findUnique({ where: { id: request.practiceId } })
   if (!practice) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Práctica no encontrada.', fields: {} })
-  const user = await prisma.user.findUnique({ where: { id: request.userId } })
+  const user = await prisma.user.findUnique({ where: { id: request.userId }, select: USER_PUBLIC_SELECT })
   return { ...practice, user }
 })
 
@@ -138,7 +146,7 @@ app.put('/api/v1/practice', async (request, reply) => {
   const { name, timeZone, address, userName, userEmail, userSpecialty, userPhone, userLicenseNumber, businessHours, fees } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
   const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(address !== undefined ? { address: String(address).trim() || null } : {}), ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
-  let user = await prisma.user.findUnique({ where: { id: request.userId } })
+  let user = await prisma.user.findUnique({ where: { id: request.userId }, select: USER_PUBLIC_SELECT })
   if (user) {
     user = await prisma.user.update({
       where: { id: user.id },
@@ -149,6 +157,7 @@ app.put('/api/v1/practice', async (request, reply) => {
         ...(userPhone !== undefined ? { phone: userPhone } : {}),
         ...(userLicenseNumber !== undefined ? { licenseNumber: String(userLicenseNumber).trim() || null } : {}),
       },
+      select: USER_PUBLIC_SELECT,
     })
   }
   return { ...practice, user }
@@ -337,8 +346,8 @@ app.delete('/api/v1/recipes/:recipeId/image', async (request, reply) => {
 
 app.get('/api/v1/patients', async (request) => {
   const { search = '', status = 'ACTIVE', page = 1, pageSize = 25, noNext } = request.query
-  const currentPage = Math.max(Number(page), 1)
-  const take = Math.min(Math.max(Number(pageSize), 1), 100)
+  const currentPage = Math.max(Number(page) || 1, 1)
+  const take = Math.min(Math.max(Number(pageSize) || 25, 1), 100)
   const where = {
     practiceId: request.practiceId,
     status,
@@ -371,7 +380,8 @@ const emptyToNull = (value) => (value === undefined ? undefined : value === '' ?
 app.post('/api/v1/patients', async (request, reply) => {
   const { firstName, lastName, email, phone, birthDate, sex, occupation, consentDataAt } = request.body || {}
   if (!firstName || !lastName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido son obligatorios.', fields: { firstName: !firstName, lastName: !lastName } })
-  const patient = await prisma.patient.create({ data: { practiceId: request.practiceId, firstName, lastName, email: emptyToNull(email), phone: emptyToNull(phone), sex, occupation: emptyToNull(occupation), birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: consentDataAt ? new Date(consentDataAt) : undefined } })
+  if (birthDate && Number.isNaN(new Date(birthDate).getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha de nacimiento inválida.', fields: { birthDate: true } })
+  const patient = await prisma.patient.create({ data: { practiceId: request.practiceId, firstName, lastName, email: emptyToNull(email), phone: emptyToNull(phone), sex: sex === undefined || sex === null || sex === '' ? null : String(sex), occupation: emptyToNull(occupation), birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: consentDataAt ? new Date(consentDataAt) : undefined } })
   return reply.code(201).send(patient)
 })
 
@@ -910,25 +920,6 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
   ])
   return { type: 'plan', planId: plan.id, patientId }
 })
-
-// kcal/protein/carbs/fat/fiber/sugar/sodium feed the macro summary shown everywhere; the
-// micronutrients feed the % de adecuación (fase 15) — both come from the same ingredient
-// nutrition JSON, per 100 g, scaled by ingredient quantity.
-const RECIPE_NUTRITION_KEYS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'sodium', 'vitaminA', 'vitaminC', 'folicAcid', 'calcium', 'iron', 'vitaminD', 'vitaminE', 'vitaminK', 'vitaminB12', 'zinc', 'iodine', 'selenium']
-const emptyNutritionTotals = () => Object.fromEntries(RECIPE_NUTRITION_KEYS.map((key) => [key, 0]))
-
-// Per-serving nutrition from linked catalog ingredients (the SMAE calculation). Imported recipes
-// use this to contrast against the book's original values instead of overwriting them.
-const perServingFromIngredients = (ingredients, portions) => {
-  const totals = emptyNutritionTotals()
-  for (const item of ingredients) {
-    const nutrition = item.ingredient.nutrition || {}
-    const factor = Number(item.quantity) / 100
-    for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor
-  }
-  const servings = Number(portions || 1)
-  return Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round((value / servings) * 10) / 10]))
-}
 
 app.get('/api/v1/recipes', async (request) => {
   const { search = '', mealType, restriction, status = 'ACTIVE', page, pageSize } = request.query
@@ -1537,7 +1528,10 @@ app.get('/api/v1/plans/:planId/adequacy', async (request, reply) => {
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   const inputs = plan.evaluation?.inputs
   if (!inputs?.age || !inputs?.sex) return { bracket: null, bracketLabel: null, nutrients: [], reason: 'MISSING_EVALUATION' }
-  return computeMicronutrientAdequacy(plan.mealSlots, inputs.age, inputs.sex)
+  // Las recetas con cantidades ajustadas para este plan cuentan con su factor.
+  const adjustments = normalizeRecipeAdjustments(plan.recipeAdjustments)
+  const slots = plan.mealSlots.map((slot) => ({ ...slot, servings: (Number(slot.servings) || 1) * adjustmentFactor(adjustments, slot.mealType, slot.recipeId) }))
+  return computeMicronutrientAdequacy(slots, inputs.age, inputs.sex)
 })
 
 app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
