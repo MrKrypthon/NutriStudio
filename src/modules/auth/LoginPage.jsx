@@ -23,11 +23,12 @@ export default function LoginPage() {
 
   return <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--surface-soft)' }}>
     <div style={{ width: 'min(380px, calc(100% - 32px))' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28, justifyContent: 'center' }}>
-        <BrandMark size={34} />
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-          <strong style={{ font: '800 34px Manrope', letterSpacing: '-.9px', color: 'var(--ink)', whiteSpace: 'nowrap' }}>Milpa</strong>
-          <small style={{ font: "500 18px 'DM Mono'", letterSpacing: '.2px', color: 'var(--muted)', whiteSpace: 'nowrap' }}>Atención Integral</small>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28, justifyContent: 'center' }}>
+        <BrandMark size={64} />
+        {/* Dos renglones que juntos miden lo mismo que el ícono. */}
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: 64 }}>
+          <strong style={{ font: '800 44px Manrope', lineHeight: 0.86, letterSpacing: '-1.6px', color: 'var(--ink)', whiteSpace: 'nowrap' }}>Milpa</strong>
+          <small style={{ font: "600 19px 'DM Sans'", lineHeight: 1, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Atención Integral</small>
         </div>
       </div>
       <form className="panel login-card" onSubmit={submit} style={{ padding: 28 }}>
