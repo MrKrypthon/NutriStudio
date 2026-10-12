@@ -27,7 +27,7 @@ export default function LoginPage() {
         <BrandMark size={64} />
         {/* Dos renglones que juntos miden lo mismo que el ícono. */}
         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: 64 }}>
-          <strong style={{ font: '800 38px Manrope', lineHeight: 0.86, letterSpacing: '-1.3px', color: 'var(--ink)', whiteSpace: 'nowrap' }}>Milpa</strong>
+          <strong style={{ font: '800 34px Manrope', lineHeight: 0.86, letterSpacing: '-1.1px', color: 'var(--ink)', whiteSpace: 'nowrap' }}>Milpa</strong>
           <small style={{ font: "600 19px 'DM Sans'", lineHeight: 1, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Atención Integral</small>
         </div>
       </div>

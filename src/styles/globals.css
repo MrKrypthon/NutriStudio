@@ -413,7 +413,7 @@ html{scroll-behavior:smooth}
   /* Marca en dos renglones (Milpa / Atención Integral) que juntos miden lo mismo que el ícono:
      el alto del bloque de texto es el del ícono (ver BRAND_MARK_SIZE en AppChrome.jsx). */
   .pc-brand>div{display:flex;flex-direction:column;justify-content:space-between;height:46px;min-width:0}
-  .pc-brand strong{display:block;font-size:27px;line-height:.86;letter-spacing:-.9px;white-space:nowrap}
+  .pc-brand strong{display:block;font-size:24px;line-height:.86;letter-spacing:-.8px;white-space:nowrap}
   .pc-brand small{display:block;font:600 13.5px 'DM Sans';line-height:1;letter-spacing:0;white-space:nowrap;color:#c3cdc7}
 }
 @media print{
