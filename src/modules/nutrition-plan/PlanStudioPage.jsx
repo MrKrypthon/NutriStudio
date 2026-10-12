@@ -34,6 +34,11 @@ const DAYS = [
 ]
 const RECIPE_COLORS = ['coral', 'blue', 'yellow', 'purple']
 const NUTRIENT_CHIPS = [['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['carbs', 'Carbohidratos', 'g'], ['fat', 'Grasas', 'g'], ['fiber', 'Fibra', 'g']]
+
+// Nutrición "efectiva" de una receta para los cálculos del plan: si tiene cálculo SMAE
+// (`calculatedNutrition`, recetas importadas vinculadas al catálogo de ingredientes) se usa ese —
+// refleja los ingredientes, incluidos los de supermercado—; si no, los valores propios de la receta.
+const effectiveNutrition = (recipe) => recipe?.calculatedNutrition || recipe?.nutrition || {}
 const slotKey = (day, mealType) => `${day}:${mealType}`
 
 const PLAN_STATUS_LABEL = { DRAFT: 'Borrador', READY: 'Listo', PUBLISHED: 'Publicado', SUPERSEDED: 'Reemplazado', CANCELLED: 'Cancelado' }
@@ -518,7 +523,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const averageKcalForMeal = (mealType) => {
     const assigned = DAYS.map((day) => recipeById(slots[slotKey(day.n, mealType)])).filter(Boolean)
     if (!assigned.length) return null
-    const total = assigned.reduce((sum, recipe) => sum + (recipe.nutrition?.kcal || 0), 0) / assigned.length
+    const total = assigned.reduce((sum, recipe) => sum + (effectiveNutrition(recipe).kcal || 0), 0) / assigned.length
     return Math.round(total * mealServingsFor(mealType))
   }
 
@@ -531,7 +536,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       for (const day of DAYS) {
         const recipe = recipeById(slots[slotKey(day.n, meal.key)])
         if (!recipe) continue
-        for (const key of keys) totals[key] += Number(recipe.nutrition?.[key] || 0) * servings
+        for (const key of keys) totals[key] += Number(effectiveNutrition(recipe)[key] || 0) * servings
       }
     }
     for (const key of keys) totals[key] = totals[key] / 7
@@ -605,7 +610,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
             <div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div>
             <select value={pickerRestriction} onChange={(e) => setPickerRestriction(e.target.value)}><option value="">Todas las restricciones</option>{availableRestrictions.map((restriction) => <option value={restriction} key={restriction}>{restriction}</option>)}</select>
           </div>
-          <div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas para este filtro.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => setPickerDetail(recipe)} key={recipe.id}>{recipeThumb(recipe, i)}<b>{recipe.name}</b><small>{Math.round(recipe.nutrition?.kcal || 0)} kcal · ver detalle</small></button>)}</div>
+          <div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas para este filtro.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => setPickerDetail(recipe)} key={recipe.id}>{recipeThumb(recipe, i)}<b>{recipe.name}</b><small>{Math.round(effectiveNutrition(recipe).kcal || 0)} kcal · ver detalle</small></button>)}</div>
         </>}
   </div></div> : null
 

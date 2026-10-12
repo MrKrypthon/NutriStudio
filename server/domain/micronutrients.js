@@ -65,7 +65,7 @@ function averageDailyMicronutrients(mealSlots) {
     if (!byDay.has(slot.dayOfWeek)) byDay.set(slot.dayOfWeek, emptyTotals())
     const totals = byDay.get(slot.dayOfWeek)
     const servings = Number(slot.servings) || 1
-    const nutrition = slot.recipe.nutrition || {}
+    const nutrition = slot.recipe.calculatedNutrition || slot.recipe.nutrition || {}
     for (const key of NUTRIENT_KEYS) totals[key] += Number(nutrition[key] || 0) * servings
   }
   const days = [...byDay.values()]

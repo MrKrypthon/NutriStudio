@@ -29,7 +29,7 @@ function buildMenuSnapshot(mealSlots) {
       recipeId: slot.recipeId,
       recipeName: slot.recipe?.name || 'Receta',
       servings: slot.servings ? Number(slot.servings) : 1,
-      kcal: Math.round((slot.recipe?.nutrition?.kcal || 0) * (slot.servings ? Number(slot.servings) : 1)),
+      kcal: Math.round(((slot.recipe?.calculatedNutrition || slot.recipe?.nutrition)?.kcal || 0) * (slot.servings ? Number(slot.servings) : 1)),
     }))
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek || MEAL_TYPE_ORDER.indexOf(a.mealType) - MEAL_TYPE_ORDER.indexOf(b.mealType))
 }
