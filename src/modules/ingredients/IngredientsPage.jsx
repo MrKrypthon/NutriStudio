@@ -86,6 +86,15 @@ export default function IngredientsPage({ setActive }) {
   }
 
   const source = selected?.equivalence?.source === 'SMAE' ? 'Sistema Mexicano de Equivalentes' : selected?.equivalence?.source?.provider ? 'Importado de fuente externa' : 'Fuente local revisada'
+  // La nutrición se guarda por 100 g; para la vista por porción se escala a los gramos del
+  // equivalente del SMAE (p. ej. Aceite: 888 kcal/100 g × 5 g = 44 kcal por 1 cdita).
+  const eq = selected?.equivalence || {}
+  const gramsPerEq = Number(eq.grams) > 0 ? Number(eq.grams) : null
+  const perPortion = (key) => {
+    if (!gramsPerEq) return null
+    const value = Number(selected?.nutrition?.[key] ?? 0) * (gramsPerEq / 100)
+    return Math.round(value * 100) / 100
+  }
 
   return <AppChrome active="Ingredientes" setActive={setActive}><div className="content ingredient-workspace">
     <ModuleHeader eyebrow="BIBLIOTECA · INGREDIENTES LOCALES" title="Ingredientes" subtitle="Datos nutricionales revisados y equivalencias de tu práctica." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizados' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span><button className="secondary" onClick={() => setShowForm((value) => !value)}><span>+</span> Nuevo ingrediente</button><button className="primary" onClick={() => setActive('Importar alimentos')}><span>+</span> Importar alimento</button></div>} />
@@ -139,8 +148,9 @@ export default function IngredientsPage({ setActive }) {
           <b>{selected.equivalence?.serving || 'Sin definir'}</b>
           <small>{selected.equivalence?.grams ? `${selected.equivalence.grams} gramos · 1 equivalente` : 'Gramos por equivalente por definir'}</small>
         </div>
-        <h3>Información nutricional por 100 g</h3>
-        <div className="nutrient-table">{NUTRIENT_ROWS.map(([key, label, unit]) => <div key={key}><span>{label}</span><b>{selected.nutrition?.[key] ?? 0} {unit}</b></div>)}</div>
+        <h3>Información nutricional por porción{selected.equivalence?.serving ? ` (${selected.equivalence.serving})` : ''}</h3>
+        {!gramsPerEq && <p className="muted" style={{ marginTop: -6 }}>Falta el peso del equivalente para calcular la porción.</p>}
+        <div className="nutrient-table">{NUTRIENT_ROWS.map(([key, label, unit]) => <div key={key}><span>{label}</span><b>{perPortion(key) ?? '—'} {unit}</b></div>)}</div>
         <div className="equivalence-box">
           <p className="eyebrow">SISTEMA MEXICANO DE EQUIVALENTES</p>
           <b>Grupo: {selected.equivalence?.group || selected.group}</b>
