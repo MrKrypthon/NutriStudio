@@ -101,14 +101,38 @@ const formatNumber = (value, digits = 1) => String(Math.round(Number(value) * 10
 function wrapText(file, text, width) {
   const lines = []
   let current = ''
-  for (const word of cleanText(text).split(' ')) {
+  for (let word of cleanText(text).split(' ')) {
     if (!word) continue
+    // Una "palabra" más ancha que la celda (una liga, texto pegado sin espacios) se corta por
+    // letras: si no, se saldría de su columna o de la hoja.
+    while (file.widthOfString(word) > width && word.length > 1) {
+      if (current) { lines.push(current); current = '' }
+      // Se estima el corte por proporción y se afina: medir letra por letra una palabra de miles
+      // de caracteres bloquearía el servidor.
+      const head = word.slice(0, 400)
+      let cut = Math.max(1, Math.min(head.length - 1, Math.floor((head.length * width) / file.widthOfString(head))))
+      while (cut > 1 && file.widthOfString(word.slice(0, cut)) > width) cut -= 1
+      while (cut < head.length - 1 && file.widthOfString(word.slice(0, cut + 1)) <= width) cut += 1
+      lines.push(word.slice(0, cut))
+      word = word.slice(cut)
+    }
     const candidate = current ? `${current} ${word}` : word
     if (!current || file.widthOfString(candidate) <= width) current = candidate
     else { lines.push(current); current = word }
   }
   if (current) lines.push(current)
   return lines
+}
+
+// Deja activa la fuente al mayor tamaño (entre `max` y `min`) con que `text` cabe en `width`; si
+// ni al mínimo cabe, devuelve el texto recortado con "…".
+function fitText(file, font, text, max, min, width) {
+  let size = max
+  file.font(font).fontSize(size)
+  while (size > min && file.widthOfString(text) > width) { size -= 0.5; file.fontSize(size) }
+  let fitted = text
+  while (fitted.length > 1 && file.widthOfString(fitted) > width) fitted = `${fitted.slice(0, -2).trimEnd()}…`
+  return fitted
 }
 
 function drawWaves(file) {
@@ -148,7 +172,11 @@ function drawPageChrome(file, data) {
   const { fonts } = data
   drawWaves(file)
   file.font(fonts.bold).fontSize(12).fillColor(TEXT).text('Plan de Alimentación', 0, 45, { width: PAGE_W, align: 'center', lineBreak: false })
-  if (data.nutritionistName) file.font(fonts.regular).fontSize(12).fillColor('#333333').text(cleanText(data.nutritionistName), 0, 62, { width: PAGE_W, align: 'center', lineBreak: false })
+  if (data.nutritionistName) {
+    // Centrado en la hoja pero sin llegar al logo: un nombre largo baja de tamaño y, si ni así, se corta.
+    const name = fitText(file, fonts.regular, cleanText(data.nutritionistName), 12, 8, 500)
+    file.fillColor('#333333').text(name, (PAGE_W - 500) / 2, 62, { width: 500, align: 'center', lineBreak: false })
+  }
   if (data.logo) {
     try { file.image(data.logo, 676, 2, { fit: [86, 92], align: 'center', valign: 'center' }) } catch { /* logo en un formato que pdfkit no lee: la hoja sale sin él */ }
   }
@@ -186,6 +214,8 @@ function drawPatientLine(file, data, y) {
   file.font(data.fonts.regular).fontSize(size).fillColor(TEXT)
   const totalWidth = () => fields.reduce((sum, text) => sum + file.widthOfString(text), 0) + gap * (fields.length - 1)
   while (size > 7 && totalWidth() > right - left) { size -= 0.5; file.fontSize(size) }
+  // Si ni con la letra mínima caben, el que cede es el nombre.
+  while (totalWidth() > right - left && fields[0].length > 12) fields[0] = `${fields[0].slice(0, -2).trimEnd()}…`
   const rest = fields.slice(1)
   const start = left + file.widthOfString(fields[0]) + gap
   file.text(fields[0], left, y, { lineBreak: false })
@@ -274,8 +304,11 @@ function drawTimeLabel(file, fonts, label, time, x, y, height) {
   // Girado -90°, "abajo" en el texto es la derecha de la columna.
   file.text(text, cx - file.widthOfString(text) / 2, cy - lineH / 2 - (hour ? 9 : 0), { lineBreak: false })
   if (hour) {
-    file.fontSize(Math.min(size, 11.5))
-    file.text(hour, cx - file.widthOfString(hour) / 2, cy + 3, { lineBreak: false })
+    // La hora también tiene que caber a lo alto de la celda (una continuación puede ser muy corta).
+    let hourSize = Math.min(size, 11.5)
+    file.fontSize(hourSize)
+    while (hourSize > 6 && file.widthOfString(hour) > height - 8) { hourSize -= 0.5; file.fontSize(hourSize) }
+    if (file.widthOfString(hour) <= height - 4) file.text(hour, cx - file.widthOfString(hour) / 2, cy + 3, { lineBreak: false })
   }
   file.restore()
 }
@@ -397,14 +430,17 @@ function drawLegend(file, data, startY, rows) {
 function drawParagraphList(file, data, title, items, startY) {
   const { fonts } = data
   let y = startY
-  if (CONTENT_BOTTOM - y < 44) y = addPage(file, data) + 16
+  // El título no se queda solo al pie: necesita lugar para él y al menos un renglón.
+  if (CONTENT_BOTTOM - y < 27 + 13.5 * 2) y = addPage(file, data) + 16
   file.font(fonts.bold).fontSize(10.5).fillColor(TEXT).text(title, 72, y, { lineBreak: false })
   y += 27
   for (const item of items) {
     file.font(fonts.regular).fontSize(10)
     const lines = wrapText(file, `-${cleanText(item).replace(/^[-•·]\s*/, '')}`, 640)
-    if (CONTENT_BOTTOM - y < lines.length * 13.5) y = addPage(file, data) + 16
+    // Un punto corto pasa entero a la hoja siguiente; uno largo se parte renglón por renglón.
+    if (lines.length <= 6 && CONTENT_BOTTOM - y < lines.length * 13.5) y = addPage(file, data) + 16
     for (const line of lines) {
+      if (CONTENT_BOTTOM - y < 13.5) y = addPage(file, data) + 16
       file.font(fonts.regular).fontSize(10).fillColor(TEXT).text(line, 72, y, { lineBreak: false })
       y += 13.5
     }
@@ -485,7 +521,10 @@ function drawNutritionPlan(file, input) {
   // El logo va en todas las hojas: se abre una sola vez para no incrustarlo una vez por hoja.
   let logo = null
   if (input.logo) { try { logo = file.openImage(input.logo) } catch { logo = null } }
-  const data = { ...input, logo, fonts: registerFonts(file) }
+  // Lo mismo las fotos: una receta que se repite en varios tiempos se incrusta una sola vez.
+  const images = new Map()
+  for (const [imageFile, buffer] of input.images || []) { try { images.set(imageFile, file.openImage(buffer)) } catch { /* foto ilegible: la celda lleva el plato dibujado */ } }
+  const data = { ...input, logo, images, fonts: registerFonts(file) }
   drawPageChrome(file, data)
   let y = drawPatientLine(file, data, FIRST_TOP)
   const rows = buildMealOptions(data.menu, data.mealTimes, data.equivalents)

@@ -5,6 +5,7 @@
 // already has ingredients linked.
 import { PrismaClient } from '@prisma/client'
 import 'dotenv/config'
+import { emptyNutritionTotals } from '../server/domain/recipeNutrition.js'
 
 const prisma = new PrismaClient()
 
@@ -28,9 +29,6 @@ const RECIPE_INGREDIENTS = {
     ['Aceite de oliva', 'Grasas sin proteínas', 5, 1],
   ],
 }
-
-const RECIPE_NUTRITION_KEYS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'sodium', 'vitaminA', 'vitaminC', 'folicAcid', 'calcium', 'iron', 'vitaminD', 'vitaminE', 'vitaminK', 'vitaminB12', 'zinc', 'iodine', 'selenium']
-const emptyNutritionTotals = () => Object.fromEntries(RECIPE_NUTRITION_KEYS.map((key) => [key, 0]))
 
 async function main() {
   const practice = await prisma.practice.findFirst()

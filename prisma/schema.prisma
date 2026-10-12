@@ -323,6 +323,9 @@ model NutritionPlan {
   fatPercent      Decimal?     @db.Decimal(5, 2)
   evaluation      Json?
   menuSnapshot    Json?
+  // Datos del encabezado del plan tal como eran al publicar (paciente, medición, nutrióloga y
+  // contacto), para que regenerar el PDF después no los cambie.
+  headerSnapshot  Json?
   // Hora de cada tiempo de comida, "HH:MM" por clave de tiempo de comida; sale junto
   // al nombre del tiempo en el plan entregado.
   mealTimes       Json?

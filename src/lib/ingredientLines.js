@@ -19,7 +19,25 @@ export const formatQuantity = (value) => {
   return [units || '', label].filter(Boolean).join(' ')
 }
 
+// Valor de una cantidad ya formateada ("1 1/2" → 1.5): la concordancia se decide con lo que se lee.
+const quantityValue = (text) => String(text).split(' ').reduce((sum, part) => { const [top, bottom] = part.split('/'); return sum + (bottom ? Number(top) / Number(bottom) : Number(top)) }, 0)
+
 const VULGAR_FRACTIONS = { '¼': 1 / 4, '½': 1 / 2, '¾': 3 / 4, '⅓': 1 / 3, '⅔': 2 / 3 }
+
+// Unidades y piezas que cambian de número con la cantidad ("1 taza" / "2 tazas"). Sólo las de esta
+// lista se ajustan: adivinar el plural de cualquier palabra rompería más de lo que arregla.
+const COUNT_NOUNS = [['taza', 'tazas'], ['cucharada', 'cucharadas'], ['cucharadita', 'cucharaditas'], ['pieza', 'piezas'], ['rebanada', 'rebanadas'], ['huevo', 'huevos'], ['clara', 'claras'], ['tortilla', 'tortillas'], ['diente', 'dientes'], ['pechuga', 'pechugas'], ['muslo', 'muslos'], ['filete', 'filetes'], ['bistec', 'bisteces'], ['lata', 'latas'], ['manojo', 'manojos'], ['puño', 'puños'], ['pizca', 'pizcas'], ['sobre', 'sobres'], ['hoja', 'hojas'], ['rama', 'ramas'], ['vaso', 'vasos'], ['plátano', 'plátanos'], ['jitomate', 'jitomates'], ['tomate', 'tomates'], ['papa', 'papas'], ['zanahoria', 'zanahorias'], ['calabacita', 'calabacitas'], ['chile', 'chiles'], ['cebolla', 'cebollas'], ['manzana', 'manzanas'], ['nopal', 'nopales'], ['pan', 'panes'], ['galleta', 'galletas']]
+const SINGULAR = new Map(COUNT_NOUNS.map(([one, many]) => [many, one]))
+const PLURAL = new Map(COUNT_NOUNS)
+
+// Concuerda la palabra que sigue a la cantidad: singular hasta 1 ("1 huevo", "1/2 taza"), plural
+// de ahí en adelante ("1 1/2 tazas"). `rest` es el renglón sin la cantidad.
+const agreeNoun = (amount, rest) => rest.replace(/^(\s*(?:de\s+)?)([a-záéíóúñ]+)/i, (whole, lead, word) => {
+  const lower = word.toLowerCase()
+  const next = amount <= 1 ? SINGULAR.get(lower) : PLURAL.get(lower)
+  if (!next) return whole
+  return lead + (word[0] === word[0].toUpperCase() ? next[0].toUpperCase() + next.slice(1) : next)
+})
 
 // Scales the leading amount of a free-text ingredient line ("2 tazas de avena" -> "3 tazas de
 // avena") without touching the rest. Unparseable lines ("al gusto") pass through unchanged.
@@ -35,8 +53,9 @@ export const scaleIngredientLine = (line, factor) => {
   // "½ taza", "1½ pieza": fracciones tipográficas, solas o pegadas a un entero.
   const vulgar = line.match(/^(\d+)?\s?([¼½¾⅓⅔])/)
   if (vulgar) {
-    const scaled = formatQuantity(((Number(vulgar[1]) || 0) + VULGAR_FRACTIONS[vulgar[2]]) * factor)
-    return scaled ? `${scaled}${line.slice(vulgar[0].length)}` : line
+    const amount = ((Number(vulgar[1]) || 0) + VULGAR_FRACTIONS[vulgar[2]]) * factor
+    const scaled = formatQuantity(amount)
+    return scaled ? `${scaled}${agreeNoun(quantityValue(scaled), line.slice(vulgar[0].length))}` : line
   }
   const match = line.match(/^(\d+)\s+(\d+)\/(\d+)\b|^(\d+)\/(\d+)\b|^(\d+(?:[.,]\d+)?)(?![\d/])/)
   if (!match) return line
@@ -47,5 +66,5 @@ export const scaleIngredientLine = (line, factor) => {
   else { amount = Number(match[6].replace(',', '.')); consumed = match[6].length }
   const scaled = formatQuantity(amount * factor)
   if (!scaled) return line
-  return `${scaled}${line.slice(consumed)}`
+  return `${scaled}${agreeNoun(quantityValue(scaled), line.slice(consumed))}`
 }

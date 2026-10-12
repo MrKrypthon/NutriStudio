@@ -116,6 +116,7 @@ function buildMenuSnapshot(mealSlots) {
 // del plan sigan al ajuste, porque del texto libre no se pueden recalcular.
 const adjustmentKey = (mealType, recipeId) => `${mealType}|${recipeId}`
 
+const MAX_ADJUSTMENTS = 60
 const normalizeFactor = (value) => { const number = Number(value); return Number.isFinite(number) && number > 0 ? Math.min(10, Math.max(0.1, Math.round(number * 100) / 100)) : 1 }
 
 // Factor nutrimental del ajuste de una receta en un tiempo de comida (1 si no tiene ajuste).
@@ -127,11 +128,13 @@ function adjustmentFactor(adjustments, mealType, recipeId) {
 function normalizeRecipeAdjustments(value) {
   const result = {}
   if (!value || typeof value !== 'object' || Array.isArray(value)) return result
-  for (const [key, adjustment] of Object.entries(value).slice(0, 200)) {
+  for (const [key, adjustment] of Object.entries(value)) {
+    // Como mucho 7 tiempos × 7 recetas distintas; el tope se aplica a los ajustes válidos.
+    if (Object.keys(result).length >= MAX_ADJUSTMENTS) break
     const [mealType, recipeId, ...rest] = String(key).split('|')
     if (rest.length || !MEAL_TYPE_ORDER.includes(mealType) || !/^[0-9a-f-]{36}$/i.test(recipeId || '')) continue
     if (!Array.isArray(adjustment?.lines)) continue
-    const lines = adjustment.lines.filter((line) => typeof line === 'string').map((line) => line.trim().slice(0, 240)).filter(Boolean).slice(0, 60)
+    const lines = adjustment.lines.filter((line) => typeof line === 'string').map((line) => line.trim().slice(0, 240)).filter(Boolean).slice(0, 40)
     if (lines.length) result[adjustmentKey(mealType, recipeId)] = { lines, factor: normalizeFactor(adjustment.factor) }
   }
   return result
@@ -155,6 +158,7 @@ function applyRecipeAdjustments(menu, adjustments) {
 // la nutrióloga repartió en el paso Equivalentes; si el plan no tiene ese cálculo, se estiman con
 // los equivalentes de su primera opción (la receta base de la Distribución).
 function buildMealOptions(menu, mealTimes, equivalentPlan) {
+  const hasPrescription = Object.values(equivalentPlan?.distribution || {}).some((meal) => mealBadgePortions(meal).length > 0)
   const times = normalizeMealTimes(mealTimes)
   return MEAL_TYPE_ORDER.map((mealType) => {
     const options = []
@@ -165,8 +169,10 @@ function buildMealOptions(menu, mealTimes, equivalentPlan) {
       seen.add(key)
       options.push(entry)
     }
+    // Con reparto de equivalentes en el plan, las porciones son sólo las prescritas: un tiempo al
+    // que no se le repartió nada sale sin círculos, no con una estimación que nadie indicó.
     const prescribed = mealBadgePortions(equivalentPlan?.distribution?.[mealType])
-    const equivalents = prescribed.length ? Object.fromEntries(prescribed.map((portion) => [portion.code, portion.quantity])) : options[0]?.equivalents || {}
+    const equivalents = hasPrescription ? Object.fromEntries(prescribed.map((portion) => [portion.code, portion.quantity])) : options[0]?.equivalents || {}
     const portions = EQUIVALENT_GROUPS
       .map((group) => ({ ...group, quantity: Math.round((equivalents[group.code] || 0) * 2) / 2 }))
       .filter((group) => group.quantity > 0)

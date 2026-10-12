@@ -1345,3 +1345,26 @@ textarea{field-sizing:content;max-height:340px;overflow-y:auto}
   .content.dashboard-content > *{flex:none}
 }
 .pc-sidebar .icon,.pc-sidebar .active .icon{color:var(--success)}
+
+/* Constructor de plan: sugerencias de recetas por tiempo de comida, aviso de plan publicado y
+   micronutrientes sin dato en el catálogo. */
+.recipe-suggest-modal{width:min(640px,calc(100% - 32px));max-height:calc(100vh - 40px);overflow:auto}
+.suggest-avoid{display:block;font-size:11px;font-weight:600;color:var(--ink);margin-bottom:12px}
+.suggest-avoid>small{font-weight:400;color:var(--muted)}
+.suggest-avoid input{display:block;width:100%;margin:5px 0 4px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font:inherit;font-weight:400}
+.suggest-avoid .muted{display:block;font-weight:400;line-height:1.45}
+.suggest-list{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:6px}
+.recipe-suggest-modal .suggest-row{display:flex;flex-direction:row;align-items:center;gap:10px;margin:0;font-weight:400;border:1px solid var(--line);border-radius:10px;padding:8px 11px;cursor:pointer;background:#fff}
+.recipe-suggest-modal .suggest-row.selected{border-color:var(--green);background:var(--mint)}
+.recipe-suggest-modal .suggest-row input{flex:0 0 auto;width:15px;height:15px;margin:0;accent-color:var(--green)}
+.suggest-row .suggest-thumb{flex:0 0 auto;width:40px;height:40px;border-radius:8px}
+.suggest-info{display:grid;gap:2px;min-width:0}
+.suggest-info b{font-size:12px;color:var(--ink)}
+.suggest-info small{font-size:10px;color:var(--ink)}
+.suggest-info small.muted{color:var(--muted)}
+.suggest-empty{padding:14px 0}
+.adjust-status b{color:var(--ink);font-weight:600}
+.plan-locked-notice b{font-weight:600}
+.adequacy-row.no-data>span{color:var(--muted)}
+.adequacy-note{margin-top:10px;line-height:1.5}
+.wizard-footer>span .link-button{font-size:inherit}
