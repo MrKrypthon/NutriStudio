@@ -410,10 +410,11 @@ html{scroll-behavior:smooth}
   .ingredient-workspace .ingredient-layout > section{display:flex;flex-direction:column;min-height:0;overflow:hidden}
   .ingredient-workspace .ingredient-list{flex:1 1 auto;min-height:0;overflow:auto}
   .ingredient-workspace .ingredient-detail{position:static;max-height:100%;overflow:auto}
-  /* Marca en una sola línea (Milpa + Atención Integral) con el mayor tamaño que quepa en el sidebar. */
-  .pc-brand>div{display:flex;align-items:baseline;gap:3px;min-width:0}
-  .pc-brand strong{display:inline;font-size:15px;letter-spacing:-.4px;white-space:nowrap}
-  .pc-brand small{font-size:8px;letter-spacing:0;white-space:nowrap}
+  /* Marca en dos renglones (Milpa / Atención Integral) que juntos miden lo mismo que el ícono:
+     el alto del bloque de texto es el del ícono (ver BRAND_MARK_SIZE en AppChrome.jsx). */
+  .pc-brand>div{display:flex;flex-direction:column;justify-content:space-between;height:46px;min-width:0}
+  .pc-brand strong{display:block;font-size:24px;line-height:.86;letter-spacing:-.8px;white-space:nowrap}
+  .pc-brand small{display:block;font:600 13.5px 'DM Sans';line-height:1;letter-spacing:0;white-space:nowrap;color:#c3cdc7}
 }
 @media print{
   .app-shell,.main{height:auto;min-height:0;overflow:visible;display:block}
