@@ -129,28 +129,47 @@ function buildMealOptions(menu) {
   }).filter((row) => row.options.length)
 }
 
-// Lee el tamaño real de un JPEG a partir de sus bytes (no del tipo que dice el navegador). Devuelve
-// null si no es un JPEG bien formado. Las fotos de receta sólo se aceptan en JPEG a propósito: se
-// sirven públicamente y luego las incrusta pdfkit, que al JPEG sólo le lee estos mismos marcadores
-// (no lo descomprime), mientras que un PNG lo descomprime y uno dañado puede tumbar el proceso.
-function readJpegSize(buffer) {
+// Revisa un JPEG subido y lo devuelve reescrito sin metadatos: { data, width, height }, o null si no
+// es un JPEG bien formado. Las fotos de receta sólo se aceptan en JPEG a propósito: se sirven
+// públicamente y luego las incrusta pdfkit, que un PNG lo descomprime (y uno dañado puede tumbar el
+// proceso) mientras que al JPEG sólo le recorre los segmentos de cabecera.
+//
+// El recorrido es deliberadamente igual de simple que el de pdfkit —marcador de 2 bytes, largo de 2
+// bytes, siguiente segmento— y más estricto: cualquier cosa que otro lector pudiera interpretar
+// distinto (bytes de relleno, largos que se salen del archivo, dos SOF) se rechaza en vez de
+// tolerarse. Y se quitan los segmentos APPn y COM: ahí viven EXIF/XMP/ICC, que pdfkit le pasa a un
+// lector de EXIF aparte, y no hacen falta para mostrar la foto. Así lo que se guarda es lo que se
+// validó y los dos lectores ven exactamente la misma estructura.
+function sanitizeJpeg(buffer) {
   if (!Buffer.isBuffer(buffer) || buffer.length < 12 || buffer[0] !== 0xff || buffer[1] !== 0xd8) return null
+  const parts = [buffer.subarray(0, 2)]
+  let size = null
   let offset = 2
-  while (offset + 9 <= buffer.length) {
-    if (buffer[offset] !== 0xff) return null
+  while (offset + 4 <= buffer.length) {
     const marker = buffer[offset + 1]
-    if (marker === 0xff) { offset += 1; continue }
-    // SOF0–SOF15 llevan el tamaño, salvo DHT (C4), JPG (C8) y DAC (CC).
-    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-      const height = buffer.readUInt16BE(offset + 5)
-      const width = buffer.readUInt16BE(offset + 7)
-      return width && height ? { width, height } : null
-    }
+    // Antes de los datos de imagen sólo se admiten segmentos con largo (nada de RSTn, SOI, EOI, TEM
+    // ni relleno 0xFF).
+    if (buffer[offset] !== 0xff || marker < 0xc0 || marker === 0xff || (marker >= 0xd0 && marker <= 0xd9)) return null
     const length = buffer.readUInt16BE(offset + 2)
-    if (length < 2) return null
-    offset += 2 + length
+    const end = offset + 2 + length
+    if (length < 2 || end > buffer.length) return null
+    // SOF0–SOF15 llevan el tamaño, salvo DHT (C4), JPG (C8) y DAC (CC).
+    if (marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
+      if (size || length < 8) return null
+      size = { height: buffer.readUInt16BE(offset + 5), width: buffer.readUInt16BE(offset + 7) }
+      if (!size.width || !size.height) return null
+    }
+    const isMetadata = (marker >= 0xe0 && marker <= 0xef) || marker === 0xfe
+    if (!isMetadata) parts.push(buffer.subarray(offset, end))
+    if (marker === 0xda) {
+      // SOS: de aquí en adelante son los datos comprimidos, que se copian tal cual.
+      if (!size || end >= buffer.length) return null
+      parts.push(buffer.subarray(end))
+      return { data: Buffer.concat(parts), ...size }
+    }
+    offset = end
   }
   return null
 }
 
-export { readJpegSize, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }
+export { sanitizeJpeg, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }

@@ -10,7 +10,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
-import { buildMenuSnapshot, readJpegSize } from './domain/documents.js'
+import { buildMenuSnapshot, sanitizeJpeg } from './domain/documents.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
@@ -305,7 +305,7 @@ app.get('/api/v1/recipes/images/:fileName', async (request, reply) => {
 const removeUploadedRecipeImage = (imageFile) => (imageFile?.startsWith('u-') ? unlink(path.join(recipeImageDir(), imageFile)).catch(() => {}) : Promise.resolve())
 
 // Foto de una receta. Sale en la tarjeta de la receta y en el plan de alimentación entregado. Sólo
-// JPEG, comprobado con los bytes del archivo y no con el tipo declarado (ver readJpegSize). El
+// JPEG, comprobado con los bytes del archivo y no con el tipo declarado (ver sanitizeJpeg). El
 // nombre lleva una marca de tiempo para que al cambiarla no se quede la anterior en la caché.
 app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
@@ -315,13 +315,13 @@ app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
   if (!match) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen JPG.', fields: { dataUrl: true } })
   // Tope sobre el texto base64 antes de decodificarlo, para no reservar memoria de más.
   if (match[1].length > Math.ceil(RECIPE_IMAGE_MAX_BYTES / 3) * 4) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La imagen no puede pesar más de 3 MB.', fields: { dataUrl: true } })
-  const buffer = Buffer.from(match[1], 'base64')
-  const size = readJpegSize(buffer)
+  // Lo que se guarda es la versión reescrita sin metadatos, no los bytes recibidos.
+  const size = sanitizeJpeg(Buffer.from(match[1], 'base64'))
   if (!size) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El archivo no es una imagen JPG válida.', fields: { dataUrl: true } })
   if (size.width > RECIPE_IMAGE_MAX_SIDE || size.height > RECIPE_IMAGE_MAX_SIDE || size.width * size.height > RECIPE_IMAGE_MAX_PIXELS) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: `La imagen es demasiado grande: máximo ${RECIPE_IMAGE_MAX_SIDE} px por lado.`, fields: { dataUrl: true } })
   const storageKey = `u-${recipe.id}-${Date.now().toString(36)}.jpg`
   await mkdir(recipeImageDir(), { recursive: true })
-  await writeFile(path.join(recipeImageDir(), storageKey), buffer)
+  await writeFile(path.join(recipeImageDir(), storageKey), size.data)
   await removeUploadedRecipeImage(recipe.imageFile)
   return prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey } })
 })
