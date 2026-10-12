@@ -1535,13 +1535,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
             </div>}
           </div>],
           ['motivo', 'Motivo de consulta', <div className="form-card" key="mo">
-            <h3>Motivo de consulta y objetivo</h3>
+            <h3>Motivo de consulta y referencia</h3>
             <div className="form-grid">
               <label>Motivo de consulta<textarea value={currentValues['Motivo de consulta'] ?? ''} onChange={(e) => updateField('Motivo de consulta', e.target.value)} /></label>
             </div>
             <SuggestionChips fieldKey="chips:motivo-consulta" seed={MOTIVO_CONSULTA_SUGGESTIONS} value={currentValues['Motivo de consulta']} onPick={(next) => updateField('Motivo de consulta', next)} />
             <div className="form-grid">
-              <label>Objetivo<textarea value={currentValues['Objetivo'] ?? ''} onChange={(e) => updateField('Objetivo', e.target.value)} /></label>
               <label>Referencia de la cita<input value={currentValues['Referencia de la cita'] ?? ''} onChange={(e) => updateField('Referencia de la cita', e.target.value)} placeholder="¿Cómo llegó el paciente?" /></label>
             </div>
             <SuggestionChips fieldKey="chips:referencia-cita" seed={REFERENCIA_CITA_SUGGESTIONS} value={currentValues['Referencia de la cita']} onPick={(next) => updateField('Referencia de la cita', next)} />
