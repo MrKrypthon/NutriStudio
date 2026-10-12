@@ -25,7 +25,10 @@ export default function LoginPage() {
     <div style={{ width: 'min(380px, calc(100% - 32px))' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 28, justifyContent: 'center' }}>
         <BrandMark size={34} />
-        <strong style={{ font: '800 17px Manrope', letterSpacing: '-.6px', color: 'var(--ink)' }}>milpa clinical</strong>
+        <div>
+          <strong style={{ display: 'block', font: '800 22px Manrope', letterSpacing: '-.8px', color: 'var(--ink)' }}>milpa</strong>
+          <small style={{ display: 'block', font: "500 10px 'DM Mono'", letterSpacing: '.3px', color: 'var(--muted)' }}>Atención Integral</small>
+        </div>
       </div>
       <form className="panel login-card" onSubmit={submit} style={{ padding: 28 }}>
         <p className="eyebrow">TU ESPACIO</p>

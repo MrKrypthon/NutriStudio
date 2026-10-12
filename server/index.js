@@ -1685,7 +1685,7 @@ function drawDocumentBrand(file, subtitle, practice, logoBuffer) {
     file.font('Helvetica').fontSize(9).fillColor(FAINT).text(subtitle, 48, startY + 34, { width: 516 })
   } else {
     drawBrandMark(file, 48, startY + 3, 26)
-    file.font('Helvetica-Bold').fontSize(15).fillColor(INK).text(practice?.name || 'milpa clinical', 84, startY, { width: 480 })
+    file.font('Helvetica-Bold').fontSize(15).fillColor(INK).text(practice?.name || 'milpa', 84, startY, { width: 480 })
     file.font('Helvetica').fontSize(9).fillColor(FAINT).text(subtitle, 84, startY + 19, { width: 480 })
   }
   file.y = startY + 44
@@ -1703,7 +1703,7 @@ const stringifyEntry = (value) => {
   return value
 }
 const diagnosisLine = (d) => [`${d.code || ''}`, `(${d.domain}) — ${d.problem}`, d.etiology ? `Causa: ${d.etiology}` : null, d.evidence ? `Evidencia: ${d.evidence}` : null].filter(Boolean).join(' ').trim()
-const signatureFor = (user, practice) => [user?.name || practice?.name || 'milpa clinical', user?.specialty || null].filter(Boolean).join(' · ')
+const signatureFor = (user, practice) => [user?.name || practice?.name || 'milpa', user?.specialty || null].filter(Boolean).join(' · ')
 
 // Una línea de texto corrida (para hechos sueltos como "Nombre: ..." o mensajes "Sin datos…").
 const drawLineText = (file, text, color = MUTED) => { file.font('Helvetica').fontSize(9).fillColor(color).text(text, 48, file.y, { width: 516 }); file.moveDown(0.12) }
@@ -1807,7 +1807,7 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   const goal = summary?.goal || summary?.Objetivo
   const summaryLine = reason || goal
     ? [reason && `Motivo: ${reason}`, goal && `Objetivo: ${goal}`].filter(Boolean).join('   ·   ')
-    : 'Documento generado desde la valoración clínica de milpa clinical.'
+    : 'Documento generado desde la valoración clínica de milpa · Atención Integral.'
   drawSummaryBox(file, 'Resumen de la consulta', summaryLine)
 
   let sectionIndex = 0
