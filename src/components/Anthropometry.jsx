@@ -262,14 +262,13 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
         <h2 className="anthro-title"><Icon>{calcTypes.find((t) => t[0] === activeKey)?.[2]}</Icon>{calcTypes.find((t) => t[0] === activeKey)?.[1]}</h2>
 
         {activeKey === 'grasa' && <>
-          <p className="anthro-hint">Estimaciones a partir de los pliegues capturados en Mediciones. El promedio reúne las fórmulas con datos disponibles.</p>
+          <p className="anthro-hint">Estimaciones a partir de los pliegues capturados en Mediciones.</p>
           <div className="calc-table">
             <div className="calc-table-head"><span>Autor</span><span>Resultado</span></div>
             {fat.rows.map((r) => <div className="calc-table-row" key={r.label}>
               <span className="calc-table-name">{r.label}<small>{r.detail}</small></span>
               <span className="calc-table-value">{r.value != null ? `${r.value} %` : '—'}{r.value != null && <i style={{ width: `${Math.min(100, (r.value / maxFat) * 100)}%` }} />}</span>
             </div>)}
-            <div className="calc-table-row total"><span className="calc-table-name"><b>Promedio</b></span><span className="calc-table-value"><b>{fat.average != null ? `${fat.average} %` : '—'}</b></span></div>
           </div>
         </>}
 
