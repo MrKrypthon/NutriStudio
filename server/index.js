@@ -279,17 +279,50 @@ app.get('/api/v1/practice/:practiceId/logo', async (request, reply) => {
 
 // Public for the same reason as the logo route above: recipe cards use these directly as <img
 // src>. The strict file-name pattern blocks path traversal. Files live in storage/recipes, which
-// prisma/import-recetario.js fills from the ebook's embedded photos.
+// prisma/import-recetario.js fills from the ebook's embedded photos; the ones the nutritionist
+// uploads herself (POST /recipes/:id/image) are named `u-<recipe id>-<stamp>` and may be PNG.
+const recipeImageDir = () => path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH || './storage/recipes')
+const RECIPE_IMAGE_MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png' }
+
 app.get('/api/v1/recipes/images/:fileName', async (request, reply) => {
   const { fileName } = request.params
-  if (!/^[a-z0-9][a-z0-9-]*\.jpg$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
-  const directory = path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH || './storage/recipes')
+  if (!/^[a-z0-9][a-z0-9-]*\.(jpg|png)$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
   try {
-    const file = await readFile(path.join(directory, fileName))
-    return reply.type('image/jpeg').header('Cache-Control', 'public, max-age=86400').send(file)
+    const file = await readFile(path.join(recipeImageDir(), fileName))
+    return reply.type(fileName.endsWith('.png') ? 'image/png' : 'image/jpeg').header('Cache-Control', 'public, max-age=86400').send(file)
   } catch {
     return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
   }
+})
+
+// Sólo se borran del disco las fotos subidas a mano; las del recetario importado se conservan
+// porque el importador las vuelve a vincular por nombre de archivo.
+const removeUploadedRecipeImage = (imageFile) => (imageFile?.startsWith('u-') ? unlink(path.join(recipeImageDir(), imageFile)).catch(() => {}) : Promise.resolve())
+
+// Foto de una receta. Sale en la tarjeta de la receta y en el plan de alimentación entregado, por
+// eso sólo JPG o PNG: es lo que pdfkit sabe incrustar. El nombre lleva una marca de tiempo para que
+// al cambiarla no se quede la anterior en la caché del navegador.
+app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
+  const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
+  const { dataUrl } = request.body || {}
+  const match = typeof dataUrl === 'string' && dataUrl.match(/^data:([a-z/]+);base64,(.+)$/)
+  const ext = match && RECIPE_IMAGE_MIME_EXT[match[1]]
+  if (!match || !ext) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen JPG o PNG.', fields: { dataUrl: true } })
+  const buffer = Buffer.from(match[2], 'base64')
+  if (buffer.byteLength > 3 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La imagen no puede pesar más de 3 MB.', fields: { dataUrl: true } })
+  const storageKey = `u-${recipe.id}-${Date.now().toString(36)}.${ext}`
+  await mkdir(recipeImageDir(), { recursive: true })
+  await writeFile(path.join(recipeImageDir(), storageKey), buffer)
+  await removeUploadedRecipeImage(recipe.imageFile)
+  return prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey } })
+})
+
+app.delete('/api/v1/recipes/:recipeId/image', async (request, reply) => {
+  const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
+  await removeUploadedRecipeImage(recipe.imageFile)
+  return prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: null } })
 })
 
 app.get('/api/v1/patients', async (request) => {
@@ -2011,7 +2044,12 @@ function drawRecallTable(file, recall) {
 // esos campos, y los borradores (vista previa), se completan con la receta viva.
 async function loadPlanMenu(plan) {
   const snapshot = Array.isArray(plan.menuSnapshot) ? plan.menuSnapshot : []
-  if (plan.status === 'PUBLISHED' && snapshot.length && snapshot.every((entry) => Array.isArray(entry.ingredients))) return snapshot
+  if (plan.status === 'PUBLISHED' && snapshot.length && snapshot.every((entry) => Array.isArray(entry.ingredients))) {
+    // La foto es lo único que no se congela: si la receta recibe (o cambia) su foto después de
+    // publicar, el plan la muestra al regenerarse.
+    const photos = await prisma.recipe.findMany({ where: { id: { in: snapshot.map((entry) => entry.recipeId).filter(Boolean) } }, select: { id: true, imageFile: true } })
+    return snapshot.map((entry) => ({ ...entry, imageFile: photos.find((recipe) => recipe.id === entry.recipeId)?.imageFile || entry.imageFile || null }))
+  }
   const recipeInclude = { ingredients: { include: { ingredient: true } } }
   if (plan.status === 'PUBLISHED' && snapshot.length) {
     const recipes = await prisma.recipe.findMany({ where: { id: { in: snapshot.map((entry) => entry.recipeId).filter(Boolean) } }, include: recipeInclude })
@@ -2027,7 +2065,7 @@ async function loadPlanMenu(plan) {
 // se resuelve aquí porque el dibujo con pdfkit es síncrono.
 async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) {
   const menu = await loadPlanMenu(plan)
-  const imageDirectory = path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH || './storage/recipes')
+  const imageDirectory = recipeImageDir()
   const images = new Map()
   for (const imageFile of new Set(menu.map((entry) => entry.imageFile).filter(Boolean))) {
     // Mismo patrón estricto que la ruta pública de fotos: el nombre viene de la base, pero no debe
@@ -2046,7 +2084,7 @@ async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) 
     recommendations: plan.recommendations,
     hydrationNote: plan.hydrationNote,
     licenseNumber: user?.licenseNumber || null,
-    contact: [user?.phone, practice?.address, user?.email].filter(Boolean),
+    contact: [{ kind: 'phone', text: user?.phone }, { kind: 'address', text: practice?.address }, { kind: 'email', text: user?.email }].filter((item) => item.text),
     logo: logoBuffer,
     images,
   }

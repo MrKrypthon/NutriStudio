@@ -72,6 +72,8 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   const [mealType, setMealType] = useState('')
   const [restriction, setRestriction] = useState('')
   const [archiveState, setArchiveState] = useState('idle')
+  const [imageState, setImageState] = useState('idle')
+  const [imageError, setImageError] = useState('')
   const [servings, setServings] = useState(1)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(12)
@@ -116,6 +118,40 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
 
   const startCreate = () => { onSelectRecipe?.(null); setActive('Nueva receta') }
   const startEdit = () => { if (!isReal) return; onSelectRecipe?.(selected.id); setActive('Editar receta') }
+
+  const applyImage = (id, imageFile) => {
+    setSelected((prev) => (prev && prev.id === id ? { ...prev, imageFile } : prev))
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, imageFile } : item)))
+  }
+  const uploadRecipeImage = async (file) => {
+    if (!file || !isReal) return
+    setImageError('')
+    if (!/^image\/(png|jpe?g)$/.test(file.type)) { setImageError('Sube una imagen JPG o PNG.'); return }
+    if (file.size > 3 * 1024 * 1024) { setImageError('La imagen no puede pesar más de 3 MB.'); return }
+    setImageState('saving')
+    try {
+      const dataUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('No se pudo leer la imagen.')); reader.readAsDataURL(file) })
+      const updated = await recipesApi.uploadImage(selected.id, dataUrl)
+      applyImage(selected.id, updated.imageFile)
+    } catch (error) {
+      setImageError(error.message || 'No se pudo subir la foto.')
+    } finally {
+      setImageState('idle')
+    }
+  }
+  const removeRecipeImage = async () => {
+    if (!isReal) return
+    setImageError('')
+    setImageState('saving')
+    try {
+      await recipesApi.removeImage(selected.id)
+      applyImage(selected.id, null)
+    } catch (error) {
+      setImageError(error.message || 'No se pudo quitar la foto.')
+    } finally {
+      setImageState('idle')
+    }
+  }
 
   const archive = async () => {
     if (!isReal) return
@@ -167,6 +203,12 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
       {selected && <aside className="recipe-detail panel">
         <RecipeImage recipe={selected} colorIndex={items.indexOf(selected)} className="detail-image" />
         <div className="detail-content">
+          {isReal && <div className="recipe-photo-actions">
+            <label className="secondary ingredient-upload">{imageState === 'saving' ? 'Subiendo…' : selected.imageFile ? 'Cambiar foto' : 'Subir foto'}<input type="file" accept="image/png,image/jpeg" style={{ display: 'none' }} disabled={imageState === 'saving'} onChange={(event) => { uploadRecipeImage(event.target.files?.[0]); event.target.value = '' }} /></label>
+            {selected.imageFile && <button type="button" className="link-button" disabled={imageState === 'saving'} onClick={removeRecipeImage}>Quitar</button>}
+            {!selected.imageFile && <small className="muted">La foto sale en el plan de alimentación de la paciente.</small>}
+          </div>}
+          {imageError && <div className="form-error">⚠ {imageError}</div>}
           <div className="detail-title"><div><span className="recipe-meal">{MEAL_TYPE_LABELS[selected.mealTypes?.[0]] || selected.mealTypes?.[0]}{selected.timeMinutes ? ` · ${selected.timeMinutes} min` : ''}</span><h2>{selected.name}</h2></div><button className="secondary" disabled={!isReal} onClick={startEdit}>Editar</button></div>
 
           {yieldPortions && <p className="muted recipe-yield">Rinde {yieldPortions} {yieldPortions === 1 ? 'porción' : 'porciones'} · valores por porción</p>}

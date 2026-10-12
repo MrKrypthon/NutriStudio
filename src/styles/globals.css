@@ -91,6 +91,7 @@ button,input,select,textarea{font-family:inherit}button:focus-visible,input:focu
 .diagnosis-entry{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;border-bottom:1px solid var(--line);padding:14px 0}.diagnosis-actions{display:flex;flex-direction:column;gap:6px;align-items:flex-end}.diagnosis-entry:first-child{border-top:1px solid var(--line)}.diagnosis-entry b{display:inline-block;font:600 8px 'DM Mono';color:#5a5c8b;background:#eef8f1;border-radius:4px;padding:3px 6px;margin-right:8px}.diagnosis-entry>div>span{font-size:12px;color:#28362f}.diagnosis-entry small{display:block;color:var(--muted);font-size:10px;margin-top:4px}
 .patient-switch{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted);font-weight:600}.patient-switch select{border:1px solid var(--line);border-radius:7px;padding:8px 10px;font:12px 'DM Sans';color:#343444;background:#fbfcfc}
 .recommendations .saved{display:block;margin:-6px 0 14px;font-size:10px;color:var(--muted)}
+.recipe-photo-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}.recipe-photo-actions small{font-size:10px}
 .plan-pdf-frame{display:block;width:100%;height:max(560px,calc(100vh - 250px));border:0;border-radius:6px;background:#fff;box-shadow:0 6px 18px #28254212}
 .paper-week{margin-top:8px;overflow-x:auto}
 .paper-week-head,.paper-week-row{display:grid;grid-template-columns:64px repeat(7,minmax(72px,1fr));gap:5px;min-width:600px}
