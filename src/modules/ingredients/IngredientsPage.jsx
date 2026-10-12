@@ -7,6 +7,16 @@ const APPROX_GROUP = 'Aproximados Menu 500'
 const GROUPS = ['Todos', 'Verduras', 'Frutas', 'Cereales S/G', 'Cereales C/G', 'AOA MBAG', 'AOA BAG', 'AOA MAG', 'AOA AAG', 'Leguminosas', 'Leche entera', 'Leche semidescremada', 'Leche descremada', 'Leche con azúcar', 'Grasas sin proteínas', 'Grasas con proteínas', 'Azucares sin grasa', 'Azucares con grasa', 'Libres en energía', 'Alcohol', APPROX_GROUP]
 const GROUP_OPTIONS = GROUPS.filter((g) => g !== 'Todos')
 
+// Ícono por grupo SMAE: da identidad visual a los ingredientes que no tienen foto.
+const GROUP_ICON = {
+  Verduras: '🥦', Frutas: '🍎', 'Cereales S/G': '🌾', 'Cereales C/G': '🍞',
+  'AOA MBAG': '🐟', 'AOA BAG': '🍗', 'AOA MAG': '🥩', 'AOA AAG': '🥓',
+  Leguminosas: '🫘', 'Leche entera': '🥛', 'Leche semidescremada': '🥛', 'Leche descremada': '🥛', 'Leche con azúcar': '🥛',
+  'Grasas sin proteínas': '🫒', 'Grasas con proteínas': '🥜', 'Azucares sin grasa': '🍬', 'Azucares con grasa': '🍫',
+  'Libres en energía': '🌿', Alcohol: '🍷', [APPROX_GROUP]: '🧺',
+}
+const groupIcon = (item) => GROUP_ICON[item?.group] || '◉'
+
 const EMPTY_FORM = { name: '', group: APPROX_GROUP, unit: 'gramos', kcal: '', protein: '', carbs: '', fat: '', fiber: '', serving: '', grams: '' }
 
 const FALLBACK = [
@@ -35,6 +45,8 @@ export default function IngredientsPage({ setActive }) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [createState, setCreateState] = useState('idle')
   const [createError, setCreateError] = useState('')
+  const [imageState, setImageState] = useState('idle')
+  const [imageError, setImageError] = useState('')
 
   useEffect(() => {
     setStatus('loading')
@@ -96,6 +108,40 @@ export default function IngredientsPage({ setActive }) {
     return Math.round(value * 100) / 100
   }
 
+  const applyImage = (id, imageFile) => {
+    setSelected((prev) => (prev && prev.id === id ? { ...prev, imageFile } : prev))
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, imageFile } : item)))
+  }
+  const uploadIngredientImage = async (file) => {
+    if (!file || !selected) return
+    setImageError('')
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { setImageError('Sube una imagen PNG, JPG o WebP.'); return }
+    if (file.size > 3 * 1024 * 1024) { setImageError('La imagen no puede pesar más de 3 MB.'); return }
+    setImageState('saving')
+    try {
+      const dataUrl = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = () => reject(new Error('No se pudo leer la imagen.')); reader.readAsDataURL(file) })
+      const updated = await ingredientsApi.uploadImage(selected.id, dataUrl)
+      applyImage(selected.id, updated.imageFile)
+    } catch (error) {
+      setImageError(error.message || 'No se pudo subir la imagen.')
+    } finally {
+      setImageState('idle')
+    }
+  }
+  const removeIngredientImage = async () => {
+    if (!selected) return
+    setImageError('')
+    setImageState('saving')
+    try {
+      await ingredientsApi.removeImage(selected.id)
+      applyImage(selected.id, null)
+    } catch (error) {
+      setImageError(error.message || 'No se pudo quitar la imagen.')
+    } finally {
+      setImageState('idle')
+    }
+  }
+
   return <AppChrome active="Ingredientes" setActive={setActive}><div className="content ingredient-workspace">
     <ModuleHeader eyebrow="BIBLIOTECA · INGREDIENTES LOCALES" title="Ingredientes" subtitle="Datos nutricionales revisados y equivalencias de tu práctica." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizados' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span><button className="secondary" onClick={() => setShowForm((value) => !value)}><span>+</span> Nuevo ingrediente</button><button className="primary" onClick={() => setActive('Importar alimentos')}><span>+</span> Importar alimento</button></div>} />
 
@@ -130,7 +176,7 @@ export default function IngredientsPage({ setActive }) {
         <div className="ingredient-list panel">
           {status !== 'loading' && items.length === 0 && <div className="result-empty"><span>◌</span><h3>No hay ingredientes con esos filtros</h3><p>Ajusta la búsqueda o el grupo.</p></div>}
           {items.map((item) => <button className={'ingredient-row ' + (selected?.id === item.id ? 'ingredient-selected' : '')} onClick={() => setSelected(item)} key={item.id}>
-            <span className="ingredient-icon">◉</span>
+            <span className="ingredient-icon">{item.imageFile ? <img src={ingredientsApi.imageUrl(item.imageFile)} alt="" /> : groupIcon(item)}</span>
             <div><b>{item.name}</b><small>{item.group} · Porción {item.equivalence?.serving || 'por definir'}</small></div>
             <span className="muted">{Math.round(item.nutrition?.kcal || 0)} kcal</span>
             <span className="row-arrow">→</span>
@@ -140,9 +186,17 @@ export default function IngredientsPage({ setActive }) {
 
       {selected && <aside className="ingredient-detail panel">
         <div className="ingredient-detail-head">
-          <span className="ingredient-icon large-ingredient">◉</span>
+          {selected.imageFile ? <img className="ingredient-photo large-ingredient" src={ingredientsApi.imageUrl(selected.imageFile)} alt={selected.name} /> : <span className="ingredient-icon large-ingredient">{groupIcon(selected)}</span>}
           <div><p className="eyebrow">{selected.group}</p><h2>{selected.name}</h2><span className="muted">{source}</span></div>
         </div>
+        <div className="ingredient-image-row">
+          <span className="field-label">Imagen</span>
+          <div className="ingredient-image-actions">
+            <label className="secondary ingredient-upload">{imageState === 'saving' ? 'Subiendo…' : selected.imageFile ? 'Cambiar imagen' : 'Subir imagen'}<input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} disabled={imageState === 'saving'} onChange={(event) => { uploadIngredientImage(event.target.files?.[0]); event.target.value = '' }} /></label>
+            {selected.imageFile && <button type="button" className="link-button" disabled={imageState === 'saving'} onClick={removeIngredientImage}>Quitar</button>}
+          </div>
+        </div>
+        {imageError && <div className="form-error">⚠ {imageError}</div>}
         <div className="serving-box">
           <span>Porción de equivalencia</span>
           <b>{selected.equivalence?.serving || 'Sin definir'}</b>

@@ -221,6 +221,9 @@ export const ingredientsApi = {
   list: (query = '') => apiRequest(`/ingredients${query}`),
   import: (payload) => apiRequest('/ingredients/import', { method: 'POST', body: JSON.stringify(payload) }),
   create: (payload) => apiRequest('/ingredients', { method: 'POST', body: JSON.stringify(payload) }),
+  imageUrl: (file) => (file ? `${API_BASE}/ingredients/images/${file}` : null),
+  uploadImage: (id, dataUrl) => apiRequest(`/ingredients/${id}/image`, { method: 'POST', body: JSON.stringify({ dataUrl }) }),
+  removeImage: (id) => apiRequest(`/ingredients/${id}/image`, { method: 'DELETE' }),
 }
 
 export const foodApi = {

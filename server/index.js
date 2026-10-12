@@ -31,7 +31,7 @@ const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login'])
 // Practice logos and recipe photos are branding/content, not patient data, and need to load in a
 // plain <img src> (which can't send an Authorization header) both in-app and inside generated
 // PDFs/emails — so these routes are public by design, scoped by unguessable ids/file names.
-const PUBLIC_ROUTE_PATTERNS = [/^\/api\/v1\/practice\/[^/]+\/logo$/, /^\/api\/v1\/recipes\/images\/[^/]+$/]
+const PUBLIC_ROUTE_PATTERNS = [/^\/api\/v1\/practice\/[^/]+\/logo$/, /^\/api\/v1\/recipes\/images\/[^/]+$/, /^\/api\/v1\/ingredients\/images\/[^/]+$/]
 
 // Estado de cada práctica (tenant) del SaaS, cacheado 30 s para no consultar en cada petición.
 const practiceStatusCache = new Map()
@@ -1082,6 +1082,45 @@ app.delete('/api/v1/education-materials/:materialId/attachment', async (request,
     data: { attachmentFileName: null, attachmentStorageKey: null, attachmentFileSize: null, attachmentMime: null },
   })
   return updated
+})
+
+const ingredientImageDir = () => path.resolve(process.env.INGREDIENT_IMAGE_STORAGE_PATH || './storage/ingredients')
+
+// Foto opcional de un ingrediente (útil para los de supermercado). Mismo patrón de data URL que
+// logos/adjuntos. Se sirve pública porque se usa como <img src>, igual que las imágenes de recetas.
+app.post('/api/v1/ingredients/:ingredientId/image', async (request, reply) => {
+  const ingredient = await prisma.ingredient.findFirst({ where: { id: request.params.ingredientId, practiceId: request.practiceId } })
+  if (!ingredient) return reply.code(404).send({ code: 'INGREDIENT_NOT_FOUND', message: 'Ingrediente no encontrado.', fields: {} })
+  const { dataUrl } = request.body || {}
+  const match = typeof dataUrl === 'string' && dataUrl.match(/^data:([a-z/]+);base64,(.+)$/)
+  const ext = match && LOGO_MIME_EXT[match[1]]
+  if (!match || !ext) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen PNG, JPG o WebP.', fields: { dataUrl: true } })
+  const buffer = Buffer.from(match[2], 'base64')
+  if (buffer.byteLength > 3 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La imagen no puede pesar más de 3 MB.', fields: { dataUrl: true } })
+  const storageKey = `${ingredient.id}.${ext}`
+  await mkdir(ingredientImageDir(), { recursive: true })
+  await writeFile(path.join(ingredientImageDir(), storageKey), buffer)
+  return prisma.ingredient.update({ where: { id: ingredient.id }, data: { imageFile: storageKey } })
+})
+
+app.get('/api/v1/ingredients/images/:fileName', async (request, reply) => {
+  const { fileName } = request.params
+  if (!/^[a-z0-9][a-z0-9-]*\.(png|jpg|webp)$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
+  const ext = fileName.split('.').pop()
+  const mime = Object.entries(LOGO_MIME_EXT).find(([, value]) => value === ext)?.[0] || 'application/octet-stream'
+  try {
+    const file = await readFile(path.join(ingredientImageDir(), fileName))
+    return reply.type(mime).header('Cache-Control', 'public, max-age=86400').send(file)
+  } catch {
+    return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
+  }
+})
+
+app.delete('/api/v1/ingredients/:ingredientId/image', async (request, reply) => {
+  const ingredient = await prisma.ingredient.findFirst({ where: { id: request.params.ingredientId, practiceId: request.practiceId } })
+  if (!ingredient) return reply.code(404).send({ code: 'INGREDIENT_NOT_FOUND', message: 'Ingrediente no encontrado.', fields: {} })
+  if (ingredient.imageFile) await unlink(path.join(ingredientImageDir(), ingredient.imageFile)).catch(() => {})
+  return prisma.ingredient.update({ where: { id: ingredient.id }, data: { imageFile: null } })
 })
 
 app.get('/api/v1/ingredients', async (request) => {
