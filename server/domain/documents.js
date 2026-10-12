@@ -2,6 +2,9 @@ const MEAL_TYPE_LABELS = {
   breakfast: 'Desayuno',
   lunch: 'Comida',
   snack: 'Colación',
+  // Segunda colación (vespertina). En el plan entregado las dos se llaman "Colación" y se
+  // distinguen por su hora, como en el formato en papel.
+  snack2: 'Colación',
   dinner: 'Cena',
 }
 
@@ -15,7 +18,7 @@ const DAY_LABELS = {
   7: 'Domingo',
 }
 
-const MEAL_TYPE_ORDER = ['breakfast', 'lunch', 'snack', 'dinner']
+const MEAL_TYPE_ORDER = ['breakfast', 'lunch', 'snack', 'snack2', 'dinner']
 
 // Grupos de equivalentes que el plan impreso muestra como "porciones" (los círculos de color junto
 // a cada tiempo de comida). El catálogo trae el grupo con varios nombres según su origen (SMAE:

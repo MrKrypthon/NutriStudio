@@ -169,3 +169,20 @@ describe('meal times', () => {
     expect(rows[0].time).toBe('10 am')
   })
 })
+
+describe('second snack', () => {
+  const entry = (overrides) => ({ dayOfWeek: 1, mealType: 'snack', recipeId: 'r1', recipeName: 'Xek', servings: 1, ...overrides })
+
+  it('is its own row between the first snack and dinner, with its own time', () => {
+    const rows = buildMealOptions([
+      entry({ mealType: 'dinner', recipeName: 'Cuernito' }),
+      entry({ mealType: 'snack2', recipeName: 'Esquite' }),
+      entry(),
+    ], { snack: '16:00', snack2: '18:00' })
+    expect(rows.map((row) => [row.mealType, row.label, row.time])).toEqual([['snack', 'Colación', '4 pm'], ['snack2', 'Colación', '6 pm'], ['dinner', 'Cena', '']])
+  })
+
+  it('is left out of the plan when it has no recipes', () => {
+    expect(buildMealOptions([entry()]).map((row) => row.mealType)).toEqual(['snack'])
+  })
+})

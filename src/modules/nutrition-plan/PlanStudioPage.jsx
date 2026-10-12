@@ -21,6 +21,8 @@ const MEAL_TYPES = [
   { key: 'breakfast', label: 'Desayuno' },
   { key: 'lunch', label: 'Comida' },
   { key: 'snack', label: 'Colación' },
+  // Segunda colación, opcional: usa las mismas recetas de colación y lleva su propia hora.
+  { key: 'snack2', label: 'Colación 2' },
   { key: 'dinner', label: 'Cena' },
 ]
 const DAYS = [
@@ -32,6 +34,8 @@ const DAYS = [
   { n: 6, label: 'Sábado' },
   { n: 7, label: 'Domingo' },
 ]
+// Tiempo de comida del plan → tipo con que están catalogadas las recetas.
+const RECIPE_MEAL_TYPE = { snack2: 'snack' }
 const RECIPE_COLORS = ['coral', 'blue', 'yellow', 'purple']
 const NUTRIENT_CHIPS = [['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['carbs', 'Carbohidratos', 'g'], ['fat', 'Grasas', 'g'], ['fiber', 'Fibra', 'g']]
 
@@ -122,8 +126,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [slots, setSlots] = useState({})
   // Porciones (factor de ración) por tiempo de comida; se aplican a las 7 días y alimentan el
   // cálculo de adecuación en vivo.
-  const [mealServings, setMealServings] = useState({ breakfast: 1, lunch: 1, snack: 1, dinner: 1 })
-  const mealServingsRef = useRef({ breakfast: 1, lunch: 1, snack: 1, dinner: 1 })
+  const [mealServings, setMealServings] = useState({ breakfast: 1, lunch: 1, snack: 1, snack2: 1, dinner: 1 })
+  const mealServingsRef = useRef({ breakfast: 1, lunch: 1, snack: 1, snack2: 1, dinner: 1 })
   const [saveState, setSaveState] = useState('idle')
   const [pickerTarget, setPickerTarget] = useState(null)
   const [pickerSearch, setPickerSearch] = useState('')
@@ -216,7 +220,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         weightKg: weightKg !== '' && weightKg != null ? String(weightKg) : '',
         heightCm: heightCm !== '' && heightCm != null ? String(heightCm) : '',
       }))
-      const nextServings = { breakfast: 1, lunch: 1, snack: 1, dinner: 1 }
+      const nextServings = { breakfast: 1, lunch: 1, snack: 1, snack2: 1, dinner: 1 }
       for (const slot of activePlan?.mealSlots || []) if (slot.servings != null) nextServings[slot.mealType] = Number(slot.servings)
       mealServingsRef.current = nextServings
       setMealServings(nextServings)
@@ -355,7 +359,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         const nextSlots = {}
         for (const slot of full.mealSlots || []) nextSlots[slotKey(slot.dayOfWeek, slot.mealType)] = slot.recipeId
         const savedInputs = full.evaluation?.inputs || {}
-        const nextServings = { breakfast: 1, lunch: 1, snack: 1, dinner: 1 }
+        const nextServings = { breakfast: 1, lunch: 1, snack: 1, snack2: 1, dinner: 1 }
         for (const slot of full.mealSlots || []) if (slot.servings != null) nextServings[slot.mealType] = Number(slot.servings)
         mealServingsRef.current = nextServings
         setMealServings(nextServings)
@@ -583,7 +587,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const pickerRecipes = pickerTarget
     ? recipes
-        .filter((recipe) => (recipe.mealTypes || []).length === 0 || recipe.mealTypes.includes(pickerTarget.mealType))
+        .filter((recipe) => (recipe.mealTypes || []).length === 0 || recipe.mealTypes.includes(RECIPE_MEAL_TYPE[pickerTarget.mealType] || pickerTarget.mealType))
         .filter((recipe) => !pickerRestriction || (recipe.restrictions || []).includes(pickerRestriction))
         .filter((recipe) => recipe.name.toLowerCase().includes(pickerSearch.toLowerCase()))
     : []

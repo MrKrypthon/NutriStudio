@@ -323,7 +323,7 @@ model NutritionPlan {
   fatPercent      Decimal?     @db.Decimal(5, 2)
   evaluation      Json?
   menuSnapshot    Json?
-  // Hora de cada tiempo de comida, "HH:MM" por clave (breakfast, lunch, snack, dinner); sale junto
+  // Hora de cada tiempo de comida, "HH:MM" por clave (breakfast, lunch, snack, snack2, dinner); sale junto
   // al nombre del tiempo en el plan entregado.
   mealTimes       Json?
   hydrationNote   String?
