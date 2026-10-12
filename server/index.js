@@ -53,6 +53,10 @@ async function isPracticeActive(practiceId) {
 // usuario completo (con el hash bcrypt) al cliente.
 const USER_PUBLIC_SELECT = { id: true, name: true, email: true, role: true, specialty: true, phone: true, licenseNumber: true }
 
+// Nombre de archivo para Content-Disposition: sin comillas ni saltos de línea (inyección de
+// cabecera) y con tope de longitud.
+const safeFileName = (name) => String(name || 'archivo').replace(/[\r\n"]/g, '').slice(0, 180)
+
 // @fastify/cors defaults `methods` to 'GET,HEAD,POST' only (the CORS-spec "simple methods"),
 // so without this every PUT here has silently failed preflight for any cross-origin caller
 // (e.g. `npm run dev:all`, or the SPA and API on separate domains in production) — it only
@@ -234,14 +238,19 @@ app.post('/api/v1/admin/transactions', async (request, reply) => {
   const when = occurredAt ? new Date(occurredAt) : new Date()
   if (Number.isNaN(when.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha inválida.', fields: { occurredAt: true } })
   const validMethod = PAYMENT_METHODS.includes(method) ? method : null
-  const created = await prisma.transaction.create({ data: { practiceId: practice.id, amountCents: amount, method: validMethod, concept: concept?.trim() || null, occurredAt: when } })
+  const created = await prisma.transaction.create({ data: { practiceId: practice.id, amountCents: amount, method: validMethod, concept: concept == null ? null : String(concept).trim() || null, occurredAt: when } })
   // "Registrar pago" puede extender la cobertura: suma meses a paidUntil (desde hoy o desde la
   // cobertura vigente) y guarda el método de pago usado.
   const months = Number(extendMonths) || 0
   if (months > 0) {
     const base = practice.paidUntil && practice.paidUntil > new Date() ? new Date(practice.paidUntil) : new Date()
+    // Sumar meses sin desbordar el fin de mes (31 ene + 1 mes debe ser 28/29 feb, no 2/3 mar).
     const next = new Date(base)
+    const day = base.getDate()
+    next.setDate(1)
     next.setMonth(next.getMonth() + months)
+    const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
+    next.setDate(Math.min(day, lastDay))
     await prisma.practice.update({ where: { id: practice.id }, data: { paidUntil: next, ...(validMethod ? { paymentMethod: validMethod } : {}) } })
   }
   return reply.code(201).send(created)
@@ -273,8 +282,11 @@ app.post('/api/v1/practice/logo', async (request, reply) => {
   const directory = path.resolve(process.env.LOGO_STORAGE_PATH || './storage/logos')
   await mkdir(directory, { recursive: true })
   const fileName = `${request.practiceId}.${ext}`
+  const previous = await prisma.practice.findUnique({ where: { id: request.practiceId }, select: { logoUrl: true } })
   await writeFile(path.join(directory, fileName), buffer)
   const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { logoUrl: fileName } })
+  // Si el logo anterior tenía otra extensión, su archivo quedaría huérfano.
+  if (previous?.logoUrl && previous.logoUrl !== fileName) await unlink(path.join(directory, previous.logoUrl)).catch(() => {})
   return { ...practice, logoDownloadUrl: `/api/v1/practice/${request.practiceId}/logo` }
 })
 
@@ -284,8 +296,13 @@ app.get('/api/v1/practice/:practiceId/logo', async (request, reply) => {
   const directory = path.resolve(process.env.LOGO_STORAGE_PATH || './storage/logos')
   const ext = practice.logoUrl.split('.').pop()
   const mime = Object.entries(LOGO_MIME_EXT).find(([, e]) => e === ext)?.[0] || 'application/octet-stream'
-  const file = await readFile(path.join(directory, practice.logoUrl))
-  return reply.type(mime).header('Cache-Control', 'public, max-age=300').send(file)
+  try {
+    const file = await readFile(path.join(directory, practice.logoUrl))
+    return reply.type(mime).header('Cache-Control', 'public, max-age=300').send(file)
+  } catch {
+    // Archivo de logo ausente/inaccesible: 404 (antes un readFile fallido reventaba con 500).
+    return reply.code(404).send({ code: 'LOGO_NOT_FOUND', message: 'No se encontró el logo.', fields: {} })
+  }
 })
 
 // Public for the same reason as the logo route above: recipe cards use these directly as <img
@@ -548,8 +565,12 @@ app.post('/api/v1/consultations/:consultationId/lab-attachments', async (request
 app.get('/api/v1/lab-attachments/:attachmentId/download', async (request, reply) => {
   const attachment = await prisma.labAttachment.findFirst({ where: { id: request.params.attachmentId, consultation: { patient: { practiceId: request.practiceId } } } })
   if (!attachment) return reply.code(404).send({ code: 'ATTACHMENT_NOT_FOUND', message: 'Adjunto no encontrado.', fields: {} })
-  const file = await readFile(path.join(labAttachmentDir(), attachment.storageKey))
-  return reply.type('application/pdf').header('Content-Disposition', `inline; filename="${attachment.fileName}"`).send(file)
+  try {
+    const file = await readFile(path.join(labAttachmentDir(), attachment.storageKey))
+    return reply.type('application/pdf').header('Content-Disposition', `inline; filename="${safeFileName(attachment.fileName)}"`).send(file)
+  } catch {
+    return reply.code(404).send({ code: 'ATTACHMENT_NOT_FOUND', message: 'El archivo del adjunto no está disponible.', fields: {} })
+  }
 })
 
 app.delete('/api/v1/lab-attachments/:attachmentId', async (request, reply) => {
@@ -1098,15 +1119,21 @@ app.post('/api/v1/education-materials/:materialId/attachment', async (request, r
     where: { id: material.id },
     data: { attachmentFileName: String(fileName).slice(0, 180), attachmentStorageKey: storageKey, attachmentFileSize: buffer.byteLength, attachmentMime: match[1] },
   })
+  // Reemplazar con otra extensión dejaba el archivo anterior huérfano.
+  if (material.attachmentStorageKey && material.attachmentStorageKey !== storageKey) await unlink(path.join(educationAttachmentDir(), material.attachmentStorageKey)).catch(() => {})
   return updated
 })
 
 app.get('/api/v1/education-materials/:materialId/attachment', async (request, reply) => {
   const material = await prisma.educationMaterial.findFirst({ where: { id: request.params.materialId, practiceId: request.practiceId } })
   if (!material?.attachmentStorageKey) return reply.code(404).send({ code: 'MATERIAL_ATTACHMENT_NOT_FOUND', message: 'Este material no tiene archivo adjunto.', fields: {} })
-  const file = await readFile(path.join(educationAttachmentDir(), material.attachmentStorageKey))
-  const disposition = material.attachmentMime?.startsWith('image/') ? 'inline' : 'attachment'
-  return reply.type(material.attachmentMime || 'application/octet-stream').header('Content-Disposition', `${disposition}; filename="${material.attachmentFileName || material.attachmentStorageKey}"`).send(file)
+  try {
+    const file = await readFile(path.join(educationAttachmentDir(), material.attachmentStorageKey))
+    const disposition = material.attachmentMime?.startsWith('image/') ? 'inline' : 'attachment'
+    return reply.type(material.attachmentMime || 'application/octet-stream').header('Content-Disposition', `${disposition}; filename="${safeFileName(material.attachmentFileName || material.attachmentStorageKey)}"`).send(file)
+  } catch {
+    return reply.code(404).send({ code: 'MATERIAL_ATTACHMENT_NOT_FOUND', message: 'El archivo adjunto no está disponible.', fields: {} })
+  }
 })
 
 app.delete('/api/v1/education-materials/:materialId/attachment', async (request, reply) => {
@@ -1136,7 +1163,10 @@ app.post('/api/v1/ingredients/:ingredientId/image', async (request, reply) => {
   const storageKey = `${ingredient.id}.${ext}`
   await mkdir(ingredientImageDir(), { recursive: true })
   await writeFile(path.join(ingredientImageDir(), storageKey), buffer)
-  return prisma.ingredient.update({ where: { id: ingredient.id }, data: { imageFile: storageKey } })
+  const updated = await prisma.ingredient.update({ where: { id: ingredient.id }, data: { imageFile: storageKey } })
+  // Reemplazar con otra extensión dejaba la imagen anterior huérfana.
+  if (ingredient.imageFile && ingredient.imageFile !== storageKey) await unlink(path.join(ingredientImageDir(), ingredient.imageFile)).catch(() => {})
+  return updated
 })
 
 app.get('/api/v1/ingredients/images/:fileName', async (request, reply) => {
@@ -1265,7 +1295,7 @@ const practiceWallClockNow = (timeZone) => {
   if (timeZone) {
     try {
       const date = new Date().toLocaleDateString('en-CA', { timeZone })
-      const time = new Date().toLocaleTimeString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+      const time = new Date().toLocaleTimeString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
       return new Date(`${date}T${time}.000Z`)
     } catch { /* cae al reloj del sistema */ }
   }
@@ -1394,7 +1424,7 @@ app.post('/api/v1/finance/expenses', async (request, reply) => {
       type: 'EXPENSE',
       amountCents: amount,
       method: PAYMENT_METHODS.includes(method) ? method : null,
-      category: category?.trim() || null,
+      category: category == null ? null : String(category).trim() || null,
       description: description?.trim() || null,
       occurredAt: when,
     },
@@ -1413,7 +1443,7 @@ app.patch('/api/v1/finance/entries/:entryId', async (request, reply) => {
     data.amountCents = amount
   }
   if (method !== undefined) data.method = PAYMENT_METHODS.includes(method) ? method : null
-  if (category !== undefined) data.category = category?.trim() || null
+  if (category !== undefined) data.category = category == null ? null : String(category).trim() || null
   if (description !== undefined) data.description = description?.trim() || null
   if (occurredAt !== undefined) {
     const when = new Date(occurredAt)
@@ -2177,7 +2207,18 @@ app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
   return generated
 })
 
-app.get('/api/v1/documents/:documentId/download', async (request, reply) => { const practiceId = request.practiceId; const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } }); if (!document?.storageKey) return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'Genera el documento antes de descargarlo.', fields: {} }); const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey); const file = await readFile(filePath); return reply.type('application/pdf').header('Content-Disposition', `attachment; filename="${document.storageKey}"`).send(file) })
+app.get('/api/v1/documents/:documentId/download', async (request, reply) => {
+  const practiceId = request.practiceId
+  const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } })
+  if (!document?.storageKey) return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'Genera el documento antes de descargarlo.', fields: {} })
+  const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey)
+  try {
+    const file = await readFile(filePath)
+    return reply.type('application/pdf').header('Content-Disposition', `attachment; filename="${safeFileName(document.storageKey)}"`).send(file)
+  } catch {
+    return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'El archivo del documento no está disponible.', fields: {} })
+  }
+})
 
 app.post('/api/v1/documents/:documentId/deliver', async (request, reply) => {
   const practiceId = request.practiceId
