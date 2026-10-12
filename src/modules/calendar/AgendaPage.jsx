@@ -64,6 +64,14 @@ function formatRangeLabel(days) {
 
 // Nombre completo tal como aparece en el buscador de pacientes del modal (ver patientLabel).
 const patientLabel = (p) => `${p.firstName} ${p.lastName}`
+// Con homónimos, el nombre por sí solo no distingue: se agrega teléfono (o un fragmento del id) para
+// que elegir "Juan Pérez" del buscador seleccione al paciente correcto.
+const patientOption = (p, duplicated) => {
+  const base = patientLabel(p)
+  if (!duplicated) return base
+  const suffix = p.phone || (p.id ? String(p.id).slice(0, 6) : '')
+  return `${base} · ${suffix}`
+}
 
 export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew, autoOpenPatientId, onConsumeAutoOpen, autoFilter, onConsumeAutoFilter }) {
   const [view, setView] = useState('Semana')
@@ -276,6 +284,13 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     else setConfirmError('No se pudo confirmar la cita. Intenta de nuevo.')
   }
 
+  const duplicatedLabels = useMemo(() => {
+    const counts = new Map()
+    for (const p of patients) { const k = patientLabel(p).toLowerCase(); counts.set(k, (counts.get(k) || 0) + 1) }
+    return new Set([...counts.entries()].filter(([, n]) => n > 1).map(([k]) => k))
+  }, [patients])
+  const optionFor = (p) => patientOption(p, duplicatedLabels.has(patientLabel(p).toLowerCase()))
+
   const openModal = (defaultPatientId) => {
     setIsBlock(false)
     setForm(emptyForm(anchor, defaultPatientId))
@@ -284,7 +299,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     // nombre se muestra sólo cuando ya se conoce; si la lista de pacientes no ha llegado todavía,
     // el efecto de abajo lo completa en cuanto llegue, en vez de mostrar un nombre vacío a medias.
     const match = defaultPatientId && patients.find((p) => p.id === defaultPatientId)
-    setPatientQuery(match ? patientLabel(match) : '')
+    setPatientQuery(match ? optionFor(match) : '')
     setSubmitError(''); setSubmitState('idle'); setOpen(true)
   }
   const openBlockModal = () => { setIsBlock(true); setForm({ ...emptyForm(anchor), type: 'BLOCK', notify: 'none' }); setResetNewPatient(); setPatientQuery(''); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
@@ -296,7 +311,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   // mientras tanto el id queda vacío y el envío sigue pidiendo elegir uno, como ya hacía el select.
   const onPatientQueryChange = (value) => {
     setPatientQuery(value)
-    const match = patients.find((p) => patientLabel(p).toLowerCase() === value.trim().toLowerCase())
+    const match = patients.find((p) => optionFor(p).toLowerCase() === value.trim().toLowerCase())
     update('patientId', match ? match.id : '')
   }
 
@@ -321,7 +336,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     try {
       const created = await persistNewPatient()
       setForm((prev) => ({ ...prev, patientId: created.id }))
-      setPatientQuery(patientLabel(created))
+      setPatientQuery(optionFor(created))
     } catch (error) {
       setNewPatientState('error')
       setNewPatientError(error.code === 'DEMO_MODE' ? 'Modo demostración: no se guardará. Conecta el API para crear pacientes.' : (error.message || 'No se pudo crear el paciente.'))
@@ -339,7 +354,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   useEffect(() => {
     if (!open || !form.patientId || patientQuery) return
     const match = patients.find((p) => p.id === form.patientId)
-    if (match) setPatientQuery(patientLabel(match))
+    if (match) setPatientQuery(optionFor(match))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patients, open])
   // Same one-shot pattern for the status filter: "Por confirmar" on Hoy lands here already
@@ -420,6 +435,12 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     if (!dragId) return
     const startAt = `${toISODate(day)}T${time}:00.000Z`
     setMoveError('')
+    const reset = () => { setDragId(null); setDragDuration(null); setDropKey(null) }
+    // El servidor solo valida solapamientos: aquí se comprueba día laborable, que la cita quepa en el
+    // horario (con su duración) y que no caiga en el pasado.
+    if (!isBusinessDay(day)) { setMoveError('Ese día no es laborable.'); reset(); return }
+    if (!fitsBusinessHours(time, dragDuration || 60)) { setMoveError('La cita no cabe en el horario de atención.'); reset(); return }
+    if (Date.parse(startAt) <= nowMs) { setMoveError('No puedes mover una cita al pasado.'); reset(); return }
     try {
       const updated = await appointmentsApi.move(dragId, startAt, dragDuration)
       setAppointments((prev) => prev.map((a) => (a.id === dragId ? updated : a)))
@@ -427,9 +448,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       // The server rejects overlapping moves; snap back and tell the professional why.
       setMoveError(error.code === 'APPOINTMENT_OVERLAP' ? 'Ese horario ya está ocupado.' : (error.message || 'No se pudo mover la cita.'))
     }
-    setDragId(null)
-    setDragDuration(null)
-    setDropKey(null)
+    reset()
   }
 
   return <AppChrome active="Agenda" setActive={setActive}><div className="content">
@@ -524,7 +543,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       <div className={'appointment-cols' + (isBlock ? ' single' : '')}>
       <div className="appointment-col">
       {!isBlock && <div className="form-step active-step"><span>1</span><b>Selecciona el paciente</b></div>}
-      {!isBlock && <div className="patient-field"><span className="field-label">Paciente</span><div className="patient-select-row"><input list="agenda-patient-options" value={patientQuery} onChange={(e) => { onPatientQueryChange(e.target.value); setShowNewPatient(false) }} placeholder="Buscar paciente…" autoComplete="off" /><datalist id="agenda-patient-options">{patients.map((p) => <option value={patientLabel(p)} key={p.id} />)}</datalist><button type="button" className={showNewPatient ? 'primary' : 'secondary'} onClick={() => setShowNewPatient((value) => !value)}>{showNewPatient ? 'Cancelar' : '＋ Nuevo paciente'}</button></div></div>}
+      {!isBlock && <div className="patient-field"><span className="field-label">Paciente</span><div className="patient-select-row"><input list="agenda-patient-options" value={patientQuery} onChange={(e) => { onPatientQueryChange(e.target.value); setShowNewPatient(false) }} placeholder="Buscar paciente…" autoComplete="off" /><datalist id="agenda-patient-options">{patients.map((p) => <option value={optionFor(p)} key={p.id} />)}</datalist><button type="button" className={showNewPatient ? 'primary' : 'secondary'} onClick={() => setShowNewPatient((value) => !value)}>{showNewPatient ? 'Cancelar' : '＋ Nuevo paciente'}</button></div></div>}
       {!isBlock && showNewPatient && <div className="new-patient-inline">
         <div className="form-row"><label>Nombre(s) *<input value={newPatient.firstName} onChange={(e) => setNewPatient((prev) => ({ ...prev, firstName: e.target.value }))} placeholder="Ej. Mariana" /></label><label>Apellido(s) *<input value={newPatient.lastName} onChange={(e) => setNewPatient((prev) => ({ ...prev, lastName: e.target.value }))} placeholder="Ej. Torres" /></label></div>
         <div className="form-row"><label>Teléfono<input type="tel" inputMode="numeric" autoComplete="tel" maxLength={12} value={newPatient.phone} onChange={(e) => setNewPatient((prev) => ({ ...prev, phone: formatPhone(e.target.value) }))} placeholder="999 224 4494" /></label><label>Email<input type="email" autoComplete="email" maxLength={EMAIL_MAX_LENGTH} value={newPatient.email} onChange={(e) => setNewPatient((prev) => ({ ...prev, email: normalizeEmail(e.target.value) }))} onBlur={() => setEmailTouched(true)} placeholder="correo@email.com" /></label></div>
