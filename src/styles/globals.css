@@ -92,6 +92,46 @@ button,input,select,textarea{font-family:inherit}button:focus-visible,input:focu
 .patient-switch{display:flex;align-items:center;gap:8px;font-size:10px;color:var(--muted);font-weight:600}.patient-switch select{border:1px solid var(--line);border-radius:7px;padding:8px 10px;font:12px 'DM Sans';color:#343444;background:#fbfcfc}
 .recommendations .saved{display:block;margin:-6px 0 14px;font-size:10px;color:var(--muted)}
 .recipe-photo-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}.recipe-photo-actions small{font-size:10px}
+/* Paso Equivalentes del Constructor de plan (cuadro dietosintético y reparto por tiempo). */
+.eq-notice{border:1px solid var(--line);background:#fffaf0;border-radius:9px;padding:10px 14px;font-size:11px;color:var(--ink);margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.eq-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr);gap:14px;align-items:start;margin-bottom:14px}
+.eq-side{display:grid;gap:14px;min-width:0}
+.eq-table-panel,.eq-distribution,.eq-summary,.eq-considerations,.eq-catalog{padding:16px 18px}
+.eq-panel-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.eq-panel-head .eyebrow{margin-bottom:4px}.eq-panel-head h3{margin:0;font:700 14px Manrope;color:var(--ink)}.eq-panel-head small{font-size:10px}
+.eq-row{display:grid;grid-template-columns:minmax(150px,1.5fr) 118px repeat(4,minmax(42px,.55fr)) 74px;align-items:center;gap:8px;padding:5px 6px;font-size:11px;color:var(--muted);border-radius:7px}
+.eq-row>span:not(.eq-group){text-align:right;font-variant-numeric:tabular-nums}
+.eq-row.group-start{border-top:1px solid var(--line);border-radius:0;padding-top:8px;margin-top:3px}
+.eq-row.active{color:var(--ink);background:var(--mint)}
+.eq-head{font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.4px;color:var(--muted);padding-bottom:6px}
+.eq-head>span:nth-child(2){text-align:center!important}
+.eq-group{display:flex;flex-direction:column;gap:1px;min-width:0}.eq-group b{font-size:11.5px;color:var(--ink)}.eq-group small{font-size:10px;color:var(--muted)}
+.eq-total,.eq-target,.eq-adequacy{border-top:1px solid var(--line);border-radius:0;color:var(--ink);padding-top:8px;padding-bottom:8px}
+.eq-total{margin-top:6px;font-weight:700}.eq-target{color:var(--muted)}
+.eq-count{display:grid;grid-template-columns:26px 1fr 26px;gap:4px;align-items:center}
+.eq-count button{border:1px solid var(--line);background:#fff;border-radius:7px;height:26px;font-size:15px;line-height:1;cursor:pointer;color:#555}
+.eq-count button:hover:not(:disabled){border-color:var(--green);color:var(--green)}.eq-count button:disabled{opacity:.4;cursor:default}
+.eq-count input{width:100%;min-width:0;border:1px solid var(--line);background:#fff;border-radius:7px;height:26px;text-align:center;font:600 12px 'DM Sans';color:var(--ink);padding:0 2px;-moz-appearance:textfield;appearance:textfield}
+.eq-count input::-webkit-outer-spin-button,.eq-count input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.eq-count.filled input{border-color:var(--green)}.eq-count.compact{grid-template-columns:1fr}
+.eq-catalog-button{border:0;background:none;color:var(--green);font-size:10px;cursor:pointer;text-align:right;padding:4px 0;text-decoration:underline;text-underline-offset:2px}
+.eq-catalog-button.selected{font-weight:700;text-decoration:none}
+.eq-chip{display:inline-block;font:600 10px 'DM Sans';font-style:normal;border-radius:10px;padding:3px 8px;white-space:nowrap;background:#eef1ec;color:var(--muted)}
+.eq-chip.ok{background:#dff1dc;color:#1f6b33}.eq-chip.low{background:#fdf0cf;color:#8a5b00}.eq-chip.high{background:#fbe0da;color:#a3331c}
+.eq-macros{display:grid;gap:11px}.eq-macro{display:grid;grid-template-columns:1fr auto;gap:5px 10px;align-items:center}
+.eq-macro b{display:block;font-size:12px;color:var(--ink)}.eq-macro small{font-size:10px;color:var(--muted)}
+.eq-bar{grid-column:1/-1;grid-row:2;height:6px;border-radius:4px;background:#eef1ec;overflow:hidden}.eq-bar i{display:block;height:100%;border-radius:4px;background:#b9c4bb}
+.eq-bar i.ok{background:var(--green)}.eq-bar i.low{background:#e0a81f}.eq-bar i.high{background:#d0553b}
+.eq-weight{font-size:10px;margin:10px 0 0}
+.eq-considerations p{font-size:11px;margin:0 0 6px;color:var(--muted);line-height:1.45}.eq-considerations p b{color:var(--ink)}
+.eq-catalog .search-field{margin-bottom:8px}.eq-catalog-list{list-style:none;margin:0 0 8px;padding:0;max-height:260px;overflow:auto;border-top:1px solid var(--line)}
+.eq-catalog-list li{display:flex;justify-content:space-between;gap:12px;padding:6px 2px;border-bottom:1px solid var(--line);font-size:11px}
+.eq-catalog-list b{font-weight:500;color:var(--ink)}.eq-catalog-list span{color:var(--muted);white-space:nowrap}
+.eq-dist-table{overflow-x:auto}
+.eq-dist-row{display:grid;grid-template-columns:minmax(150px,1.6fr) 48px repeat(5,minmax(62px,1fr)) 104px;align-items:center;gap:8px;padding:5px 6px;font-size:11px;min-width:680px;border-top:1px solid var(--line)}
+.eq-dist-row.eq-head{border-top:0}.eq-dist-row>span{text-align:center}.eq-dist-row>span.eq-group{text-align:left}
+.eq-dist-row.eq-head small{display:block;font:500 9px 'DM Sans';text-transform:none;letter-spacing:0;margin-top:1px}.eq-dist-row.eq-head small.eq-inactive{color:#a3331c}
+@media(max-width:1100px){.eq-layout{grid-template-columns:1fr}}
 .meal-time-field{display:flex;flex-direction:column;align-items:center;gap:4px}.meal-time-field small{font:600 8px 'DM Mono';color:var(--muted);text-transform:uppercase}.meal-time-field input{border:1px solid var(--line);background:#fff;border-radius:7px;height:26px;padding:0 6px;font-size:11px;color:var(--ink)}
 .plan-pdf-frame{display:block;width:100%;height:max(560px,calc(100vh - 250px));border:0;border-radius:6px;background:#fff;box-shadow:0 6px 18px #28254212}
 .paper-week{margin-top:8px;overflow-x:auto}

@@ -1,3 +1,5 @@
+import { mealBadgePortions } from './equivalents.js'
+
 const MEAL_TYPE_LABELS = {
   breakfast: 'Desayuno',
   lunch: 'Comida',
@@ -36,6 +38,7 @@ const EQUIVALENT_GROUPS = [
   { code: 'LAC', label: 'Lácteos' },
   { code: 'G_CP', label: 'Grasa Con Proteína' },
   { code: 'G_SP', label: 'Grasa Sin Proteína' },
+  { code: 'AZ', label: 'Azúcares' },
 ]
 
 function equivalentGroupCode(group) {
@@ -133,9 +136,10 @@ function formatMealTime(time) {
 
 // El plan entregado no va por día sino por opciones intercambiables: por cada tiempo de comida,
 // las recetas distintas de la semana en el orden en que aparecen (lunes → domingo). Repetir una
-// receta varios días no genera opciones repetidas. Las porciones del tiempo de comida son los
-// equivalentes de su primera opción (la receta base de la Distribución).
-function buildMealOptions(menu, mealTimes) {
+// receta varios días no genera opciones repetidas. Las porciones del tiempo de comida son las que
+// la nutrióloga repartió en el paso Equivalentes; si el plan no tiene ese cálculo, se estiman con
+// los equivalentes de su primera opción (la receta base de la Distribución).
+function buildMealOptions(menu, mealTimes, equivalentPlan) {
   const times = normalizeMealTimes(mealTimes)
   return MEAL_TYPE_ORDER.map((mealType) => {
     const options = []
@@ -146,7 +150,8 @@ function buildMealOptions(menu, mealTimes) {
       seen.add(key)
       options.push(entry)
     }
-    const equivalents = options[0]?.equivalents || {}
+    const prescribed = mealBadgePortions(equivalentPlan?.distribution?.[mealType])
+    const equivalents = prescribed.length ? Object.fromEntries(prescribed.map((portion) => [portion.code, portion.quantity])) : options[0]?.equivalents || {}
     const portions = EQUIVALENT_GROUPS
       .map((group) => ({ ...group, quantity: Math.round((equivalents[group.code] || 0) * 2) / 2 }))
       .filter((group) => group.quantity > 0)

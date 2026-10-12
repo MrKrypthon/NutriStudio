@@ -186,3 +186,17 @@ describe('second snack', () => {
     expect(buildMealOptions([entry()]).map((row) => row.mealType)).toEqual(['snack'])
   })
 })
+
+describe('prescribed equivalents in the delivered plan', () => {
+  const menu = [{ dayOfWeek: 1, mealType: 'breakfast', recipeId: 'r1', recipeName: 'Avena', servings: 1, equivalents: { C: 3, F: 1 } }, { dayOfWeek: 1, mealType: 'dinner', recipeId: 'r2', recipeName: 'Cuernito', servings: 1, equivalents: { C: 2 } }]
+
+  it('shows what the nutritionist distributed instead of the recipe estimate', () => {
+    const rows = buildMealOptions(menu, {}, { groups: {}, distribution: { breakfast: { C_SG: 1.5, C_CG: 0.5, LAC_D: 1, AZ_SG: 1 } } })
+    expect(rows[0].portions.map((portion) => [portion.code, portion.quantity])).toEqual([['C', 2], ['LAC', 1], ['AZ', 1]])
+  })
+
+  it('falls back to the recipe estimate for meals without a prescription', () => {
+    const rows = buildMealOptions(menu, {}, { groups: {}, distribution: { breakfast: { V: 1 } } })
+    expect(rows[1].portions.map((portion) => [portion.code, portion.quantity])).toEqual([['C', 2]])
+  })
+})

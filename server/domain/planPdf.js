@@ -49,6 +49,7 @@ const GROUP_BADGES = {
   LAC: { color: '#3AA8F5', text: 'LAC' },
   G_CP: { color: '#F78B3D', text: 'G', sub: 'C/P' },
   G_SP: { color: '#F78B3D', text: 'G', sub: 'S/P' },
+  AZ: { color: '#C9A0E8', text: 'AZ' },
 }
 
 const DEFAULT_INSTRUCTIONS = [
@@ -356,12 +357,15 @@ function drawMealRow(file, data, layout, row, startY) {
   return y + ROW_GAP
 }
 
-function drawLegend(file, data, startY) {
+// Leyenda de los círculos. "Azúcares" sólo aparece si el plan los prescribe: el formato en papel
+// no lo trae.
+function drawLegend(file, data, startY, rows) {
   const { fonts } = data
   let y = startY + 22
   if (CONTENT_BOTTOM - y < 52) y = addPage(file, data) + 18
   const step = 54
-  EQUIVALENT_GROUPS.forEach((group, index) => {
+  const used = new Set(rows.flatMap((row) => row.portions.map((portion) => portion.code)))
+  EQUIVALENT_GROUPS.filter((group) => group.code !== 'AZ' || used.has('AZ')).forEach((group, index) => {
     const cx = X0 + 20 + index * step
     drawBadge(file, fonts, group.code, cx, y + 13, 13)
     const words = group.label.replace(/^(AOA|Grasa) /, '$1\n').split('\n')
@@ -455,7 +459,7 @@ function drawEquivalentPages(file, data) {
 }
 
 // `input`: { patientName, nutritionistName, licenseNumber, weightKg, bodyFatPercent, muscleMassKg,
-// menu, mealTimes, recommendations, hydrationNote, contact: [{ kind: 'phone'|'address'|'email', text }], logo,
+// menu, mealTimes, equivalents, recommendations, hydrationNote, contact: [{ kind: 'phone'|'address'|'email', text }], logo,
 // images: Map<imageFile, Buffer> }.
 // `file` debe ser un PDFDocument carta apaisado con margen 0 y su primera hoja ya creada.
 function drawNutritionPlan(file, input) {
@@ -465,7 +469,7 @@ function drawNutritionPlan(file, input) {
   const data = { ...input, logo, fonts: registerFonts(file) }
   drawPageChrome(file, data)
   let y = drawPatientLine(file, data, FIRST_TOP)
-  const rows = buildMealOptions(data.menu, data.mealTimes)
+  const rows = buildMealOptions(data.menu, data.mealTimes, data.equivalents)
   if (!rows.length) {
     file.font(data.fonts.regular).fontSize(10.5).fillColor(SOFT).text('Este plan todavía no tiene recetas asignadas.', X0 + 6, y + 10, { lineBreak: false })
   } else {
@@ -477,7 +481,7 @@ function drawNutritionPlan(file, input) {
     const layout = { columns, colW, optionX: (index) => X0 + TIME_W + PORTION_W + index * colW, titleSize: 9 * scale, textSize: 8.8 * scale, lineH: 11 * scale }
     y = drawTableHeader(file, data, layout, y)
     for (const row of rows) y = drawMealRow(file, data, layout, row, y)
-    y = drawLegend(file, data, y)
+    y = drawLegend(file, data, y, rows)
   }
 
   const agreements = [...splitNotes(data.recommendations), ...splitNotes(data.hydrationNote)]

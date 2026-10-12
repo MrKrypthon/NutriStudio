@@ -326,6 +326,9 @@ model NutritionPlan {
   // Hora de cada tiempo de comida, "HH:MM" por clave (breakfast, lunch, snack, snack2, dinner); sale junto
   // al nombre del tiempo en el plan entregado.
   mealTimes       Json?
+  // Cálculo por equivalentes: { groups: { <grupo>: n }, distribution: { <tiempo>: { <grupo>: n } } }
+  // (ver server/domain/equivalents.js). Son las porciones que muestra el plan entregado.
+  equivalents     Json?
   hydrationNote   String?
   recommendations String?
   publishedAt     DateTime?
