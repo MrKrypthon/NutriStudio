@@ -900,10 +900,11 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }
 
   const labs = currentValues['Estudios'] || []
-  // El estado se interpreta automáticamente del rango de referencia cuando es posible; si no,
-  // se respeta el que se haya elegido a mano.
-  const labStatus = (lab) => (lab.range ? interpretLab(lab.value, lab.range) : null) || lab.status
-  const labsEvaluated = labs.map((lab) => ({ ...lab, status: labStatus(lab) }))
+  // El estado vive dentro del estudio: se interpreta del rango al capturar o editar el valor (ver
+  // saveLab/updateLabValue) y después puede cambiarse a mano con el selector.
+  const LAB_STATUSES = ['Normal', 'Elevado', 'Bajo', 'Pendiente']
+  const LAB_STATUS_TONE = { Normal: 'normal', Elevado: 'elevado', Bajo: 'bajo', Pendiente: 'pendiente' }
+  const labsEvaluated = labs.map((lab) => ({ ...lab, status: lab.status || 'Normal' }))
   const openLabForm = () => setLabForm({ name: '', value: '', unit: '', range: '', status: 'Normal' })
   const closeLabForm = () => setLabForm(null)
   const updateLabForm = (key, value) => setLabForm((prev) => ({ ...prev, [key]: value }))
@@ -914,6 +915,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }
   const removeLab = (id) => updateField('Estudios', labs.filter((lab) => lab.id !== id))
   const updateLabValue = (id, value) => updateField('Estudios', labs.map((lab) => (lab.id === id ? { ...lab, value, status: (lab.range ? interpretLab(value, lab.range) : null) || lab.status } : lab)))
+  const updateLabStatus = (id, status) => updateField('Estudios', labs.map((lab) => (lab.id === id ? { ...lab, status } : lab)))
 
   const uploadLabAttachment = async (file) => {
     if (!consultation || !file) return
@@ -1208,7 +1210,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
                 {interpretLab(labForm.value, labForm.range) && <p className="lab-hint">Interpretación automática según el rango: <b>{interpretLab(labForm.value, labForm.range)}</b>. Puedes cambiarla en “Estado”.</p>}
                 <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name} onClick={saveLab}>Guardar estudio</button></div>
               </div>}
-              {labsEvaluated.length > 0 && <div className="lab-list">{labsEvaluated.map((lab) => { const color = lab.status === 'Normal' ? 'confirmed' : 'pending'; return <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><span className={'status ' + color}>{lab.status}</span><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div> })}</div>}
+              {labsEvaluated.length > 0 && <div className="lab-list">{labsEvaluated.map((lab) => <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><select className={'lab-status lab-status-' + (LAB_STATUS_TONE[lab.status] || 'pendiente')} value={lab.status} onChange={(e) => updateLabStatus(lab.id, e.target.value)} title="Estado del estudio">{LAB_STATUSES.map((s) => <option value={s} key={s}>{s}</option>)}</select><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div>)}</div>}
             </div>],
             ['adjuntos', 'Adjuntos PDF', <div className="sub-stack" key="adj">
               <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName} y captura sus valores arriba a mano; todavía no hay lectura automática.</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
