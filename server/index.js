@@ -133,9 +133,9 @@ app.get('/api/v1/practice', async (request, reply) => {
 })
 
 app.put('/api/v1/practice', async (request, reply) => {
-  const { name, timeZone, userName, userEmail, userSpecialty, userPhone, businessHours, fees } = request.body || {}
+  const { name, timeZone, address, userName, userEmail, userSpecialty, userPhone, userLicenseNumber, businessHours, fees } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
-  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(address !== undefined ? { address: String(address).trim() || null } : {}), ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
   let user = await prisma.user.findUnique({ where: { id: request.userId } })
   if (user) {
     user = await prisma.user.update({
@@ -145,6 +145,7 @@ app.put('/api/v1/practice', async (request, reply) => {
         email: userEmail || user.email,
         ...(userSpecialty !== undefined ? { specialty: userSpecialty } : {}),
         ...(userPhone !== undefined ? { phone: userPhone } : {}),
+        ...(userLicenseNumber !== undefined ? { licenseNumber: String(userLicenseNumber).trim() || null } : {}),
       },
     })
   }
@@ -2044,7 +2045,8 @@ async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) 
     menu,
     recommendations: plan.recommendations,
     hydrationNote: plan.hydrationNote,
-    contact: [user?.phone, user?.email].filter(Boolean),
+    licenseNumber: user?.licenseNumber || null,
+    contact: [user?.phone, practice?.address, user?.email].filter(Boolean),
     logo: logoBuffer,
     images,
   }

@@ -73,6 +73,8 @@ model Practice {
   locale             String              @default("es-MX")
   defaultPalette     String              @default("minimal")
   logoUrl            String?
+  // Dirección del consultorio; sale en el pie del plan de alimentación entregado.
+  address            String?
   businessHours      Json?
   // Tarifas por tipo de cita, en centavos: { INITIAL, FOLLOW_UP, QUICK_CONTROL, EMERGENCY }.
   fees               Json?
@@ -105,6 +107,8 @@ model User {
   passwordHash   String
   specialty      String?
   phone          String?
+  // Cédula profesional; sale en el encabezado del plan de alimentación entregado.
+  licenseNumber  String?
   role           UserRole        @default(NUTRITIONIST)
   status         RecordStatus    @default(ACTIVE)
   consultations  Consultation[]

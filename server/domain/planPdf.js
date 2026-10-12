@@ -109,9 +109,10 @@ function drawPageChrome(file, data) {
   }
   const contact = (data.contact || []).map(cleanText).filter(Boolean)
   contact.forEach((line, index) => {
-    const y = 556 - (contact.length - index) * 14
+    // Siempre debajo de la tabla (CONTENT_BOTTOM) y sobre las olas, con uno, dos o tres renglones.
+    const y = CONTENT_BOTTOM + 8 + index * 13 + (3 - Math.min(contact.length, 3)) * 6
     file.circle(64, y + 4, 3.2).fill(WAVE_RED)
-    file.font('Helvetica').fontSize(9.5).fillColor(WAVE_RED).text(line, 73, y, { lineBreak: false })
+    file.font('Helvetica').fontSize(9).fillColor(WAVE_RED).text(line, 73, y, { lineBreak: false })
   })
 }
 
@@ -128,6 +129,7 @@ function drawPatientLine(file, data, y) {
     ['Peso', data.weightKg != null ? `${formatNumber(data.weightKg)} Kg` : null],
     ['% Grasa', data.bodyFatPercent != null ? `${formatNumber(data.bodyFatPercent)}%` : null],
     ['M.M (kg)', data.muscleMassKg != null ? formatNumber(data.muscleMassKg) : null],
+    ['Céd. Prof', data.licenseNumber],
   ].filter(([, value]) => value)
   if (!fields.length) return y
   file.font('Helvetica').fontSize(9.5).fillColor(TEXT)
@@ -352,7 +354,7 @@ function drawEquivalentPages(file, data) {
   drawEquivalentBox(file, { x: rightX, y: legumesBottom + 14, width: rightW, title: 'Lácteos', ...BLUE, items: EQUIVALENT_LISTS.DAIRY })
 }
 
-// `data`: { patientName, nutritionistName, weightKg, bodyFatPercent, muscleMassKg, menu,
+// `data`: { patientName, nutritionistName, licenseNumber, weightKg, bodyFatPercent, muscleMassKg, menu,
 // recommendations, hydrationNote, contact: string[], logo, images: Map<imageFile, Buffer> }.
 // `file` debe ser un PDFDocument carta apaisado con margen 0 y su primera hoja ya creada.
 function drawNutritionPlan(file, input) {
