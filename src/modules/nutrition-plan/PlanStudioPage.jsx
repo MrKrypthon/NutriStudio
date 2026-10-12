@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import DocumentPage from '../documents/DocumentPage.jsx'
 import EquivalentsStep from './EquivalentsStep.jsx'
+import RecipeAdjustModal from './RecipeAdjustModal.jsx'
+import { PLAN_MEALS, formatMealTime, suggestMealsFromConsultation } from '../../../server/domain/planMeals.js'
+import { adjustmentKey } from '../../../server/domain/documents.js'
 import { clinicalApi, nutritionApi, patientsApi, plansApi, recipesApi } from '../../lib/api.js'
 import { usePatient } from '../../lib/usePatient.js'
 import { isMaleSex, sexLabel } from '../../lib/sex.js'
@@ -18,14 +21,9 @@ const computeAge = (birthDate) => {
 }
 const formatUTCDate = (iso) => { if (!iso) return null; const d = new Date(iso); return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}` }
 
-const MEAL_TYPES = [
-  { key: 'breakfast', label: 'Desayuno' },
-  { key: 'lunch', label: 'Comida' },
-  { key: 'snack', label: 'Colación' },
-  // Segunda colación, opcional: usa las mismas recetas de colación y lleva su propia hora.
-  { key: 'snack2', label: 'Colación 2' },
-  { key: 'dinner', label: 'Cena' },
-]
+// Todos los tiempos de comida posibles, en el orden del día; cada plan usa sólo algunos.
+const MEAL_TYPES = PLAN_MEALS.map((meal) => ({ key: meal.key, label: meal.label, recipeType: meal.recipeType }))
+const defaultMealServings = () => Object.fromEntries(MEAL_TYPES.map((meal) => [meal.key, 1]))
 const DAYS = [
   { n: 1, label: 'Lunes' },
   { n: 2, label: 'Martes' },
@@ -35,8 +33,6 @@ const DAYS = [
   { n: 6, label: 'Sábado' },
   { n: 7, label: 'Domingo' },
 ]
-// Tiempo de comida del plan → tipo con que están catalogadas las recetas.
-const RECIPE_MEAL_TYPE = { snack2: 'snack' }
 const RECIPE_COLORS = ['coral', 'blue', 'yellow', 'purple']
 const NUTRIENT_CHIPS = [['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['carbs', 'Carbohidratos', 'g'], ['fat', 'Grasas', 'g'], ['fiber', 'Fibra', 'g']]
 
@@ -129,8 +125,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [slots, setSlots] = useState({})
   // Porciones (factor de ración) por tiempo de comida; se aplican a las 7 días y alimentan el
   // cálculo de adecuación en vivo.
-  const [mealServings, setMealServings] = useState({ breakfast: 1, lunch: 1, snack: 1, snack2: 1, dinner: 1 })
-  const mealServingsRef = useRef({ breakfast: 1, lunch: 1, snack: 1, snack2: 1, dinner: 1 })
+  const [mealServings, setMealServings] = useState(defaultMealServings)
+  const mealServingsRef = useRef(defaultMealServings())
   const [saveState, setSaveState] = useState('idle')
   const [pickerTarget, setPickerTarget] = useState(null)
   const [pickerSearch, setPickerSearch] = useState('')
@@ -150,7 +146,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [view, setView] = useState('list')
   const [planActionState, setPlanActionState] = useState('idle')
   const [previewPlan, setPreviewPlan] = useState(null)
-  const [notesForm, setNotesForm] = useState({ hydrationNote: '', recommendations: '', mealTimes: {}, equivalents: null })
+  const [notesForm, setNotesForm] = useState({ hydrationNote: '', recommendations: '', mealTimes: {}, equivalents: null, activeMeals: [], recipeAdjustments: {} })
   const [notesSaveState, setNotesSaveState] = useState('idle')
   const notesSaveTimer = useRef(null)
   const notesPendingRef = useRef(null)
@@ -190,7 +186,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       proteinPercent: plan.proteinPercent != null ? String(plan.proteinPercent) : prev.proteinPercent,
       fatPercent: plan.fatPercent != null ? String(plan.fatPercent) : prev.fatPercent,
     }))
-    setNotesForm({ hydrationNote: plan.hydrationNote || '', recommendations: plan.recommendations || '', mealTimes: plan.mealTimes || {}, equivalents: plan.equivalents || null })
+    setNotesForm({ hydrationNote: plan.hydrationNote || '', recommendations: plan.recommendations || '', mealTimes: plan.mealTimes || {}, equivalents: plan.equivalents || null, activeMeals: plan.activeMeals || [], recipeAdjustments: plan.recipeAdjustments || {} })
   }, [plan?.id])
 
   const loadPlanData = useCallback(async () => {
@@ -223,7 +219,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         weightKg: weightKg !== '' && weightKg != null ? String(weightKg) : '',
         heightCm: heightCm !== '' && heightCm != null ? String(heightCm) : '',
       }))
-      const nextServings = { breakfast: 1, lunch: 1, snack: 1, snack2: 1, dinner: 1 }
+      const nextServings = defaultMealServings()
       for (const slot of activePlan?.mealSlots || []) if (slot.servings != null) nextServings[slot.mealType] = Number(slot.servings)
       mealServingsRef.current = nextServings
       setMealServings(nextServings)
@@ -308,8 +304,11 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     }
   }
 
-  const updateNotes = (key, value) => {
-    const next = { ...notesForm, [key]: value }
+  const updateNotes = (key, value) => patchNotes({ [key]: value })
+  // Varios campos de las indicaciones del plan en un solo guardado (dos updateNotes seguidos se
+  // pisarían: cada uno parte del notesForm de este render).
+  const patchNotes = (patch) => {
+    const next = { ...notesForm, ...patch }
     setNotesForm(next)
     if (!plan) return
     setNotesSaveState('editing')
@@ -321,7 +320,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       setNotesSaveState('saving')
       try {
         const updated = await plansApi.update(plan.id, next)
-        setPlan(updated)
+        // La respuesta trae sólo el plan: se conserva lo ya cargado (consulta, recetas asignadas).
+        setPlan((prev) => ({ ...prev, ...updated }))
         setNotesSaveState('saved')
         notesPendingRef.current = null
       } catch {
@@ -362,7 +362,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         const nextSlots = {}
         for (const slot of full.mealSlots || []) nextSlots[slotKey(slot.dayOfWeek, slot.mealType)] = slot.recipeId
         const savedInputs = full.evaluation?.inputs || {}
-        const nextServings = { breakfast: 1, lunch: 1, snack: 1, snack2: 1, dinner: 1 }
+        const nextServings = defaultMealServings()
         for (const slot of full.mealSlots || []) if (slot.servings != null) nextServings[slot.mealType] = Number(slot.servings)
         mealServingsRef.current = nextServings
         setMealServings(nextServings)
@@ -381,7 +381,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
           weightKg: savedInputs.weightKg != null ? String(savedInputs.weightKg) : prev.weightKg,
           heightCm: savedInputs.heightCm != null ? String(savedInputs.heightCm) : prev.heightCm,
         }))
-        setNotesForm({ hydrationNote: full.hydrationNote || '', recommendations: full.recommendations || '', mealTimes: full.mealTimes || {}, equivalents: full.equivalents || null })
+        setNotesForm({ hydrationNote: full.hydrationNote || '', recommendations: full.recommendations || '', mealTimes: full.mealTimes || {}, equivalents: full.equivalents || null, activeMeals: full.activeMeals || [], recipeAdjustments: full.recipeAdjustments || {} })
         setStep(0)
         setView('wizard')
       } else {
@@ -453,7 +453,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
           })
         try {
           const updated = await plansApi.saveDistribution(plan.id, payload)
-          setPlan(updated)
+          setPlan((prev) => ({ ...prev, ...updated }))
           setSaveState('saved')
         } catch {
           setSaveState('error')
@@ -466,14 +466,62 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     }
   }
 
-  // Tiempos de comida entre los que se reparten los equivalentes: los que ya tienen recetas (son
-  // los que salen en el plan impreso). Sin recetas todavía, los cuatro de siempre y la segunda
-  // colación sólo si ya tiene hora.
-  const mealsWithRecipes = MEAL_TYPES.map((meal) => meal.key).filter((key) => DAYS.some((day) => slots[slotKey(day.n, key)]))
-  const equivalentMeals = mealsWithRecipes.length ? mealsWithRecipes : MEAL_TYPES.map((meal) => meal.key).filter((key) => key !== 'snack2' || notesForm.mealTimes?.snack2)
+  // Tiempos de comida de este plan. Mientras no se personalicen se proponen a partir de la consulta
+  // (los que la paciente dijo hacer, con sus horas); un tiempo con recetas siempre se muestra.
+  const mealSuggestion = useMemo(() => suggestMealsFromConsultation(sectionPayload(plan, 'dietary')), [plan?.consultation])
+  const chosenMeals = notesForm.activeMeals?.length ? notesForm.activeMeals : mealSuggestion.meals
+  const mealHasRecipes = (key) => DAYS.some((day) => slots[slotKey(day.n, key)])
+  const visibleMeals = MEAL_TYPES.filter((meal) => chosenMeals.includes(meal.key) || mealHasRecipes(meal.key))
+  const visibleMealKeys = visibleMeals.map((meal) => meal.key)
+  const hiddenMeals = MEAL_TYPES.filter((meal) => !visibleMealKeys.includes(meal.key))
+  const planLocked = plan?.status === 'PUBLISHED'
+  // Los equivalentes se reparten entre los tiempos que ya tienen recetas (son los que salen en el
+  // plan impreso); sin recetas todavía, entre todos los del plan.
+  const mealsWithRecipes = visibleMealKeys.filter(mealHasRecipes)
+  const equivalentMeals = mealsWithRecipes.length ? mealsWithRecipes : visibleMealKeys
+
+  const addMeal = (key) => {
+    if (!key || planLocked) return
+    const time = notesForm.mealTimes?.[key] || mealSuggestion.times[key]
+    patchNotes({ activeMeals: [...visibleMealKeys, key], mealTimes: { ...notesForm.mealTimes, [key]: time } })
+  }
+  const removeMeal = (meal) => {
+    if (planLocked || visibleMeals.length <= 1) return
+    if (mealHasRecipes(meal.key)) {
+      if (!window.confirm(`Quitar "${meal.label}" también quita las recetas que tiene asignadas en la semana. ¿Continuar?`)) return
+      const nextSlots = { ...slots }
+      for (const day of DAYS) delete nextSlots[slotKey(day.n, meal.key)]
+      setSlots(nextSlots)
+      persistSlots(nextSlots)
+    }
+    const mealTimes = { ...notesForm.mealTimes }
+    delete mealTimes[meal.key]
+    patchNotes({ activeMeals: visibleMealKeys.filter((key) => key !== meal.key), mealTimes })
+  }
+  const missingTimes = visibleMeals.filter((meal) => !notesForm.mealTimes?.[meal.key])
+  const applySuggestedTimes = () => patchNotes({ mealTimes: { ...Object.fromEntries(missingTimes.map((meal) => [meal.key, mealSuggestion.times[meal.key]])), ...notesForm.mealTimes } })
+
+  // Recetas distintas de un tiempo de comida (las "opciones" del plan impreso) y sus ajustes.
+  const [adjustMeal, setAdjustMeal] = useState(null)
+  const mealRecipes = (key) => { const seen = new Set(); return DAYS.map((day) => recipeById(slots[slotKey(day.n, key)])).filter((recipe) => recipe && !seen.has(recipe.id) && seen.add(recipe.id)) }
+  const adjustedCount = (key) => mealRecipes(key).filter((recipe) => notesForm.recipeAdjustments?.[adjustmentKey(key, recipe.id)]).length
+  const saveAdjustment = (mealKey, recipeId, lines) => {
+    const next = { ...(notesForm.recipeAdjustments || {}) }
+    if (lines) next[adjustmentKey(mealKey, recipeId)] = { lines }
+    else delete next[adjustmentKey(mealKey, recipeId)]
+    updateNotes('recipeAdjustments', next)
+  }
 
   const selectStep = async (next) => {
     // Entering Entrega must see the final menu: flush any pending distribution save first.
+    // …and so must the plan's own fields (hours, equivalents, adjusted portions), which save on a
+    // debounce: write them now instead of waiting for the timer.
+    if (next === STEP.DELIVERY && plan && notesPendingRef.current) {
+      clearTimeout(notesSaveTimer.current)
+      const pending = notesPendingRef.current
+      notesPendingRef.current = null
+      try { const updated = await plansApi.update(pending.planId, pending.next); setPlan((prev) => ({ ...prev, ...updated })); setNotesSaveState('saved') } catch { setNotesSaveState('error') }
+    }
     if (next === STEP.DELIVERY && plan && (slotsDirtyRef.current || slotsInFlightRef.current)) {
       if (!flushPromiseRef.current) flushPromiseRef.current = flushEverything().finally(() => { flushPromiseRef.current = null })
       await flushPromiseRef.current
@@ -596,7 +644,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const pickerRecipes = pickerTarget
     ? recipes
-        .filter((recipe) => (recipe.mealTypes || []).length === 0 || recipe.mealTypes.includes(RECIPE_MEAL_TYPE[pickerTarget.mealType] || pickerTarget.mealType))
+        .filter((recipe) => (recipe.mealTypes || []).length === 0 || recipe.mealTypes.includes(MEAL_TYPES.find((meal) => meal.key === pickerTarget.mealType)?.recipeType || pickerTarget.mealType))
         .filter((recipe) => !pickerRestriction || (recipe.restrictions || []).includes(pickerRestriction))
         .filter((recipe) => recipe.name.toLowerCase().includes(pickerSearch.toLowerCase()))
     : []
@@ -634,7 +682,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     const menu = sourcePlan.menuSnapshot?.length ? sourcePlan.menuSnapshot : sourcePlan.mealSlots || []
     return <div className="menu-preview-table">
       <div className="menu-preview-head"><span>Tiempo</span>{DAYS.map((day) => <b key={day.n}>{day.label.slice(0, 3)}</b>)}</div>
-      {MEAL_TYPES.map((meal) => <div className="menu-preview-row" key={meal.key}><span>{meal.label}</span>{DAYS.map((day) => { const entry = menuEntryFor(menu, day.n, meal.key); const name = entry?.recipeName || (entry?.recipeId ? recipeById(entry.recipeId)?.name : null); return <div className="menu-preview-cell" key={day.n}>{name ? <>{name}{entry?.kcal ? <small>{Math.round(entry.kcal)} kcal</small> : null}</> : <small className="muted">—</small>}</div> })}</div>)}
+      {MEAL_TYPES.filter((meal) => menu.some((entry) => entry.mealType === meal.key)).map((meal) => <div className="menu-preview-row" key={meal.key}><span>{meal.label}</span>{DAYS.map((day) => { const entry = menuEntryFor(menu, day.n, meal.key); const name = entry?.recipeName || (entry?.recipeId ? recipeById(entry.recipeId)?.name : null); return <div className="menu-preview-cell" key={day.n}>{name ? <>{name}{entry?.kcal ? <small>{Math.round(entry.kcal)} kcal</small> : null}</> : <small className="muted">—</small>}</div> })}</div>)}
     </div>
   }
 
@@ -740,7 +788,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
     {step === STEP.CALCULATION && <><ModuleHeader eyebrow="PLAN ALIMENTARIO · REQUERIMIENTO" title="Calcula el punto de partida" subtitle="Cada resultado queda asociado a la fórmula y a los datos utilizados." /><form className="calculator-layout" onSubmit={calculate}><section className="panel calculator-form"><div className="section-heading"><div><h2>Datos de la paciente</h2><p className="subtitle">Puedes ajustar estos valores para simular el plan.</p></div></div><div className="form-grid three"><label>Sexo<select value={form.sex} onChange={(e) => updateForm('sex', e.target.value)}><option value="male">Hombre</option><option value="female">Mujer</option></select></label><label>Edad (años)<input type="number" min="1" max="120" value={form.age} onChange={(e) => updateForm('age', e.target.value)} /></label><label>Peso (kg)<input type="number" step="0.1" min="1" value={form.weightKg} onChange={(e) => updateForm('weightKg', e.target.value)} /></label><label>Talla (cm)<input type="number" step="0.1" min="30" value={form.heightCm} onChange={(e) => updateForm('heightCm', e.target.value)} /></label><label>Fórmula energética<select value={form.formula} onChange={(e) => updateForm('formula', e.target.value)}><option value="mifflin">Mifflin-St Jeor</option><option value="harris">Harris-Benedict</option><option value="schofield">FAO/OMS/ONU (Schofield)</option><option value="valencia">Valencia (población mexicana)</option><option value="cunningham">Cunningham</option><option value="katch-mcardle">Katch-McArdle</option></select></label>{needsBodyFat && <label>% Grasa corporal<input type="number" step="0.1" min="1" max="75" value={form.bodyFatPercent} onChange={(e) => updateForm('bodyFatPercent', e.target.value)} /></label>}<label>Actividad física<select value={form.activityFactor} onChange={(e) => updateForm('activityFactor', e.target.value)}><option value="1.2">Sedentaria · 1.2</option><option value="1.375">Ligera · 1.375</option><option value="1.55">Moderada · 1.55</option><option value="1.725">Intensa · 1.725</option></select></label></div><div className="macro-distribution"><div className="section-heading"><div><h2>Distribución de macronutrientes</h2><p className="subtitle">Porcentaje del requerimiento energético. La suma debe dar 100%.</p></div></div><div className="form-grid three"><label>Carbohidratos (%)<input type="number" min="0" max="100" value={form.carbsPercent} onChange={(e) => updateForm('carbsPercent', e.target.value)} /></label><label>Proteína (%)<input type="number" min="0" max="100" value={form.proteinPercent} onChange={(e) => updateForm('proteinPercent', e.target.value)} /></label><label>Grasas (%)<input type="number" min="0" max="100" value={form.fatPercent} onChange={(e) => updateForm('fatPercent', e.target.value)} /></label></div><div className={'macro-sum' + (macroSum === 100 ? '' : ' invalid')}>{macroSum}% {macroSum === 100 ? '· distribución correcta' : '· debe sumar 100%'}</div>{calcResult?.get && macroSum === 100 && <div className="macro-grams">Carbohidratos {macroGrams(form.carbsPercent, 4)} g · Proteína {macroGrams(form.proteinPercent, 4)} g · Grasas {macroGrams(form.fatPercent, 9)} g</div>}</div><label>Objetivo terapéutico<textarea className="wide-textarea" placeholder="Resultado clínico y conductual esperado..." value={form.goal} onChange={(e) => updateForm('goal', e.target.value)} /></label><button className="primary calculate-button" disabled={calcState === 'loading'}>{calcState === 'loading' ? 'Calculando...' : 'Calcular requerimiento'} <span>→</span></button>{calcState === 'error' && <div className="form-error">⚠ {calcError}</div>}</section><aside className="panel calculation-result">{!calcResult && calcState !== 'loading' ? <div className="result-empty"><span>◌</span><h3>Tu resultado aparecerá aquí</h3><p>Completa o confirma los datos y calcula el requerimiento energético.</p></div> : calcState === 'loading' ? <div className="result-empty"><span className="loading-dot">●</span><h3>Calculando requerimiento...</h3><p>Estamos aplicando la fórmula seleccionada.</p></div> : <><div className="result-header"><div><p className="eyebrow">RESULTADO CALCULADO</p><h2>Requerimiento energético</h2></div><span className="result-check">✓</span></div><div className="get-number"><small>GET · Gasto energético total</small><b>{calcResult.get.toLocaleString()} <em>kcal/día</em></b><span>Basado en {calcResult.formulaLabel || calcResult.formula} · factor {form.activityFactor}</span></div><div className="result-details"><div><small>Metabolismo basal</small><b>{calcResult.bmr.toLocaleString()} kcal</b></div><div><small>Actividad estimada</small><b>+{calcResult.activityKcal.toLocaleString()} kcal</b></div></div>{calcResult.bmi && <div className="result-details"><div><small>IMC</small><b>{calcResult.bmi}</b></div><div><small>Peso saludable estimado</small><b>{calcResult.idealWeightRange.minKg}–{calcResult.idealWeightRange.maxKg} kg</b></div></div>}{calcResult.flags?.length > 0 && <div className="form-error">⚠ {calcResult.flags.map((f) => f.message).join(' ')}</div>}<button type="button" className="primary full-button" disabled={evalSaveState === 'saving' || !plan || macroSum !== 100} onClick={saveToPlan}>{evalSaveState === 'saving' ? 'Guardando...' : evalSaveState === 'saved' ? 'Guardado en el plan ✓' : 'Guardar en el plan'} <span>→</span></button>{!plan && <p className="muted">Crea una consulta y un plan en borrador para poder guardar.</p>}{evalSaveState === 'error' && <div className="form-error">⚠ {evalSaveError}</div>}</>}</aside></form></>}
 
-    {step === STEP.EQUIVALENTS && <EquivalentsStep plan={plan} value={notesForm.equivalents} onChange={(next) => updateNotes('equivalents', next)} locked={plan?.status === 'PUBLISHED'} mealTimes={notesForm.mealTimes} expediente={plan?.consultation ? readExpediente(plan) : null} activeMeals={equivalentMeals} onGoToCalculation={() => selectStep(STEP.CALCULATION)} />}
+    {step === STEP.EQUIVALENTS && <EquivalentsStep plan={plan} value={notesForm.equivalents} onChange={(next) => updateNotes('equivalents', next)} locked={plan?.status === 'PUBLISHED'} mealTimes={notesForm.mealTimes} expediente={plan?.consultation ? readExpediente(plan) : null} activeMeals={equivalentMeals} visibleMeals={visibleMealKeys} onGoToCalculation={() => selectStep(STEP.CALCULATION)} />}
 
     {step === STEP.DISTRIBUTION && <>
       <ModuleHeader eyebrow="PLAN ALIMENTARIO · DISTRIBUCIÓN" title="Distribuye por tiempos" subtitle="Elige la receta base de cada tiempo de comida para toda la semana; luego ajusta día por día en el paso Semana." action={<span className={'sync-label ' + (saveState === 'saving' ? 'loading' : saveState === 'error' ? 'demo' : 'online')}>{saveState === 'saving' ? '● Guardando…' : saveState === 'error' ? '● Error al guardar' : plan ? '● Sincronizado' : '● Sin plan en borrador'}</span>} />
@@ -749,14 +797,23 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea un plan para {patientName} antes de distribuir recetas.</p><button className="primary" disabled={createPlanState === 'creating'} onClick={() => createPlan()}>{createPlanState === 'creating' ? 'Creando…' : 'Crear plan'}</button>{createPlanState === 'error' && <div className="form-error">⚠ No se pudo crear el plan.</div>}</div>}
       {loadState === 'ready' && plan && renderAdequacy()}
       {loadState === 'ready' && plan && <div className="distribution">
-        <div className="distribution-meals">{MEAL_TYPES.map((meal, mealIndex) => { const base = recipeById(slots[slotKey(1, meal.key)]); const kcal = averageKcalForMeal(meal.key); return <section className="distribution-meal panel" key={meal.key}>
+        <div className="meal-bar panel">
+          <div className="meal-bar-info"><p className="eyebrow">TIEMPOS DE COMIDA · {visibleMeals.length}</p><small className="muted">{notesForm.activeMeals?.length ? 'Los tiempos de este plan. Agrega otro si la paciente come más veces al día.' : mealSuggestion.fromConsultation ? 'Propuestos con lo que la paciente contó en la consulta (dieta habitual y recordatorio de 24 h).' : 'Los tiempos habituales. Agrega otro si la paciente come más veces al día.'}</small></div>
+          <div className="meal-chips">{visibleMeals.map((meal) => <span className="meal-chip" key={meal.key}>{meal.label}{notesForm.mealTimes?.[meal.key] ? <small>{formatMealTime(notesForm.mealTimes[meal.key])}</small> : null}{!planLocked && visibleMeals.length > 1 && <button type="button" onClick={() => removeMeal(meal)} aria-label={`Quitar ${meal.label}`} title={`Quitar ${meal.label}`}>×</button>}</span>)}</div>
+          {!planLocked && <div className="meal-bar-actions">
+            {hiddenMeals.length > 0 && <select value="" onChange={(event) => addMeal(event.target.value)} aria-label="Agregar tiempo de comida"><option value="">+ Agregar tiempo de comida</option>{hiddenMeals.map((meal) => <option value={meal.key} key={meal.key}>{meal.label} · {formatMealTime(mealSuggestion.times[meal.key])}</option>)}</select>}
+            {missingTimes.length > 0 && <button type="button" className="secondary" onClick={applySuggestedTimes}>Usar horas sugeridas</button>}
+          </div>}
+        </div>
+        <div className="distribution-meals">{visibleMeals.map((meal, mealIndex) => { const base = recipeById(slots[slotKey(1, meal.key)]); const kcal = averageKcalForMeal(meal.key); return <section className="distribution-meal panel" key={meal.key}>
           <div className="distribution-meal-head">
             {recipeThumb(base, mealIndex, 'distribution-meal-image')}
             <div className="distribution-meal-info"><span className="distribution-meal-label">{meal.label} · base de la semana</span><b>{base ? base.name : 'Sin receta base'}</b><small>{kcal != null ? `${kcal} kcal promedio al día` : 'Sin recetas asignadas'}</small></div>
-            <label className="meal-time-field"><small>Hora</small><input type="time" disabled={plan?.status === 'PUBLISHED'} value={notesForm.mealTimes?.[meal.key] || ''} onChange={(event) => updateNotes('mealTimes', { ...notesForm.mealTimes, [meal.key]: event.target.value })} aria-label={`Hora de ${meal.label}`} /></label>
+            <label className="meal-time-field"><small>Hora</small><input type="time" disabled={planLocked} value={notesForm.mealTimes?.[meal.key] || ''} onChange={(event) => updateNotes('mealTimes', { ...notesForm.mealTimes, [meal.key]: event.target.value })} aria-label={`Hora de ${meal.label}`} />{!planLocked && !notesForm.mealTimes?.[meal.key] && <button type="button" className="time-suggestion" onClick={() => updateNotes('mealTimes', { ...notesForm.mealTimes, [meal.key]: mealSuggestion.times[meal.key] })} title={mealSuggestion.stated.includes(meal.key) ? 'Hora que mencionó la paciente en la consulta' : 'Hora habitual sugerida'}>{mealSuggestion.stated.includes(meal.key) ? 'Consulta' : 'Sugerida'}: {formatMealTime(mealSuggestion.times[meal.key])}</button>}</label>
             <div className="portion-stepper"><small>Porciones</small><div><button type="button" onClick={() => changeServings(meal.key, -0.5)} aria-label="Menos porciones">−</button><b>{mealServingsFor(meal.key)}</b><button type="button" onClick={() => changeServings(meal.key, 0.5)} aria-label="Más porciones">+</button></div></div>
             <button type="button" className="secondary" onClick={() => openPicker(meal.key)}>{base ? 'Cambiar' : 'Elegir receta'}</button>
           </div>
+          {mealRecipes(meal.key).length > 0 && <div className="distribution-meal-adjust"><button type="button" className="link-button" onClick={() => setAdjustMeal(meal)}>Ajustar porciones de {mealRecipes(meal.key).length === 1 ? 'la receta' : `las ${mealRecipes(meal.key).length} recetas`}</button>{adjustedCount(meal.key) > 0 && <span className="eq-chip ok">{adjustedCount(meal.key)} ajustada{adjustedCount(meal.key) === 1 ? '' : 's'}</span>}<small className="muted">Sólo para este plan; la receta original no cambia.</small></div>}
           <div className="distribution-meal-days">{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <button type="button" className={'distribution-day' + (recipe ? '' : ' empty')} key={day.n} onClick={() => openPicker(meal.key, day.n)} title={recipe ? `${recipe.name} · ${day.label}` : `Elegir ${meal.label} del ${day.label}`}>
             <small>{day.label.slice(0, 3)}</small>
             {recipe ? <>{recipeThumb(recipe, day.n, 'distribution-day-thumb')}<span>{recipe.name}</span></> : <span className="muted">+</span>}
@@ -764,6 +821,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         </section> })}</div>
         <p className="distribution-note muted">El catálogo de ingredientes ya incluye el Sistema Mexicano de Equivalentes; la asignación de la semana se hace por receta. Toca un día para variarlo.</p>
       </div>}
+      {adjustMeal && <RecipeAdjustModal meal={adjustMeal} recipes={mealRecipes(adjustMeal.key)} servings={mealServingsFor(adjustMeal.key)} adjustments={notesForm.recipeAdjustments} prescribed={notesForm.equivalents?.distribution?.[adjustMeal.key]} locked={planLocked} onSave={(recipeId, lines) => saveAdjustment(adjustMeal.key, recipeId, lines)} onClose={() => setAdjustMeal(null)} />}
       {renderPicker()}
     </>}
 
@@ -772,7 +830,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       {loadState === 'ready' && plan && renderAdequacy()}
       {loadState === 'ready' && plan && <div className="week-plan panel">
         <div className="week-head"><span>Tiempo</span>{DAYS.map((d) => <b key={d.n}>{d.label}</b>)}</div>
-        {MEAL_TYPES.map((meal) => <div className="week-row" key={meal.key}><span>{meal.label}</span>{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <div className="week-meal" key={day.n} onClick={() => openPicker(meal.key, day.n)} style={{ cursor: 'pointer' }}>{recipe ? <>{recipeThumb(recipe, day.n, 'week-image')}<small>{recipe.name}</small></> : <small className="muted">+ Elegir</small>}{recipe && <button type="button" className="link-button" onClick={(e) => { e.stopPropagation(); clearSlot(meal.key, day.n) }}>Quitar</button>}</div> })}</div>)}
+        {visibleMeals.map((meal) => <div className="week-row" key={meal.key}><span>{meal.label}</span>{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <div className="week-meal" key={day.n} onClick={() => openPicker(meal.key, day.n)} style={{ cursor: 'pointer' }}>{recipe ? <>{recipeThumb(recipe, day.n, 'week-image')}<small>{recipe.name}</small></> : <small className="muted">+ Elegir</small>}{recipe && <button type="button" className="link-button" onClick={(e) => { e.stopPropagation(); clearSlot(meal.key, day.n) }}>Quitar</button>}</div> })}</div>)}
       </div>}
       {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea un plan para {patientName} antes de armar la semana.</p><button className="primary" disabled={createPlanState === 'creating'} onClick={() => createPlan()}>{createPlanState === 'creating' ? 'Creando…' : 'Crear plan'}</button>{createPlanState === 'error' && <div className="form-error">⚠ No se pudo crear el plan.</div>}</div>}
       {loadState === 'ready' && plan && <div className="panel adequacy-panel">

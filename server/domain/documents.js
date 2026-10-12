@@ -1,14 +1,10 @@
 import { mealBadgePortions } from './equivalents.js'
+import { PLAN_MEALS, PLAN_MEAL_KEYS, formatMealTime, normalizeMealTimes } from './planMeals.js'
 
-const MEAL_TYPE_LABELS = {
-  breakfast: 'Desayuno',
-  lunch: 'Comida',
-  snack: 'Colación',
-  // Segunda colación (vespertina). En el plan entregado las dos se llaman "Colación" y se
-  // distinguen por su hora, como en el formato en papel.
-  snack2: 'Colación',
-  dinner: 'Cena',
-}
+// Nombre de cada tiempo de comida en el plan entregado (todas las colaciones son "Colación" y se
+// distinguen por su hora, como en el formato en papel) y su orden en el día.
+const MEAL_TYPE_LABELS = Object.fromEntries(PLAN_MEALS.map((meal) => [meal.key, meal.printLabel]))
+const MEAL_TYPE_ORDER = PLAN_MEAL_KEYS
 
 const DAY_LABELS = {
   1: 'Lunes',
@@ -19,8 +15,6 @@ const DAY_LABELS = {
   6: 'Sábado',
   7: 'Domingo',
 }
-
-const MEAL_TYPE_ORDER = ['breakfast', 'lunch', 'snack', 'snack2', 'dinner']
 
 // Grupos de equivalentes que el plan impreso muestra como "porciones" (los círculos de color junto
 // a cada tiempo de comida). El catálogo trae el grupo con varios nombres según su origen (SMAE:
@@ -113,25 +107,32 @@ function buildMenuSnapshot(mealSlots) {
     .sort((a, b) => a.dayOfWeek - b.dayOfWeek || MEAL_TYPE_ORDER.indexOf(a.mealType) - MEAL_TYPE_ORDER.indexOf(b.mealType))
 }
 
-// Horas de los tiempos de comida tal como se guardan en el plan: sólo las claves conocidas y sólo
-// valores "HH:MM" de 24 h; lo demás se descarta.
-function normalizeMealTimes(value) {
-  const times = {}
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return times
-  for (const mealType of MEAL_TYPE_ORDER) {
-    const time = typeof value[mealType] === 'string' ? value[mealType].trim() : ''
-    if (/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) times[mealType] = time
+// Ajustes de receta propios de un plan: la nutrióloga reescribe las cantidades de una receta para
+// esta paciente (según sus equivalentes) sin tocar la receta del catálogo. Se guardan por tiempo de
+// comida y receta: { "<tiempo>|<recipeId>": { lines: [...] } }.
+const adjustmentKey = (mealType, recipeId) => `${mealType}|${recipeId}`
+
+function normalizeRecipeAdjustments(value) {
+  const result = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return result
+  for (const [key, adjustment] of Object.entries(value).slice(0, 200)) {
+    const [mealType, recipeId, ...rest] = String(key).split('|')
+    if (rest.length || !MEAL_TYPE_ORDER.includes(mealType) || !/^[0-9a-f-]{36}$/i.test(recipeId || '')) continue
+    if (!Array.isArray(adjustment?.lines)) continue
+    const lines = adjustment.lines.filter((line) => typeof line === 'string').map((line) => line.trim().slice(0, 240)).filter(Boolean).slice(0, 60)
+    if (lines.length) result[adjustmentKey(mealType, recipeId)] = { lines }
   }
-  return times
+  return result
 }
 
-// "10:00" → "10 am", "14:30" → "2:30 pm", como se escribe en el plan en papel.
-function formatMealTime(time) {
-  const match = /^(\d{2}):(\d{2})$/.exec(String(time || ''))
-  if (!match) return ''
-  const hours = Number(match[1])
-  const hour12 = hours % 12 || 12
-  return `${hour12}${match[2] === '00' ? '' : `:${match[2]}`} ${hours < 12 ? 'am' : 'pm'}`
+// Aplica los ajustes del plan al menú: la opción ajustada muestra los renglones reescritos, que ya
+// son "lo que le toca" a la paciente (por eso deja de aplicar el aviso de rendimiento/porciones).
+function applyRecipeAdjustments(menu, adjustments) {
+  const clean = normalizeRecipeAdjustments(adjustments)
+  return (menu || []).map((entry) => {
+    const adjustment = clean[adjustmentKey(entry.mealType, entry.recipeId)]
+    return adjustment ? { ...entry, ingredients: adjustment.lines, adjusted: true } : entry
+  })
 }
 
 // El plan entregado no va por día sino por opciones intercambiables: por cada tiempo de comida,
@@ -202,4 +203,4 @@ function sanitizeJpeg(buffer) {
   return null
 }
 
-export { normalizeMealTimes, formatMealTime, sanitizeJpeg, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }
+export { normalizeMealTimes, formatMealTime, normalizeRecipeAdjustments, applyRecipeAdjustments, adjustmentKey, sanitizeJpeg, MEAL_TYPE_LABELS, DAY_LABELS, MEAL_TYPE_ORDER, EQUIVALENT_GROUPS, buildMenuSnapshot, buildMealOptions, equivalentGroupCode, recipeEquivalents, recipeIngredientLines }

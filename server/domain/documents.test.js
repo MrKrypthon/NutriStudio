@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildMealOptions, buildMenuSnapshot, equivalentGroupCode, recipeEquivalents, recipeIngredientLines, sanitizeJpeg, normalizeMealTimes, formatMealTime } from './documents.js'
+import { buildMealOptions, buildMenuSnapshot, equivalentGroupCode, recipeEquivalents, recipeIngredientLines, sanitizeJpeg, normalizeMealTimes, formatMealTime, normalizeRecipeAdjustments, applyRecipeAdjustments } from './documents.js'
 
 describe('buildMenuSnapshot', () => {
   const slot = (overrides) => ({ dayOfWeek: 1, mealType: 'breakfast', recipeId: 'r1', servings: 1, recipe: { name: 'Avena', nutrition: { kcal: 200 } }, ...overrides })
@@ -198,5 +198,24 @@ describe('prescribed equivalents in the delivered plan', () => {
   it('falls back to the recipe estimate for meals without a prescription', () => {
     const rows = buildMealOptions(menu, {}, { groups: {}, distribution: { breakfast: { V: 1 } } })
     expect(rows[1].portions.map((portion) => [portion.code, portion.quantity])).toEqual([['C', 2]])
+  })
+})
+
+describe('recipe adjustments per plan', () => {
+  const recipeId = '0f64b6b4-7599-4bdc-8e31-3492605d3499'
+  const menu = [{ dayOfWeek: 1, mealType: 'breakfast', recipeId, recipeName: 'Avena', servings: 1, portions: 2, ingredients: ['1 taza de avena'] }, { dayOfWeek: 1, mealType: 'dinner', recipeId, recipeName: 'Avena', servings: 1, portions: 2, ingredients: ['1 taza de avena'] }]
+
+  it('replaces the lines of that recipe only in the meal it was adjusted for', () => {
+    const adjusted = applyRecipeAdjustments(menu, { [`breakfast|${recipeId}`]: { lines: ['1/2 taza de avena', ' 1 fruta '] } })
+    expect(adjusted[0]).toMatchObject({ ingredients: ['1/2 taza de avena', '1 fruta'], adjusted: true })
+    expect(adjusted[1].ingredients).toEqual(['1 taza de avena'])
+    expect(adjusted[1].adjusted).toBeUndefined()
+    // La receta original (el menú de entrada) no cambia.
+    expect(menu[0].ingredients).toEqual(['1 taza de avena'])
+  })
+
+  it('drops malformed adjustments', () => {
+    expect(normalizeRecipeAdjustments({ [`brunch|${recipeId}`]: { lines: ['x'] }, 'breakfast|not-an-id': { lines: ['x'] }, [`lunch|${recipeId}`]: { lines: [] }, [`dinner|${recipeId}`]: { lines: [3, '', 'ok'] } })).toEqual({ [`dinner|${recipeId}`]: { lines: ['ok'] } })
+    expect(normalizeRecipeAdjustments(null)).toEqual({})
   })
 })

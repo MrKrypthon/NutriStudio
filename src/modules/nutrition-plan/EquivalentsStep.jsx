@@ -25,7 +25,7 @@ function CountField({ value, onChange, disabled, label, compact = false }) {
 // nutrióloga fija cuántos equivalentes de cada grupo cubren el requerimiento (con una propuesta
 // automática como punto de partida) y los reparte entre los tiempos de comida; ese reparto es la
 // columna "Porción" del plan que recibe la paciente.
-export default function EquivalentsStep({ plan, value, onChange, locked, mealTimes, expediente, activeMeals, onGoToCalculation }) {
+export default function EquivalentsStep({ plan, value, onChange, locked, mealTimes, expediente, activeMeals, visibleMeals, onGoToCalculation }) {
   const groups = value?.groups || {}
   const distribution = value?.distribution || {}
   const hasTarget = plan?.targetKcal != null
@@ -34,6 +34,9 @@ export default function EquivalentsStep({ plan, value, onChange, locked, mealTim
   const adequacy = equivalentAdequacy(totals, hasTarget ? targets : null)
   const weightKg = Number(plan?.evaluation?.inputs?.weightKg) || null
   const activeGroups = EQUIVALENT_TABLE.filter((group) => (Number(groups[group.code]) || 0) > 0 || EQUIVALENT_MEALS.some((meal) => (Number(distribution[meal.key]?.[group.code]) || 0) > 0))
+  // Columnas del reparto: los tiempos de comida del plan, más cualquiera que ya tenga equivalentes.
+  const meals = EQUIVALENT_MEALS.filter((meal) => !visibleMeals || visibleMeals.includes(meal.key) || Object.keys(distribution[meal.key] || {}).length > 0)
+  const distColumns = { gridTemplateColumns: `minmax(150px,1.6fr) 48px repeat(${meals.length},minmax(62px,1fr)) 104px` }
   const [catalogCode, setCatalogCode] = useState(null)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalog, setCatalog] = useState({ state: 'idle', items: [] })
@@ -145,13 +148,13 @@ export default function EquivalentsStep({ plan, value, onChange, locked, mealTim
     <section className="panel eq-distribution">
       <div className="eq-panel-head"><div><p className="eyebrow">DISTRIBUCIÓN</p><h3>Equivalentes por tiempo de comida</h3><small className="muted">Es la columna "Porción" del plan que recibe la paciente. El reparto automático usa sólo los tiempos que ya tienen recetas.</small></div><button type="button" className="secondary" disabled={locked || !hasGroups} onClick={distribute}>Repartir automáticamente</button></div>
       {activeGroups.length === 0 ? <p className="muted">Captura o sugiere los equivalentes de arriba para repartirlos entre los tiempos de comida.</p> : <div className="eq-dist-table" role="table">
-        <div className="eq-dist-row eq-head" role="row"><span className="eq-group">Grupo</span><span>Total</span>{EQUIVALENT_MEALS.map((meal) => <span key={meal.key}>{meal.label}{mealTimes?.[meal.key] ? <small>{formatTime(mealTimes[meal.key])}</small> : null}{activeMeals && !activeMeals.includes(meal.key) ? <small className="eq-inactive" title="Este tiempo de comida todavía no tiene recetas: no aparece en el plan impreso.">sin recetas</small> : null}</span>)}<span>Por repartir</span></div>
+        <div className="eq-dist-row eq-head" role="row" style={distColumns}><span className="eq-group">Grupo</span><span>Total</span>{meals.map((meal) => <span key={meal.key}>{meal.label}{mealTimes?.[meal.key] ? <small>{formatTime(mealTimes[meal.key])}</small> : null}{activeMeals && !activeMeals.includes(meal.key) ? <small className="eq-inactive" title="Este tiempo de comida todavía no tiene recetas: no aparece en el plan impreso.">sin recetas</small> : null}</span>)}<span>Por repartir</span></div>
         {activeGroups.map((group) => {
           const remaining = remainingEquivalents(groups, distribution, group.code)
-          return <div className="eq-dist-row" role="row" key={group.code}>
+          return <div className="eq-dist-row" role="row" style={distColumns} key={group.code}>
             <span className="eq-group"><b>{group.label}</b>{group.sub && <small>{group.sub}</small>}</span>
             <span><b>{formatCount(groups[group.code])}</b></span>
-            {EQUIVALENT_MEALS.map((meal) => <CountField compact key={meal.key} value={distribution[meal.key]?.[group.code]} disabled={locked} label={`${group.label}${group.sub ? ` ${group.sub}` : ''} en ${meal.label}`} onChange={(next) => setMealCount(meal.key, group.code, next)} />)}
+            {meals.map((meal) => <CountField compact key={meal.key} value={distribution[meal.key]?.[group.code]} disabled={locked} label={`${group.label}${group.sub ? ` ${group.sub}` : ''} en ${meal.label}`} onChange={(next) => setMealCount(meal.key, group.code, next)} />)}
             <span><i className={'eq-chip ' + (remaining === 0 ? 'ok' : remaining > 0 ? 'low' : 'high')}>{remaining === 0 ? '✓ Completo' : remaining > 0 ? `Faltan ${formatCount(remaining)}` : `Sobran ${formatCount(-remaining)}`}</i></span>
           </div>
         })}

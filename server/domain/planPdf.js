@@ -236,7 +236,9 @@ function buildCellLines(file, data, layout, option, width) {
     if (!clean) continue
     for (const line of wrapText(file, `-${clean}`, width)) lines.push({ text: line, font: fonts.regular, size: layout.textSize, color: TEXT })
   }
+  // Una receta con cantidades ajustadas para esta paciente ya dice lo que le toca.
   const notes = []
+  if (option.adjusted) return lines
   if ((option.portions || 1) > 1) notes.push(`Rinde ${formatNumber(option.portions)} porciones`)
   if ((option.servings || 1) !== 1 || (option.portions || 1) > 1) notes.push(`te toca${option.servings === 1 ? '' : 'n'} ${formatNumber(option.servings || 1)}`)
   if (notes.length) for (const line of wrapText(file, `(${notes.join(' · ')})`, width)) lines.push({ text: line, font: fonts.regular, size: layout.textSize, color: SOFT })

@@ -323,12 +323,18 @@ model NutritionPlan {
   fatPercent      Decimal?     @db.Decimal(5, 2)
   evaluation      Json?
   menuSnapshot    Json?
-  // Hora de cada tiempo de comida, "HH:MM" por clave (breakfast, lunch, snack, snack2, dinner); sale junto
+  // Hora de cada tiempo de comida, "HH:MM" por clave de tiempo de comida; sale junto
   // al nombre del tiempo en el plan entregado.
   mealTimes       Json?
   // Cálculo por equivalentes: { groups: { <grupo>: n }, distribution: { <tiempo>: { <grupo>: n } } }
   // (ver server/domain/equivalents.js). Son las porciones que muestra el plan entregado.
   equivalents     Json?
+  // Tiempos de comida que usa este plan (claves de server/domain/planMeals.js). Vacío = todavía
+  // no se personalizó: se proponen según la consulta.
+  activeMeals     String[]     @default([])
+  // Cantidades de una receta reescritas para este plan, sin tocar la receta del catálogo:
+  // { "<tiempo>|<recipeId>": { lines: [...] } }.
+  recipeAdjustments Json?
   hydrationNote   String?
   recommendations String?
   publishedAt     DateTime?

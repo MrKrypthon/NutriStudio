@@ -89,7 +89,7 @@ describe('tables', () => {
     for (const group of EQUIVALENT_TABLE) expect(Math.abs(group.kcal - (group.protein * 4 + group.carbs * 4 + group.fat * 9)), group.code).toBeLessThanOrEqual(12)
   })
 
-  it('meal shares add up to 100 %', () => {
-    expect(EQUIVALENT_MEALS.reduce((sum, meal) => sum + meal.share, 0)).toBeCloseTo(1)
+  it('every meal time has a positive share', () => {
+    for (const meal of EQUIVALENT_MEALS) expect(meal.share).toBeGreaterThan(0)
   })
 })

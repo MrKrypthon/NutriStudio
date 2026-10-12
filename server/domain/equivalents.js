@@ -3,6 +3,8 @@
 // cubren el requerimiento, y cómo se reparten entre los tiempos de comida. Este módulo no toca la
 // base ni la red: lo usan igual el servidor (guardar, PDF) y la pantalla (cálculo en vivo).
 
+import { PLAN_MEALS } from './planMeals.js'
+
 // Aporte nutrimental promedio de UN equivalente de cada grupo (SMAE). `badge` es el círculo con que
 // el plan impreso muestra el grupo: ahí cereales, leches y azúcares no se subdividen.
 const EQUIVALENT_TABLE = [
@@ -34,13 +36,8 @@ const CATALOG_GROUP = {
   G_SP: 'Grasas sin proteínas', G_CP: 'Grasas con proteínas', AZ_SG: 'Azucares sin grasa', AZ_CG: 'Azucares con grasa',
 }
 
-const EQUIVALENT_MEALS = [
-  { key: 'breakfast', label: 'Desayuno', share: 0.25 },
-  { key: 'snack', label: 'Colación', share: 0.1 },
-  { key: 'lunch', label: 'Comida', share: 0.35 },
-  { key: 'snack2', label: 'Colación 2', share: 0.1 },
-  { key: 'dinner', label: 'Cena', share: 0.2 },
-]
+// Tiempos de comida entre los que se reparten los equivalentes, con su peso relativo.
+const EQUIVALENT_MEALS = PLAN_MEALS.map((meal) => ({ key: meal.key, label: meal.label, share: meal.share / 100 }))
 
 const MAX_EQUIVALENTS = 40
 // Equivalentes de grasa sin proteína (aceite, aguacate…) que la propuesta intenta no rebasar.
@@ -113,7 +110,7 @@ function suggestEquivalents(targets) {
 }
 
 // Reparte los equivalentes de cada grupo entre los tiempos de comida activos, en medios, según el
-// peso de cada tiempo (desayuno 25 %, comida 35 %, cena 20 %, colaciones 10 %). Lo que no divide
+// peso de cada tiempo (la comida el mayor, luego desayuno y cena, y las colaciones el menor). Lo que no divide
 // exacto se asigna a los tiempos con mayor residuo, así la suma por grupo siempre es el total.
 function suggestDistribution(groups, mealKeys = EQUIVALENT_MEALS.map((meal) => meal.key)) {
   const meals = EQUIVALENT_MEALS.filter((meal) => mealKeys.includes(meal.key))

@@ -10,7 +10,8 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
-import { buildMenuSnapshot, normalizeMealTimes, sanitizeJpeg } from './domain/documents.js'
+import { applyRecipeAdjustments, buildMenuSnapshot, normalizeRecipeAdjustments, sanitizeJpeg } from './domain/documents.js'
+import { normalizeActiveMeals, normalizeMealTimes } from './domain/planMeals.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
 import { normalizeEquivalentPlan } from './domain/equivalents.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
@@ -1514,7 +1515,7 @@ app.patch('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados no pueden modificarse.', fields: {} })
-  const { hydrationNote, recommendations, mealTimes, equivalents } = request.body || {}
+  const { hydrationNote, recommendations, mealTimes, equivalents, activeMeals, recipeAdjustments } = request.body || {}
   const updated = await prisma.nutritionPlan.update({
     where: { id: plan.id },
     data: {
@@ -1523,6 +1524,8 @@ app.patch('/api/v1/plans/:planId', async (request, reply) => {
       ...(mealTimes !== undefined ? { mealTimes: normalizeMealTimes(mealTimes) } : {}),
       // Prisma distingue "no tocar" de "guardar nulo" en columnas Json: sin cálculo se guarda {}.
       ...(equivalents !== undefined ? { equivalents: normalizeEquivalentPlan(equivalents) || {} } : {}),
+      ...(activeMeals !== undefined ? { activeMeals: normalizeActiveMeals(activeMeals) } : {}),
+      ...(recipeAdjustments !== undefined ? { recipeAdjustments: normalizeRecipeAdjustments(recipeAdjustments) } : {}),
     },
   })
   await logAudit(request, { action: 'updated', entity: 'NutritionPlan', entityId: updated.id, patientId: plan.patientId, metadata: { section: 'indicaciones' } })
@@ -1595,7 +1598,8 @@ app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
   // A plan can be half-created (recipes assigned) without ever saving the requirement — the
   // Entrega preview and the PDF would then lack the kcal/macro box. Require the calculation.
   if (plan.targetKcal == null || plan.carbsPercent == null) return reply.code(400).send({ code: 'PLAN_WITHOUT_CALCULATION', message: 'Guarda el cálculo de requerimientos en el paso "Plan alimentario" antes de publicar.', fields: {} })
-  const menuSnapshot = buildMenuSnapshot(plan.mealSlots)
+  // El snapshot congela también las cantidades ajustadas para esta paciente.
+  const menuSnapshot = applyRecipeAdjustments(buildMenuSnapshot(plan.mealSlots), plan.recipeAdjustments)
   await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'PUBLISHED', publishedAt: new Date(), menuSnapshot } })
   await logAudit(request, { action: 'published', entity: 'NutritionPlan', entityId: plan.id, patientId: plan.patientId })
   // Publicar deja el PDF listo para entregar. Si la generación falla, el plan ya quedó publicado y
@@ -2067,10 +2071,10 @@ async function loadPlanMenu(plan) {
     const recipes = await prisma.recipe.findMany({ where: { id: { in: snapshot.map((entry) => entry.recipeId).filter(Boolean) } }, include: recipeInclude })
     const live = buildMenuSnapshot(snapshot.map((entry) => ({ ...entry, recipe: recipes.find((recipe) => recipe.id === entry.recipeId) || null })))
     // El nombre y las kcal congelados mandan sobre los de la receta viva.
-    return live.map((entry) => { const frozen = snapshot.find((item) => item.dayOfWeek === entry.dayOfWeek && item.mealType === entry.mealType); return { ...entry, recipeName: frozen?.recipeName || entry.recipeName, kcal: frozen?.kcal ?? entry.kcal } })
+    return applyRecipeAdjustments(live.map((entry) => { const frozen = snapshot.find((item) => item.dayOfWeek === entry.dayOfWeek && item.mealType === entry.mealType); return { ...entry, recipeName: frozen?.recipeName || entry.recipeName, kcal: frozen?.kcal ?? entry.kcal } }), plan.recipeAdjustments)
   }
   const mealSlots = await prisma.mealSlot.findMany({ where: { planId: plan.id }, include: { recipe: { include: recipeInclude } } })
-  return buildMenuSnapshot(mealSlots)
+  return applyRecipeAdjustments(buildMenuSnapshot(mealSlots), plan.recipeAdjustments)
 }
 
 // Reúne lo que necesita drawNutritionPlan: lo asíncrono (archivos de fotos, medición más reciente)
