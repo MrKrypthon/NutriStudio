@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { EQUIVALENT_GROUPS, buildMealOptions } from './documents.js'
+import { PLAN_MEALS } from './planMeals.js'
+import { planMenus } from './equivalents.js'
 import { EQUIVALENT_LISTS } from './equivalentLists.js'
 
 // Plan de alimentación que se entrega a la paciente: hoja carta apaisada con una tabla de tiempos
@@ -17,6 +19,7 @@ const FIRST_TOP = 108
 const CONTENT_TOP = 96
 const CONTENT_BOTTOM = 519
 
+const DAY_NAMES = { 1: 'lunes', 2: 'martes', 3: 'miércoles', 4: 'jueves', 5: 'viernes', 6: 'sábado', 7: 'domingo' }
 const TEXT = '#1A1A1A'
 const SOFT = '#555555'
 const WAVE_RED = '#F0544F'
@@ -539,6 +542,8 @@ function boundInput(input) {
     licenseNumber: input.licenseNumber ? clip(input.licenseNumber, 40) : null,
     recommendations: clip(input.recommendations, LIMITS.notes),
     hydrationNote: clip(input.hydrationNote, LIMITS.notes),
+    mealLabels: Object.fromEntries(Object.entries(input.mealLabels && typeof input.mealLabels === 'object' ? input.mealLabels : {}).slice(0, 12).map(([key, value]) => [key, clip(value, 28)])),
+    mealNotes: Object.fromEntries(Object.entries(input.mealNotes && typeof input.mealNotes === 'object' ? input.mealNotes : {}).slice(0, 12).map(([key, value]) => [key, clip(value, 600)])),
     contact: (Array.isArray(input.contact) ? input.contact : []).slice(0, LIMITS.contacts).map((item) => ({ kind: item?.kind, text: clip(item?.text, LIMITS.contact) })),
     menu: (Array.isArray(input.menu) ? input.menu : []).slice(0, LIMITS.entries).map((entry) => ({
       ...entry,
@@ -559,24 +564,48 @@ function drawNutritionPlan(file, rawInput) {
   const data = { ...input, logo, images, fonts: registerFonts(file) }
   drawPageChrome(file, data)
   let y = drawPatientLine(file, data, FIRST_TOP)
-  const rows = buildMealOptions(data.menu, data.mealTimes, data.equivalents)
-  if (!rows.length) {
+  // Un plan con varios menús (tipos de día) lleva una tabla por menú: cada una con las recetas de
+  // sus días y las porciones de su propio cuadro de equivalentes.
+  const menus = planMenus(data.equivalents, data.menus)
+  const sections = menus
+    .map((menu) => ({ menu, rows: buildMealOptions((data.menu || []).filter((entry) => menu.days.includes(entry.dayOfWeek)), data.mealTimes, menu.equivalents, data.mealLabels) }))
+    .filter((section) => section.rows.length)
+  if (!sections.length) {
     file.font(data.fonts.regular).fontSize(10.5).fillColor(SOFT).text('Este plan todavía no tiene recetas asignadas.', X0 + 6, y + 10, { lineBreak: false })
-  } else {
+  }
+  sections.forEach((section, index) => {
+    const { rows, menu } = section
+    if (index > 0) y = addPage(file, data)
+    if (sections.length > 1) {
+      // Título del menú con los días en que aplica.
+      const days = menu.days.map((day) => DAY_NAMES[day]).join(', ')
+      file.font(data.fonts.bold).fontSize(10.5).fillColor(TEXT).text(clip(`${menu.name} · ${days}`, 120), X0 + 6, y, { lineBreak: false })
+      y += 16
+    }
     // Cinco columnas de opción, como el formato en papel; con 6 o 7 opciones (una por día) las
     // columnas se angostan y la letra baja para que quepan.
     const columns = Math.min(7, Math.max(...rows.map((row) => row.options.length)))
     const colW = (TABLE_W - TIME_W - PORTION_W) / Math.max(columns, 5)
     const scale = columns <= 5 ? 1 : columns === 6 ? 0.88 : 0.8
-    const layout = { columns, colW, optionX: (index) => X0 + TIME_W + PORTION_W + index * colW, titleSize: 9 * scale, textSize: 8.8 * scale, lineH: 11 * scale }
+    const layout = { columns, colW, optionX: (position) => X0 + TIME_W + PORTION_W + position * colW, titleSize: 9 * scale, textSize: 8.8 * scale, lineH: 11 * scale }
     y = drawTableHeader(file, data, layout, y)
     for (const row of rows) y = drawMealRow(file, data, layout, row, y)
-    y = drawLegend(file, data, y, rows)
-  }
+    if (index === sections.length - 1) y = drawLegend(file, data, y, sections.flatMap((item) => item.rows))
+  })
 
   const agreements = [...splitNotes(data.recommendations), ...splitNotes(data.hydrationNote)]
   y = addPage(file, data) + 16
   if (agreements.length) y = drawParagraphList(file, data, 'Acuerdos y recomendaciones:', agreements, y)
+  // Indicaciones propias de cada tiempo de comida, y los suplementos o bebidas que le tocan.
+  const mealLines = []
+  for (const meal of PLAN_MEALS) {
+    const label = data.mealLabels?.[meal.key] || meal.printLabel
+    const extras = (data.equivalents?.extras || []).filter((extra) => Number(extra.meals?.[meal.key]) > 0).map((extra) => `${formatQuantity(Number(extra.meals[meal.key]))} ${extra.name}`)
+    const note = String(data.mealNotes?.[meal.key] || '').trim()
+    if (extras.length) mealLines.push(`${label}: ${extras.join(', ')}`)
+    for (const line of splitNotes(note)) mealLines.push(`${label}: ${line}`)
+  }
+  if (mealLines.length) y = drawParagraphList(file, data, 'Indicaciones por tiempo de comida:', mealLines, y)
   drawParagraphList(file, data, 'Instrucciones:', DEFAULT_INSTRUCTIONS, y)
 
   drawEquivalentPages(file, data)

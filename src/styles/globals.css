@@ -1397,3 +1397,49 @@ textarea{field-sizing:content;max-height:340px;overflow-y:auto}
 .smae-field.flagged input{border-color:#e0a81f;background:#fffaf0}.smae-field.edited input{border-color:var(--green)}
 .smae-flag{display:block;color:#8a5b00;font-size:10px;line-height:1.4;margin-top:4px}
 .smae-flag button{border:1px solid #e0a81f;background:#fff;border-radius:10px;padding:1px 8px;margin-left:4px;font-size:10px;color:#6b4700;cursor:pointer}
+
+/* Receta por equivalentes dentro del ajuste de porciones (Constructor de plan). */
+.recipe-adjust-modal{width:min(780px,calc(100% - 32px))}
+.adjust-modes{display:inline-flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;margin-bottom:12px}
+.adjust-modes button{border:0;background:#fff;padding:7px 14px;font-size:11px;color:var(--muted);cursor:pointer}.adjust-modes button.selected{background:var(--green);color:#fff;font-weight:600}
+.req-compare{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 8px}
+.req-table{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.req-row{display:grid;grid-template-columns:74px minmax(110px,1fr) minmax(130px,1.4fr) minmax(110px,1.1fr) 150px;align-items:center;gap:10px;padding:7px 11px;font-size:11px;border-top:1px solid var(--line);color:var(--ink)}
+.req-row.req-head{border-top:0;background:#fafafc;font:600 9px 'DM Mono';text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
+.req-row input{width:100%;border:1px solid var(--line);border-radius:7px;height:28px;text-align:center;font:600 12px 'DM Sans';color:var(--ink)}
+.req-row .req-group{font-size:10px;color:var(--muted)}.req-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+.req-actions .secondary{padding:5px 9px;font-size:10px;white-space:nowrap}.req-actions .link-button{font-size:15px;line-height:1}
+.req-empty{padding:12px}
+.req-picker{border:1px solid var(--green);border-radius:10px;padding:11px 13px;margin-top:10px;background:#fff}
+.req-picker-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px}
+.req-picker-list{list-style:none;margin:8px 0 0;padding:0;max-height:210px;overflow:auto;border-top:1px solid var(--line)}
+.req-picker-list button{display:flex;justify-content:space-between;gap:12px;width:100%;border:0;border-bottom:1px solid var(--line);background:none;padding:7px 4px;font-size:11px;cursor:pointer;text-align:left;color:var(--ink)}
+.req-picker-list button:hover{background:var(--mint)}.req-picker-list b{font-weight:500}.req-picker-list span{color:var(--muted);white-space:nowrap}
+.req-editor .adjust-tools .req-save{margin-left:auto}
+
+/* Constructor: aporte por tiempo, suplementos/bebidas, nombre propio de un tiempo y agua por kg. */
+.eq-meal-totals{background:#fafafc;border-top:2px solid var(--line)}.eq-meal-total b{display:block;font-size:11px;color:var(--ink)}.eq-meal-total small{display:block;font-size:9px;color:var(--muted)}
+.eq-extras{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+.eq-extra{display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)}
+.eq-extra input{border:1px solid var(--line);border-radius:7px;height:28px;padding:0 8px;font-size:11px;color:var(--ink)}
+.eq-extra .eq-extra-name{flex:1 1 180px;min-width:150px}
+.eq-extra label{display:flex;flex-direction:column;gap:3px;margin:0}.eq-extra label>small{font:600 8px 'DM Mono';text-transform:uppercase;color:var(--muted)}
+.eq-extra label>input{width:58px;text-align:center}.eq-extra-meals{display:flex;gap:6px;flex-wrap:wrap}.eq-extra-meals label{width:74px}
+.meal-chip .meal-chip-name{border:0;background:none;font:inherit;color:inherit;cursor:pointer;padding:0}.meal-chip .meal-chip-name:hover{color:var(--green)}
+.water-helper{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:10px;color:var(--muted);margin-top:6px;font-weight:400}
+.water-helper input{width:54px;border:1px solid var(--line);border-radius:7px;height:24px;text-align:center;font-size:11px}
+.meal-notes{margin-top:14px}.meal-notes textarea{min-height:48px}
+
+/* Constructor: menús del plan (tipos de día) sobre el paso Equivalentes. */
+.menu-tabs{padding:12px 16px;margin-bottom:12px}
+.menu-tabs-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.menu-tabs-row .eyebrow{margin:0 6px 0 0}
+.menu-tabs-row button{border:1px solid var(--line);background:#fff;border-radius:16px;padding:6px 13px;font-size:11px;color:var(--muted);cursor:pointer}
+.menu-tabs-row button.selected{border-color:var(--green);background:var(--green);color:#fff;font-weight:600}.menu-tabs-row button.menu-add{border-style:dashed;color:var(--green)}
+.menu-tabs>small{display:block;margin-top:8px;font-size:10px;line-height:1.45}
+.menu-settings{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+.menu-settings label{display:flex;flex-direction:column;gap:4px;font-size:10px;color:var(--muted);margin:0}
+.menu-settings input[type=number],.menu-settings label>input:not([type=checkbox]){border:1px solid var(--line);border-radius:7px;height:30px;padding:0 9px;font-size:11px;color:var(--ink)}
+.menu-settings input[type=number]{width:96px}
+.menu-days small{display:block;font-size:10px;color:var(--muted);margin-bottom:4px}.menu-days>div{display:flex;gap:4px}
+.menu-days label{flex-direction:row;align-items:center;gap:4px;border:1px solid var(--line);border-radius:14px;padding:5px 9px;cursor:pointer;color:var(--ink)}.menu-days label.on{border-color:var(--green);background:var(--mint)}
+.menu-days input{accent-color:var(--green);margin:0}.menu-target{font-size:10px;flex:1 1 220px}

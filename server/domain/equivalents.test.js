@@ -93,3 +93,23 @@ describe('tables', () => {
     for (const meal of EQUIVALENT_MEALS) expect(meal.share).toBeGreaterThan(0)
   })
 })
+
+describe('extras and menus', () => {
+  it('counts supplement rows in the day and in their meal', async () => {
+    const { extrasTotals, addTotals, normalizeEquivalentPlan } = await import('./equivalents.js')
+    const plan = normalizeEquivalentPlan({ groups: { V: 1 }, extras: [{ id: 'a', name: ' Proteína en polvo ', kcal: 160, protein: 31, fat: 3, carbs: 2.3, meals: { snack: 1, brunch: 3 } }, { name: '' }] })
+    expect(plan.extras).toEqual([{ id: 'a', name: 'Proteína en polvo', kcal: 160, protein: 31, fat: 3, carbs: 2.3, meals: { snack: 1 } }])
+    expect(extrasTotals(plan.extras)).toEqual({ kcal: 160, protein: 31, fat: 3, carbs: 2.3 })
+    expect(extrasTotals(plan.extras, 'lunch').kcal).toBe(0)
+    expect(addTotals({ kcal: 25, protein: 2, fat: 0, carbs: 4 }, extrasTotals(plan.extras)).kcal).toBe(185)
+  })
+
+  it('gives each extra menu its days and leaves the rest to the base menu', async () => {
+    const { planMenus, normalizeMenus } = await import('./equivalents.js')
+    const menus = [{ id: 't', name: 'Entrenamiento', days: [1, 3, 5, 9], kcalDelta: 200, equivalents: { groups: { C_SG: 8 } } }, { name: 'Fin de semana', days: [5, 6, 7], kcalDelta: 99999 }, { name: '' }]
+    const clean = normalizeMenus(menus)
+    expect(clean.map((menu) => [menu.name, menu.days, menu.kcalDelta])).toEqual([['Entrenamiento', [1, 3, 5], 200], ['Fin de semana', [6, 7], 1500]])
+    expect(planMenus({ groups: { V: 4 } }, menus).map((menu) => [menu.id, menu.days])).toEqual([['base', [2, 4]], ['t', [1, 3, 5]], ['m1', [6, 7]]])
+    expect(planMenus(null, null).map((menu) => menu.days)).toEqual([[1, 2, 3, 4, 5, 6, 7]])
+  })
+})

@@ -3,6 +3,7 @@ import { scaleIngredientLine } from '../../lib/ingredientLines.js'
 import { adjustmentFactor, adjustmentKey } from '../../../server/domain/documents.js'
 import { EQUIVALENT_TABLE, equivalentTotals } from '../../../server/domain/equivalents.js'
 import { backdropClose, clampFactor, formatFactor, scaledRecipeLines } from './planAdjustments.js'
+import RecipeEquivalentsEditor from './RecipeEquivalentsEditor.jsx'
 
 const formatCount = (value) => { const number = Number(value) || 0; return Number.isInteger(number) ? String(number) : number.toFixed(1) }
 const roundQuarter = (value) => Math.round(value * 4) / 4
@@ -38,6 +39,12 @@ export default function RecipeAdjustModal({ meal, recipes, servings, adjustments
   // Siempre respecto a la receta ORIGINAL: aplicarlo dos veces da el mismo resultado.
   const suggestedFactor = prescribedKcal > 0 && recipeKcal > 0 ? Math.max(0.25, roundQuarter(prescribedKcal / recipeKcal)) : null
 
+  // Una receta con ingredientes del catálogo se edita por equivalentes (porciones por grupo, con
+  // intercambio); las que sólo tienen su texto de ingredientes, renglón por renglón.
+  const canUseEquivalents = Boolean(recipe?.ingredients?.some((link) => link.ingredient))
+  const [modes, setModes] = useState({})
+  const [editorDirty, setEditorDirty] = useState(false)
+  const mode = recipe ? modes[recipe.id] || (canUseEquivalents && (!saved || saved.items?.length) ? 'equivalents' : 'text') : 'text'
   if (!recipe) return null
   const applySuggested = () => setDraft({ text: scaledRecipeLines(recipe, servings, suggestedFactor).join('\n'), factor: clampFactor(suggestedFactor) })
   const multiplyBy = (value) => {
@@ -63,12 +70,15 @@ export default function RecipeAdjustModal({ meal, recipes, servings, adjustments
     const itemBase = (itemSaved?.lines || scaledRecipeLines(item, servings)).join('\n')
     return toLines(itemDraft.text).join('\n') !== itemBase || itemDraft.factor !== adjustmentFactor(adjustments, meal.key, item.id)
   })
-  const close = () => { if (!locked && hasUnsaved && !window.confirm('Hay cantidades sin guardar. ¿Cerrar sin guardarlas?')) return; onClose() }
+  const close = () => { if (!locked && (hasUnsaved || editorDirty) && !window.confirm('Hay cantidades sin guardar. ¿Cerrar sin guardarlas?')) return; onClose() }
 
   return <div className="modal-backdrop" {...backdropClose(close)}><div className="modal recipe-adjust-modal">
     <div className="modal-head"><div><p className="eyebrow">AJUSTAR PORCIONES · {meal.label.toUpperCase()}</p><h2>{recipe.name}</h2><span className="modal-subtitle">Sólo cambia en este plan. La receta original del catálogo no se modifica.</span></div><button type="button" onClick={close} aria-label="Cerrar">×</button></div>
     {recipes.length > 1 && <div className="adjust-recipes">{recipes.map((item) => <button type="button" key={item.id} className={item.id === recipe.id ? 'selected' : ''} onClick={() => setRecipeId(item.id)}>{item.name}{adjustments?.[adjustmentKey(meal.key, item.id)] ? ' ✓' : ''}</button>)}</div>}
 
+    {canUseEquivalents && <div className="adjust-modes"><button type="button" className={mode === 'equivalents' ? 'selected' : ''} onClick={() => setModes((prev) => ({ ...prev, [recipe.id]: 'equivalents' }))}>Por equivalentes</button><button type="button" className={mode === 'text' ? 'selected' : ''} onClick={() => { setEditorDirty(false); setModes((prev) => ({ ...prev, [recipe.id]: 'text' })) }}>Texto libre</button></div>}
+    {mode === 'equivalents' && <RecipeEquivalentsEditor key={`${recipe.id}-${saved?.items?.length || 0}`} recipe={recipe} servings={servings} saved={saved} prescribed={prescribed} mealLabel={meal.label} locked={locked} onDirtyChange={setEditorDirty} onSave={(adjustment) => { onSave(recipe.id, adjustment); setEditorDirty(false) }} />}
+    {mode === 'text' && <>
     <div className="adjust-guide">
       {prescribedGroups.length > 0
         ? <p><b>Calculado para {meal.label}:</b> {prescribedGroups.map((group) => `${formatCount(prescribed[group.code])} ${group.label}${group.sub ? ` (${group.sub.toLowerCase()})` : ''}`).join(' · ')} — {Math.round(prescribedKcal)} kcal.</p>
@@ -87,6 +97,8 @@ export default function RecipeAdjustModal({ meal, recipes, servings, adjustments
     </div>}
     <p className="muted adjust-status">{isAdjusted ? '✓ Esta receta tiene cantidades ajustadas en este plan.' : 'Sin ajustes: se muestran las cantidades de la receta original.'} <b>Factor aplicado: ×{formatFactor(factor)}</b>{factor !== 1 ? ' — las kcal y macros de la receta se cuentan con ese factor en la adecuación del plan.' : ''}</p>
 
-    <div className="modal-actions"><button type="button" className="secondary" onClick={close}>Cerrar</button>{!locked && <button type="button" className="primary" disabled={!dirty} onClick={save}>Guardar ajuste</button>}</div>
+    </>}
+
+    <div className="modal-actions"><button type="button" className="secondary" onClick={close}>Cerrar</button>{!locked && mode === 'text' && <button type="button" className="primary" disabled={!dirty} onClick={save}>Guardar ajuste</button>}</div>
   </div></div>
 }

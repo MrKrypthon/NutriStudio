@@ -154,9 +154,77 @@ function normalizeEquivalentPlan(value) {
     const counts = cleanGroups(value.distribution?.[meal.key])
     if (Object.keys(counts).length) distribution[meal.key] = counts
   }
-  if (!Object.keys(groups).length && !Object.keys(distribution).length) return null
-  return { groups, distribution }
+  const extras = normalizeExtras(value.extras)
+  if (!Object.keys(groups).length && !Object.keys(distribution).length && !extras.length) return null
+  return { groups, distribution, ...(extras.length ? { extras } : {}) }
 }
+
+// Renglones propios del plan que no son un grupo de equivalentes: un suplemento, una bebida. Cada
+// uno trae su aporte por porción y cuántas porciones tocan en cada tiempo de comida:
+// { id, name, kcal, protein, fat, carbs, meals: { <tiempo>: n } }.
+const MAX_EXTRAS = 8
+function normalizeExtras(value) {
+  if (!Array.isArray(value)) return []
+  const number = (input, max) => { const parsed = Number(input); return Number.isFinite(parsed) && parsed >= 0 ? Math.min(max, Math.round(parsed * 10) / 10) : 0 }
+  const result = []
+  for (const raw of value.slice(0, MAX_EXTRAS)) {
+    const name = typeof raw?.name === 'string' ? raw.name.trim().slice(0, 60) : ''
+    if (!name) continue
+    const meals = {}
+    for (const meal of EQUIVALENT_MEALS) {
+      const count = toHalf(raw.meals?.[meal.key])
+      if (count > 0) meals[meal.key] = count
+    }
+    result.push({ id: String(raw.id || `x${result.length}`).replace(/[^a-z0-9]/gi, '').slice(0, 12) || `x${result.length}`, name, kcal: number(raw.kcal, 2000), protein: number(raw.protein, 300), fat: number(raw.fat, 300), carbs: number(raw.carbs, 500), meals })
+  }
+  return result
+}
+
+// Aporte de los renglones propios: de todo el día, o sólo de un tiempo de comida.
+function extrasTotals(extras, mealKey = null) {
+  const totals = { kcal: 0, protein: 0, fat: 0, carbs: 0 }
+  for (const extra of extras || []) {
+    const count = mealKey ? Number(extra.meals?.[mealKey]) || 0 : Object.values(extra.meals || {}).reduce((sum, value) => sum + (Number(value) || 0), 0)
+    for (const key of Object.keys(totals)) totals[key] += count * (Number(extra[key]) || 0)
+  }
+  return Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, round1(value)]))
+}
+
+// Menús adicionales de un plan ("Día de entrenamiento", "Fin de semana"): cada uno con sus días de
+// la semana, su ajuste de energía respecto al requerimiento del plan y su propio cuadro de
+// equivalentes. El menú base es `plan.equivalents` y cubre los días que ningún otro reclama.
+const MAX_MENUS = 4
+function normalizeMenus(value) {
+  if (!Array.isArray(value)) return []
+  const taken = new Set()
+  const result = []
+  for (const raw of value.slice(0, MAX_MENUS)) {
+    const name = typeof raw?.name === 'string' ? raw.name.trim().replace(/\s+/g, ' ').slice(0, 40) : ''
+    if (!name) continue
+    // Un día pertenece a un solo menú: gana el primero que lo pide.
+    const days = [...new Set((Array.isArray(raw.days) ? raw.days : []).map(Number).filter((day) => Number.isInteger(day) && day >= 1 && day <= 7 && !taken.has(day)))].sort()
+    days.forEach((day) => taken.add(day))
+    const delta = Math.round(Number(raw.kcalDelta))
+    result.push({
+      id: String(raw.id || `m${result.length}`).replace(/[^a-z0-9]/gi, '').slice(0, 12) || `m${result.length}`,
+      name,
+      days,
+      kcalDelta: Number.isFinite(delta) ? Math.max(-1500, Math.min(1500, delta)) : 0,
+      equivalents: normalizeEquivalentPlan(raw.equivalents) || { groups: {}, distribution: {} },
+    })
+  }
+  return result
+}
+
+// Los menús de un plan con los días que le tocan a cada uno, empezando por el base.
+function planMenus(equivalents, menus) {
+  const extra = normalizeMenus(menus)
+  const claimed = new Set(extra.flatMap((menu) => menu.days))
+  const base = { id: 'base', name: 'Menú base', days: [1, 2, 3, 4, 5, 6, 7].filter((day) => !claimed.has(day)), kcalDelta: 0, equivalents: equivalents || null }
+  return [base, ...extra]
+}
+
+const addTotals = (a, b) => Object.fromEntries(['kcal', 'protein', 'fat', 'carbs'].map((key) => [key, round1((Number(a?.[key]) || 0) + (Number(b?.[key]) || 0))]))
 
 // Porciones de un tiempo de comida como las muestra el plan impreso: un círculo por grupo, con
 // cereales, leches y azúcares sumados en el suyo.
@@ -173,4 +241,5 @@ export {
   EQUIVALENT_TABLE, EQUIVALENT_BY_CODE, EQUIVALENT_MEALS, CATALOG_GROUP,
   macroTargets, equivalentTotals, equivalentAdequacy, adequacyStatus,
   suggestEquivalents, suggestDistribution, remainingEquivalents, normalizeEquivalentPlan, mealBadgePortions, toHalf,
+  normalizeExtras, extrasTotals, addTotals, normalizeMenus, planMenus,
 }
