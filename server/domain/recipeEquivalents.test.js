@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareWithMeal, deriveEquivalence, equivalentCodeForGroup, fitItemsToMeal, itemFromIngredient, itemLine, itemPortions, itemsEquivalents, itemsMacros, normalizeItems, recipeItems, setItemPortions, swapItem } from './recipeEquivalents.js'
+import { catalogGroupForCode, compareWithMeal, deriveEquivalence, equivalentCodeForGroup, fitItemsToMeal, itemFromIngredient, itemLine, itemPortions, itemsEquivalents, itemsMacros, normalizeItems, recipeItems, setItemPortions, swapItem } from './recipeEquivalents.js'
 
 const ingredient = (name, group, serving, grams, nutrition = {}) => ({ id: '0f64b6b4-7599-4bdc-8e31-3492605d3499', name, group, equivalence: { group, serving, grams, source: 'SMAE' }, nutrition: { kcal: 0, protein: 0, carbs: 0, fat: 0, ...nutrition } })
 const panela = ingredient('Queso panela', 'AOA BAG', '40 g', 40, { kcal: 137.5, protein: 17.5, carbs: 0, fat: 7.5 })
@@ -114,5 +114,12 @@ describe('deriveEquivalence for foods that do not come from the SMAE', () => {
     expect(deriveEquivalence({ group: 'Frutas', nutrition: { kcal: 52, carbs: 14 }, equivalence: { group: 'Frutas', serving: '1 pieza', grams: 106, source: 'SMAE' } })).toEqual({ code: 'F', gramsPerEq: 106, serving: '1 pieza', basis: 'smae' })
     // Una especia "clasificada" como verdura: 25 kcal serían 8 g… pero con 2 kcal/100 g serían 1.25 kg.
     expect(deriveEquivalence(food('Verduras', { kcal: 2, protein: 0, carbs: 0.5, fat: 0 }, { source: 'APROX_500' })).code).toBeNull()
+  })
+})
+
+describe('catalogGroupForCode', () => {
+  it('names the catalog group of every code of the equivalents table', async () => {
+    const { EQUIVALENT_TABLE } = await import('./equivalents.js')
+    for (const group of EQUIVALENT_TABLE) expect(equivalentCodeForGroup(catalogGroupForCode(group.code)), group.code).toBe(group.code)
   })
 })

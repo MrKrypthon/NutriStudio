@@ -57,6 +57,11 @@ function subgroupFor(family, n) {
   return family
 }
 
+// Código del cuadro → grupo del catálogo de Ingredientes (los nombres del SMAE). Sirve para buscar
+// con qué intercambiar un alimento que no viene del SMAE: por su grupo de equivalentes.
+const CATALOG_GROUP_BY_CODE = { V: 'Verduras', F: 'Frutas', C_SG: 'Cereales S/G', C_CG: 'Cereales C/G', LEG: 'Leguminosas', AOA_MB: 'AOA MBAG', AOA_B: 'AOA BAG', AOA_M: 'AOA MAG', AOA_A: 'AOA AAG', LAC_D: 'Leche descremada', LAC_S: 'Leche semidescremada', LAC_E: 'Leche entera', LAC_A: 'Leche con azúcar', G_SP: 'Grasas sin proteínas', G_CP: 'Grasas con proteínas', AZ_SG: 'Azucares sin grasa', AZ_CG: 'Azucares con grasa' }
+const catalogGroupForCode = (code) => CATALOG_GROUP_BY_CODE[code] || null
+
 // Grupo de un alimento del que sólo se conoce la composición (sin grupo SMAE reconocible), por de
 // dónde viene su energía. Es una aproximación: sirve para que un alimento importado cuente en el
 // grupo más parecido, no para clasificarlo oficialmente.
@@ -254,4 +259,4 @@ function normalizeItems(value) {
   return result
 }
 
-export { deriveEquivalence, familyOf, familyTotals, FAMILY_LABELS, FAMILY_ORDER, equivalentCodeForGroup, itemFromIngredient, itemPortions, recipeItems, itemLine, itemsEquivalents, itemsMacros, compareWithMeal, fitItemsToMeal, swapItem, setItemPortions, normalizeItems }
+export { catalogGroupForCode, deriveEquivalence, familyOf, familyTotals, FAMILY_LABELS, FAMILY_ORDER, equivalentCodeForGroup, itemFromIngredient, itemPortions, recipeItems, itemLine, itemsEquivalents, itemsMacros, compareWithMeal, fitItemsToMeal, swapItem, setItemPortions, normalizeItems }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ingredientsApi } from '../../lib/api.js'
 import { EQUIVALENT_BY_CODE } from '../../../server/domain/equivalents.js'
-import { compareWithMeal, fitItemsToMeal, itemFromIngredient, itemLine, itemPortions, itemsMacros, recipeItems, setItemPortions, swapItem } from '../../../server/domain/recipeEquivalents.js'
+import { catalogGroupForCode, compareWithMeal, fitItemsToMeal, itemFromIngredient, itemLine, itemPortions, itemsMacros, recipeItems, setItemPortions, swapItem } from '../../../server/domain/recipeEquivalents.js'
 import { clampFactor } from './planAdjustments.js'
 
 const formatCount = (value) => { const number = Math.round((Number(value) || 0) * 100) / 100; return Number.isInteger(number) ? String(number) : String(number) }
@@ -38,18 +38,24 @@ function IngredientPicker({ group, title, onPick, onCancel }) {
 // La receta por equivalentes: cada ingrediente del catálogo con sus porciones de grupo, editable,
 // con "Intercambiar" (otro alimento del mismo grupo) y "Ajustar a las porciones" (lleva cada grupo
 // de la receta a lo calculado para el tiempo de comida). Sólo cambia en este plan.
-export default function RecipeEquivalentsEditor({ recipe, servings, saved, prescribed, mealLabel, locked, onSave, onDirtyChange }) {
+//
+// Con `live` no hay botón de guardar: cada cambio se avisa con `onChange(items)` y quien lo usa
+// decide cuándo se guarda (la galería de recetas, al dar "Continuar").
+export default function RecipeEquivalentsEditor({ recipe, servings, saved, prescribed, mealLabel, locked, live = false, onSave, onChange, onDirtyChange }) {
   const original = useMemo(() => recipeItems(recipe, servings), [recipe, servings])
-  const [items, setItems] = useState(() => (saved?.items?.length ? saved.items : original))
+  const [items, setItemsState] = useState(() => (saved?.items?.length ? saved.items : original))
   const [picker, setPicker] = useState(null)
   const baseline = saved?.items?.length ? saved.items : original
   const dirty = !sameItems(items, baseline)
   useEffect(() => { onDirtyChange?.(dirty) }, [dirty])
+  // Todo cambio pasa por aquí para que en modo `live` se avise sólo de lo que hizo la nutrióloga.
+  const setItems = (next) => setItemsState((prev) => { const value = typeof next === 'function' ? next(prev) : next; if (live) queueMicrotask(() => onChange?.(value)); return value })
 
   const comparison = compareWithMeal(items, prescribed)
   const macros = itemsMacros(items)
   const originalMacros = useMemo(() => itemsMacros(original), [original])
   const hasPrescription = comparison.rows.some((row) => row.target > 0)
+  const isOriginal = sameItems(items, original)
   const update = (index, next) => setItems((prev) => prev.map((item, position) => (position === index ? next : item)))
   const remove = (index) => setItems((prev) => prev.filter((_, position) => position !== index))
   const pick = (ingredient) => {
@@ -68,26 +74,35 @@ export default function RecipeEquivalentsEditor({ recipe, servings, saved, presc
   }
 
   return <div className="req-editor">
-    <div className="adjust-guide">
-      {hasPrescription
-        ? <><p><b>{comparison.fits ? `✓ La receta cumple con las porciones de ${mealLabel}.` : `La receta no coincide con las porciones de ${mealLabel}:`}</b></p>
-          <div className="req-compare">{comparison.rows.map((row) => <span key={row.code} className={'eq-chip ' + (row.status === 'ok' ? 'ok' : row.status === 'low' ? 'low' : 'high')} title={row.label}>{row.label}: {formatCount(row.actual)}{row.target ? ` de ${formatCount(row.target)}` : ''} · {STATUS_TEXT[row.status]}</span>)}</div></>
-        : <p className="muted">Este tiempo de comida no tiene equivalentes repartidos (paso Equivalentes): puedes editar las porciones a mano.</p>}
-      <p className="muted">Aporte con estas cantidades: <b>{Math.round(macros.kcal)} kcal</b> · P {formatCount(macros.protein)} g · HC {formatCount(macros.carbs)} g · L {formatCount(macros.fat)} g{Math.round(originalMacros.kcal) !== Math.round(macros.kcal) ? ` (la receta original: ${Math.round(originalMacros.kcal)} kcal)` : ''}.</p>
+    <div className={'req-notice' + (hasPrescription && !comparison.fits ? ' off' : '')}>
+      <span className="req-notice-icon">{hasPrescription && comparison.fits ? '✓' : hasPrescription ? '!' : 'i'}</span>
+      <div>
+        {hasPrescription
+          ? <><p><b>{comparison.fits ? `La receta cumple con tus porciones de ${mealLabel}; puedes editarla.` : `La receta no coincide con tus porciones de ${mealLabel}.`}</b></p>
+            <div className="req-compare">{comparison.rows.map((row) => <span key={row.code} className={'eq-chip ' + (row.status === 'ok' ? 'ok' : row.status === 'low' ? 'low' : 'high')} title={row.label}>{row.label}: {formatCount(row.actual)}{row.target ? ` de ${formatCount(row.target)}` : ''} · {STATUS_TEXT[row.status]}</span>)}</div></>
+          : <p>Este tiempo de comida no tiene equivalentes repartidos (paso Equivalentes): puedes editar las porciones a mano.</p>}
+        <p className="muted">Aporte con estas cantidades: <b>{Math.round(macros.kcal)} kcal</b> · P {formatCount(macros.protein)} g · HC {formatCount(macros.carbs)} g · L {formatCount(macros.fat)} g{Math.round(originalMacros.kcal) !== Math.round(macros.kcal) ? ` (la receta original: ${Math.round(originalMacros.kcal)} kcal)` : ''}.</p>
+      </div>
+      {!locked && hasPrescription && !comparison.fits && <button type="button" className="secondary req-fit" onClick={() => setItems(fitItemsToMeal(items, prescribed))}>✦ Ajustar a mis porciones</button>}
     </div>
 
-    <div className="req-table">
-      <div className="req-row req-head"><span>Porciones</span><span>Grupo</span><span>Alimento</span><span>Cantidad</span><span /></div>
+    <div className="req-title"><b>Ingredientes</b>{!locked && <button type="button" className="secondary" disabled={isOriginal} onClick={() => setItems(original)} title="Vuelve a las cantidades de la receta original">Distribución original</button>}</div>
+    <small className="req-caption">Porciones</small>
+    <div className="req-list">
       {items.map((item, index) => {
         const portions = itemPortions(item)
-        return <div className="req-row" key={`${item.ingredientId || item.name}-${index}`}>
-          {item.gramsPerEq
-            ? <input type="number" min="0.25" max="40" step="0.25" disabled={locked} value={portions ?? ''} aria-label={`Porciones de ${item.name}`} onChange={(event) => update(index, setItemPortions(item, event.target.value))} />
-            : <input type="number" min="1" max="5000" step="1" disabled={locked} value={item.grams} aria-label={`Gramos de ${item.name}`} title="Este alimento no tiene medida de equivalente: se edita en gramos" onChange={(event) => update(index, { ...item, grams: Math.max(0, Number(event.target.value) || 0) })} />}
-          <span className="req-group">{item.code ? groupLabel(item.code) : <i className="muted">{item.catalogGroup || 'Sin grupo'}</i>}{item.code && item.basis && item.basis !== 'smae' && <small className="req-basis" title={item.basis === 'calculada' ? 'Este alimento no viene del SMAE: su equivalente se calculó con su composición (lo que aporta por 100 g).' : 'Este alimento no trae grupo: el grupo y su equivalente se estimaron con su composición. Conviene revisarlo.'}>{item.basis === 'calculada' ? 'calculado' : 'estimado'}</small>}</span>
-          <b>{item.name}</b>
-          <span className="muted">{itemLine(item).replace(` de ${item.name}`, '')}</span>
-          {!locked && <span className="req-actions"><button type="button" className="secondary" onClick={() => setPicker({ index, group: item.catalogGroup || null })}>⇄ Intercambiar</button><button type="button" className="link-button" onClick={() => remove(index)} aria-label={`Quitar ${item.name}`} title="Quitar">×</button></span>}
+        return <div className="req-item" key={`${item.ingredientId || item.name}-${index}`}>
+          <div className="req-qty">
+            {item.gramsPerEq
+              ? <input type="number" min="0.25" max="40" step="0.25" disabled={locked} value={portions ?? ''} aria-label={`Porciones de ${item.name}`} onChange={(event) => update(index, setItemPortions(item, event.target.value))} />
+              : <input type="number" min="1" max="5000" step="1" disabled={locked} value={item.grams} aria-label={`Gramos de ${item.name}`} title="Este alimento no tiene medida de equivalente: se edita en gramos" onChange={(event) => update(index, { ...item, grams: Math.max(0, Number(event.target.value) || 0) })} />}
+            <small>{item.code ? groupLabel(item.code) : (item.catalogGroup || 'Sin grupo · gramos')}</small>
+          </div>
+          <div className="req-food">
+            <b>{item.name}{item.code && item.basis && item.basis !== 'smae' && <small className="req-basis" title={item.basis === 'calculada' ? 'Este alimento no viene del SMAE: su equivalente se calculó con su composición (lo que aporta por 100 g).' : 'Este alimento no trae grupo: el grupo y su equivalente se estimaron con su composición. Conviene revisarlo.'}>{item.basis === 'calculada' ? 'calculado' : 'estimado'}</small>}</b>
+            <small>{itemLine(item).replace(` de ${item.name}`, '')}</small>
+          </div>
+          {!locked && <span className="req-actions"><button type="button" className="secondary" onClick={() => setPicker({ index, group: catalogGroupForCode(item.code) || item.catalogGroup || null })}>⇄ Intercambiar</button><button type="button" className="req-remove" onClick={() => remove(index)} aria-label={`Quitar ${item.name}`} title="Quitar">🗑</button></span>}
         </div>
       })}
       {items.length === 0 && <p className="muted req-empty">La receta quedó sin ingredientes.</p>}
@@ -96,10 +111,8 @@ export default function RecipeEquivalentsEditor({ recipe, servings, saved, presc
     {picker && <IngredientPicker group={picker.index === 'new' ? null : picker.group} title={picker.index === 'new' ? 'Agregar un alimento del catálogo' : `Intercambiar ${items[picker.index]?.name} por otro de su grupo`} onPick={pick} onCancel={() => setPicker(null)} />}
 
     {!locked && <div className="adjust-tools">
-      {hasPrescription && !comparison.fits && <button type="button" className="secondary" onClick={() => setItems(fitItemsToMeal(items, prescribed))}>✦ Ajustar a las porciones de {mealLabel}</button>}
-      <button type="button" className="secondary" onClick={() => setPicker({ index: 'new', group: null })}>+ Agregar alimento</button>
-      <button type="button" className="link-button" onClick={() => setItems(original)}>Volver a la receta original</button>
-      <button type="button" className="primary req-save" disabled={!dirty} onClick={save}>Guardar para este plan</button>
+      <button type="button" className="secondary req-add" onClick={() => setPicker({ index: 'new', group: null })}>+ Agregar ingrediente</button>
+      {!live && <button type="button" className="primary req-save" disabled={!dirty} onClick={save}>Guardar para este plan</button>}
     </div>}
   </div>
 }

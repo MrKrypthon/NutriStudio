@@ -699,13 +699,14 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   // distinto de 1 entra con sus cantidades ya ajustadas (lo mismo que "Ajustar al cálculo").
   const applySuggestions = (meal, picks) => {
     if (planLocked || !picks.length) return
-    if (mealHasRecipes(meal.key) && !window.confirm(`"${meal.label}" ya tiene recetas en la semana: se reemplazan por las ${picks.length} seleccionadas y se quitan sus ajustes de cantidades. ¿Continuar?`)) return
     const used = picks.slice(0, DAYS.length)
     const nextSlots = { ...slots }
     DAYS.forEach((day, index) => { nextSlots[slotKey(day.n, meal.key)] = used[index % used.length].recipe.id })
     const servings = mealServingsFor(meal.key)
     const adjustments = { ...(notesForm.recipeAdjustments || {}) }
     for (const pick of used) {
+      // Ya estaba en la semana y no se tocó en la galería: conserva el ajuste que tenía.
+      if (pick.keep) continue
       const key = adjustmentKey(meal.key, pick.recipe.id)
       // Sugerida por grupos: entra ya ajustada a las porciones del tiempo, ingrediente por ingrediente.
       if (pick.items?.length) adjustments[key] = { lines: pick.items.map(itemLine), factor: clampFactor(pick.factor), items: pick.items }
@@ -1058,7 +1059,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
             <label className="meal-time-field"><small>Hora</small><input type="time" disabled={planLocked} value={notesForm.mealTimes?.[meal.key] || ''} onChange={(event) => updateNotes('mealTimes', { ...notesForm.mealTimes, [meal.key]: event.target.value })} aria-label={`Hora de ${meal.label}`} />{!planLocked && !notesForm.mealTimes?.[meal.key] && <button type="button" className="time-suggestion" onClick={() => updateNotes('mealTimes', { ...notesForm.mealTimes, [meal.key]: mealSuggestion.times[meal.key] })} title={mealSuggestion.stated.includes(meal.key) ? 'Hora que mencionó la paciente en la consulta' : 'Hora habitual sugerida'}>{mealSuggestion.stated.includes(meal.key) ? 'Consulta' : 'Sugerida'}: {formatMealTime(mealSuggestion.times[meal.key])}</button>}</label>
             <div className="portion-stepper"><small>Porciones</small><div><button type="button" disabled={planLocked} onClick={() => changeServings(meal.key, -0.5)} aria-label={`Menos porciones de ${meal.label}`}>−</button><b>{mealServingsFor(meal.key)}</b><button type="button" disabled={planLocked} onClick={() => changeServings(meal.key, 0.5)} aria-label={`Más porciones de ${meal.label}`}>+</button></div></div>
             <button type="button" className="secondary" disabled={planLocked} onClick={() => openPicker(meal.key)}>{base ? 'Cambiar' : 'Elegir receta'}</button>
-            <button type="button" className="secondary suggest-button" disabled={planLocked} onClick={() => setSuggestMeal(meal)} title="Propone recetas que se acercan a lo calculado para este tiempo de comida">✦ Sugerir recetas</button>
+            <button type="button" className="secondary suggest-button" disabled={planLocked} onClick={() => setSuggestMeal(meal)} title="Abre las recetas de este tiempo, ordenadas por lo que se le repartió, para elegir las de la semana">✦ Ver recetas</button>
           </div>
           {mealRecipes(meal.key).length > 0 && <div className="distribution-meal-adjust"><button type="button" className="link-button" onClick={() => setAdjustMeal(meal)}>Ajustar porciones de {mealRecipes(meal.key).length === 1 ? 'la receta' : `las ${mealRecipes(meal.key).length} recetas`}</button>{adjustedCount(meal.key) > 0 && <span className="eq-chip ok">{adjustedCount(meal.key)} ajustada{adjustedCount(meal.key) === 1 ? '' : 's'}</span>}<small className="muted">Sólo para este plan; la receta original no cambia.</small></div>}
           <div className="distribution-meal-days">{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <button type="button" className={'distribution-day' + (recipe ? '' : ' empty')} key={day.n} disabled={planLocked} onClick={() => openPicker(meal.key, day.n)} title={recipe ? `${recipe.name} · ${day.label}` : `Elegir ${meal.label} del ${day.label}`}>
@@ -1069,7 +1070,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         <p className="distribution-note muted">El catálogo de ingredientes ya incluye el Sistema Mexicano de Equivalentes; la asignación de la semana se hace por receta. Toca un día para variarlo.</p>
       </div>}
       {adjustMeal && <RecipeAdjustModal meal={adjustMeal} recipes={mealRecipes(adjustMeal.key)} servings={mealServingsFor(adjustMeal.key)} adjustments={notesForm.recipeAdjustments} prescribed={notesForm.equivalents?.distribution?.[adjustMeal.key]} locked={planLocked} onSave={(recipeId, adjustment) => saveAdjustment(adjustMeal.key, recipeId, adjustment)} onClose={() => setAdjustMeal(null)} />}
-      {suggestMeal && <RecipeSuggestModal meal={suggestMeal} recipes={recipes} target={suggestTarget} prescribed={notesForm.equivalents?.distribution?.[suggestMeal.key]} servings={mealServingsFor(suggestMeal.key)} initialAvoid={suggestAvoid} exclude={suggestExclude} renderThumb={(recipe, index) => recipeThumb(recipe, index, 'distribution-day-thumb suggest-thumb')} locked={planLocked} onApply={(picks) => applySuggestions(suggestMeal, picks)} onClose={() => setSuggestMeal(null)} onGoToCalculation={() => { setSuggestMeal(null); selectStep(STEP.CALCULATION) }} />}
+      {suggestMeal && <RecipeSuggestModal meal={suggestMeal} recipes={recipes} target={suggestTarget} prescribed={notesForm.equivalents?.distribution?.[suggestMeal.key]} servings={mealServingsFor(suggestMeal.key)} initialAvoid={suggestAvoid} exclude={suggestExclude} current={mealRecipes(suggestMeal.key).map((recipe) => recipe.id)} adjustments={notesForm.recipeAdjustments} renderThumb={recipeThumb} locked={planLocked} onApply={(picks) => applySuggestions(suggestMeal, picks)} onClose={() => setSuggestMeal(null)} onGoToCalculation={() => { setSuggestMeal(null); selectStep(STEP.CALCULATION) }} />}
       {renderPicker()}
     </>}
 
