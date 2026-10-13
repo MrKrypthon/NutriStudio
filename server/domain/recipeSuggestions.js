@@ -3,6 +3,8 @@
 // paciente evita. Es una propuesta para que la nutrióloga elija, no una prescripción. Este módulo
 // no toca la base ni la red: lo usan el servidor y la pantalla.
 import { recipeIngredientLines } from './documents.js'
+import { EQUIVALENT_BY_CODE } from './equivalents.js'
+import { familyOf, familyTotals, fitItemsToMeal, itemsMacros, recipeItems } from './recipeEquivalents.js'
 
 const normalizeText = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
@@ -85,4 +87,74 @@ function suggestRecipes(recipes, { recipeType, target, avoid = [], exclude = [],
   return candidates.sort((a, b) => a.score - b.score || a.recipe.name.localeCompare(b.recipe.name)).slice(0, count)
 }
 
-export { avoidTermsFromText, suggestRecipes, normalizeText }
+// Sugerencia por GRUPOS: cuando el tiempo de comida ya tiene equivalentes repartidos, lo que importa
+// no es sólo que la receta dé las mismas kcal, sino que esté hecha de los grupos que se le
+// asignaron (si tocan 2 cereales, 2 de origen animal y 1 verdura, un licuado de fruta con las
+// mismas kcal no sirve). Para cada receta con ingredientes del catálogo:
+//
+//   1. se traduce a equivalentes por grupo (SMAE; o calculados de la composición para los alimentos
+//      importados de USDA y demás — ver deriveEquivalence);
+//   2. se mide la COBERTURA: qué parte de la energía prescrita viene de grupos que la receta trae;
+//   3. se AJUSTA la receta a las porciones del tiempo (lo mismo que hará al aplicarla) y se mira
+//      qué sobra —energía de grupos que el tiempo no tiene— y qué tan cerca queda de las kcal.
+//
+// Gana la que cubre más grupos, trae menos de lo no asignado y queda más cerca en energía.
+// `prescribed` es el cuadro del tiempo ({ código: equivalentes }); `servings`, las porciones que se
+// sirven en ese tiempo (la receta se evalúa ya servida).
+function suggestRecipesByGroups(recipes, { recipeType, prescribed, servings = 1, avoid = [], exclude = [], count = 5 } = {}) {
+  const want = familyTotals(prescribed)
+  const families = Object.keys(want)
+  if (!families.length) return []
+  // Energía prescrita por familia: los equivalentes de cada código por las kcal de su grupo.
+  const wantKcal = {}
+  for (const [code, amount] of Object.entries(prescribed || {})) {
+    const group = EQUIVALENT_BY_CODE[code]
+    if (group && Number(amount) > 0) wantKcal[familyOf(code)] = (wantKcal[familyOf(code)] || 0) + Number(amount) * group.kcal
+  }
+  const targetKcal = Object.values(wantKcal).reduce((sum, value) => sum + value, 0)
+  if (!(targetKcal > 0)) return []
+  const terms = avoid.map(normalizeText).map((term) => term.trim()).filter((term) => term.length >= 3)
+  const excluded = new Set(exclude)
+  const kcalOf = (item) => (Number(item.n?.kcal) || 0) * item.grams / 100
+  const candidates = []
+  for (const recipe of recipes || []) {
+    if (excluded.has(recipe.id) || (recipe.status && recipe.status !== 'ACTIVE')) continue
+    if (recipeType && !(recipe.mealTypes || []).includes(recipeType)) continue
+    const items = recipeItems(recipe, servings)
+    if (!items.length) continue
+    const haystack = normalizeText(`${recipe.name} ${recipeIngredientLines(recipe).join(' ')} ${items.map((item) => item.name).join(' ')}`)
+    if (terms.some((term) => haystack.includes(term))) continue
+    const have = familyTotals(items)
+    const covered = families.filter((family) => have[family] > 0)
+    if (!covered.length) continue
+    const coverage = covered.reduce((sum, family) => sum + (wantKcal[family] || 0), 0) / targetKcal
+    const fitted = fitItemsToMeal(items, prescribed)
+    const macros = itemsMacros(fitted)
+    if (!(macros.kcal > 0)) continue
+    const originalKcal = items.reduce((sum, item) => sum + kcalOf(item), 0)
+    // Lo que la receta trae de más: grupos que el tiempo no tiene asignados. Los alimentos sin
+    // grupo (condimentos, libres en energía) no cuentan: apenas aportan.
+    const extraKcal = fitted.filter((item) => item.code && !want[familyOf(item.code)]).reduce((sum, item) => sum + kcalOf(item), 0)
+    const extraShare = extraKcal / macros.kcal
+    // Ya ajustada debe quedar cerca de la energía del tiempo: lo que la receta trae de grupos no
+    // asignados no se toca, y si con eso se va al doble (un licuado con crema de cacahuate para
+    // una colación de fruta) no es una sugerencia para este tiempo.
+    if (macros.kcal > targetKcal * 1.6 || macros.kcal < targetKcal * 0.4) continue
+    const energyGap = Math.abs(Math.log(macros.kcal / targetKcal))
+    // Cuánto hubo que estirar o encoger la receta para que quepa: una que sólo cabe a la cuarta
+    // parte (o al doble) no es de verdad un platillo para este tiempo.
+    const fitGap = originalKcal > 0 ? Math.abs(Math.log(macros.kcal / originalKcal)) : 0
+    const score = (1 - coverage) * 3 + extraShare * 2 + energyGap * 1.5 + fitGap * 0.8 + (recipe.imageFile ? 0 : 0.1)
+    candidates.push({
+      recipe, score, items: fitted,
+      coverage: Math.round(coverage * 100),
+      missing: families.filter((family) => !(have[family] > 0)),
+      extra: [...new Set(fitted.filter((item) => item.code && !want[familyOf(item.code)] && kcalOf(item) > macros.kcal * 0.05).map((item) => familyOf(item.code)))],
+      factor: originalKcal > 0 ? Math.round((macros.kcal / originalKcal) * 100) / 100 : 1,
+      baseKcal: Math.round(originalKcal), kcal: Math.round(macros.kcal), protein: Math.round(macros.protein), carbs: Math.round(macros.carbs), fat: Math.round(macros.fat),
+    })
+  }
+  return candidates.sort((a, b) => a.score - b.score || a.recipe.name.localeCompare(b.recipe.name)).slice(0, count)
+}
+
+export { avoidTermsFromText, suggestRecipes, suggestRecipesByGroups, normalizeText }

@@ -35,20 +35,105 @@ function equivalentCodeForGroup(group) {
   return null
 }
 
+// Nutrimento que define un equivalente de cada grupo en el SMAE, y cuánto trae: un equivalente de
+// cereal es lo que aporta 15 g de hidratos; uno de alimento de origen animal, 7 g de proteína; uno
+// de grasa, 5 g de lípidos… Con esto se calcula cuántos gramos de un alimento valen un equivalente
+// cuando el alimento NO viene del SMAE (los importados de USDA u Open Food Facts, la base de
+// alimentos, los "aproximados"): ahí sólo se conoce su composición por 100 g.
+const DEFINING = { V: ['kcal', 25], F: ['carbs', 15], C: ['carbs', 15], LEG: ['carbs', 20], AOA: ['protein', 7], LAC: ['protein', 9], G: ['fat', 5], AZ: ['carbs', 10] }
+const FAMILY_LABELS = { V: 'Verduras', F: 'Frutas', C: 'Cereales y tubérculos', LEG: 'Leguminosas', AOA: 'Alimentos de origen animal', LAC: 'Leche', G: 'Aceites y grasas', AZ: 'Azúcares' }
+// Familia de un código del cuadro: los subgrupos (cereal con/sin grasa, AOA por nivel de grasa,
+// tipos de leche…) son el mismo grupo de alimentos a la hora de armar un platillo.
+const familyOf = (code) => (code ? code.split('_')[0] : null)
+
+// Subgrupo que le corresponde a un alimento dentro de su familia, por su composición.
+function subgroupFor(family, n) {
+  const per = (amount, of, base) => (of > 0 ? (amount / of) * base : 0)
+  if (family === 'C') return per(n.fat, n.carbs, 15) >= 3 ? 'C_CG' : 'C_SG'
+  if (family === 'AOA') { const fat = per(n.fat, n.protein, 7); return fat <= 1.5 ? 'AOA_MB' : fat <= 4 ? 'AOA_B' : fat <= 6.5 ? 'AOA_M' : 'AOA_A' }
+  if (family === 'LAC') { if (per(n.carbs, n.protein, 9) >= 20) return 'LAC_A'; const fat = per(n.fat, n.protein, 9); return fat <= 3 ? 'LAC_D' : fat <= 6 ? 'LAC_S' : 'LAC_E' }
+  if (family === 'G') return per(n.protein, n.fat, 5) >= 2 ? 'G_CP' : 'G_SP'
+  if (family === 'AZ') return per(n.fat, n.carbs, 10) >= 3 ? 'AZ_CG' : 'AZ_SG'
+  return family
+}
+
+// Código del cuadro → grupo del catálogo de Ingredientes (los nombres del SMAE). Sirve para buscar
+// con qué intercambiar un alimento que no viene del SMAE: por su grupo de equivalentes.
+const CATALOG_GROUP_BY_CODE = { V: 'Verduras', F: 'Frutas', C_SG: 'Cereales S/G', C_CG: 'Cereales C/G', LEG: 'Leguminosas', AOA_MB: 'AOA MBAG', AOA_B: 'AOA BAG', AOA_M: 'AOA MAG', AOA_A: 'AOA AAG', LAC_D: 'Leche descremada', LAC_S: 'Leche semidescremada', LAC_E: 'Leche entera', LAC_A: 'Leche con azúcar', G_SP: 'Grasas sin proteínas', G_CP: 'Grasas con proteínas', AZ_SG: 'Azucares sin grasa', AZ_CG: 'Azucares con grasa' }
+const catalogGroupForCode = (code) => CATALOG_GROUP_BY_CODE[code] || null
+
+// Grupo de un alimento del que sólo se conoce la composición (sin grupo SMAE reconocible), por de
+// dónde viene su energía. Es una aproximación: sirve para que un alimento importado cuente en el
+// grupo más parecido, no para clasificarlo oficialmente.
+// Frutas de poca energía (fresa, sandía, melón…): por composición no se distinguen de una verdura,
+// así que se reconocen por el nombre.
+const FRUIT_NAMES = /\b(fresas?|frambuesas?|zarzamoras?|moras?|arandanos?|sandia|melon|papaya|toronja|naranjas?|mandarinas?|duraznos?|guayabas?|pina|manzanas?|peras?|mangos?|uvas?|kiwis?|ciruelas?|cerezas?|tunas?|platanos?|higos?|granada|maracuya|chabacanos?|nectarinas?|lichis?|carambola|tejocotes?|capulin(es)?|mamey|zapote|guanabana|pitahaya|frutos? rojos?)\b/
+const foldName = (name) => String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+function inferFamily(n, name = '') {
+  if (!(n.kcal > 0)) return null
+  const fatShare = (n.fat * 9) / n.kcal
+  const proteinShare = (n.protein * 4) / n.kcal
+  const carbShare = (n.carbs * 4) / n.kcal
+  if (fatShare >= 0.7) return 'G'
+  if (proteinShare >= 0.35 && carbShare < 0.3) return 'AOA'
+  if (carbShare >= 0.5) {
+    // Primero las verduras: son tan poco densas que su poca proteína pesa mucho en porcentaje.
+    if (n.kcal <= 110 && FRUIT_NAMES.test(foldName(name)) && !/\b(jugo|nectar|mermelada|jarabe|almibar)\b/.test(foldName(name))) return 'F'
+    if (n.kcal <= 45) return 'V'
+    if (proteinShare >= 0.2) return 'LEG'
+    if (n.kcal <= 100 && n.sugar > 0 && n.sugar >= n.carbs * 0.5) return 'F'
+    return 'C'
+  }
+  return null
+}
+
+const CALCULATED_SOURCES = new Set(['APROX_500', 'APPROX_500', 'BASE_ALIMENTOS'])
+const NUTRIENT_KEYS = ['kcal', 'protein', 'carbs', 'fat', 'sugar']
+
+// Equivalencia de un ingrediente: a qué grupo del cuadro pertenece y cuántos gramos valen un
+// equivalente. Del SMAE se toma tal cual; de cualquier otra fuente se calcula con su composición.
+// `basis` dice de dónde salió: 'smae', 'calculada' (grupo conocido, gramos calculados) o
+// 'estimada' (también el grupo se dedujo de la composición).
+function deriveEquivalence(ingredient) {
+  const equivalence = ingredient?.equivalence || {}
+  const nutrition = ingredient?.nutrition || {}
+  const n = Object.fromEntries(NUTRIENT_KEYS.map((key) => [key, Number(nutrition[key]) || 0]))
+  const named = equivalentCodeForGroup(equivalence.group) || equivalentCodeForGroup(ingredient?.group)
+  // La porción guardada es un equivalente de verdad cuando viene del SMAE o la capturó la
+  // nutrióloga. En los alimentos importados (USDA, Open Food Facts), la base de alimentos y los
+  // "aproximados" esa porción es sólo "100 g": no es un equivalente y hay que calcularlo.
+  const trusted = typeof equivalence.source !== 'object' && !CALCULATED_SOURCES.has(equivalence.source) && !/^100\s*g/i.test(String(equivalence.serving || '').trim())
+  if (trusted && named && Number(equivalence.grams) > 0) {
+    return { code: named, gramsPerEq: Number(equivalence.grams), serving: equivalence.serving ? String(equivalence.serving) : null, basis: 'smae' }
+  }
+  // Un alimento del SMAE que no está en un grupo de equivalentes (libres en energía, bebidas
+  // alcohólicas) no tiene equivalente: no se le inventa uno.
+  if (trusted && equivalence.source === 'SMAE') return { code: null, gramsPerEq: null, serving: null, basis: null }
+  const family = familyOf(named) || inferFamily(n, ingredient.name)
+  if (!family) return { code: null, gramsPerEq: null, serving: null, basis: null }
+  const [nutrient, amount] = DEFINING[family]
+  if (!(n[nutrient] > 0)) return { code: null, gramsPerEq: null, serving: null, basis: null }
+  const gramsPerEq = (amount / n[nutrient]) * 100
+  // Un "equivalente" de menos de 3 g o de más de 600 g no es una porción real: el alimento no
+  // pertenece de verdad a ese grupo (p. ej. una especia clasificada como verdura).
+  if (gramsPerEq < 3 || gramsPerEq > 600) return { code: null, gramsPerEq: null, serving: null, basis: null }
+  return { code: subgroupFor(family, n), gramsPerEq: round2(gramsPerEq), serving: null, basis: named ? 'calculada' : 'estimada' }
+}
+
 // Un ingrediente del catálogo como renglón editable de la receta. `grams` es lo que se sirve a la
 // paciente; `portions`, cuántos equivalentes de su grupo son esos gramos.
 function itemFromIngredient(ingredient, grams) {
-  const equivalence = ingredient?.equivalence || {}
-  const gramsPerEq = Number(equivalence.grams) || null
-  const code = equivalence.source === 'APPROX_500' ? null : equivalentCodeForGroup(equivalence.group) || equivalentCodeForGroup(ingredient?.group)
+  const derived = deriveEquivalence(ingredient)
   const nutrition = ingredient?.nutrition || {}
   return {
     ingredientId: ingredient?.id || null,
     name: String(ingredient?.name || 'Ingrediente'),
     catalogGroup: String(ingredient?.group || ''),
-    code: gramsPerEq ? code : null,
-    serving: gramsPerEq && equivalence.serving ? String(equivalence.serving) : null,
-    gramsPerEq,
+    code: derived.code,
+    serving: derived.serving,
+    gramsPerEq: derived.gramsPerEq,
+    basis: derived.basis,
     grams: round2(Math.max(0, Number(grams) || 0)),
     // Por 100 g, sólo lo que se necesita para mostrar el aporte de la receta ajustada.
     n: Object.fromEntries(MACRO_KEYS.map((key) => [key, Number(nutrition[key]) || 0])),
@@ -92,19 +177,31 @@ function itemsMacros(items) {
   return Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round(value * 10) / 10]))
 }
 
-// Compara lo que suma la receta con lo calculado para el tiempo de comida, grupo por grupo.
+// Equivalentes por familia: { C: 2, AOA: 1.5 }. Acepta renglones de receta o un cuadro por código.
+function familyTotals(source) {
+  const totals = {}
+  const add = (code, amount) => { const family = familyOf(code); if (family && amount) totals[family] = round2((totals[family] || 0) + amount) }
+  if (Array.isArray(source)) for (const item of source) add(item.code, itemPortions(item) || 0)
+  else for (const [code, amount] of Object.entries(source || {})) add(code, Number(amount) || 0)
+  return totals
+}
+
+// Compara lo que suma la receta con lo calculado para el tiempo de comida, por grupo de alimentos
+// (familia): 2 de AOA cumplen sea pollo o queso, aunque el cuadro pida un nivel de grasa concreto.
 // `status`: 'ok' (dentro de ¼ de equivalente), 'low', 'high', o 'extra' (la receta trae un grupo
 // que el tiempo no tiene asignado).
 const TOLERANCE = 0.25
+const FAMILY_ORDER = ['V', 'F', 'C', 'LEG', 'AOA', 'LAC', 'G', 'AZ']
 function compareWithMeal(items, prescribed) {
-  const have = itemsEquivalents(items)
+  const have = familyTotals(items)
+  const want = familyTotals(prescribed)
   const rows = []
-  for (const group of EQUIVALENT_TABLE) {
-    const target = Number(prescribed?.[group.code]) || 0
-    const actual = have[group.code] || 0
+  for (const family of FAMILY_ORDER) {
+    const target = want[family] || 0
+    const actual = have[family] || 0
     if (!target && !actual) continue
     const status = !target ? 'extra' : Math.abs(actual - target) <= TOLERANCE ? 'ok' : actual < target ? 'low' : 'high'
-    rows.push({ code: group.code, label: group.label, sub: group.sub || null, target, actual, status })
+    rows.push({ code: family, label: FAMILY_LABELS[family], sub: null, target, actual, status })
   }
   return { rows, fits: rows.length > 0 && rows.every((row) => row.status === 'ok') }
 }
@@ -114,11 +211,13 @@ function compareWithMeal(items, prescribed) {
 // que la receta no trae no se inventan (quedan como faltantes en compareWithMeal) y los alimentos
 // sin grupo de equivalentes (condimentos, libres) no se tocan.
 function fitItemsToMeal(items, prescribed) {
-  const have = itemsEquivalents(items)
+  const have = familyTotals(items)
+  const want = familyTotals(prescribed)
   return (items || []).map((item) => {
-    const target = Number(prescribed?.[item.code]) || 0
-    const current = have[item.code] || 0
-    if (!item.code || !item.gramsPerEq || !target || !current) return item
+    const family = familyOf(item.code)
+    const target = want[family] || 0
+    const current = have[family] || 0
+    if (!family || !item.gramsPerEq || !target || !current) return item
     // En cuartos de equivalente, que es como se sirve.
     const portions = Math.max(0.25, Math.round((itemPortions(item) * target / current) * 4) / 4)
     return { ...item, grams: round2(portions * item.gramsPerEq) }
@@ -152,6 +251,7 @@ function normalizeItems(value) {
       code: EQUIVALENT_BY_CODE[raw.code] ? raw.code : null,
       serving: text(raw.serving, 60) || null,
       gramsPerEq: Number.isFinite(gramsPerEq) && gramsPerEq > 0 && gramsPerEq <= 2000 ? round2(gramsPerEq) : null,
+      basis: ['smae', 'calculada', 'estimada'].includes(raw.basis) ? raw.basis : null,
       grams: round2(grams),
       n: Object.fromEntries(MACRO_KEYS.map((key) => { const number = Number(raw.n?.[key]); return [key, Number.isFinite(number) && number >= 0 && number <= 1000 ? round2(number) : 0] })),
     })
@@ -159,4 +259,4 @@ function normalizeItems(value) {
   return result
 }
 
-export { equivalentCodeForGroup, itemFromIngredient, itemPortions, recipeItems, itemLine, itemsEquivalents, itemsMacros, compareWithMeal, fitItemsToMeal, swapItem, setItemPortions, normalizeItems }
+export { catalogGroupForCode, deriveEquivalence, familyOf, familyTotals, FAMILY_LABELS, FAMILY_ORDER, equivalentCodeForGroup, itemFromIngredient, itemPortions, recipeItems, itemLine, itemsEquivalents, itemsMacros, compareWithMeal, fitItemsToMeal, swapItem, setItemPortions, normalizeItems }

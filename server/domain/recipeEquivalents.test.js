@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareWithMeal, equivalentCodeForGroup, fitItemsToMeal, itemFromIngredient, itemLine, itemPortions, itemsEquivalents, itemsMacros, normalizeItems, recipeItems, setItemPortions, swapItem } from './recipeEquivalents.js'
+import { catalogGroupForCode, compareWithMeal, deriveEquivalence, equivalentCodeForGroup, fitItemsToMeal, itemFromIngredient, itemLine, itemPortions, itemsEquivalents, itemsMacros, normalizeItems, recipeItems, setItemPortions, swapItem } from './recipeEquivalents.js'
 
 const ingredient = (name, group, serving, grams, nutrition = {}) => ({ id: '0f64b6b4-7599-4bdc-8e31-3492605d3499', name, group, equivalence: { group, serving, grams, source: 'SMAE' }, nutrition: { kcal: 0, protein: 0, carbs: 0, fat: 0, ...nutrition } })
 const panela = ingredient('Queso panela', 'AOA BAG', '40 g', 40, { kcal: 137.5, protein: 17.5, carbs: 0, fat: 7.5 })
@@ -44,7 +44,9 @@ describe('recipe as equivalents', () => {
 
   it('compares the recipe with what the meal time has calculated', () => {
     const { rows, fits } = compareWithMeal(items, { AOA_B: 2, C_SG: 3, F: 1 })
-    expect(rows.map((row) => [row.code, row.target, row.actual, row.status])).toEqual([['F', 1, 0, 'low'], ['C_SG', 3, 2, 'low'], ['AOA_B', 2, 2, 'ok'], ['G_SP', 0, 0.5, 'extra']])
+    expect(rows.map((row) => [row.code, row.target, row.actual, row.status])).toEqual([['F', 1, 0, 'low'], ['C', 3, 2, 'low'], ['AOA', 2, 2, 'ok'], ['G', 0, 0.5, 'extra']])
+    // Por familia: 2 de AOA cumplen aunque el cuadro pida otro nivel de grasa.
+    expect(compareWithMeal(items, { AOA_MB: 2, C_CG: 2, G_CP: 0.5 }).fits).toBe(true)
     expect(fits).toBe(false)
     expect(compareWithMeal(items, { AOA_B: 2, C_SG: 2, G_SP: 0.5 }).fits).toBe(true)
   })
@@ -75,5 +77,49 @@ describe('normalizeItems', () => {
     expect(normalizeItems([good, { name: '', grams: 10 }, { name: 'x', grams: -1 }, { name: 'y', grams: 99999 }, 'junk'])).toEqual([good])
     expect(normalizeItems(null)).toEqual([])
     expect(normalizeItems([{ ...good, code: 'ZZ', ingredientId: 'nope', n: { kcal: 'abc' } }])[0]).toMatchObject({ code: null, ingredientId: null, n: { kcal: 0 } })
+  })
+})
+
+describe('deriveEquivalence for foods that do not come from the SMAE', () => {
+  const food = (group, nutrition, equivalence = {}) => ({ id: 'x', name: 'Alimento', group, nutrition, equivalence: { group, serving: '100 g', grams: 100, ...equivalence } })
+
+  it('computes the grams of one equivalent from the nutrient that defines the group', () => {
+    // Cereal: 15 g de hidratos. Arroz cocido con 28 g/100 g → 53.6 g por equivalente.
+    expect(deriveEquivalence(food('Cereales', { kcal: 130, protein: 2.7, carbs: 28, fat: 0.3 }, { source: 'APROX_500' }))).toMatchObject({ code: 'C_SG', gramsPerEq: 53.57, basis: 'calculada' })
+    // AOA: 7 g de proteína. Pechuga con 31 g/100 g → 22.6 g; por su grasa, muy bajo.
+    expect(deriveEquivalence(food('Proteínas', { kcal: 165, protein: 31, carbs: 0, fat: 3.6 }, { group: 'AOA', source: { provider: 'usda' } }))).toMatchObject({ code: 'AOA_MB', gramsPerEq: 22.58, basis: 'calculada' })
+    // Grasa: 5 g de lípidos. Aceite → 5 g.
+    expect(deriveEquivalence(food('Grasas', { kcal: 884, protein: 0, carbs: 0, fat: 100 }, { source: 'BASE_ALIMENTOS' }))).toMatchObject({ code: 'G_SP', gramsPerEq: 5 })
+  })
+
+  it('tells a low-energy fruit from a vegetable by its name when it has no group', () => {
+    const strawberry = { kcal: 32, protein: 0.7, carbs: 7.7, fat: 0.3 }
+    expect(deriveEquivalence({ ...food('', strawberry, { source: { provider: 'usda' } }), name: 'Fresa cruda' })).toMatchObject({ code: 'F', basis: 'estimada' })
+    expect(deriveEquivalence({ ...food('', strawberry, { source: { provider: 'usda' } }), name: 'Calabacita cruda' })).toMatchObject({ code: 'V', basis: 'estimada' })
+  })
+
+  it('picks the subgroup from the composition', () => {
+    expect(deriveEquivalence(food('Cereales', { kcal: 460, protein: 7, carbs: 60, fat: 20 }, { source: 'APROX_500' })).code).toBe('C_CG')
+    expect(deriveEquivalence(food('AOA', { kcal: 300, protein: 20, carbs: 0, fat: 24 }, { source: 'APROX_500' })).code).toBe('AOA_A')
+    expect(deriveEquivalence(food('Grasas', { kcal: 600, protein: 20, carbs: 20, fat: 50 }, { source: 'APROX_500' })).code).toBe('G_CP')
+  })
+
+  it('estimates the group when the food has no recognizable one', () => {
+    expect(deriveEquivalence(food('Importado', { kcal: 884, protein: 0, carbs: 0, fat: 100 }, { group: 'Otros', source: { provider: 'usda' } }))).toMatchObject({ code: 'G_SP', basis: 'estimada' })
+    expect(deriveEquivalence(food('Importado', { kcal: 20, protein: 1, carbs: 4, fat: 0.2 }, { group: '', source: { provider: 'usda' } })).code).toBe('V')
+    expect(deriveEquivalence(food('Importado', { kcal: 0 }, { group: '' })).code).toBeNull()
+  })
+
+  it('keeps the SMAE portion untouched and rejects absurd portions', () => {
+    expect(deriveEquivalence({ group: 'Frutas', nutrition: { kcal: 52, carbs: 14 }, equivalence: { group: 'Frutas', serving: '1 pieza', grams: 106, source: 'SMAE' } })).toEqual({ code: 'F', gramsPerEq: 106, serving: '1 pieza', basis: 'smae' })
+    // Una especia "clasificada" como verdura: 25 kcal serían 8 g… pero con 2 kcal/100 g serían 1.25 kg.
+    expect(deriveEquivalence(food('Verduras', { kcal: 2, protein: 0, carbs: 0.5, fat: 0 }, { source: 'APROX_500' })).code).toBeNull()
+  })
+})
+
+describe('catalogGroupForCode', () => {
+  it('names the catalog group of every code of the equivalents table', async () => {
+    const { EQUIVALENT_TABLE } = await import('./equivalents.js')
+    for (const group of EQUIVALENT_TABLE) expect(equivalentCodeForGroup(catalogGroupForCode(group.code)), group.code).toBe(group.code)
   })
 })
