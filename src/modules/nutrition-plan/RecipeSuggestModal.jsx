@@ -99,7 +99,7 @@ export default function RecipeSuggestModal({ meal, recipes, target, prescribed, 
   const toggle = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]))
   const selectedRecipes = selected.map((id) => recipeById.get(id)).filter(Boolean)
   const used = selectedRecipes.slice(0, DAYS_IN_WEEK)
-  const adjustedCount = selectedRecipes.filter(isAdjusted).length
+  const adjustedCount = used.filter(isAdjusted).length
   const pickBest = () => setSelected(ranked.slice(0, BEST_PICKS).map((item) => item.recipe.id))
 
   const apply = () => onApply(used.map((recipe) => {
@@ -134,7 +134,7 @@ export default function RecipeSuggestModal({ meal, recipes, target, prescribed, 
       <button type="button" className="gallery-card-photo" onClick={() => setOpenId(recipe.id)} title="Ver ingredientes e información nutricional">
         {renderThumb ? renderThumb(recipe, index, 'gallery-photo') : null}
         <span className="gallery-card-badges">
-          {isOn && <i className="gallery-day">{selected.indexOf(recipe.id) + 1}</i>}
+          {isOn && <i className="gallery-day">{(() => { const position = selected.indexOf(recipe.id) + 1; return position <= DAYS_IN_WEEK ? position : '★' })()}</i>}
           {byGroups && rank && <i className={'eq-chip ' + coverageTone(rank.coverage)} title="Cuánto de lo repartido a este tiempo cubre la receta">Cubre {rank.coverage}%</i>}
           {isOn && isAdjusted(recipe) && <i className="gallery-fit">Con ajuste</i>}
         </span>

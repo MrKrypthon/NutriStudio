@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ingredientsApi } from '../../lib/api.js'
 import { EQUIVALENT_BY_CODE } from '../../../server/domain/equivalents.js'
 import { catalogGroupForCode, compareWithMeal, fitItemsToMeal, itemFromIngredient, itemLine, itemPortions, itemsMacros, recipeItems, setItemPortions, swapItem } from '../../../server/domain/recipeEquivalents.js'
 import { clampFactor } from './planAdjustments.js'
 
-const formatCount = (value) => { const number = Math.round((Number(value) || 0) * 100) / 100; return Number.isInteger(number) ? String(number) : String(number) }
+const formatCount = (value) => String(Math.round((Number(value) || 0) * 100) / 100)
 const STATUS_TEXT = { ok: 'cumple', low: 'falta', high: 'excede', extra: 'no asignado' }
 const groupLabel = (code) => { const group = EQUIVALENT_BY_CODE[code]; return group ? `${group.label}${group.sub ? ` · ${group.sub.toLowerCase()}` : ''}` : 'Sin grupo' }
 const sameItems = (a, b) => JSON.stringify(a.map((item) => [item.ingredientId, item.name, item.grams])) === JSON.stringify(b.map((item) => [item.ingredientId, item.name, item.grams]))
@@ -48,8 +48,17 @@ export default function RecipeEquivalentsEditor({ recipe, servings, saved, presc
   const baseline = saved?.items?.length ? saved.items : original
   const dirty = !sameItems(items, baseline)
   useEffect(() => { onDirtyChange?.(dirty) }, [dirty])
-  // Todo cambio pasa por aquí para que en modo `live` se avise sólo de lo que hizo la nutrióloga.
-  const setItems = (next) => setItemsState((prev) => { const value = typeof next === 'function' ? next(prev) : next; if (live) queueMicrotask(() => onChange?.(value)); return value })
+  // Actualización de estado pura; el aviso a `onChange` (modo `live`) sale de un efecto, no del
+  // updater (hacerlo dentro se disparaba dos veces con el doble render de StrictMode).
+  const setItems = (next) => setItemsState((prev) => (typeof next === 'function' ? next(prev) : next))
+  const didNotifyRef = useRef(false)
+  useEffect(() => {
+    if (!live) return
+    if (!didNotifyRef.current) { didNotifyRef.current = true; return }
+    onChange?.(items)
+    // onDirtyChange/onChange vienen del padre; no se incluyen a propósito.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items])
 
   const comparison = compareWithMeal(items, prescribed)
   const macros = itemsMacros(items)
@@ -66,6 +75,8 @@ export default function RecipeEquivalentsEditor({ recipe, servings, saved, presc
     setPicker(null)
   }
   const save = () => {
+    // Sin ingredientes, el ajuste se descartaba en silencio (líneas vacías): no guardar nada.
+    if (!items.length) return
     if (sameItems(items, original)) { onSave(null); return }
     // El factor resume cuánto cambió la energía respecto a la receta original: con él siguen al
     // ajuste la adecuación del plan y los micronutrientes.
@@ -112,7 +123,7 @@ export default function RecipeEquivalentsEditor({ recipe, servings, saved, presc
 
     {!locked && <div className="adjust-tools">
       <button type="button" className="secondary req-add" onClick={() => setPicker({ index: 'new', group: null })}>+ Agregar ingrediente</button>
-      {!live && <button type="button" className="primary req-save" disabled={!dirty} onClick={save}>Guardar para este plan</button>}
+      {!live && <button type="button" className="primary req-save" disabled={!dirty || items.length === 0} onClick={save}>Guardar para este plan</button>}
     </div>}
   </div>
 }
