@@ -71,7 +71,7 @@ export default function RecipeEquivalentsEditor({ recipe, servings, saved, presc
     <div className="adjust-guide">
       {hasPrescription
         ? <><p><b>{comparison.fits ? `✓ La receta cumple con las porciones de ${mealLabel}.` : `La receta no coincide con las porciones de ${mealLabel}:`}</b></p>
-          <div className="req-compare">{comparison.rows.map((row) => <span key={row.code} className={'eq-chip ' + (row.status === 'ok' ? 'ok' : row.status === 'low' ? 'low' : 'high')} title={groupLabel(row.code)}>{groupLabel(row.code)}: {formatCount(row.actual)}{row.target ? ` de ${formatCount(row.target)}` : ''} · {STATUS_TEXT[row.status]}</span>)}</div></>
+          <div className="req-compare">{comparison.rows.map((row) => <span key={row.code} className={'eq-chip ' + (row.status === 'ok' ? 'ok' : row.status === 'low' ? 'low' : 'high')} title={row.label}>{row.label}: {formatCount(row.actual)}{row.target ? ` de ${formatCount(row.target)}` : ''} · {STATUS_TEXT[row.status]}</span>)}</div></>
         : <p className="muted">Este tiempo de comida no tiene equivalentes repartidos (paso Equivalentes): puedes editar las porciones a mano.</p>}
       <p className="muted">Aporte con estas cantidades: <b>{Math.round(macros.kcal)} kcal</b> · P {formatCount(macros.protein)} g · HC {formatCount(macros.carbs)} g · L {formatCount(macros.fat)} g{Math.round(originalMacros.kcal) !== Math.round(macros.kcal) ? ` (la receta original: ${Math.round(originalMacros.kcal)} kcal)` : ''}.</p>
     </div>
@@ -84,7 +84,7 @@ export default function RecipeEquivalentsEditor({ recipe, servings, saved, presc
           {item.gramsPerEq
             ? <input type="number" min="0.25" max="40" step="0.25" disabled={locked} value={portions ?? ''} aria-label={`Porciones de ${item.name}`} onChange={(event) => update(index, setItemPortions(item, event.target.value))} />
             : <input type="number" min="1" max="5000" step="1" disabled={locked} value={item.grams} aria-label={`Gramos de ${item.name}`} title="Este alimento no tiene medida de equivalente: se edita en gramos" onChange={(event) => update(index, { ...item, grams: Math.max(0, Number(event.target.value) || 0) })} />}
-          <span className="req-group">{item.code ? groupLabel(item.code) : <i className="muted">{item.catalogGroup || 'Sin grupo'}</i>}</span>
+          <span className="req-group">{item.code ? groupLabel(item.code) : <i className="muted">{item.catalogGroup || 'Sin grupo'}</i>}{item.code && item.basis && item.basis !== 'smae' && <small className="req-basis" title={item.basis === 'calculada' ? 'Este alimento no viene del SMAE: su equivalente se calculó con su composición (lo que aporta por 100 g).' : 'Este alimento no trae grupo: el grupo y su equivalente se estimaron con su composición. Conviene revisarlo.'}>{item.basis === 'calculada' ? 'calculado' : 'estimado'}</small>}</span>
           <b>{item.name}</b>
           <span className="muted">{itemLine(item).replace(` de ${item.name}`, '')}</span>
           {!locked && <span className="req-actions"><button type="button" className="secondary" onClick={() => setPicker({ index, group: item.catalogGroup || null })}>⇄ Intercambiar</button><button type="button" className="link-button" onClick={() => remove(index)} aria-label={`Quitar ${item.name}`} title="Quitar">×</button></span>}

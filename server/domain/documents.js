@@ -1,5 +1,5 @@
-import { mealBadgePortions } from './equivalents.js'
-import { normalizeItems } from './recipeEquivalents.js'
+import { EQUIVALENT_BY_CODE, mealBadgePortions } from './equivalents.js'
+import { itemsEquivalents, normalizeItems, recipeItems } from './recipeEquivalents.js'
 import { PLAN_MEALS, PLAN_MEAL_KEYS, formatMealTime, normalizeMealLabels, normalizeMealTimes } from './planMeals.js'
 
 // Nombre de cada tiempo de comida en el plan entregado (todas las colaciones son "Colación" y se
@@ -55,22 +55,16 @@ function equivalentGroupCode(group) {
   return null
 }
 
-// Equivalentes por grupo de UNA porción de la receta, a partir de sus ingredientes vinculados al
-// catálogo: gramos usados ÷ gramos de un equivalente. No se usa `RecipeIngredient.equivalence`
-// (en las recetas importadas guarda la cantidad del renglón original, no equivalentes) ni los
-// ingredientes "aproximados", cuya porción de 100 g no es un equivalente SMAE.
+// Equivalentes por grupo de UNA porción de la receta, con los círculos del plan impreso (cereales,
+// leches y azúcares sin subdividir). Usa la misma equivalencia que el Constructor: la del SMAE
+// cuando el ingrediente viene de ahí, y la calculada de su composición cuando no.
 function recipeEquivalents(recipe) {
   const totals = {}
-  for (const item of recipe?.ingredients || []) {
-    const equivalence = item.ingredient?.equivalence || {}
-    const grams = Number(equivalence.grams)
-    if (!grams || equivalence.source === 'APPROX_500') continue
-    const code = equivalentGroupCode(equivalence.group) || equivalentGroupCode(item.ingredient?.group)
-    if (!code) continue
-    totals[code] = (totals[code] || 0) + Number(item.quantity) / grams
+  for (const [code, value] of Object.entries(itemsEquivalents(recipeItems(recipe, 1)))) {
+    const badge = EQUIVALENT_BY_CODE[code]?.badge
+    if (badge) totals[badge] = Math.round(((totals[badge] || 0) + value) * 100) / 100
   }
-  const portions = Number(recipe?.portions) || 1
-  return Object.fromEntries(Object.entries(totals).map(([code, value]) => [code, Math.round((value / portions) * 100) / 100]))
+  return totals
 }
 
 const trimNumber = (value) => String(Math.round(Number(value) * 10) / 10)

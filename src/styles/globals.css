@@ -1443,3 +1443,6 @@ textarea{field-sizing:content;max-height:340px;overflow-y:auto}
 .menu-days small{display:block;font-size:10px;color:var(--muted);margin-bottom:4px}.menu-days>div{display:flex;gap:4px}
 .menu-days label{flex-direction:row;align-items:center;gap:4px;border:1px solid var(--line);border-radius:14px;padding:5px 9px;cursor:pointer;color:var(--ink)}.menu-days label.on{border-color:var(--green);background:var(--mint)}
 .menu-days input{accent-color:var(--green);margin:0}.menu-target{font-size:10px;flex:1 1 220px}
+
+.suggest-groups{display:block;line-height:1.5}.suggest-groups .eq-chip{font-size:9px;padding:2px 7px}.suggest-groups span{color:var(--muted)}
+.req-basis{display:inline-block;margin-left:6px;font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);border:1px dashed var(--line,#d9d2c4);border-radius:999px;padding:1px 6px;cursor:help}

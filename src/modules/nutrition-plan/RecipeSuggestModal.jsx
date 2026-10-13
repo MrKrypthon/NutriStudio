@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { suggestRecipes } from '../../../server/domain/recipeSuggestions.js'
+import { suggestRecipes, suggestRecipesByGroups } from '../../../server/domain/recipeSuggestions.js'
+import { FAMILY_LABELS } from '../../../server/domain/recipeEquivalents.js'
 import { backdropClose, formatFactor } from './planAdjustments.js'
 
 const MAX_SUGGESTIONS = 8
@@ -16,18 +17,22 @@ const formatServings = (value) => { const number = Number(value) || 1; return Nu
 // `target` es lo calculado para el tiempo completo ({ kcal, protein, carbs, fat, source }) o null
 // si el plan todavía no tiene requerimiento. `servings` son las porciones del tiempo de comida:
 // la receta se busca para una porción (target ÷ porciones) y los valores se muestran ya servidos.
-export default function RecipeSuggestModal({ meal, recipes, target, servings = 1, initialAvoid = [], exclude = [], renderThumb, locked, onApply, onClose, onGoToCalculation }) {
+export default function RecipeSuggestModal({ meal, recipes, target, prescribed, servings = 1, initialAvoid = [], exclude = [], renderThumb, locked, onApply, onClose, onGoToCalculation }) {
   const portions = Number(servings) || 1
   const [avoidText, setAvoidText] = useState(initialAvoid.join(', '))
   // null = todavía no se toca la selección: van marcadas las primeras de la lista.
   const [picked, setPicked] = useState(null)
   const avoid = useMemo(() => avoidText.split(',').map((term) => term.trim()).filter(Boolean), [avoidText])
+  // Con equivalentes repartidos al tiempo, las recetas se ordenan por los GRUPOS que traen (y se
+  // proponen ya ajustadas a esas porciones); sin ellos, sólo por energía y macros.
+  const byGroups = Boolean(prescribed && Object.values(prescribed).some((value) => Number(value) > 0))
   const suggestions = useMemo(() => {
     if (!target || !(target.kcal > 0)) return []
+    if (byGroups) return suggestRecipesByGroups(recipes, { recipeType: meal.recipeType, prescribed, servings: portions, avoid, exclude, count: MAX_SUGGESTIONS })
     const perPortion = { kcal: target.kcal / portions, protein: target.protein / portions, carbs: target.carbs / portions, fat: target.fat / portions }
     return suggestRecipes(recipes, { recipeType: meal.recipeType, target: perPortion, avoid, exclude, count: MAX_SUGGESTIONS })
       .map((item) => ({ ...item, baseKcal: Math.round((Number((item.recipe.calculatedNutrition || item.recipe.nutrition || {}).kcal) || 0) * portions), kcal: Math.round(item.kcal * portions), protein: Math.round(item.protein * portions), carbs: Math.round(item.carbs * portions), fat: Math.round(item.fat * portions) }))
-  }, [recipes, meal.recipeType, target, portions, avoid, exclude])
+  }, [recipes, meal.recipeType, target, prescribed, byGroups, portions, avoid, exclude])
   const isSelected = (item, index) => (picked ? picked.has(item.recipe.id) : index < PRESELECTED)
   const selected = suggestions.filter(isSelected)
   const toggle = (id) => {
@@ -45,7 +50,7 @@ export default function RecipeSuggestModal({ meal, recipes, target, servings = 1
     {!target ? <div className="adjust-guide"><p>Todavía no hay requerimiento guardado para este plan: calcula y guarda el requerimiento en el paso "Plan alimentario" para poder sugerir recetas. {onGoToCalculation && <button type="button" className="link-button" onClick={onGoToCalculation}>Ir al cálculo →</button>}</p></div> : <>
       <div className="adjust-guide">
         <p><b>Calculado para {meal.label}:</b> {Math.round(target.kcal)} kcal · P {Math.round(target.protein)} g · HC {Math.round(target.carbs)} g · L {Math.round(target.fat)} g{portions !== 1 ? ` (en ${formatServings(portions)} porciones)` : ''}</p>
-        <p className="muted">{target.source === 'equivalents' ? 'Según los equivalentes repartidos a este tiempo de comida.' : 'Este tiempo todavía no tiene equivalentes repartidos: se usa su parte proporcional del requerimiento del día.'}</p>
+        <p className="muted">{byGroups ? 'Se ordenan por los grupos de alimentos que traen: primero las que están hechas de lo que se le repartió a este tiempo. Cada una se propone ya ajustada a esas porciones.' : target.source === 'equivalents' ? 'Según los equivalentes repartidos a este tiempo de comida.' : 'Este tiempo todavía no tiene equivalentes repartidos: se usa su parte proporcional del requerimiento del día.'}</p>
         {selected.length > 0 && <p><b>Promedio de las {selected.length} marcadas:</b> {average('kcal')} kcal ({Math.round((average('kcal') / target.kcal) * 100)}%) · P {average('protein')} g · HC {average('carbs')} g · L {average('fat')} g</p>}
       </div>
 
@@ -55,16 +60,16 @@ export default function RecipeSuggestModal({ meal, recipes, target, servings = 1
       </label>
 
       {suggestions.length === 0
-        ? <p className="muted suggest-empty">No hay recetas de {meal.label.toLowerCase()} que se acerquen a este cálculo con esos filtros. Prueba quitando términos de "Evitar" o elige la receta a mano.</p>
+        ? <p className="muted suggest-empty">{byGroups ? `Ninguna receta de ${meal.label.toLowerCase()} con ingredientes del catálogo trae los grupos asignados a este tiempo con esos filtros.` : `No hay recetas de ${meal.label.toLowerCase()} que se acerquen a este cálculo con esos filtros.`} Prueba quitando términos de "Evitar" o elige la receta a mano.</p>
         : <ul className="suggest-list">{suggestions.map((item, index) => <li key={item.recipe.id}><label className={'suggest-row' + (isSelected(item, index) ? ' selected' : '')}>
             <input type="checkbox" checked={isSelected(item, index)} disabled={locked} onChange={() => toggle(item.recipe.id)} />
             {renderThumb ? renderThumb(item.recipe, index) : null}
-            <span className="suggest-info"><b>{item.recipe.name}</b><small>{item.baseKcal} kcal · ×{formatFactor(item.factor)} → {item.kcal} kcal</small><small className="muted">{MACROS.map(([key, label]) => `${label} ${item[key]} g`).join(' · ')}</small></span>
+            <span className="suggest-info"><b>{item.recipe.name}</b>{byGroups && <small className="suggest-groups"><i className={'eq-chip ' + (item.coverage >= 90 ? 'ok' : item.coverage >= 60 ? 'low' : 'high')}>Cubre {item.coverage}% de lo asignado</i>{item.missing.length > 0 && <span> Falta: {item.missing.map((family) => FAMILY_LABELS[family]).join(', ')}.</span>}{item.extra.length > 0 && <span> Trae además: {item.extra.map((family) => FAMILY_LABELS[family]).join(', ')}.</span>}</small>}<small>{item.baseKcal} kcal · {byGroups ? 'ajustada a las porciones' : `×${formatFactor(item.factor)}`} → {item.kcal} kcal</small><small className="muted">{MACROS.map(([key, label]) => `${label} ${item[key]} g`).join(' · ')}</small></span>
           </label></li>)}</ul>}
       {selected.length > DAYS_IN_WEEK && <p className="muted">La semana tiene 7 días: se usan las primeras {DAYS_IN_WEEK} marcadas.</p>}
       {selected.length > 0 && selected.length < DAYS_IN_WEEK && <p className="muted">Con {selected.length} {selected.length === 1 ? 'receta' : 'recetas'}, los días restantes repiten desde la primera.</p>}
     </>}
 
-    <div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Cerrar</button>{target && <button type="button" className="primary" disabled={locked || used.length === 0} onClick={() => onApply(used.map((item) => ({ recipe: item.recipe, factor: item.factor })))}>Usar las seleccionadas ({used.length})</button>}</div>
+    <div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Cerrar</button>{target && <button type="button" className="primary" disabled={locked || used.length === 0} onClick={() => onApply(used.map((item) => ({ recipe: item.recipe, factor: item.factor, items: item.items || null })))}>Usar las seleccionadas ({used.length})</button>}</div>
   </div></div>
 }

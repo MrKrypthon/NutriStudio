@@ -62,9 +62,11 @@ describe('recipeEquivalents', () => {
     expect(recipeEquivalents(recipe)).toEqual({ C: 1, G_SP: 1 })
   })
 
-  it('skips approximate ingredients and ingredients without an equivalent weight', () => {
-    const recipe = { portions: 1, ingredients: [ingredient(100, { group: 'Verduras', grams: 100, source: 'APPROX_500' }), ingredient(50, { group: 'Frutas' })] }
-    expect(recipeEquivalents(recipe)).toEqual({})
+  it('computes the portion of approximate ingredients from their composition and skips what has none', () => {
+    // 150 g de arroz cocido aproximado (28 g de HC/100 g): 15 g de HC son 53.6 g → 2.8 equivalentes.
+    const rice = { quantity: 150, ingredient: { group: 'Aproximados', equivalence: { group: 'Cereales', grams: 100, serving: '100 g', source: 'APROX_500' }, nutrition: { kcal: 130, protein: 2.7, carbs: 28, fat: 0.3 } } }
+    const recipe = { portions: 1, ingredients: [rice, ingredient(50, { group: 'Frutas' })] }
+    expect(recipeEquivalents(recipe)).toEqual({ C: 2.8 })
   })
 })
 

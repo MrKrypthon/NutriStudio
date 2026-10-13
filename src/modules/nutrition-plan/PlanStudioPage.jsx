@@ -4,8 +4,9 @@ import ModuleHeader from '../../components/ModuleHeader.jsx'
 import DocumentPage from '../documents/DocumentPage.jsx'
 import EquivalentsStep from './EquivalentsStep.jsx'
 import RecipeAdjustModal from './RecipeAdjustModal.jsx'
+import { itemLine } from '../../../server/domain/recipeEquivalents.js'
 import RecipeSuggestModal from './RecipeSuggestModal.jsx'
-import { pruneAdjustments, scaledRecipeLines } from './planAdjustments.js'
+import { pruneAdjustments, scaledRecipeLines, clampFactor } from './planAdjustments.js'
 import { PLAN_MEALS, formatMealTime, suggestMealsFromConsultation } from '../../../server/domain/planMeals.js'
 import { adjustmentFactor, adjustmentKey } from '../../../server/domain/documents.js'
 import { equivalentTotals, macroTargets } from '../../../server/domain/equivalents.js'
@@ -706,7 +707,9 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     const adjustments = { ...(notesForm.recipeAdjustments || {}) }
     for (const pick of used) {
       const key = adjustmentKey(meal.key, pick.recipe.id)
-      if (pick.factor !== 1) adjustments[key] = { lines: scaledRecipeLines(pick.recipe, servings, pick.factor), factor: pick.factor }
+      // Sugerida por grupos: entra ya ajustada a las porciones del tiempo, ingrediente por ingrediente.
+      if (pick.items?.length) adjustments[key] = { lines: pick.items.map(itemLine), factor: clampFactor(pick.factor), items: pick.items }
+      else if (pick.factor !== 1) adjustments[key] = { lines: scaledRecipeLines(pick.recipe, servings, pick.factor), factor: pick.factor }
       else delete adjustments[key]
     }
     const patch = { recipeAdjustments: adjustments }
@@ -1066,7 +1069,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         <p className="distribution-note muted">El catálogo de ingredientes ya incluye el Sistema Mexicano de Equivalentes; la asignación de la semana se hace por receta. Toca un día para variarlo.</p>
       </div>}
       {adjustMeal && <RecipeAdjustModal meal={adjustMeal} recipes={mealRecipes(adjustMeal.key)} servings={mealServingsFor(adjustMeal.key)} adjustments={notesForm.recipeAdjustments} prescribed={notesForm.equivalents?.distribution?.[adjustMeal.key]} locked={planLocked} onSave={(recipeId, adjustment) => saveAdjustment(adjustMeal.key, recipeId, adjustment)} onClose={() => setAdjustMeal(null)} />}
-      {suggestMeal && <RecipeSuggestModal meal={suggestMeal} recipes={recipes} target={suggestTarget} servings={mealServingsFor(suggestMeal.key)} initialAvoid={suggestAvoid} exclude={suggestExclude} renderThumb={(recipe, index) => recipeThumb(recipe, index, 'distribution-day-thumb suggest-thumb')} locked={planLocked} onApply={(picks) => applySuggestions(suggestMeal, picks)} onClose={() => setSuggestMeal(null)} onGoToCalculation={() => { setSuggestMeal(null); selectStep(STEP.CALCULATION) }} />}
+      {suggestMeal && <RecipeSuggestModal meal={suggestMeal} recipes={recipes} target={suggestTarget} prescribed={notesForm.equivalents?.distribution?.[suggestMeal.key]} servings={mealServingsFor(suggestMeal.key)} initialAvoid={suggestAvoid} exclude={suggestExclude} renderThumb={(recipe, index) => recipeThumb(recipe, index, 'distribution-day-thumb suggest-thumb')} locked={planLocked} onApply={(picks) => applySuggestions(suggestMeal, picks)} onClose={() => setSuggestMeal(null)} onGoToCalculation={() => { setSuggestMeal(null); selectStep(STEP.CALCULATION) }} />}
       {renderPicker()}
     </>}
 

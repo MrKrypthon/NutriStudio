@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { avoidTermsFromText, suggestRecipes } from './recipeSuggestions.js'
+import { avoidTermsFromText, suggestRecipes, suggestRecipesByGroups } from './recipeSuggestions.js'
 
 const recipe = (id, name, kcal, extra = {}) => ({ id, name, status: 'ACTIVE', mealTypes: ['lunch'], imageFile: `${id}.jpg`, nutrition: { kcal, protein: kcal * 0.25 / 4, carbs: kcal * 0.45 / 4, fat: kcal * 0.3 / 9 }, ingredientsText: ['1 taza de arroz', '120 g de pollo'], ...extra })
 const target = { kcal: 600, protein: 37.5, carbs: 67.5, fat: 20 }
@@ -45,5 +45,61 @@ describe('suggestRecipes', () => {
   it('returns nothing without a calculated target', () => {
     expect(suggestRecipes([recipe('a', 'Pollo', 600)], { recipeType: 'lunch', target: { kcal: 0 } })).toEqual([])
     expect(suggestRecipes(null, { target })).toEqual([])
+  })
+})
+
+describe('suggestRecipesByGroups', () => {
+  const food = (name, group, serving, grams, nutrition) => ({ id: name, name, group, equivalence: { group, serving, grams, source: 'SMAE' }, nutrition })
+  const tortilla = food('Tortilla', 'Cereales S/G', '1 pieza', 30, { kcal: 233, protein: 6.6, carbs: 50, fat: 0 })
+  const pollo = food('Pollo', 'AOA MBAG', '30 g', 30, { kcal: 133, protein: 23, carbs: 0, fat: 3.3 })
+  const espinaca = food('Espinaca', 'Verduras', '2 taza', 120, { kcal: 21, protein: 1.7, carbs: 3.3, fat: 0 })
+  const platano = food('Plátano', 'Frutas', '1/2 pieza', 54, { kcal: 111, protein: 0, carbs: 28, fat: 0 })
+  const crema = food('Crema', 'Grasas sin proteínas', '1 cda', 15, { kcal: 300, protein: 0, carbs: 0, fat: 33 })
+  const make = (id, name, links, extra = {}) => ({ id, name, status: 'ACTIVE', mealTypes: ['lunch'], imageFile: `${id}.jpg`, portions: 1, nutrition: { kcal: 300 }, ingredients: links.map(([ingredient, quantity]) => ({ quantity, ingredient })), ...extra })
+  // A la comida le tocan 2 cereales, 3 de origen animal y 1 verdura.
+  const prescribed = { C_SG: 2, AOA_B: 3, V: 1 }
+  const tacos = make('tacos', 'Tacos de pollo con espinaca', [[tortilla, 30], [pollo, 60], [espinaca, 60]])
+  const quesadilla = make('ques', 'Tortillas con pollo', [[tortilla, 60], [pollo, 60]])
+  const licuado = make('lic', 'Licuado de plátano con crema', [[platano, 216], [crema, 30]])
+  const mixta = make('mix', 'Pollo con tortilla, espinaca y mucha crema', [[tortilla, 60], [pollo, 90], [espinaca, 120], [crema, 60]])
+
+  it('leaves out a recipe that stays far above the energy of the meal even after fitting', () => {
+    // Colación de 1 fruta (60 kcal): el plátano se ajusta, pero la crema (no asignada) la deja en ~150 kcal.
+    const snack = (recipe) => ({ ...recipe, mealTypes: ['snack'] })
+    const fruta = make('fruta', 'Plátano', [[platano, 108]])
+    const result = suggestRecipesByGroups([snack(licuado), snack(fruta)], { recipeType: 'snack', prescribed: { F: 1 } })
+    expect(result.map((item) => item.recipe.id)).toEqual(['fruta'])
+  })
+
+  it('ranks first the recipes made of the groups the meal was given', () => {
+    const result = suggestRecipesByGroups([licuado, quesadilla, mixta, tacos], { recipeType: 'lunch', prescribed })
+    expect(result.map((item) => item.recipe.id)).toEqual(['tacos', 'ques', 'mix'])
+    expect(result[0]).toMatchObject({ coverage: 100, missing: [], extra: [] })
+    expect(result[1].missing).toEqual(['V'])
+    expect(result[2].extra).toEqual(['G'])
+  })
+
+  it('leaves out a recipe with the right energy but none of the groups', () => {
+    expect(suggestRecipesByGroups([licuado], { recipeType: 'lunch', prescribed })).toEqual([])
+  })
+
+  it('returns the recipe already fitted to the portions of the meal', () => {
+    const [best] = suggestRecipesByGroups([tacos], { recipeType: 'lunch', prescribed })
+    const grams = Object.fromEntries(best.items.map((item) => [item.name, item.grams]))
+    // 2 cereales = 60 g de tortilla, 3 AOA = 90 g de pollo, 1 verdura = 120 g de espinaca.
+    expect(grams).toEqual({ Tortilla: 60, Pollo: 90, Espinaca: 120 })
+    expect(best.kcal).toBe(285)
+    expect(best.factor).toBeGreaterThan(1)
+  })
+
+  it('counts any fat level of animal protein as the same food group', () => {
+    const result = suggestRecipesByGroups([tacos], { recipeType: 'lunch', prescribed: { C_CG: 2, AOA_M: 3, V: 1 } })
+    expect(result[0].coverage).toBe(100)
+  })
+
+  it('respects what the patient avoids and the meal type, and needs a prescription', () => {
+    expect(suggestRecipesByGroups([tacos, quesadilla], { recipeType: 'lunch', prescribed, avoid: ['espinaca'] }).map((item) => item.recipe.id)).toEqual(['ques'])
+    expect(suggestRecipesByGroups([tacos], { recipeType: 'dinner', prescribed })).toEqual([])
+    expect(suggestRecipesByGroups([tacos], { recipeType: 'lunch', prescribed: {} })).toEqual([])
   })
 })
