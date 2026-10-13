@@ -3,7 +3,7 @@ import cors from '@fastify/cors'
 import { Prisma, PrismaClient } from '@prisma/client'
 import 'dotenv/config'
 import PDFDocument from 'pdfkit'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import bcrypt from 'bcryptjs'
@@ -1309,7 +1309,10 @@ async function recordConsultationIncome(consultation, { paymentMethod, amountCen
   const practice = await prisma.practice.findUnique({ where: { id: consultation.patient.practiceId } })
   const type = consultation.appointment?.type && APPOINTMENT_TYPES.includes(consultation.appointment.type) ? consultation.appointment.type : 'FOLLOW_UP'
   const fees = normalizeFees(practice?.fees)
-  const amount = amountCents !== undefined && amountCents !== null ? normalizeCents(amountCents) : fees[type]
+  const hasExplicit = amountCents !== undefined && amountCents !== null && amountCents !== ''
+  // Un monto explícito pero no numérico no debe anular el cobro: se cae a la tarifa configurada.
+  const explicitInvalid = hasExplicit && !Number.isFinite(Number(amountCents))
+  const amount = hasExplicit && !explicitInvalid ? normalizeCents(amountCents) : fees[type]
   if (amount <= 0) return null
   const method = PAYMENT_METHODS.includes(paymentMethod) ? paymentMethod : 'CASH'
   const occurredAt = practiceWallClockNow(practice?.timeZone)
@@ -1517,11 +1520,15 @@ app.post('/api/v1/patients/:patientId/plans', async (request, reply) => {
 })
 
 // Todos los planes de la práctica (para el hub del Constructor, sin tener que elegir paciente).
-app.get('/api/v1/plans', async (request) => {
+const PLAN_STATUSES = ['DRAFT', 'READY', 'PUBLISHED', 'SUPERSEDED', 'CANCELLED']
+app.get('/api/v1/plans', async (request, reply) => {
   const { status } = request.query
+  // Un status arbitrario iba directo al enum de Prisma → error de validación → 500.
+  if (status && !PLAN_STATUSES.includes(status)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Estado de plan no válido.', fields: { status: 'invalid' } })
   const plans = await prisma.nutritionPlan.findMany({
     where: { patient: { practiceId: request.practiceId }, ...(status ? { status } : {}) },
-    include: { patient: true, mealSlots: { select: { dayOfWeek: true } } },
+    // El hub solo necesita el nombre de la paciente, no todos sus datos sensibles.
+    include: { patient: { select: { id: true, firstName: true, lastName: true } }, mealSlots: { select: { dayOfWeek: true } } },
     orderBy: { updatedAt: 'desc' },
     take: 200,
   })
@@ -1560,7 +1567,7 @@ app.post('/api/v1/plans/:planId/reactivate', async (request, reply) => {
 app.patch('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
-  if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados no pueden modificarse.', fields: {} })
+  if (plan.status === 'PUBLISHED' || plan.status === 'CANCELLED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados o cancelados no pueden modificarse.', fields: {} })
   const { hydrationNote, recommendations, mealTimes, equivalents, activeMeals, recipeAdjustments, mealLabels, mealNotes, menus } = request.body || {}
   const updated = await prisma.nutritionPlan.update({
     where: { id: plan.id },
@@ -1596,7 +1603,7 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
   const { sex, age, weightKg, heightCm, bodyFatPercent, formula = 'mifflin', activityFactor, mets, energyAdjustKcal, carbsPercent, proteinPercent, fatPercent, goal } = request.body || {}
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
-  if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados no pueden modificarse.', fields: {} })
+  if (plan.status === 'PUBLISHED' || plan.status === 'CANCELLED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados o cancelados no pueden modificarse.', fields: {} })
 
   const values = { age: Number(age), weightKg: Number(weightKg), heightCm: Number(heightCm) }
   const invalid = Object.entries(values).filter(([, value]) => !Number.isFinite(value) || value <= 0).map(([key]) => key)
@@ -1633,8 +1640,10 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
 
 app.put('/api/v1/plans/:planId/distribution', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
-  if (!plan || plan.status === 'PUBLISHED') return reply.code(plan ? 409 : 404).send({ code: plan ? 'PLAN_LOCKED' : 'PLAN_NOT_FOUND', message: plan ? 'Los planes publicados no pueden modificarse.' : 'Plan no encontrado.', fields: {} })
-  const mealSlots = normalizeMealSlots(request.body?.mealSlots)
+  if (!plan || plan.status === 'PUBLISHED' || plan.status === 'CANCELLED') return reply.code(plan ? 409 : 404).send({ code: plan ? 'PLAN_LOCKED' : 'PLAN_NOT_FOUND', message: plan ? (plan.status === 'CANCELLED' ? 'Reactiva el plan antes de editarlo.' : 'Los planes publicados no pueden modificarse.') : 'Plan no encontrado.', fields: {} })
+  // Un body sin `mealSlots` (o con otra forma) no debe borrar la semana entera en silencio.
+  if (!Array.isArray(request.body?.mealSlots)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'mealSlots debe ser una lista.', fields: { mealSlots: 'invalid' } })
+  const mealSlots = normalizeMealSlots(request.body.mealSlots)
   const recipeIds = [...new Set(mealSlots.map((slot) => slot.recipeId).filter(Boolean))]
   const validRecipes = recipeIds.length ? await prisma.recipe.findMany({ where: { id: { in: recipeIds }, practiceId: request.practiceId }, select: { id: true } }) : []
   const validRecipeIds = new Set(validRecipes.map((item) => item.id))
@@ -1658,7 +1667,10 @@ app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
   if (!menuSnapshot.length) return reply.code(400).send({ code: 'EMPTY_PLAN', message: 'Asigna al menos una receta antes de publicar.', fields: {} })
   const { practice, user } = await loadPracticeBranding(practiceId, request.userId)
   const headerSnapshot = await buildPlanHeader(plan.patient, practice, user)
-  await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'PUBLISHED', publishedAt: new Date(), menuSnapshot, headerSnapshot } })
+  // Update condicional: dos publicaciones concurrentes pasarían ambas la comprobación de estado y
+  // crearían dos documentos. Con `updateMany` solo una gana la carrera.
+  const published = await prisma.nutritionPlan.updateMany({ where: { id: plan.id, status: { notIn: ['PUBLISHED', 'CANCELLED'] } }, data: { status: 'PUBLISHED', publishedAt: new Date(), menuSnapshot, headerSnapshot } })
+  if (!published.count) return reply.code(409).send({ code: 'PLAN_ALREADY_PUBLISHED', message: 'Este plan ya fue publicado.', fields: {} })
   await logAudit(request, { action: 'published', entity: 'NutritionPlan', entityId: plan.id, patientId: plan.patientId })
   // Publicar deja el PDF listo para entregar. Si la generación falla, el plan ya quedó publicado y
   // la pantalla de Entrega ofrece "Generar PDF" para reintentarlo.
@@ -1678,7 +1690,11 @@ app.post('/api/v1/documents/nutrition-plan', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: planId, patient: { practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status !== 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_NOT_PUBLISHED', message: 'Publica el plan antes de generar su documento.', fields: {} })
+  // Un plan tiene un solo documento de entrega: reutilizarlo en vez de crear uno nuevo en cada llamada.
+  const existing = await prisma.document.findFirst({ where: { planId: plan.id, type: 'nutrition_plan' }, orderBy: { createdAt: 'desc' } })
+  if (existing) return existing
   const document = await prisma.document.create({ data: { patientId: plan.patientId, consultationId: plan.consultationId, planId: plan.id, type: 'nutrition_plan', sections: { menu: true, macros: true, recommendations: true }, version: 0 } })
+  await logAudit(request, { action: 'created', entity: 'Document', entityId: document.id, patientId: plan.patientId, metadata: { type: 'nutrition_plan', planId: plan.id } })
   return reply.code(201).send(document)
 })
 
@@ -2235,10 +2251,21 @@ async function generateDocumentFile(documentId, practiceId, userId) {
   }
   const directory = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents')
   await mkdir(directory, { recursive: true })
-  const fileName = `${document.id}-v${document.version + 1}.pdf`
+  // Sufijo único: dos generaciones concurrentes del mismo documento calculaban el mismo nombre y
+  // se sobreescribían el archivo.
+  const fileName = `${document.id}-v${document.version + 1}-${randomUUID().slice(0, 8)}.pdf`
   await writeFile(path.join(directory, fileName), pdf)
   const checksum = createHash('sha256').update(pdf).digest('hex')
-  const generated = await prisma.document.update({ where: { id: document.id }, data: { generatedAt: new Date(), version: { increment: 1 }, checksum, storageKey: fileName } })
+  let generated
+  try {
+    generated = await prisma.document.update({ where: { id: document.id }, data: { generatedAt: new Date(), version: { increment: 1 }, checksum, storageKey: fileName } })
+  } catch (error) {
+    // No dejar el PDF recién escrito si el update falla.
+    await unlink(path.join(directory, fileName)).catch(() => {})
+    throw error
+  }
+  // Borra el PDF anterior (si lo había) para no acumular huérfanos al regenerar.
+  if (document.storageKey && document.storageKey !== fileName) await unlink(path.join(directory, document.storageKey)).catch(() => {})
   return { ...generated, downloadUrl: `/api/v1/documents/${document.id}/download` }
 }
 
