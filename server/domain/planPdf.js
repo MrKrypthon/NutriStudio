@@ -196,7 +196,9 @@ function drawPageChrome(file, data) {
     // Siempre debajo de la tabla (CONTENT_BOTTOM) y sobre las olas, con uno, dos o tres renglones.
     const y = CONTENT_BOTTOM + 9 + index * 14 + (3 - Math.min(contact.length, 3)) * 7
     drawContactIcon(file, item.kind, 74, y + 6)
-    file.font(fonts.regular).fontSize(10.5).fillColor(WAVE_RED).text(cleanText(item.text), 85, y, { lineBreak: false })
+    // Sin truncar, un contacto largo (hasta 160 chars) se salía de la hoja en cada página.
+    file.font(fonts.regular).fontSize(10.5).fillColor(WAVE_RED)
+    file.text(truncateToWidth(file, cleanText(item.text), PAGE_W - 85 - 24), 85, y, { lineBreak: false })
   })
 }
 

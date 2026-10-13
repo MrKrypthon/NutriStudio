@@ -14,11 +14,15 @@ function leanMassKg(weightKg, bodyFatPercent) {
 }
 
 function calculateBmi(weightKg, heightCm) {
-  const heightM = heightCm / 100
-  return weightKg / (heightM * heightM)
+  const weight = Number(weightKg)
+  const heightM = Number(heightCm) / 100
+  if (!Number.isFinite(weight) || !Number.isFinite(heightM) || heightM <= 0) return null
+  return weight / (heightM * heightM)
 }
 
 function classifyBmi(bmi) {
+  // Sin un IMC finito no hay clasificación: antes NaN caía hasta el final y se etiquetaba "obesidad_iii".
+  if (!Number.isFinite(bmi)) return null
   if (bmi < 18.5) return 'bajo_peso'
   if (bmi < 25) return 'normal'
   if (bmi < 30) return 'sobrepeso'
@@ -29,7 +33,8 @@ function classifyBmi(bmi) {
 
 // Rango de peso saludable según IMC de referencia OMS (18.5-24.9), no un objetivo clínico individual.
 function idealWeightRange(heightCm) {
-  const heightM = heightCm / 100
+  const heightM = Number(heightCm) / 100
+  if (!Number.isFinite(heightM) || heightM <= 0) return { minKg: null, maxKg: null }
   return {
     minKg: round1(18.5 * heightM * heightM),
     maxKg: round1(24.9 * heightM * heightM),
@@ -40,6 +45,10 @@ function idealWeightRange(heightCm) {
 // que ya usaba este proyecto para el bracket 18-30; se completan el resto de los brackets de
 // edad porque aplicar solo el coeficiente 18-30 a cualquier edad subestima/sobreestima el GEB.
 const SCHOFIELD_BRACKETS = [
+  // Lactantes/niños (FAO/OMS/ONU 1985): sin estos tramos, un menor recibía la ecuación adolescente
+  // y el GEB salía sobreestimado (micronutrients.js sí contempla el bracket infantil).
+  { maxAge: 3, male: (w) => 60.9 * w - 54, female: (w) => 61.0 * w - 51 },
+  { maxAge: 10, male: (w) => 22.7 * w + 495, female: (w) => 22.5 * w + 499 },
   { maxAge: 18, male: (w) => 17.5 * w + 651, female: (w) => 12.2 * w + 746 },
   { maxAge: 30, male: (w) => 15.3 * w + 679, female: (w) => 14.7 * w + 496 },
   { maxAge: 60, male: (w) => 11.6 * w + 879, female: (w) => 8.7 * w + 829 },
@@ -135,8 +144,18 @@ function normalizeEnergyAdjust(value) {
 }
 
 function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent, formula, activityFactor, mets, energyAdjustKcal }) {
+  const weight = Number(weightKg)
+  const height = Number(heightCm)
+  const ageValue = Number(age)
+  // Sin peso/talla/edad válidos todo lo que sigue da NaN y aguas abajo se clasifica como si fueran
+  // datos reales (peso/talla vacíos → GET NaN, sin flag, y BMI "obesidad_iii"). Se rechaza antes.
+  if (!Number.isFinite(weight) || weight <= 0) throw new NutritionEngineError('INVALID_WEIGHT', 'El peso debe ser un número mayor que cero.', { weightKg: 'invalid' })
+  if (!Number.isFinite(height) || height <= 0) throw new NutritionEngineError('INVALID_HEIGHT', 'La talla debe ser un número mayor que cero.', { heightCm: 'invalid' })
+  if (!Number.isFinite(ageValue) || ageValue <= 0) throw new NutritionEngineError('INVALID_AGE', 'La edad debe ser un número mayor que cero.', { age: 'invalid' })
+
   const key = String(sex || '').trim().toLowerCase()
   const male = key.startsWith('homb') || key.startsWith('masc') || key === 'male' || key === 'm'
+  const female = key.startsWith('muj') || key.startsWith('fem') || key === 'female' || key === 'f'
   // Cunningham y Katch-McArdle calculan sobre la masa magra: sin % de grasa válido, `leanMassKg`
   // trataba el peso total como libre de grasa y el BMR salía muy sobreestimado (o negativo con >100).
   if (formula === 'cunningham' || formula === 'katch-mcardle') {
@@ -144,19 +163,30 @@ function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent
     if (!Number.isFinite(bf) || bf <= 0 || bf >= 100) throw new NutritionEngineError('MISSING_BODY_FAT', 'Esta fórmula requiere el % de grasa corporal (un valor entre 1 y 99).')
   }
   const formulaEntry = resolveFormula(formula)
-  const bmr = formulaEntry.compute({ age, weightKg, heightCm, bodyFatPercent, male })
+  const bmr = formulaEntry.compute({ age: ageValue, weightKg: weight, heightCm: height, bodyFatPercent, male })
 
   const metsKcal = mets?.met && mets?.minutes && mets?.sessionsPerWeek
-    ? (Number(mets.met) * 3.5 * weightKg / 200 * Number(mets.minutes) * Number(mets.sessionsPerWeek)) / 7
+    ? (Number(mets.met) * 3.5 * weight / 200 * Number(mets.minutes) * Number(mets.sessionsPerWeek)) / 7
     : null
   // El gasto total = metabolismo basal + energía de la actividad. Con METS, la actividad es la
   // energía del ejercicio (que se SUMA al BMR); con factor de actividad, el factor ya multiplica al
   // BMR. Antes `get = metsKcal || ...` descartaba el BMR cuando había METS (GET ≈ kcal del ejercicio).
-  const get = metsKcal != null ? bmr + metsKcal : bmr * Number(activityFactor || ACTIVITY_FACTORS.sedentary)
+  const factor = Number(activityFactor)
+  const factorValid = Number.isFinite(factor) && factor > 0
+  const get = metsKcal != null ? bmr + metsKcal : bmr * (factorValid ? factor : ACTIVITY_FACTORS.sedentary)
 
-  const bmi = calculateBmi(weightKg, heightCm)
+  const bmi = calculateBmi(weight, height)
   const flags = []
-  if (get < PLAUSIBLE_GET_RANGE.min || get > PLAUSIBLE_GET_RANGE.max) {
+  // Un sexo no reconocido cae en la rama femenina sin aviso: se marca para revisión profesional.
+  if (!male && !female) {
+    flags.push({ code: 'SEX_UNSPECIFIED', message: 'No se reconoció el sexo (Hombre/Mujer); se usó la ecuación femenina. Verifica el dato.' })
+  }
+  // Un factor de actividad no numérico daba GET=NaN sin flag: se avisa y se usa el sedentario.
+  if (metsKcal == null && activityFactor != null && !factorValid) {
+    flags.push({ code: 'INVALID_ACTIVITY_FACTOR', message: 'El factor de actividad no es válido; se usó el nivel sedentario.' })
+  }
+  // `get < min || get > max` era falso para NaN (dato faltante): se evalúa también el no-finito.
+  if (!Number.isFinite(get) || get < PLAUSIBLE_GET_RANGE.min || get > PLAUSIBLE_GET_RANGE.max) {
     flags.push({ code: 'GET_OUT_OF_RANGE', message: 'El gasto energético calculado está fuera del rango plausible para un adulto y requiere revisión profesional.' })
   }
 
@@ -177,10 +207,10 @@ function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent
     energyAdjustKcal: adjust,
     targetKcal,
     activityMethod: metsKcal ? 'mets' : 'factor',
-    bmi: round1(bmi),
+    bmi: bmi == null ? null : round1(bmi),
     bmiCategory: classifyBmi(bmi),
-    idealWeightRange: idealWeightRange(heightCm),
-    inputs: { age, weightKg, heightCm, sex, bodyFatPercent: bodyFatPercent || null },
+    idealWeightRange: idealWeightRange(height),
+    inputs: { age: ageValue, weightKg: weight, heightCm: height, sex, bodyFatPercent: bodyFatPercent || null },
     flags,
     reviewed: false,
   }

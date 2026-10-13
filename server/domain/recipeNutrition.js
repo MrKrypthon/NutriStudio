@@ -13,10 +13,10 @@ function perServingFromIngredients(ingredients, portions) {
   const totals = emptyNutritionTotals()
   for (const item of ingredients || []) {
     const nutrition = item.ingredient?.nutrition || {}
-    const factor = Number(item.quantity) / 100
+    const factor = (Number(item.quantity) || 0) / 100
     for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor
   }
-  const servings = Number(portions) || 1
+  const servings = Math.max(1, Number(portions) || 1)
   return Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round((value / servings) * 10) / 10]))
 }
 
