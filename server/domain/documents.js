@@ -1,5 +1,6 @@
 import { mealBadgePortions } from './equivalents.js'
-import { PLAN_MEALS, PLAN_MEAL_KEYS, formatMealTime, normalizeMealTimes } from './planMeals.js'
+import { normalizeItems } from './recipeEquivalents.js'
+import { PLAN_MEALS, PLAN_MEAL_KEYS, formatMealTime, normalizeMealLabels, normalizeMealTimes } from './planMeals.js'
 
 // Nombre de cada tiempo de comida en el plan entregado (todas las colaciones son "Colación" y se
 // distinguen por su hora, como en el formato en papel) y su orden en el día.
@@ -135,7 +136,11 @@ function normalizeRecipeAdjustments(value) {
     if (rest.length || !MEAL_TYPE_ORDER.includes(mealType) || !/^[0-9a-f-]{36}$/i.test(recipeId || '')) continue
     if (!Array.isArray(adjustment?.lines)) continue
     const lines = adjustment.lines.filter((line) => typeof line === 'string').map((line) => line.trim().slice(0, 240)).filter(Boolean).slice(0, 40)
-    if (lines.length) result[adjustmentKey(mealType, recipeId)] = { lines, factor: normalizeFactor(adjustment.factor) }
+    if (!lines.length) continue
+    // `items`: la receta editada por equivalentes (ver recipeEquivalents.js). Es opcional: un
+    // ajuste escrito a mano sólo trae renglones.
+    const items = normalizeItems(adjustment.items)
+    result[adjustmentKey(mealType, recipeId)] = { lines, factor: normalizeFactor(adjustment.factor), ...(items.length ? { items } : {}) }
   }
   return result
 }
@@ -157,7 +162,8 @@ function applyRecipeAdjustments(menu, adjustments) {
 // receta varios días no genera opciones repetidas. Las porciones del tiempo de comida son las que
 // la nutrióloga repartió en el paso Equivalentes; si el plan no tiene ese cálculo, se estiman con
 // los equivalentes de su primera opción (la receta base de la Distribución).
-function buildMealOptions(menu, mealTimes, equivalentPlan) {
+function buildMealOptions(menu, mealTimes, equivalentPlan, mealLabels) {
+  const labels = normalizeMealLabels(mealLabels)
   const hasPrescription = Object.values(equivalentPlan?.distribution || {}).some((meal) => mealBadgePortions(meal).length > 0)
   const times = normalizeMealTimes(mealTimes)
   return MEAL_TYPE_ORDER.map((mealType) => {
@@ -176,7 +182,7 @@ function buildMealOptions(menu, mealTimes, equivalentPlan) {
     const portions = EQUIVALENT_GROUPS
       .map((group) => ({ ...group, quantity: Math.round((equivalents[group.code] || 0) * 2) / 2 }))
       .filter((group) => group.quantity > 0)
-    return { mealType, label: MEAL_TYPE_LABELS[mealType] || mealType, time: formatMealTime(times[mealType]), options, portions }
+    return { mealType, label: labels[mealType] || MEAL_TYPE_LABELS[mealType] || mealType, time: formatMealTime(times[mealType]), options, portions }
   }).filter((row) => row.options.length)
 }
 

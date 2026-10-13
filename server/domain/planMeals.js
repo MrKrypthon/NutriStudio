@@ -99,4 +99,27 @@ function suggestMealsFromConsultation(dietary) {
   return { meals, times, fromConsultation: hasInfo, stated: Object.keys(stated) }
 }
 
-export { PLAN_MEALS, PLAN_MEAL_KEYS, DEFAULT_ACTIVE_MEALS, normalizeActiveMeals, normalizeMealTimes, formatMealTime, parseTimeFromText, suggestMealsFromConsultation }
+// Nombre propio que la nutrióloga le da a un tiempo de comida en un plan ("Pre-entreno" en vez de
+// "Colación matutina"): { <tiempo>: texto }. Sin nombre propio se usa el del catálogo.
+function normalizeMealLabels(value) {
+  const labels = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return labels
+  for (const key of PLAN_MEAL_KEYS) {
+    const label = typeof value[key] === 'string' ? value[key].trim().replace(/\s+/g, ' ').slice(0, 28) : ''
+    if (label) labels[key] = label
+  }
+  return labels
+}
+
+// Indicación para un tiempo de comida en particular ("Al despertar: 1 vaso de agua…").
+function normalizeMealNotes(value) {
+  const notes = {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return notes
+  for (const key of PLAN_MEAL_KEYS) {
+    const note = typeof value[key] === 'string' ? value[key].trim().slice(0, 600) : ''
+    if (note) notes[key] = note
+  }
+  return notes
+}
+
+export { normalizeMealLabels, normalizeMealNotes, PLAN_MEALS, PLAN_MEAL_KEYS, DEFAULT_ACTIVE_MEALS, normalizeActiveMeals, normalizeMealTimes, formatMealTime, parseTimeFromText, suggestMealsFromConsultation }

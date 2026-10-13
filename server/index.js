@@ -11,9 +11,9 @@ import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
 import { adjustmentFactor, applyRecipeAdjustments, buildMenuSnapshot, normalizeRecipeAdjustments, sanitizeJpeg } from './domain/documents.js'
-import { PLAN_MEAL_KEYS, normalizeActiveMeals, normalizeMealTimes } from './domain/planMeals.js'
+import { PLAN_MEAL_KEYS, normalizeActiveMeals, normalizeMealLabels, normalizeMealNotes, normalizeMealTimes } from './domain/planMeals.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
-import { normalizeEquivalentPlan } from './domain/equivalents.js'
+import { normalizeEquivalentPlan, normalizeMenus } from './domain/equivalents.js'
 import { emptyNutritionTotals, perServingFromIngredients } from './domain/recipeNutrition.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
@@ -1531,7 +1531,7 @@ app.patch('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados no pueden modificarse.', fields: {} })
-  const { hydrationNote, recommendations, mealTimes, equivalents, activeMeals, recipeAdjustments } = request.body || {}
+  const { hydrationNote, recommendations, mealTimes, equivalents, activeMeals, recipeAdjustments, mealLabels, mealNotes, menus } = request.body || {}
   const updated = await prisma.nutritionPlan.update({
     where: { id: plan.id },
     data: {
@@ -1541,6 +1541,9 @@ app.patch('/api/v1/plans/:planId', async (request, reply) => {
       // Prisma distingue "no tocar" de "guardar nulo" en columnas Json: sin cálculo se guarda {}.
       ...(equivalents !== undefined ? { equivalents: normalizeEquivalentPlan(equivalents) || {} } : {}),
       ...(activeMeals !== undefined ? { activeMeals: normalizeActiveMeals(activeMeals) } : {}),
+      ...(mealLabels !== undefined ? { mealLabels: normalizeMealLabels(mealLabels) } : {}),
+      ...(menus !== undefined ? { menus: normalizeMenus(menus) } : {}),
+      ...(mealNotes !== undefined ? { mealNotes: normalizeMealNotes(mealNotes) } : {}),
       ...(recipeAdjustments !== undefined ? { recipeAdjustments: normalizeRecipeAdjustments(recipeAdjustments) } : {}),
     },
   })
@@ -1582,7 +1585,7 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
         formula,
         activityMethod: energy.activityMethod,
         activityFactor: energy.activityMethod === 'factor' ? factor : null,
-        metsPayload: energy.activityMethod === 'mets' ? mets : null,
+        metsPayload: energy.activityMethod === 'mets' ? { met: Number(mets?.met) || 0, minutes: Number(mets?.minutes) || 0, sessionsPerWeek: Number(mets?.sessionsPerWeek) || 0 } : Prisma.DbNull,
         targetKcal: energy.targetKcal,
         carbsPercent: macros.macros.carbs.percent,
         proteinPercent: macros.macros.protein.percent,
@@ -2142,6 +2145,9 @@ async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) 
     menu,
     mealTimes: plan.mealTimes,
     equivalents: plan.equivalents,
+    mealLabels: plan.mealLabels,
+    menus: plan.menus,
+    mealNotes: plan.mealNotes,
     recommendations: plan.recommendations,
     hydrationNote: plan.hydrationNote,
     logo: logoBuffer,

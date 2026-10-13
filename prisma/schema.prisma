@@ -333,6 +333,12 @@ model NutritionPlan {
   // Cálculo por equivalentes: { groups: { <grupo>: n }, distribution: { <tiempo>: { <grupo>: n } } }
   // (ver server/domain/equivalents.js). Son las porciones que muestra el plan entregado.
   equivalents     Json?
+  // Nombre propio de un tiempo de comida en este plan y su indicación particular:
+  // { <tiempo>: texto }.
+  // Menús adicionales del plan (tipos de día), ver normalizeMenus en server/domain/equivalents.js.
+  menus           Json?
+  mealLabels      Json?
+  mealNotes       Json?
   // Tiempos de comida que usa este plan (claves de server/domain/planMeals.js). Vacío = todavía
   // no se personalizó: se proponen según la consulta.
   activeMeals     String[]     @default([])
