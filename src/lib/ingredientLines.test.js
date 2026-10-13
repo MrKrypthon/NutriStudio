@@ -33,12 +33,23 @@ describe('scaleIngredientLine', () => {
 
   it('understands typographic fractions', () => {
     expect(scaleIngredientLine('½ taza de frijol', 2)).toBe('1 taza de frijol')
-    expect(scaleIngredientLine('1½ pieza de pan', 2)).toBe('3 pieza de pan')
+    expect(scaleIngredientLine('1½ pieza de pan', 2)).toBe('3 piezas de pan')
     expect(scaleIngredientLine('¼ de cebolla', 0.25)).toBe('1/4 de cebolla')
   })
 
   it('passes through lines without an amount and unchanged factors', () => {
     expect(scaleIngredientLine('Sal al gusto', 3)).toBe('Sal al gusto')
     expect(scaleIngredientLine('2 huevos', 1)).toBe('2 huevos')
+  })
+
+  it('keeps the unit in agreement with the scaled amount', () => {
+    expect(scaleIngredientLine('2 huevos', 0.5)).toBe('1 huevo')
+    expect(scaleIngredientLine('2 tazas de arroz cocido', 0.5)).toBe('1 taza de arroz cocido')
+    expect(scaleIngredientLine('1 taza de leche', 1.5)).toBe('1 1/2 tazas de leche')
+    expect(scaleIngredientLine('1 cucharadita de aceite', 0.5)).toBe('1/2 cucharadita de aceite')
+    expect(scaleIngredientLine('1/4 de cebolla', 4)).toBe('1 de cebolla')
+    expect(scaleIngredientLine('3 Tortillas de maíz', 1 / 3)).toBe('1 Tortilla de maíz')
+    // Palabras fuera de la lista no se tocan.
+    expect(scaleIngredientLine('2 calabazas tiernas', 0.5)).toBe('1 calabazas tiernas')
   })
 })

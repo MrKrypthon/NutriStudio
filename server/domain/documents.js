@@ -1,5 +1,6 @@
-import { mealBadgePortions } from './equivalents.js'
-import { PLAN_MEALS, PLAN_MEAL_KEYS, formatMealTime, normalizeMealTimes } from './planMeals.js'
+import { EQUIVALENT_BY_CODE, mealBadgePortions } from './equivalents.js'
+import { itemsEquivalents, normalizeItems, recipeItems } from './recipeEquivalents.js'
+import { PLAN_MEALS, PLAN_MEAL_KEYS, formatMealTime, normalizeMealLabels, normalizeMealTimes } from './planMeals.js'
 
 // Nombre de cada tiempo de comida en el plan entregado (todas las colaciones son "Colación" y se
 // distinguen por su hora, como en el formato en papel) y su orden en el día.
@@ -54,22 +55,16 @@ function equivalentGroupCode(group) {
   return null
 }
 
-// Equivalentes por grupo de UNA porción de la receta, a partir de sus ingredientes vinculados al
-// catálogo: gramos usados ÷ gramos de un equivalente. No se usa `RecipeIngredient.equivalence`
-// (en las recetas importadas guarda la cantidad del renglón original, no equivalentes) ni los
-// ingredientes "aproximados", cuya porción de 100 g no es un equivalente SMAE.
+// Equivalentes por grupo de UNA porción de la receta, con los círculos del plan impreso (cereales,
+// leches y azúcares sin subdividir). Usa la misma equivalencia que el Constructor: la del SMAE
+// cuando el ingrediente viene de ahí, y la calculada de su composición cuando no.
 function recipeEquivalents(recipe) {
   const totals = {}
-  for (const item of recipe?.ingredients || []) {
-    const equivalence = item.ingredient?.equivalence || {}
-    const grams = Number(equivalence.grams)
-    if (!grams || equivalence.source === 'APPROX_500') continue
-    const code = equivalentGroupCode(equivalence.group) || equivalentGroupCode(item.ingredient?.group)
-    if (!code) continue
-    totals[code] = (totals[code] || 0) + Number(item.quantity) / grams
+  for (const [code, value] of Object.entries(itemsEquivalents(recipeItems(recipe, 1)))) {
+    const badge = EQUIVALENT_BY_CODE[code]?.badge
+    if (badge) totals[badge] = Math.round(((totals[badge] || 0) + value) * 100) / 100
   }
-  const portions = Number(recipe?.portions) || 1
-  return Object.fromEntries(Object.entries(totals).map(([code, value]) => [code, Math.round((value / portions) * 100) / 100]))
+  return totals
 }
 
 const trimNumber = (value) => String(Math.round(Number(value) * 10) / 10)
@@ -116,6 +111,7 @@ function buildMenuSnapshot(mealSlots) {
 // del plan sigan al ajuste, porque del texto libre no se pueden recalcular.
 const adjustmentKey = (mealType, recipeId) => `${mealType}|${recipeId}`
 
+const MAX_ADJUSTMENTS = 60
 const normalizeFactor = (value) => { const number = Number(value); return Number.isFinite(number) && number > 0 ? Math.min(10, Math.max(0.1, Math.round(number * 100) / 100)) : 1 }
 
 // Factor nutrimental del ajuste de una receta en un tiempo de comida (1 si no tiene ajuste).
@@ -127,12 +123,18 @@ function adjustmentFactor(adjustments, mealType, recipeId) {
 function normalizeRecipeAdjustments(value) {
   const result = {}
   if (!value || typeof value !== 'object' || Array.isArray(value)) return result
-  for (const [key, adjustment] of Object.entries(value).slice(0, 200)) {
+  for (const [key, adjustment] of Object.entries(value)) {
+    // Como mucho 7 tiempos × 7 recetas distintas; el tope se aplica a los ajustes válidos.
+    if (Object.keys(result).length >= MAX_ADJUSTMENTS) break
     const [mealType, recipeId, ...rest] = String(key).split('|')
     if (rest.length || !MEAL_TYPE_ORDER.includes(mealType) || !/^[0-9a-f-]{36}$/i.test(recipeId || '')) continue
     if (!Array.isArray(adjustment?.lines)) continue
-    const lines = adjustment.lines.filter((line) => typeof line === 'string').map((line) => line.trim().slice(0, 240)).filter(Boolean).slice(0, 60)
-    if (lines.length) result[adjustmentKey(mealType, recipeId)] = { lines, factor: normalizeFactor(adjustment.factor) }
+    const lines = adjustment.lines.filter((line) => typeof line === 'string').map((line) => line.trim().slice(0, 240)).filter(Boolean).slice(0, 40)
+    if (!lines.length) continue
+    // `items`: la receta editada por equivalentes (ver recipeEquivalents.js). Es opcional: un
+    // ajuste escrito a mano sólo trae renglones.
+    const items = normalizeItems(adjustment.items)
+    result[adjustmentKey(mealType, recipeId)] = { lines, factor: normalizeFactor(adjustment.factor), ...(items.length ? { items } : {}) }
   }
   return result
 }
@@ -154,7 +156,9 @@ function applyRecipeAdjustments(menu, adjustments) {
 // receta varios días no genera opciones repetidas. Las porciones del tiempo de comida son las que
 // la nutrióloga repartió en el paso Equivalentes; si el plan no tiene ese cálculo, se estiman con
 // los equivalentes de su primera opción (la receta base de la Distribución).
-function buildMealOptions(menu, mealTimes, equivalentPlan) {
+function buildMealOptions(menu, mealTimes, equivalentPlan, mealLabels) {
+  const labels = normalizeMealLabels(mealLabels)
+  const hasPrescription = Object.values(equivalentPlan?.distribution || {}).some((meal) => mealBadgePortions(meal).length > 0)
   const times = normalizeMealTimes(mealTimes)
   return MEAL_TYPE_ORDER.map((mealType) => {
     const options = []
@@ -165,12 +169,14 @@ function buildMealOptions(menu, mealTimes, equivalentPlan) {
       seen.add(key)
       options.push(entry)
     }
+    // Con reparto de equivalentes en el plan, las porciones son sólo las prescritas: un tiempo al
+    // que no se le repartió nada sale sin círculos, no con una estimación que nadie indicó.
     const prescribed = mealBadgePortions(equivalentPlan?.distribution?.[mealType])
-    const equivalents = prescribed.length ? Object.fromEntries(prescribed.map((portion) => [portion.code, portion.quantity])) : options[0]?.equivalents || {}
+    const equivalents = hasPrescription ? Object.fromEntries(prescribed.map((portion) => [portion.code, portion.quantity])) : options[0]?.equivalents || {}
     const portions = EQUIVALENT_GROUPS
       .map((group) => ({ ...group, quantity: Math.round((equivalents[group.code] || 0) * 2) / 2 }))
       .filter((group) => group.quantity > 0)
-    return { mealType, label: MEAL_TYPE_LABELS[mealType] || mealType, time: formatMealTime(times[mealType]), options, portions }
+    return { mealType, label: labels[mealType] || MEAL_TYPE_LABELS[mealType] || mealType, time: formatMealTime(times[mealType]), options, portions }
   }).filter((row) => row.options.length)
 }
 

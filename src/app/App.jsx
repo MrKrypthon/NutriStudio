@@ -20,6 +20,7 @@ import DocumentsPage from '../modules/documents/DocumentsPage.jsx'
 import DocumentPage from '../modules/documents/DocumentPage.jsx'
 import FollowupsPage from '../modules/tasks/FollowupsPage.jsx'
 import EducationPage from '../modules/education/EducationPage.jsx'
+import EquivalencesPage from '../modules/equivalences/EquivalencesPage.jsx'
 import NewMaterialPage from '../modules/education/NewMaterialPage.jsx'
 import SettingsPage from '../modules/settings/SettingsPage.jsx'
 import FinancePage from '../modules/finance/FinancePage.jsx'
@@ -144,6 +145,7 @@ export default function App() {
   if (active === 'Plantillas') return <TemplatesPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
   if (active === 'Recetas') return <RecipesPage setActive={setActive} onSelectRecipe={setSelectedRecipeId} onAssignRecipe={assignRecipe} />
   if (active === 'Ingredientes') return <IngredientsPage setActive={setActive} />
+  if (active === 'Equivalencias') return <EquivalencesPage setActive={setActive} />
   if (active === 'Educación') return <EducationPage setActive={setActive} onSelectMaterial={setSelectedMaterialId} />
   if (active === 'Nuevo material') return <NewMaterialPage setActive={setActive} />
   if (active === 'Editar material') return <NewMaterialPage setActive={setActive} materialId={selectedMaterialId} />

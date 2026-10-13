@@ -2096,6 +2096,7 @@
     "mealType": "breakfast",
     "page": 5,
     "name": "Cinnamon French Toast",
+    "servings": 1,
     "nutrition": {
       "kcal": 291,
       "carbs": 35.8,
@@ -2104,20 +2105,21 @@
     },
     "ingredientsText": [
       "2 rebanadas de pan multigrano",
-      "1/4 de taza de leche light o vegetal sin en- dulzar (soya, almendras o coco). º",
+      "1/4 de taza de leche light o vegetal sin endulzar (soya, almendras o coco).",
       "3 claras de huevo.",
-      "1/2 scoop de proteína de suero de leche de 1 porcion vainilla.",
-      "1 cucharadita de canela en polvo. Toppings:",
-      "1 sobre de endulzante. canela en polvo o 2 cucharaditas de miel de abeja o 1 cucharada de miel sin azúcar. Utilizando leche light y 1. En un recipiente, mezcla con un tenedor las miel de abeja: claras y el huevo, la leche, el endulzante y la canela hasta que esté casi a punto de nieve. con el tenedor. La miel de abeja aporta calorías (45 6. Puedes no remojar tanto el pan para que no se extra. la rebanada de pan cuando esté en el sartén."
+      "1/2 scoop de proteína de suero de leche de vainilla.",
+      "1 cucharadita de canela en polvo.",
+      "1 sobre de endulzante."
     ],
-    "instructions": "2. Añade la proteína en polvo y vuelve a mezclar 3. *Puedes licuar todos los ingredientes* 4. Remoja el pan de uno y otro lado hasta que",
-    "imageFile": "flex-cinnamon-french-toast.jpg"
+    "instructions": "1. En un recipiente, mezcla con un tenedor las claras y el huevo, la leche, el endulzante y la canela hasta que esté casi a punto de nieve. 2. Añade la proteína en polvo y vuelve a mezclar con el tenedor. 3. *Puedes licuar todos los ingredientes* 4. Remoja el pan de uno y otro lado hasta que absorba líquido. 5. Ponlo a dorar en un sartén caliente. 6. Puedes no remojar tanto el pan para que no se rompa, y con la mezcla sobrante puedes bañar la rebanada de pan cuando esté en el sartén.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "breakfast",
     "page": 6,
     "name": "Sándwich Montecristo",
+    "servings": 1,
     "nutrition": {
       "kcal": 407,
       "carbs": 35.8,
@@ -2126,21 +2128,22 @@
     },
     "ingredientsText": [
       "2 rebanadas de pan multigrano",
-      "1/4 de taza de leche light o vegetal sin en- dulzar (soya, almendras o coco). º",
-      "4 claras de huevo. 1 porcion",
+      "1/4 de taza de leche light o vegetal sin endulzar (soya, almendras o coco).",
+      "4 claras de huevo.",
       "1 cucharadita de canela en polvo.",
       "1 sobre de endulzante.",
       "40g de queso panela light.",
-      "30g de pechuga de pavo. Toppings: 2 cucharaditas de miel de abeja o 1 cucharada de miel sin azúcar. Utilizando leche light y 1. En un recipiente, mezcla con un tenedor las miel de abeja: claras y el huevo, la leche, el endulzante y la absorba líquido. rompa, y con la mezcla sobrante puedes bañar La miel de abeja aporta calorías (45 extra."
+      "30g de pechuga de pavo."
     ],
-    "instructions": "3. Ponlo a dorar en un sartén caliente. 4. Puedes no remojar tanto el pan para que no se 5. *Gratina el queso en el sartén con el jamón*",
-    "imageFile": "flex-sandwich-montecristo.jpg"
+    "instructions": "1. En un recipiente, mezcla con un tenedor las claras y el huevo, la leche, el endulzante y la canela hasta que esté casi a punto de nieve. 2. Remoja el pan de uno y otro lado hasta que absorba líquido. 3. Ponlo a dorar en un sartén caliente. 4. Puedes no remojar tanto el pan para que no se rompa, y con la mezcla sobrante puedes bañar la rebanada de pan cuando esté en el sartén. 5. *Gratina el queso en el sartén con el jamón*",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "breakfast",
     "page": 7,
     "name": "Crepas Ligeras",
+    "servings": 1,
     "nutrition": {
       "kcal": 244,
       "carbs": 28,
@@ -2149,19 +2152,20 @@
     },
     "ingredientsText": [
       "¼ de taza de harina de trigo integral o avena molida.",
-      "1 huevo + 1 clara º",
+      "1 huevo + 1 clara",
       "½ tza de leche light.",
-      "1 cucharadita de esencia de vainilla. 1 porcion",
-      "2 sobres de edulcorante sin calorías. Toppings: Rellena con proteína como pollo des- hebrado, queso panela o Oaxaca light, aguacate. das de la mezcla y expándelo por todo el sartén Mujeres 1 porción para hacerlas delgadas. Voltea cuidadosamente. Hombres 2 porciones Recuerda que las cantidades del relleno serán las que aporten principalmente proteína o puedes añadir whey protein a la mezcla y añadir más agua si las quieres rellenar solo de fruta. 3"
+      "1 cucharadita de esencia de vainilla.",
+      "2 sobres de edulcorante sin calorías."
     ],
-    "instructions": "1. En un recipiente, mezcla todos los ingredientes 3. Con una cuchara mediana agrega 2-3 cuchara-",
-    "imageFile": "flex-crepas-ligeras.jpg"
+    "instructions": "1. En un recipiente, mezcla todos los ingredientes hasta que se incorporen bien. 2. Calienta un sartén antiadherente y rocíalo con aceite en spray o aceite de tu preferencia. 3. Con una cuchara mediana agrega 2-3 cucharadas de la mezcla y expándelo por todo el sartén para hacerlas delgadas. Voltea cuidadosamente.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "breakfast",
     "page": 8,
     "name": "Pro-oats",
+    "servings": 1,
     "nutrition": {
       "kcal": 274,
       "carbs": 27.3,
@@ -2170,18 +2174,19 @@
     },
     "ingredientsText": [
       "1/2 taza de avena (60g)",
-      "1 scoop de proteína de suero de leche sabor chocolate o vainilla o 4 claras de º huevo.",
-      "1/2 taza de agua o leche vegetal sin azúcar 1 porcion (almendra leche o coco).",
-      "1 sobre de endulzante Utilizando proteína de sue- 1. En una olla agrega la leche vegetal o el agua, la ro de leche y leche light: avena y el endulzante hasta que hierva. bien. Puedes agregar un poco más de leche o agua si no te gusta la consistencia. Con las claras de huevo: Mismo procedimiento, solo añade las claras, una por una batiendo vigorosamente, vuelve a colocar al fuego hasta que espese un poco, aproximadamente 1-2 minutos. 4"
+      "1 scoop de proteína de suero de leche sabor chocolate o vainilla o 4 claras de huevo.",
+      "1/2 taza de agua o leche vegetal sin azúcar (almendra leche o coco).",
+      "1 sobre de endulzante"
     ],
-    "instructions": "",
-    "imageFile": "flex-pro-oats.jpg"
+    "instructions": "1. En una olla agrega la leche vegetal o el agua, la avena y el endulzante hasta que hierva. 2. Deja que espese y puedes agregar 1 cucharada de cocoa en polvo o canela. 3. Retira del fuego y deja reposar unos minutos. 4. Al final, agrega la proteína en polvo y mezcla bien. Puedes agregar un poco más de leche o agua si no te gusta la consistencia.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "breakfast",
     "page": 9,
     "name": "Burrito",
+    "servings": 1,
     "nutrition": {
       "kcal": 243,
       "carbs": 19.94,
@@ -2189,21 +2194,22 @@
       "fat": 10
     },
     "ingredientsText": [
-      "1 huevo + 2 claras. En cualquier",
-      "1/4 de taza de granos de frijoles drena- Momento dos. º",
+      "1 huevo + 2 claras.",
+      "1/4 de taza de granos de frijoles drenados.",
       "30g de queso Oaxaca Light.",
-      "1 tortilla de harina integral 1 porcion",
+      "1 tortilla de harina integral",
       "Pimienta y sal al gusto.",
-      "Salsa roja. y pimienta. de los frijoles y el queso. 5"
+      "Salsa roja."
     ],
-    "instructions": "1. Bate los huevos y las claras con una pizca de sal 2. En un sartén antihaderente, revuélvelos y aña- 3. Rellena la tortilla y ponle salsa al gusto. 4. Enróllala como burrito.",
-    "imageFile": "flex-burrito.jpg"
+    "instructions": "1. Bate los huevos y las claras con una pizca de sal y pimienta. 2. En un sartén antihaderente, revuélvelos y añade los frijoles y el queso. 3. Rellena la tortilla y ponle salsa al gusto. 4. Enróllala como burrito.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "breakfast",
     "page": 10,
     "name": "Pizzadillas",
+    "servings": 1,
     "nutrition": {
       "kcal": 407,
       "carbs": 35.8,
@@ -2211,21 +2217,22 @@
       "fat": 5.5
     },
     "ingredientsText": [
-      "2 tortillas de harina integral En cualquier",
-      "2 cucharadas de salsa de tomate para Momento pizza. º",
+      "2 tortillas de harina integral",
+      "2 cucharadas de salsa de tomate para pizza.",
       "60grs de queso Oaxaca light.",
-      "1 taza de vegetales de tu preferencia 1 porcion",
-      "1/2 taza de espinacas picadas y previamen- te desinfectadas.",
-      "1/2 taza de champiñones Utilizando leche light y 1. Coloca en una tortilla de harina integral en el miel de abeja: sartén a fuego lento y coloca la salsa, luego tortilla. 6"
+      "1 taza de vegetales de tu preferencia",
+      "1/2 taza de espinacas picadas y previamente desinfectadas.",
+      "1/2 taza de champiñones"
     ],
-    "instructions": "3. Espera a que dore y voltea.",
-    "imageFile": "flex-pizzadillas.jpg"
+    "instructions": "1. Coloca en una tortilla de harina integral en el sartén a fuego lento y coloca la salsa, luego añade el queso deshebrado. 2. Añade los vegetales picados y tapa con la otra tortilla. 3. Espera a que dore y voltea.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "breakfast",
     "page": 11,
     "name": "Carrot Pancakes",
+    "servings": 1,
     "nutrition": {
       "kcal": 310,
       "carbs": 33,
@@ -2233,25 +2240,26 @@
       "fat": 8.35
     },
     "ingredientsText": [
-      "1 huevo entero + 2 claras . Pre o Post",
-      "½ taza de avena en hojuelas (60g) Workout",
+      "1 huevo entero + 2 claras .",
+      "½ taza de avena en hojuelas (60g)",
       "1 zanahoria rayada cruda (1/2 taza).",
-      "1/4 de taza de leche light o vegetal sin en- dulzar (coco, almendra o soya). 1 porcion",
-      "1/3 de taza de yogur griego natural sin grasa (125g) (opcional). Toppings:",
-      "1 cucharadita de canela en polvo o vanilla miel de abeja y pasitas o nueces (opcional). picadas o mezcla queso filadelfia",
-      "½ cucharadita de clavos de olor en pol- light (1 cucharada) o yogur grie- vo. go (2 cucharadas) con splenda y",
-      "¼ de cucharadita de nuez moscada. rayadura de naranja.",
-      "1 pizca de polvo para hornear (opcio- nal)*",
-      "2 sobres de endulzante sin calorías. polvo. los líquidos (yogur, leche, claras de huevo). los con la mezcla del tamaño que desees. y voltea. 7"
+      "1/4 de taza de leche light o vegetal sin endulzar (coco, almendra o soya).",
+      "1/3 de taza de yogur griego natural sin grasa (125g) (opcional).",
+      "1 cucharadita de canela en polvo o vanilla (opcional).",
+      "½ cucharadita de clavos de olor en polvo.",
+      "¼ de cucharadita de nuez moscada.",
+      "1 pizca de polvo para hornear (opcional)*",
+      "2 sobres de endulzante sin calorías."
     ],
-    "instructions": "2. Mezcla la avena con la canela, clavos de olor, 4. Deja reposar la mezcla unos segundos. 5. Añade la zanahoria rayada y mezcla. 6. En un sartén antiadherente caliente, haz círcu- 7. Espera hasta que esté burbujeando la panqueca",
-    "imageFile": "flex-carrot-pancakes.jpg"
+    "instructions": "1. Licúa la avena hasta que se haga totalmente polvo. 2. Mezcla la avena con la canela, clavos de olor, nuez moscada y el endulzante. 3. Gentilmente, mezcla los ingredientes secos con los líquidos (yogur, leche, claras de huevo). 4. Deja reposar la mezcla unos segundos. 5. Añade la zanahoria rayada y mezcla. 6. En un sartén antiadherente caliente, haz círculos con la mezcla del tamaño que desees. 7. Espera hasta que esté burbujeando la panqueca y voltea.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "breakfast",
     "page": 12,
     "name": "Pancakes de avena",
+    "servings": 1,
     "nutrition": {
       "kcal": 248,
       "carbs": 23,
@@ -2259,23 +2267,24 @@
       "fat": 4.35
     },
     "ingredientsText": [
-      "4 claras de huevo. Pre o Post",
-      "¼ de taza de avena en hojuelas (30g) Workout",
+      "4 claras de huevo.",
+      "¼ de taza de avena en hojuelas (30g)",
       "1 zanahoria rayada cruda (1/2 taza).",
-      "1/4 de taza de leche light o vegetal sin en- 1 porcion dulzar (coco, almendra o soya).",
+      "1/4 de taza de leche light o vegetal sin endulzar (coco, almendra o soya).",
       "1/3 de taza de yogur griego natural sin grasa (125g) (opcional).",
       "1 cucharadita de canela en polvo o vanilla (opcional).",
-      "1 pizca de polvo para hornear (opcio- nal)*",
-      "2 sobres de endulzante sin calorías. polvo. los líquidos (yogur, leche, claras de huevo). y voltea. Puedes añadir aceite en spray por máximo 5 segundos ó 1/2 cdita de mantequilla o aceite vegetal para evitar que se pegue la panqueca, en caso de no contar con sartén antiadhe- rente. 8"
+      "1 pizca de polvo para hornear (opcional)*",
+      "2 sobres de endulzante sin calorías."
     ],
-    "instructions": "1. Licúa la avena hasta que se haga totalmente 2. Mezcla la avena con la canela y el endulzante. 3. Gentilmente, mezcla los ingredientes secos con 4. Deja reposar la mezcla unos segundos. 5. En un sartén antiadherente caliente, haz círcu- 6. Espera hasta que esté burbujeando la panqueca",
-    "imageFile": "flex-pancakes-de-avena.jpg"
+    "instructions": "1. Licúa la avena hasta que se haga totalmente polvo. 2. Mezcla la avena con la canela y el endulzante. 3. Gentilmente, mezcla los ingredientes secos con los líquidos (yogur, leche, claras de huevo). 4. Deja reposar la mezcla unos segundos. 5. En un sartén antiadherente caliente, haz círculos con la mezcla del tamaño que desees. 6. Espera hasta que esté burbujeando la panqueca y voltea.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "lunch",
     "page": 15,
     "name": "Hamburguesas de pollo",
+    "servings": 1,
     "nutrition": {
       "kcal": 113.6,
       "carbs": 0,
@@ -2283,23 +2292,24 @@
       "fat": 2.11
     },
     "ingredientsText": [
-      "500 grs de carne molida de pechuga Por cada 100g de carne sin de pollo cruda. pan",
-      "1 diente de ajo picado Energia:",
+      "500 grs de carne molida de pechuga de pollo cruda.",
+      "1 diente de ajo picado",
       "2-3 tomates picados.",
       "1 huevo",
-      "1 cebolla roja o blanca finamente Macros:",
+      "1 cebolla roja o blanca finamente picada",
       "2 tzas de espinaca picada.",
       "Perejil al gusto.",
-      "Sal y pimienta al gusto. 22g Proteína º 1 porcion spray máximo. integral o 1 pan thins de Oroweat."
+      "Sal y pimienta al gusto."
     ],
-    "instructions": "1. Coloca todo en un bowl y mezcla todo con las 2. Haz de 5 a 7 tortitas con las manos. 3. Cocínalas con poco aceite o 5 seg de aceite en 4. *Puedes acompañarlas solas o con 1 pan pita",
-    "imageFile": "flex-hamburguesas-de-pollo.jpg"
+    "instructions": "1. Coloca todo en un bowl y mezcla todo con las manos hasta que quede homogéneo. 2. Haz de 5 a 7 tortitas con las manos. 3. Cocínalas con poco aceite o 5 seg de aceite en spray máximo. 4. *Puedes acompañarlas solas o con 1 pan pita integral o 1 pan thins de Oroweat.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "lunch",
     "page": 16,
     "name": "Pollo con chícharos",
+    "servings": 1,
     "nutrition": {
       "kcal": 487,
       "carbs": 43,
@@ -2307,120 +2317,125 @@
       "fat": 12.99
     },
     "ingredientsText": [
-      "2 dientes de ajo. Por toda la preparación",
+      "2 dientes de ajo.",
       "2 cucharaditas de aceite de olivo.",
-      "220g de pechuga de pollo asadas, pica- Energia: das.",
+      "220g de pechuga de pollo asadas, picadas.",
       "½ cebolla picada.",
-      "200g de chícharos drenados. Macros:",
-      "1 tomate picado. 43g HCO",
-      "¼ cucharadita de comino en polvo. 12.99g Lípidos",
-      "¼ cucharadita de sal. aceite de olivo a fuego medio por unos segun- dos (no dejes que el ajo se dore) pollo. Saltea hasta que la cebolla torne de color º café. tos más hasta que la comida tome consistencia. comer toda la porción, mujeres mitad de porción."
+      "200g de chícharos drenados.",
+      "1 tomate picado.",
+      "¼ cucharadita de comino en polvo.",
+      "¼ cucharadita de sal."
     ],
-    "instructions": "1. En un sartén grande, saltea el ajo picado con el 2. Añade la cebolla y los trozos de pechuga de Workout 3. Añade el resto de los ingredientes. 4. Continúa cocinando y revolviendo por 3 minu-",
-    "imageFile": "flex-pollo-con-chicharos.jpg"
+    "instructions": "1. En un sartén grande, saltea el ajo picado con el aceite de olivo a fuego medio por unos segundos (no dejes que el ajo se dore) 2. Añade la cebolla y los trozos de pechuga de pollo. Saltea hasta que la cebolla torne de color café. 3. Añade el resto de los ingredientes. 4. Continúa cocinando y revolviendo por 3 minutos más hasta que la comida tome consistencia.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "lunch",
     "page": 17,
     "name": "Chop Suey",
+    "servings": 1,
     "nutrition": {
       "kcal": 593,
-      "carbs": 45,
+      "carbs": 16.6,
       "protein": 64,
       "fat": 27.15
     },
     "ingredientsText": [
-      "1 taza de brócoli cocido momento",
-      "¼ de cebolla cortada en juliana grue- º sa.",
-      "½ calabacita picada en rodajas. 1 porcion",
+      "1 taza de brócoli cocido",
+      "¼ de cebolla cortada en juliana gruesa.",
+      "½ calabacita picada en rodajas.",
       "1 taza de brotes de soya.",
       "1 zanahoria cortada en rodajas.",
-      "50 ml de salsa de soya Lite* complemento: *Se puede acompañar con 1 taza de",
+      "50 ml de salsa de soya Lite*",
       "2 cucharaditas de aceite de olivo.",
       "2 cucharaditas de ajonjolí.",
-      "200 grs de pechuga de pollo cocida pica- da. Por toda la preparación 1. Colocar en un sartén caliente las 2 cucharaditas de aceite de olivo y dejarlas acitronar. horia a fuego medio, añadir un poco de salsa de ditas de ajonjolí y si se desea una cucharada de salsa teriyaki o salsa de soya lite. 13 comer toda la porción, mujeres mitad de porción."
+      "200 grs de pechuga de pollo cocida picada."
     ],
-    "instructions": "2. Añadir las calabacitas, brotes de soya y la zana-",
-    "imageFile": "flex-chop-suey.jpg"
+    "instructions": "1. Colocar en un sartén caliente las 2 cucharaditas de aceite de olivo y dejarlas acitronar. 2. Añadir las calabacitas, brotes de soya y la zanahoria a fuego medio, añadir un poco de salsa de soya hasta que queden cocidas. 3. Por último, añadir el brócoli y la pechuga de pollo y dejar cocinar con la salsa de soya restante. 4. Retirar del fuego y servir con las dos cucharaditas de ajonjolí y si se desea una cucharada de salsa teriyaki o salsa de soya lite.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "lunch",
     "page": 18,
     "name": "Fajitas de Res con Arroz",
+    "servings": 2,
     "nutrition": {
-      "kcal": 475,
-      "carbs": 18,
-      "protein": 63,
-      "fat": 12.99
+      "kcal": 237.5,
+      "carbs": 9,
+      "protein": 31.5,
+      "fat": 6.5
     },
     "ingredientsText": [
-      "1 taza de arroz blanco o integral cocido. momento",
-      "1 cucharadita de paprika. º",
+      "1 taza de arroz blanco o integral cocido.",
+      "1 cucharadita de paprika.",
       "1/8 de cucharadita de comino.",
-      "½ taza de salsa roja. 2 porciones",
+      "½ taza de salsa roja.",
       "500g de carne de res magra.",
       "1 cebolla pequeña picada.",
       "1 pimiento morrón picado.",
-      "Sal y pimienta al gusto. Por toda la preparación 1. En un bowl combina el arroz cocido con la pa- prika, el comino y la salsa. que todo esté completamente caliente (puedes pimientos a fuego alto por 2 minutos. cla de res y vegetales. Puedes añadir el jugo de ½ limón si deseas. remojado toda la noche o dos horas previas. 14"
+      "Sal y pimienta al gusto."
     ],
-    "instructions": "2. Mezcla todo y calienta en el microondas hasta 4. Separa el arroz en dos partes y sirve con la mez-",
-    "imageFile": "flex-fajitas-de-res-con-arroz.jpg"
+    "instructions": "1. En un bowl combina el arroz cocido con la paprika, el comino y la salsa. 2. Mezcla todo y calienta en el microondas hasta que todo esté completamente caliente (puedes ir parando el micro). 3. En un sartén antiadeherente, añade aceite en spray y fríe la carne de res con la cebolla y los pimientos a fuego alto por 2 minutos. 4. Separa el arroz en dos partes y sirve con la mezcla de res y vegetales. Puedes añadir el jugo de ½ limón si deseas.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dinner",
     "page": 20,
     "name": "Hamburguesas de atún",
+    "servings": 2,
     "nutrition": {
-      "kcal": 475,
-      "carbs": 18,
-      "protein": 63,
-      "fat": 12.99
+      "kcal": 237.5,
+      "carbs": 9,
+      "protein": 31.5,
+      "fat": 6.5
     },
     "ingredientsText": [
-      "3 paquetes de atún bajos en sodio. Por toda la preparación",
+      "3 paquetes de atún bajos en sodio.",
       "½ taza de harina de linaza o almendras o coco.",
-      "4 cebollines picados. 475 kcal",
-      "2 huevos. Macros:",
+      "4 cebollines picados.",
+      "2 huevos.",
       "1 cucharada de salsa de soya.",
       "1 pizca de ajo en polvo.",
-      "Sal y pimienta al gusto. 12.99g Lípidos",
-      "2 cucharaditas de aceite de olivo. 63g Proteína Cualquier grande. Fórmalos en 2 hamburguesitas. momento 2. Pon a freír las dos hamburguesitas con las 2 º cucharaditas de aceite de olivo en un sartén o puedes ponerlas al horno previamente preca- 2 porciones lentado a 180 °C por 10 minutos o hasta que doren. 16"
+      "Sal y pimienta al gusto.",
+      "2 cucharaditas de aceite de olivo."
     ],
-    "instructions": "1. Combina todos los ingredientes en un bowl",
-    "imageFile": "flex-hamburguesas-de-atun.jpg"
+    "instructions": "1. Combina todos los ingredientes en un bowl grande. Fórmalos en 2 hamburguesitas. 2. Pon a freír las dos hamburguesitas con las 2 cucharaditas de aceite de olivo en un sartén o puedes ponerlas al horno previamente precalentado a 180 °C por 10 minutos o hasta que doren.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dinner",
     "page": 21,
     "name": "Pizza de pollo al pesto",
+    "servings": 2,
     "nutrition": {
-      "kcal": 658,
-      "carbs": 50,
-      "protein": 67,
-      "fat": 20
+      "kcal": 329,
+      "carbs": 25,
+      "protein": 33.5,
+      "fat": 10
     },
     "ingredientsText": [
-      "2 pan árabe medianos. Por toda la preparación con",
-      "170g de pechuga de pollo al grill en cubi- salsa pesto tos.",
+      "2 pan árabe medianos.",
+      "170g de pechuga de pollo al grill en cubitos.",
       "Aceite de olivo en spray.",
-      "3 cucharaditas de salsa pesto (opcio- 658 kcal",
+      "3 cucharaditas de salsa pesto (opcional).",
       "¼ de taza de flores de brócoli cocido.",
       "¼ de taza de tomates deshidratados.",
-      "¼ de taza de calabacitas picadas. 20g Lípidos",
-      "½ taza de queso Oaxaca light deshebra- 67g Proteína do. Cualquier 2. Coloca en una bandeja para hornear un trozo de momento papel para horneado y rocía el aceite en spray y º coloca el pan árabe. 2 porciones 3. Unta la salsa pesto o puede ser salsa de tomate para pizza. Mezcla todos los vegetales y el pollo en un bowl, y añádelos en la superficie del pan. hasta que se derrita (10 minutos aprox). 17"
+      "¼ de taza de calabacitas picadas.",
+      "½ taza de queso Oaxaca light deshebrado."
     ],
-    "instructions": "1. Precalienta el horno a 180°C. 4. Añade sobre los vegetales el queso y hornea",
-    "imageFile": "flex-pizza-de-pollo-al-pesto.jpg"
+    "instructions": "1. Precalienta el horno a 180°C. 2. Coloca en una bandeja para hornear un trozo de papel para horneado y rocía el aceite en spray y coloca el pan árabe. 3. Unta la salsa pesto o puede ser salsa de tomate para pizza. Mezcla todos los vegetales y el pollo en un bowl, y añádelos en la superficie del pan. 4. Añade sobre los vegetales el queso y hornea hasta que se derrita (10 minutos aprox).",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dinner",
     "page": 22,
     "name": "Crepa de Espinaca",
+    "servings": 1,
     "nutrition": {
       "kcal": 351,
       "carbs": 5.5,
@@ -2430,19 +2445,20 @@
     "ingredientsText": [
       "6 claras (1 taza líquidas).",
       "1 manojo de espinacas.",
-      "50g taza de queso Mozarella. 351 kcal",
-      "4 rebanadas de pechuga de pavo. Macros:",
+      "50g taza de queso Mozarella.",
+      "4 rebanadas de pechuga de pavo.",
       "Aceite de olivo en spray.",
-      "Sal y pimienta al gusto 11.2 Lípidos viamente desinfectadas, la sal y la pimienta. spray. Añade la mezcla en el sartén y deja cocer º hasta que se levanten las orillas. de el queso y la pechuga de pavo y envuelve como crepa, deja que se derrita el queso. 18"
+      "Sal y pimienta al gusto"
     ],
-    "instructions": "1. Licúa las claras de huevo con las espinacas pre- 2. Precalienta un sartén y añade aceite de olivo en 3. Voltea deja cocer por unos segundos más. Aña- 1 porcion",
-    "imageFile": "flex-crepa-de-espinaca.jpg"
+    "instructions": "1. Licúa las claras de huevo con las espinacas previamente desinfectadas, la sal y la pimienta. 2. Precalienta un sartén y añade aceite de olivo en spray. Añade la mezcla en el sartén y deja cocer hasta que se levanten las orillas. 3. Voltea deja cocer por unos segundos más. Añade el queso y la pechuga de pavo y envuelve como crepa, deja que se derrita el queso.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dinner",
     "page": 23,
     "name": "Chicken Bakes",
+    "servings": 1,
     "nutrition": {
       "kcal": 464,
       "carbs": 26.6,
@@ -2451,20 +2467,21 @@
     },
     "ingredientsText": [
       "1 tortilla de harina grande.",
-      "200grs de pechuga pollo en fajitas cocida Energia:",
+      "200grs de pechuga pollo en fajitas cocida al grill.",
       "50g de queso Oaxaca light.",
       "Aceite de oliva en spray.",
-      "1 taza de vegetales mixtos cocidos. 26.6g HCO",
-      "3 cucharadas de salsa para pizza. 13.3 Lípidos º 2. Extiende la tortilla y añade la salsa para pizza como base. 1 porcion tortilla. 19"
+      "1 taza de vegetales mixtos cocidos.",
+      "3 cucharadas de salsa para pizza."
     ],
-    "instructions": "1. Precalienta el horno a 180°C. En una charola 3. Añade el pollo y los vegetales. 4. De último añade el queso Oaxaca deshebrado. 5. Hornea por 10 minutos o hasta que dore la",
-    "imageFile": "flex-chicken-bakes.jpg"
+    "instructions": "1. Precalienta el horno a 180°C. En una charola para hornear añade una trozo de papel para hornear y rocía con aceite de olivo. 2. Extiende la tortilla y añade la salsa para pizza como base. 3. Añade el pollo y los vegetales. 4. De último añade el queso Oaxaca deshebrado. 5. Hornea por 10 minutos o hasta que dore la tortilla.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dessert",
     "page": 25,
     "name": "Nana ice-cream",
+    "servings": 1,
     "nutrition": {
       "kcal": 248,
       "carbs": 26,
@@ -2473,19 +2490,20 @@
     },
     "ingredientsText": [
       "1 plátano congelado",
-      "1 scoop de proteína de suero de leche cho- colate o vainilla (depende del sabor que te º guste)",
-      "1 cucharada (5g) de cacao en polvo 1 porcion",
+      "1 scoop de proteína de suero de leche chocolate o vainilla (depende del sabor que te guste)",
+      "1 cucharada (5g) de cacao en polvo",
       "1/3 de taza de leche vegetal sin azúcar o yogur griego natural sin grasa.",
-      "2 sobres de endulzante sin calorías. Hecho con yogur griego* 21"
+      "2 sobres de endulzante sin calorías."
     ],
-    "instructions": "1. Mezcla bien todos los ingredientes en la licuadora 2. Vierte en un recipiente de vidrio. 248 kcal 3. Congela hasta que tome consistencia de helado. Macros:",
-    "imageFile": "flex-nana-ice-cream.jpg"
+    "instructions": "1. Mezcla bien todos los ingredientes en la licuadora o procesador de alimentos. 2. Vierte en un recipiente de vidrio. 3. Congela hasta que tome consistencia de helado.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dessert",
     "page": 26,
     "name": "Choco Mugcake",
+    "servings": 1,
     "nutrition": {
       "kcal": 177,
       "carbs": 8,
@@ -2493,21 +2511,22 @@
       "fat": 3
     },
     "ingredientsText": [
-      "1 scoop de proteína de suero de leche vai- nilla o chocolate.",
-      "1 clara de huevo º",
-      "1/4 de taza de leche light o vegetal sin en- dulzar (coco, almendra o soya). 1 porcion",
+      "1 scoop de proteína de suero de leche vainilla o chocolate.",
+      "1 clara de huevo",
+      "1/4 de taza de leche light o vegetal sin endulzar (coco, almendra o soya).",
       "1 cucharadita de cocoa sin endulzar.",
-      "1/2 cucharadita de polvo para hor- near.",
-      "2 sobres de endulzante sin calorías. Toppings: 1 cucharada de chocolate o miel maple sin azúcar. 22"
+      "1/2 cucharadita de polvo para hornear.",
+      "2 sobres de endulzante sin calorías."
     ],
-    "instructions": "1. Mezcla los ingredientes secos en una taza. 2. Incorpora los húmedos. Energia: 3. Mezcla muy bien. 177 kcal 4. Cocina por un minuto y medio en el microon- Macros: 5. Voltea en un plato. 3g Lípidos",
-    "imageFile": "flex-choco-mugcake.jpg"
+    "instructions": "1. Mezcla los ingredientes secos en una taza. 2. Incorpora los húmedos. 3. Mezcla muy bien. 4. Cocina por un minuto y medio en el microondas. 5. Voltea en un plato.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dessert",
     "page": 27,
     "name": "Lava Cake in a Mug",
+    "servings": 2,
     "nutrition": {
       "kcal": 311,
       "carbs": 25.6,
@@ -2515,24 +2534,25 @@
       "fat": 17
     },
     "ingredientsText": [
-      "60g de chocolate oscuro 70% cacao o 3.5 barritas de 18g de chocolate Turín sin",
+      "60g de chocolate oscuro 70% cacao o 3.5 barritas de 18g de chocolate Turín sin azúcar.",
       "1 huevo.",
-      "4 cucharadas de harina de trigo integral o",
-      "¼ de cucharadita de polvo para hor- 25.6g HCO",
+      "4 cucharadas de harina de trigo integral o avena molida.",
+      "¼ de cucharadita de polvo para hornear.",
       "3 cucharadas de cocoa sin azúcar.",
       "¼ de cucharadita de sal.",
       "3 sobres de splenda.",
-      "1 cucharada de aceite de coco o de tu pre- ferencia.",
-      "3 cucharadas de leche light. º da, cocoa, polvo para hornear, el huevo batido y el aceite vegetal. 2 porciones mente 1 chocolate ½ en cada una. mente por 50 segundos a una potencia media. Esta receta no es baja en grasa, tomar en cuenta la cantidad que comes durante el día. 23"
+      "1 cucharada de aceite de coco o de tu preferencia.",
+      "3 cucharadas de leche light."
     ],
-    "instructions": "1. Bate el huevo con un tenedor o batidor manual 2. En un bowl pequeño combina la harina, splen- 3. Divide en dos tazas pequeñas. Pon aproximada- 4. Hornea en microondas cada una aproximada- 5. Sirve inmediatamente en un plato.",
-    "imageFile": "flex-lava-cake-in-a-mug.jpg"
+    "instructions": "1. Bate el huevo con un tenedor o batidor manual y aparta. 2. En un bowl pequeño combina la harina, splenda, cocoa, polvo para hornear, el huevo batido y el aceite vegetal. 3. Divide en dos tazas pequeñas. Pon aproximadamente 1 chocolate ½ en cada una. 4. Hornea en microondas cada una aproximadamente por 50 segundos a una potencia media. 5. Sirve inmediatamente en un plato.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dessert",
     "page": 28,
     "name": "Brownie Fast",
+    "servings": 1,
     "nutrition": {
       "kcal": 149,
       "carbs": 19.65,
@@ -2540,42 +2560,45 @@
       "fat": 3.7
     },
     "ingredientsText": [
-      "1 cucharada + 1 cucharadita de harina inte- Cualquier gral o de avena (avena molida). momento",
-      "2 cucharadas de cocoa en polvo sin azú- º car.",
-      "2 sobres de endulzante sin calorías. 1 porcion",
-      "1/2 cucharadita de bicarbonato de so- dio.",
+      "1 cucharada + 1 cucharadita de harina integral o de avena (avena molida).",
+      "2 cucharadas de cocoa en polvo sin azúcar.",
+      "2 sobres de endulzante sin calorías.",
+      "1/2 cucharadita de bicarbonato de sodio.",
       "1/3 de taza de yogur griego natural sin grasa.",
-      "3 cucharadas de leche light. del brownie y revolverlos muy bien hasta que se haga una mezcla homogénea y húmeda. Toppings: 1 cucharada de chocolate líquido sin azúcar + 1 cucharada de yogur griego o 3 cucharadas de chispas de chocolate. 24"
+      "3 cucharadas de leche light."
     ],
-    "instructions": "1. Colocar en un recipiente o taza los ingredientes 2. Cocinarlo en el microondas por minuto y medio.",
-    "imageFile": "flex-brownie-fast.jpg"
+    "instructions": "1. Colocar en un recipiente o taza los ingredientes del brownie y revolverlos muy bien hasta que se haga una mezcla homogénea y húmeda. 2. Cocinarlo en el microondas por minuto y medio. El brownie debe crecer un poco y verse esponjoso.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dessert",
     "page": 29,
     "name": "Nana & Oats Muffins",
+    "servings": 6,
     "nutrition": {
       "kcal": 370,
       "carbs": 50,
       "protein": 10,
-      "fat": 12
+      "fat": 12,
+      "fiber": 11
     },
     "ingredientsText": [
       "3 plátanos pequeños",
       "2 tazas de avena en hojuelas",
-      "2 cucharadas de leche light o de almen- º dra.",
-      "1/4 de taza de arándanos 50% menos 6 porciones azúcar.",
-      "1/4 de taza de almendras fileteadas o nueces. estén listos. 11g Fibra 25"
+      "2 cucharadas de leche light o de almendra.",
+      "1/4 de taza de arándanos 50% menos azúcar.",
+      "1/4 de taza de almendras fileteadas o nueces."
     ],
-    "instructions": "1. Precalienta el horno a 180°C Por 1 muffin 2. Preparar un molde para muffins de mínimo 6 y 3. Licua o procesa todos los ingredientes. 370 kcal 4. Repartir la mezcla en los 6 moldes. Macros: 5. Hornear por lo menos 15-18 minutos, hasta que 50g HCO Netos 6. Cuando estén fríos, guarda en un recipiente con 12g Lípidos",
-    "imageFile": "flex-nana-oats-muffins.jpg"
+    "instructions": "1. Precalienta el horno a 180°C 2. Preparar un molde para muffins de mínimo 6 y rociar con aceite en spray. 3. Licua o procesa todos los ingredientes. 4. Repartir la mezcla en los 6 moldes. 5. Hornear por lo menos 15-18 minutos, hasta que estén listos. 6. Cuando estén fríos, guarda en un recipiente con tapa.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dessert",
     "page": 30,
     "name": "Brownies Flexibles",
+    "servings": 9,
     "nutrition": {
       "kcal": 55,
       "carbs": 7.86,
@@ -2583,26 +2606,27 @@
       "fat": 4.5
     },
     "ingredientsText": [
-      "1 huevo cualquier",
-      "½ taza de avena instantánea. momento",
+      "1 huevo",
+      "½ taza de avena instantánea.",
       "½ taza de cocoa.",
       "1 pizca de sal.",
-      "1 cucharadita de polvo para hornear. 9 porciones",
-      "¾ de taza de yogur griego sin grasa ni azú- car añadido (Chobani natural).",
+      "1 cucharadita de polvo para hornear.",
+      "¾ de taza de yogur griego sin grasa ni azúcar añadido (Chobani natural).",
       "1/4 de taza de leche light.",
-      "½ taza de endulzante sin calorías o 12 sobres de edulcorante sin calorías (splen- da). en spray. estén listos. 26"
+      "½ taza de endulzante sin calorías o 12 sobres de edulcorante sin calorías (splenda)."
     ],
-    "instructions": "1. Precalienta el horno a 180°C Por 1 brownie 2. Engrasa un molde de 8 x 8 pulgadas con aceite Energia: 3. Licua o procesa todos los ingredientes. 4. Repartir la mezcla en los 6 moldes. 5. Hornear por lo menos 15 minutos, hasta que 6. Cuando estén fríos, córtalos en cuadritos.",
-    "imageFile": "flex-brownies-flexibles.jpg"
+    "instructions": "1. Precalienta el horno a 180°C 2. Engrasa un molde de 8 x 8 pulgadas con aceite en spray. 3. Licua o procesa todos los ingredientes. 4. Repartir la mezcla en los 6 moldes. 5. Hornear por lo menos 15 minutos, hasta que estén listos. 6. Cuando estén fríos, córtalos en cuadritos.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dessert",
     "page": 31,
     "name": "Muffins choco-plátano",
+    "servings": 5,
     "nutrition": {
       "kcal": 291,
-      "carbs": 0,
+      "carbs": 8.2,
       "protein": 10,
       "fat": 6.5
     },
@@ -2611,18 +2635,19 @@
       "1 scoop de proteína sabor chocolate.",
       "50g de crema de maní o almendras.",
       "2 cucharadas de cocoa sin azúcar.",
-      "1 huevo o 2 claras de huevo. 5 porciones",
+      "1 huevo o 2 claras de huevo.",
       "10 ml de escencia de vainilla.",
-      "5 sobres de splenda. licuadora hasta que quede totalmente homogéneo. 8.2 HCO 27"
+      "5 sobres de splenda."
     ],
-    "instructions": "1. Precalienta el horno a 180º C. Por 1 muffin 2. Mezcla todos los ingredientes en un procesador o Energia: 3. Pasa a moldes para muffin. 4. Hornea por 15-20 minutos.",
-    "imageFile": "flex-muffins-choco-platano.jpg"
+    "instructions": "1. Precalienta el horno a 180º C. 2. Mezcla todos los ingredientes en un procesador o licuadora hasta que quede totalmente homogéneo. 3. Pasa a moldes para muffin. 4. Hornea por 15-20 minutos.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dessert",
     "page": 32,
     "name": "Peanut Butter Cups",
+    "servings": 12,
     "nutrition": {
       "kcal": 92,
       "carbs": 6,
@@ -2630,19 +2655,20 @@
       "fat": 6
     },
     "ingredientsText": [
-      "¼ de taza de crema de cacahuate. cualquier",
-      "2-3 cucharadas de proteína de vainilla momento (opcional).",
+      "¼ de taza de crema de cacahuate.",
+      "2-3 cucharadas de proteína de vainilla (opcional).",
       "1 taza de chips de chocolate oscuro.",
-      "1 cucharada de aceite de coco. 12 porciones Por Porción. cacahuate con la proteína hasta que formes una pasta. derrite las chispas de chocolate y el aceite de coco por 45 segundos o hasta que esté líquido. dita de chocolate aprox en cada uno y llévalo al congelador por 10-15 minutos hasta que quede firme. de crema de cacahuate con mucho cuidado y añade una cucharadita más de chocolate por encima. pletamente firme. 28"
+      "1 cucharada de aceite de coco."
     ],
-    "instructions": "1. Coloca 12 papeles para muffin ó 12 moldes de 2. En un recipiente mediano combina la crema de 92 kcal 3. Forma 12 bolas con la pasta de la medida de una 4. En un recipiente de vidrio o para microondas, 3g Proteína 5. Llena los moldes para muffin con una cuchara- 6. Una vez firme, añade una bolita de la pasta 7. Enfría por 10-15 minutos o hasta que esté com-",
-    "imageFile": "flex-peanut-butter-cups.jpg"
+    "instructions": "1. Coloca 12 papeles para muffin ó 12 moldes de silicona y rocíales aceite en spray. 2. En un recipiente mediano combina la crema de cacahuate con la proteína hasta que formes una pasta. 3. Forma 12 bolas con la pasta de la medida de una cucharada. 4. En un recipiente de vidrio o para microondas, derrite las chispas de chocolate y el aceite de coco por 45 segundos o hasta que esté líquido. 5. Llena los moldes para muffin con una cucharadita de chocolate aprox en cada uno y llévalo al congelador por 10-15 minutos hasta que quede firme. 6. Una vez firme, añade una bolita de la pasta de crema de cacahuate con mucho cuidado y añade una cucharadita más de chocolate por encima. 7. Enfría por 10-15 minutos o hasta que esté completamente firme.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "dessert",
     "page": 33,
     "name": "Nana-nut Bread",
+    "servings": 12,
     "nutrition": {
       "kcal": 166.6,
       "carbs": 23.9,
@@ -2650,24 +2676,25 @@
       "fat": 5.5
     },
     "ingredientsText": [
-      "2 plátanos maduros. cualquier",
-      "3 huevos. momento",
-      "½ taza de chispas de chocolate hersheys se- miamargo.",
-      "¼ de taza de crema de cacahuate. 12 porciones",
+      "2 plátanos maduros.",
+      "3 huevos.",
+      "½ taza de chispas de chocolate hersheys semiamargo.",
+      "¼ de taza de crema de cacahuate.",
       "3 cucharadas de miel de abeja.",
       "1 taza de harina de trigo integral.",
       "1 taza de harina de avena (avena instantánea molida).",
       "3 cucharaditas de polvo para hornear.",
-      "½ cucharadita de sal. Por Porción. de abeja y la crema de cacahuate, agrega la mez- para hornear y la sal de mar. añade la mezcla. centro cocido. 29"
+      "½ cucharadita de sal."
     ],
-    "instructions": "1. Precalienta el horno a 180 grados. 2. En u bowl grande aplasta los plátanos con un 3. Calienta en el microondas por 10 segundos la miel 4. Mezcla hasta incorporar. 23.9g HCO 5. En otro bowl mezcla la harina y la avena, el polvo 5.5g Lípidos 6. Añade los ingredientes líquidos y mezcla bien. 7. Añade las chispas de chocolate y mezcla. 8. Engrasa un molde con aceite vegetal en spray y 9. Hornea por 30-45 minutos o hasta que esté el 10. Deja enfriar y corta en cuadritos.",
-    "imageFile": "flex-nana-nut-bread.jpg"
+    "instructions": "1. Precalienta el horno a 180 grados. 2. En u bowl grande aplasta los plátanos con un tenedor hasta que queden puré. 3. Calienta en el microondas por 10 segundos la miel de abeja y la crema de cacahuate, agrega la mezcla a los plátano y agrega los huevos. 4. Mezcla hasta incorporar. 5. En otro bowl mezcla la harina y la avena, el polvo para hornear y la sal de mar. 6. Añade los ingredientes líquidos y mezcla bien. 7. Añade las chispas de chocolate y mezcla. 8. Engrasa un molde con aceite vegetal en spray y añade la mezcla. 9. Hornea por 30-45 minutos o hasta que esté el centro cocido.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "snack",
     "page": 35,
     "name": "Café frappuccino",
+    "servings": 1,
     "nutrition": {
       "kcal": 147,
       "carbs": 3,
@@ -2675,20 +2702,21 @@
       "fat": 4
     },
     "ingredientsText": [
-      "1 scoop de proteína de vainilla o chocola- pre te. workout",
+      "1 scoop de proteína de vainilla o chocolate.",
       "1 taza de leche de almendra, coco o soya sin endulzar o agua.",
-      "1 cucharada de café instantáneo. 1 porcion",
+      "1 cucharada de café instantáneo.",
       "1-2 sobres de endulzante sin calorías.",
-      "1 taza de hielo picado. Sin plátano y con leche de coco. junto con el hielo y listo. 31"
+      "1 taza de hielo picado."
     ],
-    "instructions": "1. Mezcla todos los ingredientes en la licuadora 2. Si la utilizas pre entreno o para desayuno pue- Energia:",
-    "imageFile": "flex-cafe-frappuccino.jpg"
+    "instructions": "1. Mezcla todos los ingredientes en la licuadora junto con el hielo y listo. 2. Si la utilizas pre entreno o para desayuno puedes añadir 1 carbohidrato (1 plátano congelado).",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "snack",
     "page": 36,
     "name": "Nana Protein Shake",
+    "servings": 1,
     "nutrition": {
       "kcal": 421,
       "carbs": 45,
@@ -2696,21 +2724,22 @@
       "fat": 12.45
     },
     "ingredientsText": [
-      "1 plátano congelado. post",
-      "240 ml de leche light. workout",
+      "1 plátano congelado.",
+      "240 ml de leche light.",
       "1 cda (15g) de mantequilla de maní.",
       "1 scoop de proteína de vainilla.",
-      "1 taza de hielo picado. 1 porcion",
-      "2 sobres de splenda. vainilla a la licuadora. dulzante. Licúa por unos segundos. 32"
+      "1 taza de hielo picado.",
+      "2 sobres de splenda."
     ],
-    "instructions": "1. Añade el plátano en rodajas congelado, la 2. Por último añade la leche y hielo picado y en-",
-    "imageFile": "flex-nana-protein-shake.jpg"
+    "instructions": "1. Añade el plátano en rodajas congelado, la mantequilla de maní y el scoop de proteína de vainilla a la licuadora. 2. Por último añade la leche y hielo picado y endulzante. Licúa por unos segundos.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "snack",
     "page": 37,
     "name": "Energreen Shake",
+    "servings": 1,
     "nutrition": {
       "kcal": 204,
       "carbs": 39.9,
@@ -2718,22 +2747,23 @@
       "fat": 0.56
     },
     "ingredientsText": [
-      "1 taza de té verde sin endulzar. pre",
-      "½ pera. workout",
+      "1 taza de té verde sin endulzar.",
+      "½ pera.",
       "1 manzana verde.",
       "1 puño de espinaca.",
-      "½ puño de kale. 1 porcion",
+      "½ puño de kale.",
       "2 sobres de splenda.",
-      "125g de yogur griego natural. to con los 2 sobres de splenda. Licúa hasta que quede completamente batido. 33"
+      "125g de yogur griego natural."
     ],
-    "instructions": "1. Añade la manzana y la pera con cáscara picada, 2. Añade el yogur griego y la taza de té verde jun- 204 kcal",
-    "imageFile": "flex-energreen-shake.jpg"
+    "instructions": "1. Añade la manzana y la pera con cáscara picada, el kale y la espinaca. 2. Añade el yogur griego y la taza de té verde junto con los 2 sobres de splenda. Licúa hasta que quede completamente batido.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "snack",
     "page": 38,
     "name": "Berry-Almond Shake",
+    "servings": 1,
     "nutrition": {
       "kcal": 454,
       "carbs": 50.6,
@@ -2741,24 +2771,25 @@
       "fat": 12.93
     },
     "ingredientsText": [
-      "1 taza de frutos rojos (fresas y bluebe- post rries). workout",
+      "1 taza de frutos rojos (fresas y blueberries).",
       "½ plátano.",
       "50g de yogur griego.",
-      "1 taza de leche de almendras. 1 porcion",
+      "1 taza de leche de almendras.",
       "10 almendras.",
       "1/3 de tza de avena.",
       "1 scoop de proteína de vainilla.",
       "Hielo al gusto.",
-      "2 sobres de splenda. licuar por 1 minuto más. 34"
+      "2 sobres de splenda."
     ],
-    "instructions": "1. Añade los frutos rojos, el plátano, el hielo y el 2. Añade el resto de los ingredientes y vuelve a 454 kcal",
-    "imageFile": "flex-berry-almond-shake.jpg"
+    "instructions": "1. Añade los frutos rojos, el plátano, el hielo y el yogur a la licuadora por 1 minuto. 2. Añade el resto de los ingredientes y vuelve a licuar por 1 minuto más.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "snack",
     "page": 39,
     "name": "Lemon Pie Shake",
+    "servings": 1,
     "nutrition": {
       "kcal": 321,
       "carbs": 30,
@@ -2766,23 +2797,24 @@
       "fat": 6.58
     },
     "ingredientsText": [
-      "125g de yogur griego natural sin azúcar post (chobani). workout",
+      "125g de yogur griego natural sin azúcar (chobani).",
       "5 galletas Marías",
       "El jugo de ½ limón.",
-      "1 taza de leche de almendras sin azú- 1 porcion car.",
-      "1 scoop de proteína de vainilla (opcio- nal).",
+      "1 taza de leche de almendras sin azúcar.",
+      "1 scoop de proteína de vainilla (opcional).",
       "Hielo al gusto.",
       "1 cdita de escencia de vainilla.",
-      "2 sobres de splenda. Con la proteína 3 galletas Marías con el hielo al gusto o puedes 35 quedarte con el yogur y aportaría 20g de proteína."
+      "2 sobres de splenda."
     ],
-    "instructions": "1. En la licuadora agrega todos los ingredientes y 2. Sirve en un vaso y tritura el resto de las galle- 321 kcal",
-    "imageFile": "flex-lemon-pie-shake.jpg"
+    "instructions": "1. En la licuadora agrega todos los ingredientes y 3 galletas Marías con el hielo al gusto o puedes congelar previamente el yogur. 2. Sirve en un vaso y tritura el resto de las galletas.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "snack",
     "page": 40,
     "name": "Veggie Power Shake",
+    "servings": 1,
     "nutrition": {
       "kcal": 182,
       "carbs": 10.72,
@@ -2790,20 +2822,21 @@
       "fat": 4.27
     },
     "ingredientsText": [
-      "1 taza de espinacas. cualquier",
-      "½ taza de apio picado o 3 varas de momento apio.",
-      "½ taza de zanahoria rayada o 3 zanaho- rias. 1 porcion",
+      "1 taza de espinacas.",
+      "½ taza de apio picado o 3 varas de apio.",
+      "½ taza de zanahoria rayada o 3 zanahorias.",
       "1 scoop de proteína de vainilla.",
-      "1 cucharada de semillas de chía o lina- za. grandes si deseas utilizar de base el jugo de los todos los ingredientes, excepto las semillas de chía. 36"
+      "1 cucharada de semillas de chía o linaza."
     ],
-    "instructions": "1. Puedes usar las porciones de vegetales más Energia: 2. Licúa con 300 ml de leche de almendras o agua 10.72g HCO",
-    "imageFile": "flex-veggie-power-shake.jpg"
+    "instructions": "1. Puedes usar las porciones de vegetales más grandes si deseas utilizar de base el jugo de los vegetales y mételos al extractor de jugo. (De lo contrario usa la medida pequeña) 2. Licúa con 300 ml de leche de almendras o agua todos los ingredientes, excepto las semillas de chía.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "base",
     "page": 44,
     "name": "Ensalada pakistaní",
+    "servings": 1,
     "nutrition": {
       "kcal": 332,
       "carbs": 8.57,
@@ -2811,22 +2844,23 @@
       "fat": 28.8
     },
     "ingredientsText": [
-      "½ pimiento rojo cualquier",
-      "½ pimiento naranja momento",
-      "1 taza de gajos de cítricos (naranja, man- darina y toronja).",
-      "60g de queso de cabra. 1 porcion",
+      "½ pimiento rojo",
+      "½ pimiento naranja",
+      "1 taza de gajos de cítricos (naranja, mandarina y toronja).",
+      "60g de queso de cabra.",
       "7 nueces picadas.",
       "1 cucharadita de aceite de oliva",
-      "Pimienta y sal al gusto* sirve fresco con pan pita. el horno y orégano molido."
+      "Pimienta y sal al gusto*"
     ],
-    "instructions": "1. Lava los pimientos. Energia: 2. Cortarlos en juliana y retirarle las semillas. 332kcal 3. Mezcla todos los ingredientes en un bowl y",
-    "imageFile": "flex-ensalada-pakistani.jpg"
+    "instructions": "1. Lava los pimientos. 2. Cortarlos en juliana y retirarle las semillas. 3. Mezcla todos los ingredientes en un bowl y sirve fresco con pan pita.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "base",
     "page": 45,
     "name": "Apple&Carrot Cream Salad",
+    "servings": 1,
     "nutrition": {
       "kcal": 228,
       "carbs": 25.2,
@@ -2834,41 +2868,21 @@
       "fat": 9.49
     },
     "ingredientsText": [
-      "1 zanahoria rayada. cualquier",
-      "7 nueces en mitad. momento",
+      "1 zanahoria rayada.",
+      "7 nueces en mitad.",
       "1 manzana verde picada.",
       "½ taza de apio picado.",
-      "½ taza de yogur griego sin azúcar 1 porcion (125g). 41"
+      "½ taza de yogur griego sin azúcar (125g)."
     ],
-    "instructions": "1. Mezcla todos los ingredientes en un bowl. Energia: 2. Refrigera por 20 minutos. 228 kcal 3. Sirve fresca en hojas de lechuga (opcional).",
-    "imageFile": "flex-apple-carrot-cream-salad.jpg"
-  },
-  {
-    "source": "recetario-flexible",
-    "mealType": "base",
-    "page": 46,
-    "name": "Greek Salad",
-    "nutrition": {
-      "kcal": 429,
-      "carbs": 52.78,
-      "protein": 11.36,
-      "fat": 20.35
-    },
-    "ingredientsText": [
-      "1 zanahoria rayada. post",
-      "7 nueces en mitad. workout",
-      "1 manzana verde picada.",
-      "½ taza de apio picado.",
-      "½ taza de yogur griego sin azúcar 1 porcion (125g). 42"
-    ],
-    "instructions": "1. Mezcla todos los ingredientes en un bowl. Energia: 2. Refrigera por 20 minutos. 429 kcal 3. Sirve fresca en hojas de lechuga (opcional).",
-    "imageFile": "flex-greek-salad.jpg"
+    "instructions": "1. Mezcla todos los ingredientes en un bowl. 2. Refrigera por 20 minutos. 3. Sirve fresca en hojas de lechuga (opcional).",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "base",
     "page": 47,
     "name": "Ensalada de manzana y brócoli",
+    "servings": 4,
     "nutrition": {
       "kcal": 130,
       "carbs": 13.19,
@@ -2876,23 +2890,24 @@
       "fat": 5
     },
     "ingredientsText": [
-      "1 taza de brócoli cocido. complemento",
+      "1 taza de brócoli cocido.",
       "½ taza de arándanos o pasas.",
       "14 nueces en mitades.",
       "1 zanahoria rayada.",
-      "1 manzana roja. 4 porciones",
+      "1 manzana roja.",
       "125g de yogur natural.",
       "El jugo de 1 limón pequeño.",
-      "Pimienta y sal. coli previamente lavados. o las pasas. pimienta al gusto y el jugo de un limón. y mezcla."
+      "Pimienta y sal."
     ],
-    "instructions": "1. Pon en una cacerola a hervir los floretes de bró- Energia: 2. Se trocea la manzana en pedazos pequeños con 3. Trocea las nueces en pedazos pequeños. 13.19g HCO 4. Una vez cocido el brócoli, se deja escurrir y se 2.8g Proteína 5. Para el aderezo mezcla el yogur con la sal y 6. Vierte en el bowl junto con las nueces troceadas",
-    "imageFile": "flex-ensalada-de-manzana-y-brocoli.jpg"
+    "instructions": "1. Pon en una cacerola a hervir los floretes de brócoli previamente lavados. 2. Se trocea la manzana en pedazos pequeños con todo y la piel. 3. Trocea las nueces en pedazos pequeños. 4. Una vez cocido el brócoli, se deja escurrir y se mezcla con la zanahoria, manzana y arándanos o las pasas. 5. Para el aderezo mezcla el yogur con la sal y pimienta al gusto y el jugo de un limón. 6. Vierte en el bowl junto con las nueces troceadas y mezcla.",
+    "imageFile": null
   },
   {
     "source": "recetario-flexible",
     "mealType": "base",
     "page": 48,
     "name": "Crema de espinaca",
+    "servings": 1,
     "nutrition": {
       "kcal": 196,
       "carbs": 25,
@@ -2900,13 +2915,13 @@
       "fat": 6.17
     },
     "ingredientsText": [
-      "240 ml de leche descremada ó soya entrada o",
-      "1 manojo de espinacas lavadas y desinfec- cena tadas",
+      "240 ml de leche descremada ó soya",
+      "1 manojo de espinacas lavadas y desinfectadas",
       "¼ de cebolla picada",
-      "1 cdita de aceite 1 porcion",
-      "2 cdas de arroz ó harina integral. de aceite en spray, acitronar la cebolla y agre- añadir pizca de sal y especias al gusto e ir mo- viendo para evitar que se pegue. *Esta sopa pude realizarse con brócoli cocido en lugar de espinacas. Para una 44"
+      "1 cdita de aceite",
+      "2 cdas de arroz ó harina integral."
     ],
-    "instructions": "1. Calentar la cdita de aceite ó 5 seg de aspersión Energia: 2. Colocar en la licuadora la leche y el sofrito de Macros: 3. En una cacerola aparte poner a cocer la sopa, 10.7g Proteína 4. Servir caliente.",
-    "imageFile": "flex-crema-de-espinaca.jpg"
+    "instructions": "1. Calentar la cdita de aceite ó 5 seg de aspersión de aceite en spray, acitronar la cebolla y agregar espinacas cortadas. 2. Colocar en la licuadora la leche y el sofrito de cebolla con espinaca y licuar. 3. En una cacerola aparte poner a cocer la sopa, añadir pizca de sal y especias al gusto e ir moviendo para evitar que se pegue. 4. Servir caliente.",
+    "imageFile": null
   }
 ]

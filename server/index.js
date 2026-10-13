@@ -1,6 +1,6 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
-import { PrismaClient } from '@prisma/client'
+import { Prisma, PrismaClient } from '@prisma/client'
 import 'dotenv/config'
 import PDFDocument from 'pdfkit'
 import { createHash } from 'node:crypto'
@@ -11,9 +11,9 @@ import jwt from 'jsonwebtoken'
 import { searchFoods } from './providers/food.js'
 import { NutritionEngineError, computeEnergyRequirement, computeMacros } from './domain/nutrition.js'
 import { adjustmentFactor, applyRecipeAdjustments, buildMenuSnapshot, normalizeRecipeAdjustments, sanitizeJpeg } from './domain/documents.js'
-import { normalizeActiveMeals, normalizeMealTimes } from './domain/planMeals.js'
+import { PLAN_MEAL_KEYS, normalizeActiveMeals, normalizeMealLabels, normalizeMealNotes, normalizeMealTimes } from './domain/planMeals.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
-import { normalizeEquivalentPlan } from './domain/equivalents.js'
+import { normalizeEquivalentPlan, normalizeMenus } from './domain/equivalents.js'
 import { emptyNutritionTotals, perServingFromIngredients } from './domain/recipeNutrition.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 
@@ -149,7 +149,7 @@ app.get('/api/v1/practice', async (request, reply) => {
 app.put('/api/v1/practice', async (request, reply) => {
   const { name, timeZone, address, userName, userEmail, userSpecialty, userPhone, userLicenseNumber, businessHours, fees } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
-  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(address !== undefined ? { address: String(address).trim() || null } : {}), ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(address !== undefined ? { address: String(address).trim().slice(0, 200) || null } : {}), ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
   let user = await prisma.user.findUnique({ where: { id: request.userId }, select: USER_PUBLIC_SELECT })
   if (user) {
     user = await prisma.user.update({
@@ -159,7 +159,7 @@ app.put('/api/v1/practice', async (request, reply) => {
         email: userEmail || user.email,
         ...(userSpecialty !== undefined ? { specialty: userSpecialty } : {}),
         ...(userPhone !== undefined ? { phone: userPhone } : {}),
-        ...(userLicenseNumber !== undefined ? { licenseNumber: String(userLicenseNumber).trim() || null } : {}),
+        ...(userLicenseNumber !== undefined ? { licenseNumber: String(userLicenseNumber).trim().slice(0, 40) || null } : {}),
       },
       select: USER_PUBLIC_SELECT,
     })
@@ -1467,7 +1467,7 @@ app.post('/api/v1/nutrition-plans/calculate', async (request, reply) => {
   if (invalid.length) return reply.code(400).send({ code: 'INVALID_MEASUREMENTS', message: 'Edad, peso y talla deben ser valores positivos.', fields: Object.fromEntries(invalid.map((key) => [key, 'invalid'])) })
   if (values.age < 1 || values.age > 120 || values.weightKg > 500 || values.heightCm > 250 || values.weightKg < 5 || values.heightCm < 40) return reply.code(400).send({ code: 'OUT_OF_RANGE', message: 'Revisa que las medidas estén dentro de un rango plausible.', fields: {} })
   try {
-    return computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor, mets, energyAdjustKcal })
+    return computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor: normalizeActivityFactor(activityFactor), mets, energyAdjustKcal })
   } catch (error) {
     if (error instanceof NutritionEngineError) return reply.code(400).send({ code: error.code, message: error.message, fields: error.fields })
     throw error
@@ -1484,12 +1484,35 @@ app.post('/api/v1/nutrition-plans/macros', async (request, reply) => {
   }
 })
 
+// Factor de actividad física: entre 1 (reposo) y 2.5; sin valor válido, sedentario.
+const normalizeActivityFactor = (value) => { const number = Number(value); return Number.isFinite(number) && number > 0 ? Math.min(2.5, Math.max(1, number)) : 1.2 }
+
+// Texto libre del plan (objetivo, recomendaciones…): sólo cadenas y con tope de largo. Sin tope, un
+// texto de megabytes bloquea el servidor al dibujar el PDF, que es síncrono.
+const cleanPlanText = (value, max) => (value === null ? null : typeof value === 'string' ? value.slice(0, max) : undefined)
+
+// Espacios de la semana tal como se guardan: día 1–7, tiempo de comida conocido, porciones entre
+// 0 y 20 (1 si no vienen bien), y uno solo por día y tiempo (gana el último).
+function normalizeMealSlots(value) {
+  const slots = new Map()
+  for (const slot of Array.isArray(value) ? value.slice(0, 200) : []) {
+    const dayOfWeek = Number(slot?.dayOfWeek)
+    if (!Number.isInteger(dayOfWeek) || dayOfWeek < 1 || dayOfWeek > 7 || !PLAN_MEAL_KEYS.includes(slot?.mealType)) continue
+    const servings = Number(slot.servings)
+    slots.set(`${dayOfWeek}|${slot.mealType}`, { dayOfWeek, mealType: slot.mealType, recipeId: typeof slot.recipeId === 'string' ? slot.recipeId : null, servings: Number.isFinite(servings) && servings > 0 && servings <= 20 ? servings : 1 })
+  }
+  return [...slots.values()]
+}
+
 app.post('/api/v1/patients/:patientId/plans', async (request, reply) => {
   const { consultationId, goal } = request.body || {}
   if (!consultationId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La consulta asociada es obligatoria.', fields: { consultationId: 'required' } })
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
-  const plan = await prisma.nutritionPlan.create({ data: { patientId: patient.id, consultationId, goal } })
+  // La consulta debe ser de esta misma paciente: el plan después expone sus secciones y diagnósticos.
+  const consultation = await prisma.consultation.findFirst({ where: { id: String(consultationId), patientId: patient.id }, select: { id: true } })
+  if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const plan = await prisma.nutritionPlan.create({ data: { patientId: patient.id, consultationId: consultation.id, goal: cleanPlanText(goal, 1000) ?? undefined } })
   return reply.code(201).send(plan)
 })
 
@@ -1529,23 +1552,28 @@ app.post('/api/v1/plans/:planId/reactivate', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status !== 'CANCELLED') return plan
-  return prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'DRAFT' } })
+  // Un plan que ya se había publicado vuelve a publicado, con su menú congelado intacto: reactivarlo
+  // no debe reabrir a edición un plan entregado.
+  return prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: plan.publishedAt ? 'PUBLISHED' : 'DRAFT' } })
 })
 
 app.patch('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados no pueden modificarse.', fields: {} })
-  const { hydrationNote, recommendations, mealTimes, equivalents, activeMeals, recipeAdjustments } = request.body || {}
+  const { hydrationNote, recommendations, mealTimes, equivalents, activeMeals, recipeAdjustments, mealLabels, mealNotes, menus } = request.body || {}
   const updated = await prisma.nutritionPlan.update({
     where: { id: plan.id },
     data: {
-      ...(hydrationNote !== undefined ? { hydrationNote } : {}),
-      ...(recommendations !== undefined ? { recommendations } : {}),
+      ...(hydrationNote !== undefined ? { hydrationNote: cleanPlanText(hydrationNote, 2000) } : {}),
+      ...(recommendations !== undefined ? { recommendations: cleanPlanText(recommendations, 6000) } : {}),
       ...(mealTimes !== undefined ? { mealTimes: normalizeMealTimes(mealTimes) } : {}),
       // Prisma distingue "no tocar" de "guardar nulo" en columnas Json: sin cálculo se guarda {}.
       ...(equivalents !== undefined ? { equivalents: normalizeEquivalentPlan(equivalents) || {} } : {}),
       ...(activeMeals !== undefined ? { activeMeals: normalizeActiveMeals(activeMeals) } : {}),
+      ...(mealLabels !== undefined ? { mealLabels: normalizeMealLabels(mealLabels) } : {}),
+      ...(menus !== undefined ? { menus: normalizeMenus(menus) } : {}),
+      ...(mealNotes !== undefined ? { mealNotes: normalizeMealNotes(mealNotes) } : {}),
       ...(recipeAdjustments !== undefined ? { recipeAdjustments: normalizeRecipeAdjustments(recipeAdjustments) } : {}),
     },
   })
@@ -1576,17 +1604,18 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
   if (values.age < 1 || values.age > 120 || values.weightKg > 500 || values.heightCm > 250 || values.weightKg < 5 || values.heightCm < 40) return reply.code(400).send({ code: 'OUT_OF_RANGE', message: 'Revisa que las medidas estén dentro de un rango plausible.', fields: {} })
 
   try {
-    const energy = computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor, mets, energyAdjustKcal })
+    const factor = normalizeActivityFactor(activityFactor)
+    const energy = computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor: factor, mets, energyAdjustKcal })
     // El requerimiento del plan (y sus macros) ya incluye el ajuste por objetivo: déficit o superávit.
     const macros = computeMacros({ kcal: energy.targetKcal, carbsPercent, proteinPercent, fatPercent })
     const updated = await prisma.nutritionPlan.update({
       where: { id: plan.id },
       data: {
-        goal: goal ?? plan.goal,
+        goal: cleanPlanText(goal, 1000) ?? plan.goal,
         formula,
         activityMethod: energy.activityMethod,
-        activityFactor: energy.activityMethod === 'factor' ? Number(activityFactor) : null,
-        metsPayload: energy.activityMethod === 'mets' ? mets : null,
+        activityFactor: energy.activityMethod === 'factor' ? factor : null,
+        metsPayload: energy.activityMethod === 'mets' ? { met: Number(mets?.met) || 0, minutes: Number(mets?.minutes) || 0, sessionsPerWeek: Number(mets?.sessionsPerWeek) || 0 } : Prisma.DbNull,
         targetKcal: energy.targetKcal,
         carbsPercent: macros.macros.carbs.percent,
         proteinPercent: macros.macros.protein.percent,
@@ -1603,37 +1632,43 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
 })
 
 app.put('/api/v1/plans/:planId/distribution', async (request, reply) => {
-  const { mealSlots = [] } = request.body || {}
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan || plan.status === 'PUBLISHED') return reply.code(plan ? 409 : 404).send({ code: plan ? 'PLAN_LOCKED' : 'PLAN_NOT_FOUND', message: plan ? 'Los planes publicados no pueden modificarse.' : 'Plan no encontrado.', fields: {} })
+  const mealSlots = normalizeMealSlots(request.body?.mealSlots)
   const recipeIds = [...new Set(mealSlots.map((slot) => slot.recipeId).filter(Boolean))]
   const validRecipes = recipeIds.length ? await prisma.recipe.findMany({ where: { id: { in: recipeIds }, practiceId: request.practiceId }, select: { id: true } }) : []
   const validRecipeIds = new Set(validRecipes.map((item) => item.id))
-  await prisma.$transaction([prisma.mealSlot.deleteMany({ where: { planId: plan.id } }), prisma.mealSlot.createMany({ data: mealSlots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: validRecipeIds.has(slot.recipeId) ? slot.recipeId : null, servings: slot.servings, notes: slot.notes })) })])
+  await prisma.$transaction([prisma.mealSlot.deleteMany({ where: { planId: plan.id } }), prisma.mealSlot.createMany({ data: mealSlots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: validRecipeIds.has(slot.recipeId) ? slot.recipeId : null, servings: slot.servings })) })])
   await logAudit(request, { action: 'updated', entity: 'NutritionPlan', entityId: plan.id, patientId: plan.patientId, metadata: { section: 'distribución', slots: mealSlots.length } })
   return prisma.nutritionPlan.findUnique({ where: { id: plan.id }, include: { mealSlots: true } })
 })
 
 app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
   const practiceId = request.practiceId
-  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId } }, include: { mealSlots: { include: { recipe: { include: { ingredients: { include: { ingredient: true } } } } } } } })
+  const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId } }, include: { patient: true, documents: { where: { type: 'nutrition_plan' }, orderBy: { createdAt: 'desc' } }, mealSlots: { include: { recipe: { include: { ingredients: { include: { ingredient: true } } } } } } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED') return reply.code(409).send({ code: 'PLAN_ALREADY_PUBLISHED', message: 'Este plan ya fue publicado.', fields: {} })
-  if (!plan.mealSlots.length) return reply.code(400).send({ code: 'EMPTY_PLAN', message: 'Agrega al menos un tiempo de comida antes de publicar.', fields: {} })
+  if (plan.status === 'CANCELLED') return reply.code(409).send({ code: 'PLAN_CANCELLED', message: 'Reactiva el plan antes de publicarlo.', fields: {} })
   // A plan can be half-created (recipes assigned) without ever saving the requirement — the
   // Entrega preview and the PDF would then lack the kcal/macro box. Require the calculation.
   if (plan.targetKcal == null || plan.carbsPercent == null) return reply.code(400).send({ code: 'PLAN_WITHOUT_CALCULATION', message: 'Guarda el cálculo de requerimientos en el paso "Plan alimentario" antes de publicar.', fields: {} })
   // El snapshot congela también las cantidades ajustadas para esta paciente.
   const menuSnapshot = applyRecipeAdjustments(buildMenuSnapshot(plan.mealSlots), plan.recipeAdjustments)
-  await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'PUBLISHED', publishedAt: new Date(), menuSnapshot } })
+  // Espacios sin receta no cuentan: un plan sin ninguna receta no se publica.
+  if (!menuSnapshot.length) return reply.code(400).send({ code: 'EMPTY_PLAN', message: 'Asigna al menos una receta antes de publicar.', fields: {} })
+  const { practice, user } = await loadPracticeBranding(practiceId, request.userId)
+  const headerSnapshot = await buildPlanHeader(plan.patient, practice, user)
+  await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'PUBLISHED', publishedAt: new Date(), menuSnapshot, headerSnapshot } })
   await logAudit(request, { action: 'published', entity: 'NutritionPlan', entityId: plan.id, patientId: plan.patientId })
   // Publicar deja el PDF listo para entregar. Si la generación falla, el plan ya quedó publicado y
   // la pantalla de Entrega ofrece "Generar PDF" para reintentarlo.
   try {
-    const document = await prisma.document.create({ data: { patientId: plan.patientId, consultationId: plan.consultationId, planId: plan.id, type: 'nutrition_plan', sections: { menu: true, macros: true, recommendations: true }, version: 0 } })
+    // Un plan tiene un solo documento de entrega: si ya existía (plan vuelto a publicar), se
+    // regenera ese en vez de dejar uno viejo colgando con el PDF anterior.
+    const document = plan.documents[0] || await prisma.document.create({ data: { patientId: plan.patientId, consultationId: plan.consultationId, planId: plan.id, type: 'nutrition_plan', sections: { menu: true, macros: true, recommendations: true }, version: 0 } })
     await generateDocumentFile(document.id, practiceId, request.userId)
   } catch (error) { request.log.error(error) }
-  return prisma.nutritionPlan.findUnique({ where: { id: plan.id }, include: { documents: true } })
+  return prisma.nutritionPlan.findUnique({ where: { id: plan.id }, include: { documents: { orderBy: { createdAt: 'desc' } } } })
 })
 
 app.post('/api/v1/documents/nutrition-plan', async (request, reply) => {
@@ -2085,14 +2120,16 @@ function drawRecallTable(file, recall) {
 // esos campos, y los borradores (vista previa), se completan con la receta viva.
 async function loadPlanMenu(plan) {
   const snapshot = Array.isArray(plan.menuSnapshot) ? plan.menuSnapshot : []
-  if (plan.status === 'PUBLISHED' && snapshot.length && snapshot.every((entry) => Array.isArray(entry.ingredients))) {
+  // Un plan que se publicó conserva su menú congelado aunque después se cancele.
+  const published = Boolean(plan.publishedAt) || plan.status === 'PUBLISHED'
+  if (published && snapshot.length && snapshot.every((entry) => Array.isArray(entry.ingredients))) {
     // La foto es lo único que no se congela: si la receta recibe (o cambia) su foto después de
     // publicar, el plan la muestra al regenerarse.
     const photos = await prisma.recipe.findMany({ where: { id: { in: snapshot.map((entry) => entry.recipeId).filter(Boolean) } }, select: { id: true, imageFile: true } })
     return snapshot.map((entry) => ({ ...entry, imageFile: photos.find((recipe) => recipe.id === entry.recipeId)?.imageFile || entry.imageFile || null }))
   }
   const recipeInclude = { ingredients: { include: { ingredient: true } } }
-  if (plan.status === 'PUBLISHED' && snapshot.length) {
+  if (published && snapshot.length) {
     const recipes = await prisma.recipe.findMany({ where: { id: { in: snapshot.map((entry) => entry.recipeId).filter(Boolean) } }, include: recipeInclude })
     const live = buildMenuSnapshot(snapshot.map((entry) => ({ ...entry, recipe: recipes.find((recipe) => recipe.id === entry.recipeId) || null })))
     // El nombre y las kcal congelados mandan sobre los de la receta viva.
@@ -2100,6 +2137,21 @@ async function loadPlanMenu(plan) {
   }
   const mealSlots = await prisma.mealSlot.findMany({ where: { planId: plan.id }, include: { recipe: { include: recipeInclude } } })
   return applyRecipeAdjustments(buildMenuSnapshot(mealSlots), plan.recipeAdjustments)
+}
+
+// Encabezado y pie del plan: quién es la paciente, su medición más reciente y los datos de la
+// nutrióloga que lo firma.
+async function buildPlanHeader(patient, practice, user) {
+  const measurement = await prisma.measurement.findFirst({ where: { patientId: patient.id, weightKg: { not: null } }, orderBy: { measuredAt: 'desc' } })
+  return {
+    patientName: `${patient.firstName} ${patient.lastName}`.trim(),
+    nutritionistName: user?.name || practice?.name || '',
+    licenseNumber: user?.licenseNumber || null,
+    weightKg: measurement?.weightKg != null ? Number(measurement.weightKg) : null,
+    bodyFatPercent: measurement?.bodyFatPercent != null ? Number(measurement.bodyFatPercent) : null,
+    muscleMassKg: measurement?.muscleMassKg != null ? Number(measurement.muscleMassKg) : null,
+    contact: [{ kind: 'phone', text: user?.phone }, { kind: 'address', text: practice?.address }, { kind: 'email', text: user?.email }].filter((item) => item.text),
+  }
 }
 
 // Reúne lo que necesita drawNutritionPlan: lo asíncrono (archivos de fotos, medición más reciente)
@@ -2114,20 +2166,20 @@ async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) 
     if (!/^[a-z0-9][a-z0-9-]*\.jpg$/.test(imageFile)) continue
     try { images.set(imageFile, await readFile(path.join(imageDirectory, imageFile))) } catch { /* foto faltante: la celda sale sin ella */ }
   }
-  const measurement = await prisma.measurement.findFirst({ where: { patientId: patient.id, weightKg: { not: null } }, orderBy: { measuredAt: 'desc' } })
+  // Publicado: el encabezado es el que se congeló al publicar (los planes publicados antes de que
+  // existiera ese snapshot, y los borradores, lo arman con los datos de hoy).
+  const frozenHeader = plan.publishedAt && plan.headerSnapshot && typeof plan.headerSnapshot === 'object' ? plan.headerSnapshot : null
+  const header = frozenHeader || await buildPlanHeader(patient, practice, user)
   return {
-    patientName: `${patient.firstName} ${patient.lastName}`.trim(),
-    nutritionistName: user?.name || practice?.name || '',
-    weightKg: measurement?.weightKg != null ? Number(measurement.weightKg) : null,
-    bodyFatPercent: measurement?.bodyFatPercent != null ? Number(measurement.bodyFatPercent) : null,
-    muscleMassKg: measurement?.muscleMassKg != null ? Number(measurement.muscleMassKg) : null,
+    ...header,
     menu,
     mealTimes: plan.mealTimes,
     equivalents: plan.equivalents,
+    mealLabels: plan.mealLabels,
+    menus: plan.menus,
+    mealNotes: plan.mealNotes,
     recommendations: plan.recommendations,
     hydrationNote: plan.hydrationNote,
-    licenseNumber: user?.licenseNumber || null,
-    contact: [{ kind: 'phone', text: user?.phone }, { kind: 'address', text: practice?.address }, { kind: 'email', text: user?.email }].filter((item) => item.text),
     logo: logoBuffer,
     images,
   }
@@ -2228,6 +2280,72 @@ app.post('/api/v1/documents/:documentId/deliver', async (request, reply) => {
   const delivered = await prisma.document.update({ where: { id: document.id }, data: { deliveredAt: new Date() } })
   await logAudit(request, { action: 'delivered', entity: 'Document', entityId: document.id, patientId: document.patientId, metadata: { type: document.type } })
   return delivered
+})
+
+// ── Equivalencias: alimentos del libro SMAE 5ª ed. (tabla SmaeFood) ─────────────────────────────
+const SMAE_NUTRIENT_KEYS = ['grossWeight', 'netWeight', 'kcal', 'protein', 'fat', 'carbs', 'satFat', 'monoFat', 'polyFat', 'cholesterol', 'sugar', 'fiber', 'vitA', 'vitC', 'folicAcid', 'calcium', 'iron', 'potassium', 'sodium', 'phosphorus', 'ethanol', 'gi', 'gl']
+
+app.get('/api/v1/smae-foods/groups', async (request) => {
+  const practiceId = request.practiceId
+  const [groups, pending] = await Promise.all([
+    prisma.smaeFood.groupBy({ by: ['group'], where: { practiceId }, _count: true }),
+    prisma.smaeFood.groupBy({ by: ['group'], where: { practiceId, review: { not: Prisma.AnyNull } }, _count: true }),
+  ])
+  const pendingByGroup = new Map(pending.map((item) => [item.group, item._count]))
+  return { items: groups.map((item) => ({ group: item.group, count: item._count, pending: pendingByGroup.get(item.group) || 0 })) }
+})
+
+app.get('/api/v1/smae-foods', async (request) => {
+  const { search = '', group, review, page, pageSize } = request.query
+  const where = {
+    practiceId: request.practiceId,
+    ...(group ? { group: String(group) } : {}),
+    ...(search ? { name: { contains: String(search).slice(0, 80), mode: 'insensitive' } } : {}),
+    ...(review === '1' ? { review: { not: Prisma.AnyNull } } : {}),
+  }
+  const currentPage = Math.max(Number(page) || 1, 1)
+  const take = Math.min(Math.max(Number(pageSize) || 50, 1), 200)
+  const [items, total] = await prisma.$transaction([
+    prisma.smaeFood.findMany({ where, orderBy: [{ page: 'asc' }, { row: 'asc' }], skip: (currentPage - 1) * take, take }),
+    prisma.smaeFood.count({ where }),
+  ])
+  return { items, total, page: currentPage, pageSize: take }
+})
+
+// Corrige o confirma celdas de un alimento. `values` trae sólo los campos tocados; un valor null
+// en un nutrimento significa "ND". Cada campo enviado deja de estar marcado para revisión y queda
+// anotado en `corrections`, que el importador respeta.
+app.patch('/api/v1/smae-foods/:foodId', async (request, reply) => {
+  const food = await prisma.smaeFood.findFirst({ where: { id: request.params.foodId, practiceId: request.practiceId } })
+  if (!food) return reply.code(404).send({ code: 'SMAE_FOOD_NOT_FOUND', message: 'Alimento no encontrado.', fields: {} })
+  const values = request.body?.values
+  if (!values || typeof values !== 'object' || Array.isArray(values)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Indica los valores a guardar.', fields: { values: true } })
+  const nutrients = { ...(food.nutrients || {}) }
+  const review = { ...(food.review || {}) }
+  const corrections = { ...(food.corrections || {}) }
+  const data = {}
+  for (const [field, raw] of Object.entries(values).slice(0, 40)) {
+    if (SMAE_NUTRIENT_KEYS.includes(field)) {
+      const number = raw === null || raw === '' ? null : Number(raw)
+      if (number !== null && (!Number.isFinite(number) || number < 0 || number > 100000)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Los valores deben ser números positivos (o vacío para ND).', fields: { [field]: true } })
+      nutrients[field] = number === null ? null : Math.round(number * 100) / 100
+      corrections[field] = nutrients[field]
+    } else if (field === 'name' || field === 'unit') {
+      const text = typeof raw === 'string' ? raw.trim().slice(0, 160) : ''
+      if (!text) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El texto no puede quedar vacío.', fields: { [field]: true } })
+      data[field] = text
+      corrections[field] = text
+    } else if (field === 'qty') {
+      const number = Number(raw)
+      if (!Number.isFinite(number) || number <= 0 || number > 10000) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La cantidad debe ser un número positivo.', fields: { qty: true } })
+      data.qty = Math.round(number * 1000) / 1000
+      corrections.qty = data.qty
+    } else continue
+    delete review[field]
+  }
+  const updated = await prisma.smaeFood.update({ where: { id: food.id }, data: { ...data, nutrients, corrections, review: Object.keys(review).length ? review : Prisma.DbNull } })
+  await logAudit(request, { action: 'updated', entity: 'SmaeFood', entityId: food.id, metadata: { fields: Object.keys(values).slice(0, 40) } })
+  return updated
 })
 
 app.setErrorHandler((error, request, reply) => {

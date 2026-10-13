@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { EQUIVALENT_GROUPS, buildMealOptions } from './documents.js'
+import { PLAN_MEALS } from './planMeals.js'
+import { planMenus } from './equivalents.js'
 import { EQUIVALENT_LISTS } from './equivalentLists.js'
 
 // Plan de alimentación que se entrega a la paciente: hoja carta apaisada con una tabla de tiempos
@@ -17,6 +19,7 @@ const FIRST_TOP = 108
 const CONTENT_TOP = 96
 const CONTENT_BOTTOM = 519
 
+const DAY_NAMES = { 1: 'lunes', 2: 'martes', 3: 'miércoles', 4: 'jueves', 5: 'viernes', 6: 'sábado', 7: 'domingo' }
 const TEXT = '#1A1A1A'
 const SOFT = '#555555'
 const WAVE_RED = '#F0544F'
@@ -101,14 +104,46 @@ const formatNumber = (value, digits = 1) => String(Math.round(Number(value) * 10
 function wrapText(file, text, width) {
   const lines = []
   let current = ''
-  for (const word of cleanText(text).split(' ')) {
+  for (let word of cleanText(text).split(' ')) {
     if (!word) continue
+    // Una "palabra" más ancha que la celda (una liga, texto pegado sin espacios) se corta por
+    // letras: si no, se saldría de su columna o de la hoja.
+    while (file.widthOfString(word) > width && word.length > 1) {
+      if (current) { lines.push(current); current = '' }
+      // Se estima el corte por proporción y se afina: medir letra por letra una palabra de miles
+      // de caracteres bloquearía el servidor.
+      const head = word.slice(0, 400)
+      let cut = Math.max(1, Math.min(head.length - 1, Math.floor((head.length * width) / file.widthOfString(head))))
+      while (cut > 1 && file.widthOfString(word.slice(0, cut)) > width) cut -= 1
+      while (cut < head.length - 1 && file.widthOfString(word.slice(0, cut + 1)) <= width) cut += 1
+      lines.push(word.slice(0, cut))
+      word = word.slice(cut)
+    }
     const candidate = current ? `${current} ${word}` : word
     if (!current || file.widthOfString(candidate) <= width) current = candidate
     else { lines.push(current); current = word }
   }
   if (current) lines.push(current)
   return lines
+}
+
+// Deja activa la fuente al mayor tamaño (entre `max` y `min`) con que `text` cabe en `width`; si
+// ni al mínimo cabe, devuelve el texto recortado con "…".
+function fitText(file, font, text, max, min, width) {
+  let size = max
+  file.font(font).fontSize(size)
+  while (size > min && file.widthOfString(text) > width) { size -= 0.5; file.fontSize(size) }
+  return truncateToWidth(file, text, width)
+}
+
+// Recorta `text` con "…" para que quepa en `width` con la fuente activa. El corte se estima por
+// proporción y se afina unas letras: medir quitando de a una letra sería cuadrático en el largo.
+function truncateToWidth(file, text, width) {
+  const total = file.widthOfString(text)
+  if (total <= width) return text
+  let keep = Math.max(1, Math.floor((text.length * width) / total) - 1)
+  while (keep > 1 && file.widthOfString(`${text.slice(0, keep).trimEnd()}…`) > width) keep -= 1
+  return `${text.slice(0, keep).trimEnd()}…`
 }
 
 function drawWaves(file) {
@@ -148,7 +183,11 @@ function drawPageChrome(file, data) {
   const { fonts } = data
   drawWaves(file)
   file.font(fonts.bold).fontSize(12).fillColor(TEXT).text('Plan de Alimentación', 0, 45, { width: PAGE_W, align: 'center', lineBreak: false })
-  if (data.nutritionistName) file.font(fonts.regular).fontSize(12).fillColor('#333333').text(cleanText(data.nutritionistName), 0, 62, { width: PAGE_W, align: 'center', lineBreak: false })
+  if (data.nutritionistName) {
+    // Centrado en la hoja pero sin llegar al logo: un nombre largo baja de tamaño y, si ni así, se corta.
+    const name = fitText(file, fonts.regular, cleanText(data.nutritionistName), 12, 8, 500)
+    file.fillColor('#333333').text(name, (PAGE_W - 500) / 2, 62, { width: 500, align: 'center', lineBreak: false })
+  }
   if (data.logo) {
     try { file.image(data.logo, 676, 2, { fit: [86, 92], align: 'center', valign: 'center' }) } catch { /* logo en un formato que pdfkit no lee: la hoja sale sin él */ }
   }
@@ -186,6 +225,8 @@ function drawPatientLine(file, data, y) {
   file.font(data.fonts.regular).fontSize(size).fillColor(TEXT)
   const totalWidth = () => fields.reduce((sum, text) => sum + file.widthOfString(text), 0) + gap * (fields.length - 1)
   while (size > 7 && totalWidth() > right - left) { size -= 0.5; file.fontSize(size) }
+  // Si ni con la letra mínima caben, el que cede es el nombre.
+  if (totalWidth() > right - left) fields[0] = truncateToWidth(file, fields[0], Math.max(60, right - left - (totalWidth() - file.widthOfString(fields[0]))))
   const rest = fields.slice(1)
   const start = left + file.widthOfString(fields[0]) + gap
   file.text(fields[0], left, y, { lineBreak: false })
@@ -274,8 +315,11 @@ function drawTimeLabel(file, fonts, label, time, x, y, height) {
   // Girado -90°, "abajo" en el texto es la derecha de la columna.
   file.text(text, cx - file.widthOfString(text) / 2, cy - lineH / 2 - (hour ? 9 : 0), { lineBreak: false })
   if (hour) {
-    file.fontSize(Math.min(size, 11.5))
-    file.text(hour, cx - file.widthOfString(hour) / 2, cy + 3, { lineBreak: false })
+    // La hora también tiene que caber a lo alto de la celda (una continuación puede ser muy corta).
+    let hourSize = Math.min(size, 11.5)
+    file.fontSize(hourSize)
+    while (hourSize > 6 && file.widthOfString(hour) > height - 8) { hourSize -= 0.5; file.fontSize(hourSize) }
+    if (file.widthOfString(hour) <= height - 4) file.text(hour, cx - file.widthOfString(hour) / 2, cy + 3, { lineBreak: false })
   }
   file.restore()
 }
@@ -397,14 +441,17 @@ function drawLegend(file, data, startY, rows) {
 function drawParagraphList(file, data, title, items, startY) {
   const { fonts } = data
   let y = startY
-  if (CONTENT_BOTTOM - y < 44) y = addPage(file, data) + 16
+  // El título no se queda solo al pie: necesita lugar para él y al menos un renglón.
+  if (CONTENT_BOTTOM - y < 27 + 13.5 * 2) y = addPage(file, data) + 16
   file.font(fonts.bold).fontSize(10.5).fillColor(TEXT).text(title, 72, y, { lineBreak: false })
   y += 27
   for (const item of items) {
     file.font(fonts.regular).fontSize(10)
     const lines = wrapText(file, `-${cleanText(item).replace(/^[-•·]\s*/, '')}`, 640)
-    if (CONTENT_BOTTOM - y < lines.length * 13.5) y = addPage(file, data) + 16
+    // Un punto corto pasa entero a la hoja siguiente; uno largo se parte renglón por renglón.
+    if (lines.length <= 6 && CONTENT_BOTTOM - y < lines.length * 13.5) y = addPage(file, data) + 16
     for (const line of lines) {
+      if (CONTENT_BOTTOM - y < 13.5) y = addPage(file, data) + 16
       file.font(fonts.regular).fontSize(10).fillColor(TEXT).text(line, 72, y, { lineBreak: false })
       y += 13.5
     }
@@ -481,31 +528,84 @@ function drawEquivalentPages(file, data) {
 // menu, mealTimes, equivalents, recommendations, hydrationNote, contact: [{ kind: 'phone'|'address'|'email', text }], logo,
 // images: Map<imageFile, Buffer> }.
 // `file` debe ser un PDFDocument carta apaisado con margen 0 y su primera hoja ya creada.
-function drawNutritionPlan(file, input) {
+// Topes de lo que se dibuja. El dibujo es síncrono, así que su costo tiene que estar acotado aquí
+// mismo y no depender de que cada ruta que guarda estos textos los haya limitado: nombres y
+// direcciones vienen de varias pantallas, y hay datos guardados antes de que existieran los topes.
+const LIMITS = { name: 160, contact: 160, notes: 6000, recipeName: 200, ingredient: 300, ingredients: 60, entries: 60, contacts: 3 }
+const clip = (value, max) => String(value ?? '').slice(0, max)
+
+function boundInput(input) {
+  return {
+    ...input,
+    patientName: clip(input.patientName, LIMITS.name),
+    nutritionistName: clip(input.nutritionistName, LIMITS.name),
+    licenseNumber: input.licenseNumber ? clip(input.licenseNumber, 40) : null,
+    recommendations: clip(input.recommendations, LIMITS.notes),
+    hydrationNote: clip(input.hydrationNote, LIMITS.notes),
+    mealLabels: Object.fromEntries(Object.entries(input.mealLabels && typeof input.mealLabels === 'object' ? input.mealLabels : {}).slice(0, 12).map(([key, value]) => [key, clip(value, 28)])),
+    mealNotes: Object.fromEntries(Object.entries(input.mealNotes && typeof input.mealNotes === 'object' ? input.mealNotes : {}).slice(0, 12).map(([key, value]) => [key, clip(value, 600)])),
+    contact: (Array.isArray(input.contact) ? input.contact : []).slice(0, LIMITS.contacts).map((item) => ({ kind: item?.kind, text: clip(item?.text, LIMITS.contact) })),
+    menu: (Array.isArray(input.menu) ? input.menu : []).slice(0, LIMITS.entries).map((entry) => ({
+      ...entry,
+      recipeName: clip(entry.recipeName, LIMITS.recipeName),
+      ingredients: (Array.isArray(entry.ingredients) ? entry.ingredients : []).slice(0, LIMITS.ingredients).map((line) => clip(line, LIMITS.ingredient)),
+    })),
+  }
+}
+
+function drawNutritionPlan(file, rawInput) {
+  const input = boundInput(rawInput)
   // El logo va en todas las hojas: se abre una sola vez para no incrustarlo una vez por hoja.
   let logo = null
   if (input.logo) { try { logo = file.openImage(input.logo) } catch { logo = null } }
-  const data = { ...input, logo, fonts: registerFonts(file) }
+  // Lo mismo las fotos: una receta que se repite en varios tiempos se incrusta una sola vez.
+  const images = new Map()
+  for (const [imageFile, buffer] of input.images || []) { try { images.set(imageFile, file.openImage(buffer)) } catch { /* foto ilegible: la celda lleva el plato dibujado */ } }
+  const data = { ...input, logo, images, fonts: registerFonts(file) }
   drawPageChrome(file, data)
   let y = drawPatientLine(file, data, FIRST_TOP)
-  const rows = buildMealOptions(data.menu, data.mealTimes, data.equivalents)
-  if (!rows.length) {
+  // Un plan con varios menús (tipos de día) lleva una tabla por menú: cada una con las recetas de
+  // sus días y las porciones de su propio cuadro de equivalentes.
+  const menus = planMenus(data.equivalents, data.menus)
+  const sections = menus
+    .map((menu) => ({ menu, rows: buildMealOptions((data.menu || []).filter((entry) => menu.days.includes(entry.dayOfWeek)), data.mealTimes, menu.equivalents, data.mealLabels) }))
+    .filter((section) => section.rows.length)
+  if (!sections.length) {
     file.font(data.fonts.regular).fontSize(10.5).fillColor(SOFT).text('Este plan todavía no tiene recetas asignadas.', X0 + 6, y + 10, { lineBreak: false })
-  } else {
+  }
+  sections.forEach((section, index) => {
+    const { rows, menu } = section
+    if (index > 0) y = addPage(file, data)
+    if (sections.length > 1) {
+      // Título del menú con los días en que aplica.
+      const days = menu.days.map((day) => DAY_NAMES[day]).join(', ')
+      file.font(data.fonts.bold).fontSize(10.5).fillColor(TEXT).text(clip(`${menu.name} · ${days}`, 120), X0 + 6, y, { lineBreak: false })
+      y += 16
+    }
     // Cinco columnas de opción, como el formato en papel; con 6 o 7 opciones (una por día) las
     // columnas se angostan y la letra baja para que quepan.
     const columns = Math.min(7, Math.max(...rows.map((row) => row.options.length)))
     const colW = (TABLE_W - TIME_W - PORTION_W) / Math.max(columns, 5)
     const scale = columns <= 5 ? 1 : columns === 6 ? 0.88 : 0.8
-    const layout = { columns, colW, optionX: (index) => X0 + TIME_W + PORTION_W + index * colW, titleSize: 9 * scale, textSize: 8.8 * scale, lineH: 11 * scale }
+    const layout = { columns, colW, optionX: (position) => X0 + TIME_W + PORTION_W + position * colW, titleSize: 9 * scale, textSize: 8.8 * scale, lineH: 11 * scale }
     y = drawTableHeader(file, data, layout, y)
     for (const row of rows) y = drawMealRow(file, data, layout, row, y)
-    y = drawLegend(file, data, y, rows)
-  }
+    if (index === sections.length - 1) y = drawLegend(file, data, y, sections.flatMap((item) => item.rows))
+  })
 
   const agreements = [...splitNotes(data.recommendations), ...splitNotes(data.hydrationNote)]
   y = addPage(file, data) + 16
   if (agreements.length) y = drawParagraphList(file, data, 'Acuerdos y recomendaciones:', agreements, y)
+  // Indicaciones propias de cada tiempo de comida, y los suplementos o bebidas que le tocan.
+  const mealLines = []
+  for (const meal of PLAN_MEALS) {
+    const label = data.mealLabels?.[meal.key] || meal.printLabel
+    const extras = (data.equivalents?.extras || []).filter((extra) => Number(extra.meals?.[meal.key]) > 0).map((extra) => `${formatQuantity(Number(extra.meals[meal.key]))} ${extra.name}`)
+    const note = String(data.mealNotes?.[meal.key] || '').trim()
+    if (extras.length) mealLines.push(`${label}: ${extras.join(', ')}`)
+    for (const line of splitNotes(note)) mealLines.push(`${label}: ${line}`)
+  }
+  if (mealLines.length) y = drawParagraphList(file, data, 'Indicaciones por tiempo de comida:', mealLines, y)
   drawParagraphList(file, data, 'Instrucciones:', DEFAULT_INSTRUCTIONS, y)
 
   drawEquivalentPages(file, data)
