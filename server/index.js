@@ -927,7 +927,9 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
   if (!consultation) consultation = await prisma.consultation.create({ data: { patientId, nutritionistId: request.userId, status: 'IN_PROGRESS', startedAt: new Date() } })
   let plan = await prisma.nutritionPlan.findFirst({ where: { patientId, status: { not: 'PUBLISHED' } }, orderBy: { createdAt: 'desc' } })
   if (!plan) plan = await prisma.nutritionPlan.create({ data: { patientId, consultationId: consultation.id } })
-  const slots = template.mealSlots || []
+  // Normaliza igual que la distribución (valida día/tiempo y deduplica por día+tiempo): una
+  // plantilla con slots crudos duplicados violaría @@unique([planId, dayOfWeek, mealType]) → 500.
+  const slots = normalizeMealSlots(template.mealSlots)
   // The template's mealSlots are a snapshot of recipeId taken at creation time (see POST above) --
   // if any of those recipes no longer exist in this practice (same defensive check as
   // PUT /plans/:planId/distribution), inserting them as-is would violate the FK and 500. Drop the
@@ -1552,7 +1554,9 @@ app.post('/api/v1/plans/:planId/cancel', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'CANCELLED') return plan
-  return prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'CANCELLED' } })
+  const updated = await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: 'CANCELLED' } })
+  await logAudit(request, { action: 'cancelled', entity: 'NutritionPlan', entityId: updated.id, patientId: plan.patientId })
+  return updated
 })
 
 app.post('/api/v1/plans/:planId/reactivate', async (request, reply) => {
@@ -1561,7 +1565,9 @@ app.post('/api/v1/plans/:planId/reactivate', async (request, reply) => {
   if (plan.status !== 'CANCELLED') return plan
   // Un plan que ya se había publicado vuelve a publicado, con su menú congelado intacto: reactivarlo
   // no debe reabrir a edición un plan entregado.
-  return prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: plan.publishedAt ? 'PUBLISHED' : 'DRAFT' } })
+  const updated = await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: plan.publishedAt ? 'PUBLISHED' : 'DRAFT' } })
+  await logAudit(request, { action: 'reactivated', entity: 'NutritionPlan', entityId: updated.id, patientId: plan.patientId })
+  return updated
 })
 
 app.patch('/api/v1/plans/:planId', async (request, reply) => {
@@ -1596,7 +1602,12 @@ app.get('/api/v1/plans/:planId/adequacy', async (request, reply) => {
   // Las recetas con cantidades ajustadas para este plan cuentan con su factor.
   const adjustments = normalizeRecipeAdjustments(plan.recipeAdjustments)
   const slots = plan.mealSlots.map((slot) => ({ ...slot, servings: (Number(slot.servings) || 1) * adjustmentFactor(adjustments, slot.mealType, slot.recipeId) }))
-  return computeMicronutrientAdequacy(slots, inputs.age, inputs.sex)
+  try {
+    return computeMicronutrientAdequacy(slots, inputs.age, inputs.sex)
+  } catch (error) {
+    request.log.error(error)
+    return reply.code(500).send({ code: 'ADEQUACY_FAILED', message: 'No se pudo calcular la adecuación de micronutrientes.', fields: {} })
+  }
 })
 
 app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
@@ -2276,7 +2287,13 @@ app.get('/api/v1/plans/:planId/preview-pdf', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId } }, include: { patient: true } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   const { practice, user, logoBuffer } = await loadPracticeBranding(practiceId, request.userId)
-  const pdf = await renderNutritionPlanPdf(await loadNutritionPlanData(plan, plan.patient, practice, user, logoBuffer))
+  let pdf
+  try {
+    pdf = await renderNutritionPlanPdf(await loadNutritionPlanData(plan, plan.patient, practice, user, logoBuffer))
+  } catch (error) {
+    request.log.error(error)
+    return reply.code(500).send({ code: 'PDF_GENERATION_FAILED', message: 'No se pudo generar la vista previa del PDF.', fields: {} })
+  }
   return reply.type('application/pdf').header('Content-Disposition', 'inline; filename="plan-de-alimentacion.pdf"').header('Cache-Control', 'no-store').send(pdf)
 })
 
