@@ -137,7 +137,6 @@ const FATS_WITH_PROTEIN = [
   'Nuez de la india sin sal – 12g – 15 mitades',
   'Pepitas – 12g – 60 pzas',
   'Pistache – 13g – 18 pzas',
-  'Avellana – 13g – 18 pzas',
   'Crema de cacahuate – 11g – 3 cdita',
   'Chía – 12g – 5 cditas',
   'Linaza – 12g – 2 cditas',
