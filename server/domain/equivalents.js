@@ -4,6 +4,7 @@
 // base ni la red: lo usan igual el servidor (guardar, PDF) y la pantalla (cálculo en vivo).
 
 import { PLAN_MEALS } from './planMeals.js'
+import { round1 } from './round.js'
 
 // Aporte nutrimental promedio de UN equivalente de cada grupo (SMAE). `badge` es el círculo con que
 // el plan impreso muestra el grupo: ahí cereales, leches y azúcares no se subdividen.
@@ -48,7 +49,6 @@ const toHalf = (value) => {
   if (!Number.isFinite(number) || number <= 0) return 0
   return Math.min(MAX_EQUIVALENTS, Math.round(number * 2) / 2)
 }
-const round1 = (value) => Math.round(value * 10) / 10
 
 // Requerimiento en gramos a partir de las kcal y el porcentaje de cada macronutrimento.
 function macroTargets({ kcal, carbsPercent, proteinPercent, fatPercent }) {

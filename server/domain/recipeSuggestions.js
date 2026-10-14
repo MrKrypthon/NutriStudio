@@ -5,8 +5,9 @@
 import { recipeIngredientLines } from './documents.js'
 import { EQUIVALENT_BY_CODE } from './equivalents.js'
 import { familyOf, familyTotals, fitItemsToMeal, itemsMacros, recipeItems } from './recipeEquivalents.js'
+import { foldText } from './text.js'
 
-const normalizeText = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const normalizeText = foldText
 
 // Palabras de un texto libre del expediente que no nombran un alimento.
 const STOPWORDS = new Set(['ninguna', 'ninguno', 'conocida', 'conocido', 'evita', 'evitar', 'causa', 'causan', 'malestar', 'gusta', 'gustan', 'agrada', 'agradan', 'entera', 'entero', 'todo', 'toda', 'tipo', 'algunos', 'algunas', 'cuando', 'porque', 'pero', 'solo', 'mucho', 'mucha', 'poco', 'poca', 'come', 'comer', 'tolera', 'distension', 'dolor', 'gases', 'alergia', 'alergias', 'alergica', 'alergico', 'intolerancia', 'intolerante', 'sensibilidad', 'para', 'como', 'desde', 'hace', 'tiene', 'sobre', 'entre', 'ella', 'esta', 'este', 'esos', 'esas', 'productos', 'alimentos', 'comida', 'comidas', 'bebidas'])

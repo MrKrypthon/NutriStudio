@@ -1,12 +1,10 @@
+import { round1 } from './round.js'
+
 const ACTIVITY_FACTORS = {
   sedentary: 1.2,
   light: 1.375,
   moderate: 1.55,
   intense: 1.725,
-}
-
-function round1(value) {
-  return Math.round(value * 10) / 10
 }
 
 function leanMassKg(weightKg, bodyFatPercent) {

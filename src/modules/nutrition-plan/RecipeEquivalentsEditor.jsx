@@ -2,12 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ingredientsApi } from '../../lib/api.js'
 import { EQUIVALENT_BY_CODE } from '../../../server/domain/equivalents.js'
 import { catalogGroupForCode, compareWithMeal, fitItemsToMeal, itemFromIngredient, itemLine, itemPortions, itemsMacros, recipeItems, setItemPortions, swapItem } from '../../../server/domain/recipeEquivalents.js'
-import { clampFactor } from './planAdjustments.js'
+import { clampFactor, formatCount, sameItems } from './planAdjustments.js'
 
-const formatCount = (value) => String(Math.round((Number(value) || 0) * 100) / 100)
 const STATUS_TEXT = { ok: 'cumple', low: 'falta', high: 'excede', extra: 'no asignado' }
 const groupLabel = (code) => { const group = EQUIVALENT_BY_CODE[code]; return group ? `${group.label}${group.sub ? ` · ${group.sub.toLowerCase()}` : ''}` : 'Sin grupo' }
-const sameItems = (a, b) => JSON.stringify(a.map((item) => [item.ingredientId, item.name, item.grams])) === JSON.stringify(b.map((item) => [item.ingredientId, item.name, item.grams]))
 
 // Buscador del catálogo de Ingredientes para intercambiar o agregar un alimento. Con `group` sólo
 // ofrece alimentos de ese grupo (un intercambio conserva las porciones porque es el mismo grupo).
