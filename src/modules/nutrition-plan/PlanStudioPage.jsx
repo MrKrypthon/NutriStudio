@@ -45,9 +45,14 @@ const ENERGY_ADJUST_PRESETS = ENERGY_ADJUST_OPTIONS.map(([value]) => value)
 const ACTIVITY_FACTORS = ['1.2', '1.375', '1.55', '1.725']
 // Campos del formulario que cambian el requerimiento: tocarlos deja viejo el resultado calculado.
 const ENERGY_FIELDS = ['sex', 'age', 'weightKg', 'heightCm', 'bodyFatPercent', 'formula', 'activityFactor', 'energyAdjustKcal', 'activityMethod', 'metsValue', 'metsMinutes', 'metsSessions']
+// Porcentajes de macros: van en el mismo guardado que el requerimiento, pero no lo vuelven viejo.
+const MACRO_FIELDS = ['carbsPercent', 'proteinPercent', 'fatPercent']
+// Un 0 % es válido; sólo un campo vacío cae al valor por defecto (antes `Number(x) || 50` convertía
+// un 0 legítimo en 50).
+const percentValue = (value, fallback) => (value !== '' && value != null && Number.isFinite(Number(value)) ? Number(value) : fallback)
 // Ejercicios frecuentes con su intensidad en METs (Compendio de Actividades Físicas), para no tener
 // que recordar el número; se puede escribir cualquier otro valor.
-const MET_PRESETS = [['3.5', 'Caminar a paso normal'], ['4.3', 'Caminar rápido'], ['7', 'Trotar'], ['9.8', 'Correr (10 km/h)'], ['5', 'Pesas / fuerza'], ['8', 'HIIT o circuito'], ['7.5', 'Ciclismo moderado'], ['8', 'Natación continua'], ['7', 'Fútbol'], ['6.5', 'Baile aeróbico'], ['2.5', 'Yoga']]
+const MET_PRESETS = [['3.5', 'Caminar a paso normal'], ['4.3', 'Caminar rápido'], ['5', 'Pesas / fuerza'], ['6.5', 'Baile aeróbico'], ['7', 'Trotar o fútbol'], ['7.5', 'Ciclismo moderado'], ['8', 'HIIT o natación continua'], ['9.8', 'Correr (10 km/h)'], ['2.5', 'Yoga']]
 // Lo que se manda al servidor para calcular: con METs va el ejercicio; con factor, no.
 const energyPayload = (form) => {
   const { metsValue, metsMinutes, metsSessions, activityMethod, ...rest } = form
@@ -210,6 +215,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [adjustMeal, setAdjustMeal] = useState(null)
   const [suggestMeal, setSuggestMeal] = useState(null)
   const [notesForm, setNotesForm] = useState(() => notesFromPlan(null))
+  // Espejo de notesForm para que dos ediciones en el mismo tick no se pisen (cada una parte del
+  // valor más reciente, no del de este render).
+  const notesFormRef = useRef(notesForm)
+  notesFormRef.current = notesForm
   const [notesSaveState, setNotesSaveState] = useState('idle')
   const notesSaveTimer = useRef(null)
   const notesPendingRef = useRef(null)
@@ -255,8 +264,16 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   useEffect(() => {
     if (!patient) return
-    setForm((prev) => ({ ...prev, sex: sexToFormValue(patient.sex), age: computeAge(patient.birthDate) || prev.age }))
-  }, [patient])
+    // Rellena sexo/edad desde la paciente SÓLO si el plan no los trae guardados; antes este efecto
+    // pisaba los del plan y, sin fecha de nacimiento, arrastraba la edad de la paciente anterior.
+    const inputs = plan?.evaluation?.inputs || {}
+    setForm((prev) => {
+      const next = { ...prev }
+      if (inputs.sex == null) next.sex = sexToFormValue(patient.sex)
+      if (inputs.age == null) next.age = computeAge(patient.birthDate) || ''
+      return next
+    })
+  }, [patient, plan?.evaluation])
 
   // La respuesta de un guardado trae sólo la fila del plan: se conserva lo ya cargado (consulta,
   // recetas asignadas). Si entre tanto se abrió OTRO plan, la respuesta se descarta.
@@ -281,7 +298,12 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     setForm(nextForm)
     setCustomAdjust(!ENERGY_ADJUST_PRESETS.includes(nextForm.energyAdjustKcal))
     if (!(keepNotes && samePlan)) setNotesForm(notesFromPlan(nextPlan))
-    if (!samePlan) { setCalcResult(null); setCalcState('idle'); setCalcStale(false); setEvalSaveState('idle'); setSaveState('idle'); setNotesSaveState('idle'); setAdjustMeal(null); setSuggestMeal(null); setPickerTarget(null) }
+    if (!samePlan) {
+      setCalcResult(null); setCalcState('idle'); setCalcStale(false); setCalcError('')
+      setEvalSaveState('idle'); setEvalSaveError(''); setSaveState('idle'); setNotesSaveState('idle')
+      setAdjustMeal(null); setSuggestMeal(null); setPickerTarget(null)
+      setAdequacy(null); setAdequacyState('idle'); setCreatePlanState('idle'); setPlanActionState('idle')
+    }
   }
 
   const loadPlanData = useCallback(async () => {
@@ -366,7 +388,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const updateForm = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
     // El resultado en pantalla ya no corresponde a estos datos (y "Guardar" recalcula con ellos).
-    if (ENERGY_FIELDS.includes(key) && calcResult) { setCalcStale(true); setEvalSaveState('idle') }
+    // También mientras el cálculo está en vuelo: si no, la respuesta tardía lo daba por vigente.
+    if (ENERGY_FIELDS.includes(key) && (calcResult || calcState === 'loading')) { setCalcStale(true); setEvalSaveState('idle') }
+    // Un cambio de macros no invalida el cálculo, pero sí el "Guardado ✓" (van en el mismo guardado).
+    else if (MACRO_FIELDS.includes(key)) setEvalSaveState('idle')
   }
 
   const calculate = async (event) => {
@@ -390,7 +415,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     setEvalSaveState('saving')
     setEvalSaveError('')
     try {
-      const updated = await plansApi.evaluate(plan.id, { ...energyPayload(form), energyAdjustKcal: Number(form.energyAdjustKcal) || 0, carbsPercent: Number(form.carbsPercent) || 50, proteinPercent: Number(form.proteinPercent) || 25, fatPercent: Number(form.fatPercent) || 25 })
+      const updated = await plansApi.evaluate(plan.id, { ...energyPayload(form), energyAdjustKcal: Number(form.energyAdjustKcal) || 0, carbsPercent: percentValue(form.carbsPercent, 50), proteinPercent: percentValue(form.proteinPercent, 25), fatPercent: percentValue(form.fatPercent, 25) })
       mergePlan(updated)
       setEvalSaveState('saved')
     } catch (error) {
@@ -425,7 +450,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   // pisarían: cada uno parte del notesForm de este render).
   const patchNotes = (patch) => {
     if (planLocked) return
-    const next = { ...notesForm, ...patch }
+    const next = { ...notesFormRef.current, ...patch }
+    notesFormRef.current = next
     setNotesForm(next)
     if (!plan) return
     setNotesSaveState('editing')
@@ -549,6 +575,14 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         const current = () => planIdRef.current === snapshot.planId
         if (current()) setSaveState('saving')
         const activeIds = new Set(recipesRef.current.map((recipe) => recipe.id))
+        // Con espacios asignados pero sin catálogo cargado, un payload vacío borraría la semana:
+        // se deja pendiente y se reintenta en el próximo guardado.
+        if (Object.values(snapshot.slots).some(Boolean) && !activeIds.size) {
+          slotsDirtyRef.current = snapshot
+          if (current()) setSaveState('error')
+          slotsInFlightRef.current = false
+          return
+        }
         const payload = Object.entries(snapshot.slots)
           .filter(([, recipeId]) => recipeId && activeIds.has(recipeId))
           .map(([key, recipeId]) => {
@@ -811,6 +845,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     commitSlots(nextSlots)
   }
 
+  // Firma de la distribución: el efecto de adecuación debe repetirse cuando cambia el MENÚ, no en
+  // cada guardado de indicaciones (que también reemplaza la identidad de `plan` y disparaba
+  // peticiones en cadena).
+  const distributionSignature = (plan?.mealSlots || []).map((slot) => `${slot.dayOfWeek}:${slot.mealType}:${slot.recipeId || ''}:${slot.servings}`).sort().join(',')
   useEffect(() => {
     if (step !== STEP.DISTRIBUTION || !plan) return
     let cancelled = false
@@ -819,7 +857,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       .then((response) => { if (!cancelled) { setAdequacy(response); setAdequacyState('ready') } })
       .catch(() => { if (!cancelled) setAdequacyState('error') })
     return () => { cancelled = true }
-  }, [step, plan])
+  }, [step, plan?.id, distributionSignature])
 
   const mealServingsFor = (mealType) => mealServingsRef.current[mealType] ?? 1
   const averageKcalForMeal = (mealType, days = DAYS) => {
@@ -981,7 +1019,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const renderHub = () => {
     const query = hubQuery.trim().toLowerCase()
-    const filtered = hubPlans.filter((item) => !query || `${item.patient.firstName} ${item.patient.lastName}`.toLowerCase().includes(query))
+    const filtered = hubPlans.filter((item) => !query || `${item.patient?.firstName || ''} ${item.patient?.lastName || ''}`.toLowerCase().includes(query))
     const groups = [
       ['Pendientes', filtered.filter((item) => item.status === 'DRAFT' || item.status === 'READY')],
       ['Realizados', filtered.filter((item) => item.status === 'PUBLISHED' || item.status === 'SUPERSEDED')],
@@ -999,7 +1037,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       {hubState === 'ready' && groups.map(([title, items]) => items.length > 0 && <section className="plans-group" key={title}>
         <p className="eyebrow">{title.toUpperCase()} · {items.length}</p>
         <div className="plan-cards">{items.map((item) => { const { progress, nextStep } = planProgress(item); const editable = item.status === 'DRAFT' || item.status === 'READY'; return <article className={'plan-card-item' + (editable ? ' editable' : '')} key={item.id}>
-          <div className="plan-card-info"><b>{item.patient.firstName} {item.patient.lastName}</b><small>{PLAN_STATUS_LABEL[item.status] || item.status} · v{item.version} · {editable ? `${nextStep} pendiente · ` : ''}actualizado {planUpdatedLabel(item.updatedAt || item.createdAt)}</small></div>
+          <div className="plan-card-info"><b>{item.patient?.firstName} {item.patient?.lastName}</b><small>{PLAN_STATUS_LABEL[item.status] || item.status} · v{item.version} · {editable ? `${nextStep} pendiente · ` : ''}actualizado {planUpdatedLabel(item.updatedAt || item.createdAt)}</small></div>
           <div className="plan-card-progress"><div className="pp-bar"><i style={{ width: `${progress}%` }} /></div><b>{progress}%</b></div>
           <div className="plan-card-actions">
             <button className="secondary" disabled={planActionState === item.id} onClick={() => openPlanFromHub(item)}>{editable ? 'Continuar' : 'Ver menú'}</button>
@@ -1058,6 +1096,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   </div></AppChrome>
 
   return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><button className="back-button" onClick={() => { setMode('hub'); loadHub() }}>← Todos los planes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>{view === 'list' ? `${plans.length} plan(es) · el borrador se guarda solo` : planLocked ? 'Plan guardado y asignado · sólo lectura' : 'Borrador · Se guarda automáticamente'}</span></div></div><label className="patient-switch">Paciente<select value={activePatientId || ''} onChange={(e) => { const nextId = e.target.value; if (!nextId) return; setActivePatientId(nextId); setMode('patient'); onSelectPatient?.(nextId) }}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>{view === 'list' ? renderPlansOverview() : <><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
+  return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><button className="back-button" onClick={() => { setMode('hub'); loadHub() }}>← Todos los planes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>{view === 'list' ? `${plans.length} plan(es) · el borrador se guarda solo` : 'Borrador · Se guarda automáticamente'}</span></div></div><label className="patient-switch">Paciente<select value={activePatientId || ''} onChange={(e) => { const nextId = e.target.value; if (!nextId) return; flushNotes(); setActivePatientId(nextId); setMode('patient'); onSelectPatient?.(nextId) }}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>{view === 'list' ? renderPlansOverview() : <><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
 
     <div className="plan-body">
 

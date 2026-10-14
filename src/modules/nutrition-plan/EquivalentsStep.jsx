@@ -10,13 +10,18 @@ const MACROS = [['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['f
 const STATUS_LABEL = { ok: 'En rango', low: 'Falta', high: 'Excede', none: '—' }
 const formatCount = (value) => { const number = Number(value) || 0; return Number.isInteger(number) ? String(number) : number.toFixed(1) }
 
-// Campo de equivalentes: − / + de medio en medio, o escribir la cantidad.
+// Campo de equivalentes: − / + de medio en medio, o escribir la cantidad. Mientras se teclea se
+// conserva el texto tal cual y sólo se normaliza al salir: antes cada tecla pasaba por `toHalf`, así
+// que al escribir "1.5" el punto se descartaba y se guardaba "15".
 function CountField({ value, onChange, disabled, label, compact = false }) {
   const count = Number(value) || 0
+  const [text, setText] = useState(null)
+  const shown = text != null ? text : (count || '')
+  const commit = (raw) => { setText(null); onChange(toHalf(raw)) }
   return <div className={'eq-count' + (compact ? ' compact' : '') + (count > 0 ? ' filled' : '')}>
-    {!compact && <button type="button" disabled={disabled || count <= 0} onClick={() => onChange(toHalf(count - 0.5))} aria-label={`Menos ${label}`}>−</button>}
-    <input type="number" min="0" max="40" step="0.5" inputMode="decimal" disabled={disabled} value={count || ''} placeholder="0" aria-label={label} onChange={(event) => onChange(toHalf(event.target.value))} />
-    {!compact && <button type="button" disabled={disabled} onClick={() => onChange(toHalf(count + 0.5))} aria-label={`Más ${label}`}>+</button>}
+    {!compact && <button type="button" disabled={disabled || count <= 0} onClick={() => commit(count - 0.5)} aria-label={`Menos ${label}`}>−</button>}
+    <input type="number" min="0" max="40" step="0.5" inputMode="decimal" disabled={disabled} value={shown} placeholder="0" aria-label={label} onChange={(event) => setText(event.target.value)} onBlur={(event) => commit(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />
+    {!compact && <button type="button" disabled={disabled} onClick={() => commit(count + 0.5)} aria-label={`Más ${label}`}>+</button>}
   </div>
 }
 
@@ -54,7 +59,7 @@ export default function EquivalentsStep({ plan, value, onChange, locked, expedie
 
   const emit = (nextGroups, nextDistribution, nextExtras = extras) => onChange({ groups: nextGroups, distribution: nextDistribution, extras: nextExtras })
   const setExtra = (index, patch) => emit(groups, distribution, extras.map((extra, position) => (position === index ? { ...extra, ...patch } : extra)))
-  const addExtra = () => emit(groups, distribution, [...extras, { id: `x${Date.now().toString(36)}`, name: '', kcal: 0, protein: 0, fat: 0, carbs: 0, meals: {} }])
+  const addExtra = () => emit(groups, distribution, [...extras, { id: (globalThis.crypto?.randomUUID?.() || `x${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`), name: '', kcal: 0, protein: 0, fat: 0, carbs: 0, meals: {} }])
   const removeExtra = (index) => emit(groups, distribution, extras.filter((_, position) => position !== index))
   const setGroup = (code, count) => {
     const next = { ...groups }
