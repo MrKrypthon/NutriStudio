@@ -82,7 +82,7 @@ export default function RecipeAdjustModal({ meal, recipes, servings, adjustments
     <div className="adjust-guide">
       {prescribedGroups.length > 0
         ? <p><b>Calculado para {meal.label}:</b> {prescribedGroups.map((group) => `${formatCount(prescribed[group.code])} ${group.label}${group.sub ? ` (${group.sub.toLowerCase()})` : ''}`).join(' · ')} — {Math.round(prescribedKcal)} kcal.</p>
-        : <p className="muted">Este tiempo de comida todavía no tiene equivalentes repartidos (paso Equivalentes): puedes ajustar las cantidades a mano.</p>}
+        : <p className="muted">Este tiempo de comida todavía no tiene porciones repartidas (tabla de Distribuye): puedes ajustar las cantidades a mano.</p>}
       {recipeKcal > 0 && <p className="muted">La receta original aporta {recipeKcal} kcal en {formatCount(servings)} {Number(servings) === 1 ? 'porción' : 'porciones'}{factor !== 1 ? `; con el ajuste (×${formatFactor(factor)}), ${adjustedKcal} kcal` : ''}.{suggestedFactor && suggestedFactor !== factor ? ` Para acercarla al cálculo, las cantidades originales se multiplican por ${formatFactor(suggestedFactor)}.` : suggestedFactor ? ' Coincide con lo calculado.' : ''}</p>}
     </div>
 

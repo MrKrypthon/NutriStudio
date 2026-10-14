@@ -101,6 +101,10 @@ function suggestRecipes(recipes, { recipeType, target, avoid = [], exclude = [],
 // Gana la que cubre más grupos, trae menos de lo no asignado y queda más cerca en energía.
 // `prescribed` es el cuadro del tiempo ({ código: equivalentes }); `servings`, las porciones que se
 // sirven en ese tiempo (la receta se evalúa ya servida).
+const DESSERT_NAMES = /\b(pastel|panque|galletas?|brownies?|pay|helados?|flan|gelatina|donas?|muffins?|cupcakes?|pan dulce|conchas?|churros?|mousse|cheesecake|tarta|postre|pudin|budin|arroz con leche|cajeta)\b/
+// Parte de la energía de la receta que viene de azúcares (4 kcal por gramo).
+const sugarShare = (recipe) => { const nutrition = recipe.calculatedNutrition || recipe.nutrition || {}; const kcal = Number(nutrition.kcal) || 0; return kcal > 0 ? ((Number(nutrition.sugar) || 0) * 4) / kcal : 0 }
+
 function suggestRecipesByGroups(recipes, { recipeType, prescribed, servings = 1, avoid = [], exclude = [], count = 5 } = {}) {
   const want = familyTotals(prescribed)
   const families = Object.keys(want)
@@ -144,7 +148,10 @@ function suggestRecipesByGroups(recipes, { recipeType, prescribed, servings = 1,
     // Cuánto hubo que estirar o encoger la receta para que quepa: una que sólo cabe a la cuarta
     // parte (o al doble) no es de verdad un platillo para este tiempo.
     const fitGap = originalKcal > 0 ? Math.abs(Math.log(macros.kcal / originalKcal)) : 0
-    const score = (1 - coverage) * 3 + extraShare * 2 + energyGap * 1.5 + fitGap * 0.8 + (recipe.imageFile ? 0 : 0.1)
+    // Un postre o un platillo muy azucarado no es la sugerencia para un tiempo sin azúcares
+    // asignados, aunque sus grupos cuadren (un pastel "cubre" cereal y grasa).
+    const sweet = !want.AZ && (DESSERT_NAMES.test(normalizeText(recipe.name)) || sugarShare(recipe) > 0.2)
+    const score = (1 - coverage) * 3 + extraShare * 2 + energyGap * 1.5 + fitGap * 0.8 + (sweet ? 1.5 : 0) + (recipe.imageFile ? 0 : 0.1)
     candidates.push({
       recipe, score, items: fitted,
       coverage: Math.round(coverage * 100),

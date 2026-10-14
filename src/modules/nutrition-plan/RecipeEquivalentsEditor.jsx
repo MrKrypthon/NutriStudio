@@ -80,7 +80,7 @@ export default function RecipeEquivalentsEditor({ recipe, servings, saved, presc
         {hasPrescription
           ? <><p><b>{comparison.fits ? `La receta cumple con tus porciones de ${mealLabel}; puedes editarla.` : `La receta no coincide con tus porciones de ${mealLabel}.`}</b></p>
             <div className="req-compare">{comparison.rows.map((row) => <span key={row.code} className={'eq-chip ' + (row.status === 'ok' ? 'ok' : row.status === 'low' ? 'low' : 'high')} title={row.label}>{row.label}: {formatCount(row.actual)}{row.target ? ` de ${formatCount(row.target)}` : ''} · {STATUS_TEXT[row.status]}</span>)}</div></>
-          : <p>Este tiempo de comida no tiene equivalentes repartidos (paso Equivalentes): puedes editar las porciones a mano.</p>}
+          : <p>Este tiempo de comida no tiene porciones repartidas (tabla de Distribuye): puedes editar las porciones a mano.</p>}
         <p className="muted">Aporte con estas cantidades: <b>{Math.round(macros.kcal)} kcal</b> · P {formatCount(macros.protein)} g · HC {formatCount(macros.carbs)} g · L {formatCount(macros.fat)} g{Math.round(originalMacros.kcal) !== Math.round(macros.kcal) ? ` (la receta original: ${Math.round(originalMacros.kcal)} kcal)` : ''}.</p>
       </div>
       {!locked && hasPrescription && !comparison.fits && <button type="button" className="secondary req-fit" onClick={() => setItems(fitItemsToMeal(items, prescribed))}>✦ Ajustar a mis porciones</button>}
