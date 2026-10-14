@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { educationApi } from '../../lib/api.js'
+import { saveBlob } from '../../lib/download.js'
 
 const CATEGORY_COLORS = { 'Guías prácticas': 'mint', 'Material para paciente': 'yellow', 'Hábitos saludables': 'blue', 'Infografía': 'coral', 'Guía de consulta': 'purple' }
 
@@ -17,6 +18,9 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
   const [status, setStatus] = useState('loading')
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
+  // Categorías para el filtro: se acumulan de todos los listados (el backend filtra por categoría,
+  // así que derivarlas de `items` dejaba el <select> atrapado en la categoría elegida).
+  const [categoryOptions, setCategoryOptions] = useState(() => [...new Set(FALLBACK.map((item) => item.category))])
   const [detail, setDetail] = useState(null)
   const [archiveState, setArchiveState] = useState('idle')
   const [archiveError, setArchiveError] = useState('')
@@ -33,7 +37,7 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
     if (category) params.set('category', category)
     const query = params.toString() ? `?${params}` : ''
     educationApi.list(query)
-      .then((response) => { setItems(response.items || []); setStatus('online') })
+      .then((response) => { const list = response.items || []; setItems(list); setStatus('online'); setCategoryOptions((prev) => [...new Set([...prev, ...list.map((item) => item.category).filter(Boolean)])]) })
       .catch(() => setStatus('demo'))
   }
 
@@ -43,7 +47,6 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, category])
 
-  const categoryOptions = [...new Set(items.map((item) => item.category))]
   const isReal = status === 'online'
 
   const startCreate = () => { onSelectMaterial?.(null); setActive('Nuevo material') }
@@ -68,9 +71,12 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
 
   const onPickFile = (e) => {
     const file = e.target.files && e.target.files[0]
+    // Limpiar siempre (antes del `return`): reintentar con el MISMO archivo debe volver a disparar change.
+    e.target.value = ''
     if (!file) return
     const allowed = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp']
     if (!allowed.includes(file.type)) { setAttachError('Solo se admiten archivos PDF, PNG, JPG y WebP.'); return }
+    if (file.size > 10 * 1024 * 1024) { setAttachError('El archivo no puede pesar más de 10 MB.'); return }
     const reader = new FileReader()
     reader.onload = async () => {
       setAttachState('uploading')
@@ -83,7 +89,6 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
       } catch (error) { setAttachState('idle'); setAttachError(error.message || 'No se pudo subir el archivo.') }
     }
     reader.readAsDataURL(file)
-    e.target.value = ''
   }
 
   const downloadAttachment = async () => {
@@ -91,12 +96,8 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
     setAttachState('downloading')
     try {
       const blob = await educationApi.downloadAttachmentBlob(detail.id)
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = detail.attachmentFileName || 'material'
-      a.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, detail.attachmentFileName || 'material')
+      setAttachState('idle')
       setAttachState('idle')
     } catch { setAttachState('idle') }
   }

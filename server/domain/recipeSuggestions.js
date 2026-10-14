@@ -5,8 +5,9 @@
 import { recipeIngredientLines } from './documents.js'
 import { EQUIVALENT_BY_CODE } from './equivalents.js'
 import { familyOf, familyTotals, fitItemsToMeal, itemsMacros, recipeItems } from './recipeEquivalents.js'
+import { foldText } from './text.js'
 
-const normalizeText = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+const normalizeText = foldText
 
 // Palabras de un texto libre del expediente que no nombran un alimento.
 const STOPWORDS = new Set(['ninguna', 'ninguno', 'conocida', 'conocido', 'evita', 'evitar', 'causa', 'causan', 'malestar', 'gusta', 'gustan', 'agrada', 'agradan', 'entera', 'entero', 'todo', 'toda', 'tipo', 'algunos', 'algunas', 'cuando', 'porque', 'pero', 'solo', 'mucho', 'mucha', 'poco', 'poca', 'come', 'comer', 'tolera', 'distension', 'dolor', 'gases', 'alergia', 'alergias', 'alergica', 'alergico', 'intolerancia', 'intolerante', 'sensibilidad', 'para', 'como', 'desde', 'hace', 'tiene', 'sobre', 'entre', 'ella', 'esta', 'este', 'esos', 'esas', 'productos', 'alimentos', 'comida', 'comidas', 'bebidas'])
@@ -46,13 +47,25 @@ function avoidTermsFromText(...texts) {
 }
 
 const nutritionOf = (recipe) => {
-  const source = recipe?.calculatedNutrition || recipe?.nutrition || {}
+  const calculated = recipe?.calculatedNutrition
+  const stored = recipe?.nutrition
+  // `calculatedNutrition` puede venir como objeto vacío (truthy): se elige la fuente con kcal real
+  // para no descartar en silencio una receta que sí tiene nutrición guardada.
+  const source = Number(calculated?.kcal) > 0 ? calculated : (stored || calculated || {})
   return { kcal: Number(source.kcal) || 0, protein: Number(source.protein) || 0, carbs: Number(source.carbs) || 0, fat: Number(source.fat) || 0 }
 }
 const macroShares = (values) => (values.kcal > 0 ? { protein: (values.protein * 4) / values.kcal, carbs: (values.carbs * 4) / values.kcal, fat: (values.fat * 9) / values.kcal } : null)
 const roundQuarter = (value) => Math.round(value * 4) / 4
 const MIN_FACTOR = 0.5
 const MAX_FACTOR = 2
+
+// Coincidencia de términos a evitar: un término corto ("sal") se busca como palabra completa para
+// no excluir "salmón"/"salsa"; una raíz larga ("cacahuat", "nuec") se admite como prefijo de palabra.
+const termMatchers = (terms) => terms.map((term) => {
+  const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(term.length <= 3 ? `\\b${escaped}\\b` : `\\b${escaped}`)
+})
+const matchesAnyTerm = (matchers, haystack) => matchers.some((pattern) => pattern.test(haystack))
 
 // Mejores recetas para un tiempo de comida. `target` son las kcal y gramos calculados para ese
 // tiempo; cada sugerencia trae el `factor` por el que habría que multiplicar sus cantidades para
@@ -62,6 +75,7 @@ function suggestRecipes(recipes, { recipeType, target, avoid = [], exclude = [],
   if (targetKcal <= 0) return []
   const targetShares = macroShares({ kcal: targetKcal, protein: Number(target.protein) || 0, carbs: Number(target.carbs) || 0, fat: Number(target.fat) || 0 })
   const terms = avoid.map(normalizeText).map((term) => term.trim()).filter((term) => term.length >= 3)
+  const matchers = termMatchers(terms)
   const excluded = new Set(exclude)
   const candidates = []
   for (const recipe of recipes || []) {
@@ -72,7 +86,7 @@ function suggestRecipes(recipes, { recipeType, target, avoid = [], exclude = [],
     const lines = recipeIngredientLines(recipe)
     if (!lines.length) continue
     const haystack = normalizeText(`${recipe.name} ${lines.join(' ')}`)
-    if (terms.some((term) => haystack.includes(term))) continue
+    if (matchesAnyTerm(matchers, haystack)) continue
     const factor = roundQuarter(targetKcal / values.kcal)
     if (factor < MIN_FACTOR || factor > MAX_FACTOR) continue
     const shares = macroShares(values)
@@ -84,7 +98,7 @@ function suggestRecipes(recipes, { recipeType, target, avoid = [], exclude = [],
       + (recipe.imageFile ? 0 : 0.15)
     candidates.push({ recipe, factor, score, kcal: Math.round(values.kcal * factor), protein: Math.round(values.protein * factor), carbs: Math.round(values.carbs * factor), fat: Math.round(values.fat * factor) })
   }
-  return candidates.sort((a, b) => a.score - b.score || a.recipe.name.localeCompare(b.recipe.name)).slice(0, count)
+  return candidates.sort((a, b) => a.score - b.score || String(a.recipe.name || '').localeCompare(String(b.recipe.name || ''))).slice(0, count)
 }
 
 // Sugerencia por GRUPOS: cuando el tiempo de comida ya tiene equivalentes repartidos, lo que importa
@@ -114,6 +128,7 @@ function suggestRecipesByGroups(recipes, { recipeType, prescribed, servings = 1,
   const targetKcal = Object.values(wantKcal).reduce((sum, value) => sum + value, 0)
   if (!(targetKcal > 0)) return []
   const terms = avoid.map(normalizeText).map((term) => term.trim()).filter((term) => term.length >= 3)
+  const matchers = termMatchers(terms)
   const excluded = new Set(exclude)
   const kcalOf = (item) => (Number(item.n?.kcal) || 0) * item.grams / 100
   const candidates = []
@@ -123,7 +138,7 @@ function suggestRecipesByGroups(recipes, { recipeType, prescribed, servings = 1,
     const items = recipeItems(recipe, servings)
     if (!items.length) continue
     const haystack = normalizeText(`${recipe.name} ${recipeIngredientLines(recipe).join(' ')} ${items.map((item) => item.name).join(' ')}`)
-    if (terms.some((term) => haystack.includes(term))) continue
+    if (matchesAnyTerm(matchers, haystack)) continue
     const have = familyTotals(items)
     const covered = families.filter((family) => have[family] > 0)
     if (!covered.length) continue
@@ -154,7 +169,7 @@ function suggestRecipesByGroups(recipes, { recipeType, prescribed, servings = 1,
       baseKcal: Math.round(originalKcal), kcal: Math.round(macros.kcal), protein: Math.round(macros.protein), carbs: Math.round(macros.carbs), fat: Math.round(macros.fat),
     })
   }
-  return candidates.sort((a, b) => a.score - b.score || a.recipe.name.localeCompare(b.recipe.name)).slice(0, count)
+  return candidates.sort((a, b) => a.score - b.score || String(a.recipe.name || '').localeCompare(String(b.recipe.name || ''))).slice(0, count)
 }
 
 export { avoidTermsFromText, suggestRecipes, suggestRecipesByGroups, normalizeText }

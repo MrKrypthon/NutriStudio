@@ -20,7 +20,9 @@ import { scheduleGrowTextareas } from '../lib/autoGrow.js'
 
 const LOCAL_PREFIX = 'suggestion-chips:'
 const readLocal = (fieldKey) => {
-  try { const parsed = JSON.parse(localStorage.getItem(LOCAL_PREFIX + fieldKey) || '[]'); return Array.isArray(parsed) ? parsed : [] } catch { return [] }
+  // Las sugerencias guardadas en localStorage solo tienen {label,text}: se les da un id local para
+  // que el borrado no llame a `DELETE /suggestions/undefined`.
+  try { const parsed = JSON.parse(localStorage.getItem(LOCAL_PREFIX + fieldKey) || '[]'); return Array.isArray(parsed) ? parsed.map((s, i) => ({ id: s.id || `local-${i}`, label: s.label, text: s.text })) : [] } catch { return [] }
 }
 const writeLocal = (fieldKey, items) => { try { localStorage.setItem(LOCAL_PREFIX + fieldKey, JSON.stringify(items)) } catch { /* almacenamiento no disponible */ } }
 

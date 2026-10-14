@@ -17,7 +17,7 @@ const serializeDraft = (draft) => JSON.stringify({
   instructions: draft.instructions,
   ingredientsText: draft.ingredientsText,
   imageFile: draft.imageFile,
-  chosen: draft.chosen.map((item) => ({ id: item.id, quantity: Number(item.quantity) })),
+  chosen: draft.chosen,
 })
 
 const serverToDraft = (recipe) => ({

@@ -3,16 +3,13 @@ import { normalizeText, suggestRecipes, suggestRecipesByGroups } from '../../../
 import { compareWithMeal, FAMILY_LABELS, itemsMacros, recipeItems } from '../../../server/domain/recipeEquivalents.js'
 import { EQUIVALENT_BY_CODE } from '../../../server/domain/equivalents.js'
 import RecipeEquivalentsEditor from './RecipeEquivalentsEditor.jsx'
-import { clampFactor, scaledRecipeLines } from './planAdjustments.js'
+import { clampFactor, formatCount, round1, sameItems, scaledRecipeLines } from './planAdjustments.js'
 
 const DAYS_IN_WEEK = 7
 const BEST_PICKS = 5
 const PAGE = 60
 const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', snack: 'Colaciones', lunch: 'Comida', dinner: 'Cena' }
 const MICROS = [['fiber', 'Fibra', 'g'], ['sugar', 'Azúcar', 'g'], ['sodium', 'Sodio', 'mg'], ['calcium', 'Calcio', 'mg'], ['iron', 'Hierro', 'mg'], ['zinc', 'Zinc', 'mg'], ['selenium', 'Selenio', 'mcg'], ['folicAcid', 'Ácido fólico', 'mcg'], ['vitaminA', 'Vitamina A', 'mcg'], ['vitaminC', 'Vitamina C', 'mg'], ['vitaminD', 'Vitamina D', 'mcg'], ['vitaminE', 'Vitamina E', 'mg'], ['vitaminB12', 'Vitamina B12', 'mcg']]
-const round1 = (value) => Math.round((Number(value) || 0) * 10) / 10
-const formatCount = (value) => String(Math.round((Number(value) || 0) * 100) / 100)
-const sameItems = (a, b) => JSON.stringify(a.map((item) => [item.ingredientId, item.name, item.grams])) === JSON.stringify(b.map((item) => [item.ingredientId, item.name, item.grams]))
 const coverageTone = (coverage) => (coverage >= 90 ? 'ok' : coverage >= 60 ? 'low' : 'high')
 
 // Dona de dónde viene la energía (hidratos, proteína, grasa), con las kcal al centro.
@@ -99,7 +96,7 @@ export default function RecipeSuggestModal({ meal, recipes, target, prescribed, 
   const toggle = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]))
   const selectedRecipes = selected.map((id) => recipeById.get(id)).filter(Boolean)
   const used = selectedRecipes.slice(0, DAYS_IN_WEEK)
-  const adjustedCount = selectedRecipes.filter(isAdjusted).length
+  const adjustedCount = used.filter(isAdjusted).length
   const pickBest = () => setSelected(ranked.slice(0, BEST_PICKS).map((item) => item.recipe.id))
 
   const apply = () => onApply(used.map((recipe) => {
@@ -134,7 +131,7 @@ export default function RecipeSuggestModal({ meal, recipes, target, prescribed, 
       <button type="button" className="gallery-card-photo" onClick={() => setOpenId(recipe.id)} title="Ver ingredientes e información nutricional">
         {renderThumb ? renderThumb(recipe, index, 'gallery-photo') : null}
         <span className="gallery-card-badges">
-          {isOn && <i className="gallery-day">{selected.indexOf(recipe.id) + 1}</i>}
+          {isOn && <i className="gallery-day">{(() => { const position = selected.indexOf(recipe.id) + 1; return position <= DAYS_IN_WEEK ? position : '★' })()}</i>}
           {byGroups && rank && <i className={'eq-chip ' + coverageTone(rank.coverage)} title="Cuánto de lo repartido a este tiempo cubre la receta">Cubre {rank.coverage}%</i>}
           {isOn && isAdjusted(recipe) && <i className="gallery-fit">Con ajuste</i>}
         </span>

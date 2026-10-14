@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { scaleIngredientLine } from '../../lib/ingredientLines.js'
 import { adjustmentFactor, adjustmentKey } from '../../../server/domain/documents.js'
 import { EQUIVALENT_TABLE, equivalentTotals } from '../../../server/domain/equivalents.js'
@@ -37,7 +37,7 @@ export default function RecipeAdjustModal({ meal, recipes, servings, adjustments
   const recipeKcal = recipe ? Math.round((Number((recipe.calculatedNutrition || recipe.nutrition || {}).kcal) || 0) * (Number(servings) || 1)) : 0
   const adjustedKcal = Math.round(recipeKcal * factor)
   // Siempre respecto a la receta ORIGINAL: aplicarlo dos veces da el mismo resultado.
-  const suggestedFactor = prescribedKcal > 0 && recipeKcal > 0 ? Math.max(0.25, roundQuarter(prescribedKcal / recipeKcal)) : null
+  const suggestedFactor = prescribedKcal > 0 && recipeKcal > 0 ? clampFactor(roundQuarter(prescribedKcal / recipeKcal)) : null
 
   // Una receta con ingredientes del catálogo se edita por equivalentes (porciones por grupo, con
   // intercambio); las que sólo tienen su texto de ingredientes, renglón por renglón.
@@ -71,10 +71,24 @@ export default function RecipeAdjustModal({ meal, recipes, servings, adjustments
     return toLines(itemDraft.text).join('\n') !== itemBase || itemDraft.factor !== adjustmentFactor(adjustments, meal.key, item.id)
   })
   const close = () => { if (!locked && (hasUnsaved || editorDirty) && !window.confirm('Hay cantidades sin guardar. ¿Cerrar sin guardarlas?')) return; onClose() }
+  // Cerrar con Escape (el modal no tenía manejo de teclado). Ref para no re-registrar en cada render.
+  const closeRef = useRef(close); closeRef.current = close
+  useEffect(() => {
+    const onKey = (event) => { if (event.key === 'Escape') closeRef.current() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  // Cambiar de receta descarta lo editado por equivalentes (el editor se remonta): confirmar antes.
+  const selectRecipe = (id) => {
+    if (id === recipe.id) return
+    if (mode === 'equivalents' && editorDirty && !window.confirm('Hay cambios sin guardar en esta receta. ¿Cambiar de receta sin guardarlos?')) return
+    setEditorDirty(false)
+    setRecipeId(id)
+  }
 
-  return <div className="modal-backdrop" {...backdropClose(close)}><div className="modal recipe-adjust-modal">
+  return <div className="modal-backdrop" {...backdropClose(close)}><div className="modal recipe-adjust-modal" role="dialog" aria-modal="true" aria-label={`Ajustar porciones de ${meal.label}`}>
     <div className="modal-head"><div><p className="eyebrow">AJUSTAR PORCIONES · {meal.label.toUpperCase()}</p><h2>{recipe.name}</h2><span className="modal-subtitle">Sólo cambia en este plan. La receta original del catálogo no se modifica.</span></div><button type="button" onClick={close} aria-label="Cerrar">×</button></div>
-    {recipes.length > 1 && <div className="adjust-recipes">{recipes.map((item) => <button type="button" key={item.id} className={item.id === recipe.id ? 'selected' : ''} onClick={() => setRecipeId(item.id)}>{item.name}{adjustments?.[adjustmentKey(meal.key, item.id)] ? ' ✓' : ''}</button>)}</div>}
+    {recipes.length > 1 && <div className="adjust-recipes">{recipes.map((item) => <button type="button" key={item.id} className={item.id === recipe.id ? 'selected' : ''} onClick={() => selectRecipe(item.id)}>{item.name}{adjustments?.[adjustmentKey(meal.key, item.id)] ? ' ✓' : ''}</button>)}</div>}
 
     {canUseEquivalents && <div className="adjust-modes"><button type="button" className={mode === 'equivalents' ? 'selected' : ''} onClick={() => setModes((prev) => ({ ...prev, [recipe.id]: 'equivalents' }))}>Por equivalentes</button><button type="button" className={mode === 'text' ? 'selected' : ''} onClick={() => { setEditorDirty(false); setModes((prev) => ({ ...prev, [recipe.id]: 'text' })) }}>Texto libre</button></div>}
     {mode === 'equivalents' && <RecipeEquivalentsEditor key={`${recipe.id}-${saved?.items?.length || 0}`} recipe={recipe} servings={servings} saved={saved} prescribed={prescribed} mealLabel={meal.label} locked={locked} onDirtyChange={setEditorDirty} onSave={(adjustment) => { onSave(recipe.id, adjustment); setEditorDirty(false) }} />}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import { documentsApi, patientsApi, plansApi } from '../../lib/api.js'
+import { saveBlob } from '../../lib/download.js'
 import { usePatient } from '../../lib/usePatient.js'
 
 // `planId` (sólo embebido en el Constructor): el plan que se está editando. Sin él, la pantalla
@@ -109,12 +110,7 @@ export default function DocumentPage({ setActive, patientId, planId = null, embe
     if (!document?.storageKey) return
     try {
       const blob = await documentsApi.downloadBlob(document.id)
-      const url = URL.createObjectURL(blob)
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = document.storageKey
-      link.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, document.storageKey)
     } catch (err) {
       setError(err.message || 'No se pudo descargar el PDF.')
     }

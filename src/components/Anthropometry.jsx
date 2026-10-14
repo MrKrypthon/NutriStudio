@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import Icon from './Icon.jsx'
 import { bodyComposition, bodyFatEstimates, somatotype, theoreticalWeights } from '../lib/anthropometry.js'
-import { isFemaleSex, isMaleSex } from '../lib/sex.js'
+import { isFemaleSex } from '../lib/sex.js'
 
 // Módulo antropométrico con el menú superior y el submenú de tipos al estilo de las capturas
 // (Mediciones / Cálculos / Somatocarta / Notas / Fotos). El cálculo de calorías se movió a
@@ -171,8 +171,9 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   const [photoError, setPhotoError] = useState('')
   const selectType = (key) => { setType(key); const first = GROUP_FIELDS[key]?.[0]; if (first) setActiveField(first.key) }
 
-  // El embarazo y su IMC sólo aplican a pacientes mujeres: en hombres no se muestran.
-  const isMale = isMaleSex(patientSex)
+  // El embarazo y su IMC sólo aplican a pacientes mujeres: solo si el sexo es Mujer (antes se
+  // mostraban también con el sexo vacío/desconocido, porque "no hombre" no es lo mismo que mujer).
+  const isFemale = isFemaleSex(patientSex)
 
   const peso = num(values['Peso (kg)'])
   const talla = num(values['Talla (cm)'])
@@ -245,7 +246,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   }
 
   const renderCalculations = () => {
-    const calcTypes = isMale ? CALC_TYPES.filter(([key]) => key !== 'imc-embarazo') : CALC_TYPES
+    const calcTypes = isFemale ? CALC_TYPES : CALC_TYPES.filter(([key]) => key !== 'imc-embarazo')
     const activeKey = calcTypes.some(([key]) => key === calcType) ? calcType : calcTypes[0][0]
     const fat = bodyFatEstimates(values, { sex: patientSex })
     const composition = bodyComposition(values, { sex: patientSex, fatPercent: fat.average })
@@ -370,7 +371,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
         <h2 className="anthro-title"><Icon>{TYPES.find((t) => t[0] === type)?.[2]}</Icon>{TYPES.find((t) => t[0] === type)?.[1]}</h2>
 
         {type === 'peso' && <>
-          <div className="anthro-fields">{GROUP_FIELDS.peso.map(renderField)}{!isMale && <label className="anthro-check"><input type="checkbox" checked={Boolean(values['Embarazo (antropometría)'])} onChange={(event) => onFieldChange?.('Embarazo (antropometría)', event.target.checked)} /> Embarazo</label>}</div>
+          <div className="anthro-fields">{GROUP_FIELDS.peso.map(renderField)}{isFemale && <label className="anthro-check"><input type="checkbox" checked={Boolean(values['Embarazo (antropometría)'])} onChange={(event) => onFieldChange?.('Embarazo (antropometría)', event.target.checked)} /> Embarazo</label>}</div>
           <div className="imc-block">
             <div className="imc-head"><b>Índice de masa corporal</b><span className="imc-value" style={{ color: imc ? category.color : undefined }}>{imc ? `IMC=${imc.toFixed(1)} · ${category.label}` : 'Ingresa peso y estatura'}</span></div>
             <div className="imc-row">
