@@ -213,6 +213,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [adjustMeal, setAdjustMeal] = useState(null)
   const [suggestMeal, setSuggestMeal] = useState(null)
   const [notesForm, setNotesForm] = useState(() => notesFromPlan(null))
+  // Espejo de notesForm para que dos ediciones en el mismo tick no se pisen (cada una parte del
+  // valor más reciente, no del de este render).
+  const notesFormRef = useRef(notesForm)
+  notesFormRef.current = notesForm
   const [notesSaveState, setNotesSaveState] = useState('idle')
   const notesSaveTimer = useRef(null)
   const notesPendingRef = useRef(null)
@@ -444,7 +448,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   // pisarían: cada uno parte del notesForm de este render).
   const patchNotes = (patch) => {
     if (planLocked) return
-    const next = { ...notesForm, ...patch }
+    const next = { ...notesFormRef.current, ...patch }
+    notesFormRef.current = next
     setNotesForm(next)
     if (!plan) return
     setNotesSaveState('editing')
@@ -568,6 +573,14 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         const current = () => planIdRef.current === snapshot.planId
         if (current()) setSaveState('saving')
         const activeIds = new Set(recipesRef.current.map((recipe) => recipe.id))
+        // Con espacios asignados pero sin catálogo cargado, un payload vacío borraría la semana:
+        // se deja pendiente y se reintenta en el próximo guardado.
+        if (Object.values(snapshot.slots).some(Boolean) && !activeIds.size) {
+          slotsDirtyRef.current = snapshot
+          if (current()) setSaveState('error')
+          slotsInFlightRef.current = false
+          return
+        }
         const payload = Object.entries(snapshot.slots)
           .filter(([, recipeId]) => recipeId && activeIds.has(recipeId))
           .map(([key, recipeId]) => {

@@ -92,10 +92,13 @@ const cleanText = (value) => String(value ?? '')
   .trim()
 
 const formatQuantity = (value) => {
-  const whole = Math.floor(value)
-  const half = value - whole >= 0.5
-  if (!half) return String(whole)
-  return whole ? `${whole}½` : '½'
+  const number = Number(value) || 0
+  const whole = Math.floor(number)
+  const half = number - whole >= 0.5
+  if (half) return whole ? `${whole}½` : '½'
+  // Un valor positivo por debajo de la mitad ya no se muestra como "0".
+  if (number > 0 && whole === 0) return String(Math.round(number * 100) / 100)
+  return String(whole)
 }
 
 const formatNumber = (value, digits = 1) => String(Math.round(Number(value) * 10 ** digits) / 10 ** digits)
