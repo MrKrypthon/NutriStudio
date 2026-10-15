@@ -1587,7 +1587,7 @@ textarea{field-sizing:content;max-height:340px;overflow-y:auto}
 @media(max-width:600px){.day-info-macros{grid-template-columns:repeat(2,1fr)}.day-info-micros{grid-template-columns:1fr}}
 .optionals{position:relative;margin:4px 0 16px}.optionals>.saved{position:absolute;right:0;top:0;font:9px 'DM Mono';color:var(--muted)}
 .optional-block{padding:0;margin-top:10px}.optional-block>summary{cursor:pointer;padding:14px 18px;font-weight:600;font-size:13.5px}.optional-block[open]>summary{border-bottom:1px solid var(--line)}
-.optional-block>:not(summary){margin:14px 18px}.optional-block>textarea{width:calc(100% - 36px)}.optional-block textarea{width:100%;display:block;min-height:70px;border:1px solid var(--line);border-radius:8px;padding:9px;font-size:13px;resize:vertical}.optional-block label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
+.optional-block>:not(summary){margin:14px 18px}.optional-block>textarea{width:calc(100% - 36px);max-width:calc(100% - 36px);box-sizing:border-box}.optional-block textarea{width:100%;display:block;min-height:70px;border:1px solid var(--line);border-radius:8px;padding:9px;font-size:13px;resize:vertical}.optional-block label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
 .optional-block .water-helper{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px}.optional-block .water-helper input{width:70px;border:1px solid var(--line);border-radius:7px;padding:5px}
 .optional-meals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}@media(max-width:760px){.optional-meals{grid-template-columns:1fr}}
 .plan-context-brief{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:12px;background:var(--tint-corn);border-radius:10px;padding:8px 14px;margin-bottom:14px}.plan-context-brief b{font:600 9px 'DM Mono';letter-spacing:.08em;text-transform:uppercase}
@@ -1603,3 +1603,48 @@ textarea{field-sizing:content;max-height:340px;overflow-y:auto}
 .save-preview .paper-toolbar{display:flex;align-items:center;gap:12px}.save-preview .paper-toolbar small{margin-left:auto}
 .save-card .button-link{font-size:13px;color:var(--ink);padding:9px 14px}
 .eq-distribution>.eq-extras:first-child{border-top:0;padding-top:0;margin-top:0}
+/* Constructor de plan: barra única (paciente + pasos + estado) y más alto para el paso. */
+.plan-header{display:grid;grid-template-columns:minmax(200px,1fr) auto minmax(120px,1fr);align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin-bottom:12px}
+.plan-header-who{display:flex;align-items:center;gap:9px;min-width:0}.plan-header-who>div{display:flex;flex-direction:column;min-width:0}.plan-header-who b{font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.plan-header-who small{font-size:10.5px;color:var(--muted)}
+.plan-header-who .person-avatar{width:32px;height:32px;flex:none;font-size:11px}
+.plan-header-back{border:1px solid var(--line);background:#fff;border-radius:50%;width:30px;height:30px;flex:none;cursor:pointer;color:var(--ink)}.plan-header-back:hover{background:var(--surface-soft)}
+.plan-header .plan-steps{border:0;background:none;margin:0;padding:2px 0;position:static;max-width:none;justify-content:center;overflow-x:auto;scrollbar-width:none}.plan-header .plan-steps::-webkit-scrollbar{display:none}
+.plan-header .plan-steps button{font-size:11px;padding:0 16px;white-space:nowrap}.plan-header .plan-steps button:not(:last-child):after{width:24px;right:-12px}
+.plan-header-tools{display:flex;justify-content:flex-end}
+.plan-wizard .plan-body .module-header{margin-bottom:12px}.plan-wizard .plan-body .module-header h1{font-size:22px;letter-spacing:-.6px}.plan-wizard .plan-body .module-header .subtitle{font-size:12.5px;margin-top:3px}
+.menu-hint{font-size:10.5px}
+/* Barra de secciones de Distribuye: fija arriba mientras se desplaza el paso. */
+.dist-nav{position:sticky;top:0;z-index:6;display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;background:#F3F5EE;padding:6px 0 8px;margin:-4px 0 6px}.dist-nav::-webkit-scrollbar{display:none}
+.dist-nav button{flex:none;border:1px solid var(--line);background:#fff;border-radius:16px;padding:6px 12px;font-size:11.5px;color:var(--muted);cursor:pointer;display:flex;gap:6px;align-items:center}.dist-nav button small{font:600 9.5px 'DM Mono';background:var(--surface-soft);border-radius:8px;padding:1px 5px}
+.dist-nav button.active{background:var(--green);border-color:var(--green);color:#fff}.dist-nav button.active small{background:#ffffff2e;color:#fff}
+.dist-anchor{height:0}[id^="dist-"]{scroll-margin-top:52px}
+.eq-layout>*{min-width:0}.eq-table-panel{overflow-x:auto}.eq-table{min-width:520px}
+@media(max-width:900px){.plan-header{grid-template-columns:1fr auto}.plan-header .plan-steps{grid-column:1/-1;grid-row:2;justify-content:flex-start}}
+@media(max-width:680px){
+  .plan-header{position:sticky;top:var(--header-h);z-index:8;border-radius:0 0 12px 12px;margin:-12px -16px 10px;border-top:0;padding:8px 12px}
+  .plan-header .plan-steps button{padding:0 9px}.plan-header .plan-steps button:not(.active){font-size:0;gap:0}.plan-header .plan-steps button:not(:last-child):after{width:10px;right:-5px}
+  .plan-header-tools .sync-label{font-size:0}.plan-header-tools .sync-label:first-letter{font-size:12px}
+  .dist-nav{top:calc(var(--header-h) + 92px)}[id^="dist-"]{scroll-margin-top:calc(var(--header-h) + 140px)}
+  .plan-context-brief{flex-wrap:nowrap;overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+  .plan-wizard .plan-body .module-header{flex-direction:column;align-items:flex-start;gap:8px}
+}
+.dm-row{--dm-first:190px;grid-template-columns:minmax(var(--dm-first),1.5fr) repeat(var(--dm-cols,4),minmax(118px,1fr))}
+/* Primera columna fija al desplazar de lado (nombres de grupo y de tiempo siempre a la vista). */
+.dm-group,.dm-corner{position:sticky;left:0;z-index:2;background:#fff;align-self:stretch;box-shadow:6px 0 6px -6px #10231a26}
+.dm-row:nth-child(even):not(.dm-head):not(.dm-foot) .dm-group{background:#f8faf5}.dm-foot .dm-group{background:#fbfcf9}
+.tg-row>span{position:sticky;left:0;z-index:2;background:#fff;display:flex;align-items:center;align-self:stretch}
+@media(max-width:680px){
+  .plan-header{margin:-4px 0 10px;border-top:1px solid var(--line);border-radius:12px}
+  .dm-row{--dm-first:118px;grid-template-columns:minmax(var(--dm-first),1fr) repeat(var(--dm-cols,4),minmax(104px,1fr))}
+  .dm-group{flex-direction:column;align-items:flex-start;gap:4px;font-size:11.5px;padding:8px}
+  .dm-title{flex-direction:column}.dm-panel,.tg-panel{padding:14px 10px 10px}
+  .tg-row{grid-template-columns:78px repeat(7,minmax(104px,1fr))}.tg-table{min-width:840px}
+}
+.tg-cell.empty{align-items:center;text-align:center}.tg-cell.empty small{padding:0}.tg-plus{font-size:20px;line-height:1;color:var(--green);opacity:.6}
+@media(max-width:680px){.plan-studio.plan-wizard{overflow-x:clip}}
+.optional-block>textarea{width:calc(100% - 36px)}
+summary.plan-context-head{cursor:pointer;list-style:none}summary.plan-context-head::-webkit-details-marker{display:none}
+details.plan-context-card:not([open]) summary.plan-context-head{margin-bottom:0}
+/* El resultado del cálculo queda a la vista mientras se llena el formulario. */
+.plan-wizard .calculator-layout{align-items:start}.plan-wizard .calculation-result{position:sticky;top:0}
+@media(max-width:680px){.plan-wizard .calculation-result{position:static}}
