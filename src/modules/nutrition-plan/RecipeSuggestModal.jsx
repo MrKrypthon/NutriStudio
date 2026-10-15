@@ -3,12 +3,15 @@ import { normalizeText, suggestRecipes, suggestRecipesByGroups } from '../../../
 import { compareWithMeal, FAMILY_LABELS, itemsMacros, recipeItems } from '../../../server/domain/recipeEquivalents.js'
 import { EQUIVALENT_BY_CODE } from '../../../server/domain/equivalents.js'
 import RecipeEquivalentsEditor from './RecipeEquivalentsEditor.jsx'
+import { clampFactor, MICROS, scaledRecipeLines } from './planAdjustments.js'
 import { clampFactor, formatCount, round1, sameItems, scaledRecipeLines } from './planAdjustments.js'
 
-const DAYS_IN_WEEK = 7
 const BEST_PICKS = 5
 const PAGE = 60
 const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', snack: 'Colaciones', lunch: 'Comida', dinner: 'Cena' }
+const round1 = (value) => Math.round((Number(value) || 0) * 10) / 10
+const formatCount = (value) => String(Math.round((Number(value) || 0) * 100) / 100)
+const sameItems = (a, b) => JSON.stringify(a.map((item) => [item.ingredientId, item.name, item.grams])) === JSON.stringify(b.map((item) => [item.ingredientId, item.name, item.grams]))
 const MICROS = [['fiber', 'Fibra', 'g'], ['sugar', 'Azúcar', 'g'], ['sodium', 'Sodio', 'mg'], ['calcium', 'Calcio', 'mg'], ['iron', 'Hierro', 'mg'], ['zinc', 'Zinc', 'mg'], ['selenium', 'Selenio', 'mcg'], ['folicAcid', 'Ácido fólico', 'mcg'], ['vitaminA', 'Vitamina A', 'mcg'], ['vitaminC', 'Vitamina C', 'mg'], ['vitaminD', 'Vitamina D', 'mcg'], ['vitaminE', 'Vitamina E', 'mg'], ['vitaminB12', 'Vitamina B12', 'mcg']]
 const coverageTone = (coverage) => (coverage >= 90 ? 'ok' : coverage >= 60 ? 'low' : 'high')
 
@@ -33,7 +36,7 @@ function MacroDonut({ macros }) {
 // `target` es lo calculado para el tiempo completo ({ kcal, protein, carbs, fat, source }) o null
 // si el plan todavía no tiene requerimiento; `prescribed`, los equivalentes repartidos al tiempo;
 // `current`, las recetas que el tiempo ya tiene en la semana y `adjustments` sus ajustes guardados.
-export default function RecipeSuggestModal({ meal, recipes, target, prescribed, servings = 1, initialAvoid = [], exclude = [], current = [], adjustments = {}, renderThumb, locked, onApply, onClose, onGoToCalculation }) {
+export default function RecipeSuggestModal({ meal, recipes, target, prescribed, servings = 1, initialAvoid = [], exclude = [], current = [], adjustments = {}, days = 7, menuName = null, renderThumb, locked, onApply, onClose, onGoToCalculation }) {
   const portions = Number(servings) || 1
   const byGroups = Boolean(prescribed && Object.values(prescribed).some((value) => Number(value) > 0))
   const canRank = Boolean(target && target.kcal > 0)
@@ -95,6 +98,10 @@ export default function RecipeSuggestModal({ meal, recipes, target, prescribed, 
   }
   const toggle = (id) => setSelected((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]))
   const selectedRecipes = selected.map((id) => recipeById.get(id)).filter(Boolean)
+  const used = selectedRecipes.slice(0, days)
+  const adjustedCount = selectedRecipes.filter(isAdjusted).length
+  const bestCount = Math.max(1, Math.min(BEST_PICKS, days))
+  const pickBest = () => setSelected(ranked.slice(0, bestCount).map((item) => item.recipe.id))
   const used = selectedRecipes.slice(0, DAYS_IN_WEEK)
   const adjustedCount = used.filter(isAdjusted).length
   const pickBest = () => setSelected(ranked.slice(0, BEST_PICKS).map((item) => item.recipe.id))
@@ -173,7 +180,7 @@ export default function RecipeSuggestModal({ meal, recipes, target, prescribed, 
           <button type="button" className={mode === 'fit' ? 'selected' : ''} disabled={!canRank} onClick={() => setMode('fit')}>Para mi distribución</button>
           <button type="button" className={mode === 'all' ? 'selected' : ''} onClick={() => setMode('all')}>Todas</button>
         </div>
-        {canRank && !locked && <button type="button" className="secondary gallery-best" onClick={pickBest} title={`Marca las ${BEST_PICKS} que mejor se acercan a lo calculado`}>✦ Elegir las {BEST_PICKS} mejores</button>}
+        {canRank && !locked && <button type="button" className="secondary gallery-best" onClick={pickBest} title={`Marca ${bestCount === 1 ? 'la que mejor se acerca' : `las ${bestCount} que mejor se acercan`} a lo calculado`}>✦ {bestCount === 1 ? 'Elegir la mejor' : `Elegir las ${bestCount} mejores`}</button>}
         {selected.length > 0 && !locked && <button type="button" className="gallery-count" onClick={() => setSelected([])} title="Quitar todas las seleccionadas">{selected.length} ×</button>}
       </div>
 
@@ -196,8 +203,8 @@ export default function RecipeSuggestModal({ meal, recipes, target, prescribed, 
         <div className="gallery-bottom-text">
           <b>{selectedRecipes.length} {selectedRecipes.length === 1 ? 'receta seleccionada' : 'recetas seleccionadas'}</b>
           {adjustedCount > 0 && <small className="gallery-adjusted">{adjustedCount} con ajuste</small>}
-          {selectedRecipes.length > DAYS_IN_WEEK ? <small className="muted">La semana tiene 7 días: se usan las primeras {DAYS_IN_WEEK}.</small>
-            : selectedRecipes.length > 0 && selectedRecipes.length < DAYS_IN_WEEK ? <small className="muted">Los días restantes repiten desde la primera.</small> : null}
+          {selectedRecipes.length > days ? <small className="muted">{menuName ? `“${menuName}” tiene ${days} día${days === 1 ? '' : 's'}` : `La semana tiene ${days} días`}: se usa{days === 1 ? ' la primera' : `n las primeras ${days}`}.</small>
+            : selectedRecipes.length > 0 && selectedRecipes.length < days ? <small className="muted">Los días restantes repiten desde la primera.</small> : null}
         </div>
         <button type="button" className="primary" disabled={locked || used.length === 0} onClick={apply}>Continuar</button>
       </footer>

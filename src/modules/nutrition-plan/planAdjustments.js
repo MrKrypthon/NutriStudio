@@ -32,3 +32,6 @@ export const pruneAdjustments = (adjustments, slots) => {
 // Cierre de un modal al hacer clic en el fondo: sólo si el clic EMPIEZA en el fondo. Con `onClick`
 // se cerraba al seleccionar texto arrastrando y soltar fuera del cuadro, perdiendo lo escrito.
 export const backdropClose = (onClose) => ({ onMouseDown: (event) => { if (event.target === event.currentTarget) onClose() } })
+
+// Micronutrimentos que se muestran de una receta o de un día del plan: [clave, nombre, unidad].
+export const MICROS = [['fiber', 'Fibra', 'g'], ['sugar', 'Azúcar', 'g'], ['sodium', 'Sodio', 'mg'], ['calcium', 'Calcio', 'mg'], ['iron', 'Hierro', 'mg'], ['zinc', 'Zinc', 'mg'], ['selenium', 'Selenio', 'mcg'], ['folicAcid', 'Ácido fólico', 'mcg'], ['vitaminA', 'Vitamina A', 'mcg'], ['vitaminC', 'Vitamina C', 'mg'], ['vitaminD', 'Vitamina D', 'mcg'], ['vitaminE', 'Vitamina E', 'mg'], ['vitaminB12', 'Vitamina B12', 'mcg']]

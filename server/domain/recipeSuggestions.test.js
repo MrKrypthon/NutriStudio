@@ -79,6 +79,15 @@ describe('suggestRecipesByGroups', () => {
     expect(result[2].extra).toEqual(['G'])
   })
 
+  it('puts desserts and sugary recipes after the rest when the meal has no sugar portions', () => {
+    const pastel = make('pastel', 'Pastel de pollo y tortilla', [[tortilla, 30], [pollo, 60], [espinaca, 60]])
+    const dulce = make('dulce', 'Tortilla con pollo y espinaca', [[tortilla, 30], [pollo, 60], [espinaca, 60]], { nutrition: { kcal: 300, sugar: 20 } })
+    // La quesadilla no trae verdura, pero ninguno de los dos dulces le gana.
+    expect(suggestRecipesByGroups([pastel, dulce, quesadilla], { recipeType: 'lunch', prescribed }).map((item) => item.recipe.id)[0]).toBe('ques')
+    // Con azúcares asignados al tiempo, el postre ya no se castiga.
+    expect(suggestRecipesByGroups([pastel, quesadilla], { recipeType: 'lunch', prescribed: { ...prescribed, AZ_SG: 1 } })[0].recipe.id).toBe('pastel')
+  })
+
   it('leaves out a recipe with the right energy but none of the groups', () => {
     expect(suggestRecipesByGroups([licuado], { recipeType: 'lunch', prescribed })).toEqual([])
   })

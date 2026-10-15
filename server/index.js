@@ -855,6 +855,9 @@ app.get('/api/v1/templates', async (request) => {
   return { items: templates }
 })
 
+// Campos del plan que viajan en una plantilla de plan (ver POST /templates).
+const PLAN_TEMPLATE_FIELDS = ['equivalents', 'menus', 'activeMeals', 'mealTimes', 'mealLabels', 'mealNotes', 'recipeAdjustments', 'hydrationNote', 'recommendations']
+
 app.post('/api/v1/templates', async (request, reply) => {
   const { name, type, description, sourceConsultationId, sourcePlanId } = request.body || {}
   if (!name || !type) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y tipo son obligatorios.', fields: { name: !name, type: !type } })
@@ -872,6 +875,9 @@ app.post('/api/v1/templates', async (request, reply) => {
     const plan = await prisma.nutritionPlan.findFirst({ where: { id: sourcePlanId, patient: { practiceId: request.practiceId } }, include: { mealSlots: true } })
     if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan de origen no encontrado.', fields: {} })
     mealSlots = plan.mealSlots.map((slot) => ({ dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: slot.recipeId, servings: slot.servings }))
+    // Además de la semana, la plantilla de plan guarda cómo se armó: porciones, menús, tiempos,
+    // horas, ajustes de receta e indicaciones. No guarda nada de la paciente (peso, requerimiento).
+    sections = { planSettings: Object.fromEntries(PLAN_TEMPLATE_FIELDS.map((field) => [field, plan[field] ?? null])) }
   }
 
   const template = await prisma.template.create({ data: { practiceId: request.practiceId, type, name, description, sections, mealSlots } })
@@ -925,8 +931,16 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
 
   let consultation = await prisma.consultation.findFirst({ where: { patientId }, orderBy: { createdAt: 'desc' } })
   if (!consultation) consultation = await prisma.consultation.create({ data: { patientId, nutritionistId: request.userId, status: 'IN_PROGRESS', startedAt: new Date() } })
-  let plan = await prisma.nutritionPlan.findFirst({ where: { patientId, status: { not: 'PUBLISHED' } }, orderBy: { createdAt: 'desc' } })
+  // Sólo un plan que se puede seguir editando: antes "no publicado" incluía cancelados y reemplazados.
+  let plan = await prisma.nutritionPlan.findFirst({ where: { patientId, status: { in: ['DRAFT', 'READY'] } }, orderBy: { createdAt: 'desc' } })
   if (!plan) plan = await prisma.nutritionPlan.create({ data: { patientId, consultationId: consultation.id } })
+  const settings = template.sections?.planSettings
+  if (settings && typeof settings === 'object') {
+    const data = {}
+    for (const field of PLAN_TEMPLATE_FIELDS) if (settings[field] != null) data[field] = settings[field]
+    if (Object.keys(data).length) await prisma.nutritionPlan.update({ where: { id: plan.id }, data })
+  }
+  const slots = template.mealSlots || []
   // Normaliza igual que la distribución (valida día/tiempo y deduplica por día+tiempo): una
   // plantilla con slots crudos duplicados violaría @@unique([planId, dayOfWeek, mealType]) → 500.
   const slots = normalizeMealSlots(template.mealSlots)

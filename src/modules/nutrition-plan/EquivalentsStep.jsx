@@ -3,13 +3,12 @@ import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { ingredientsApi } from '../../lib/api.js'
 import {
   CATALOG_GROUP, EQUIVALENT_MEALS, EQUIVALENT_TABLE,
-  addTotals, adequacyStatus, equivalentAdequacy, equivalentTotals, extrasTotals, macroTargets, remainingEquivalents, suggestDistribution, suggestEquivalents, toHalf,
+  addTotals, adequacyStatus, equivalentAdequacy, equivalentTotals, extrasTotals, macroTargets, suggestDistribution, suggestEquivalents, toHalf,
 } from '../../../server/domain/equivalents.js'
 
 const MACROS = [['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['fat', 'Lípidos', 'g'], ['carbs', 'HdC', 'g']]
 const STATUS_LABEL = { ok: 'En rango', low: 'Falta', high: 'Excede', none: '—' }
 const formatCount = (value) => { const number = Number(value) || 0; return Number.isInteger(number) ? String(number) : number.toFixed(1) }
-const formatTime = (time) => { const match = /^(\d{2}):(\d{2})$/.exec(time || ''); if (!match) return ''; const hours = Number(match[1]); return `${hours % 12 || 12}${match[2] === '00' ? '' : `:${match[2]}`} ${hours < 12 ? 'am' : 'pm'}` }
 
 // Campo de equivalentes: − / + de medio en medio, o escribir la cantidad. Mientras se teclea se
 // conserva el texto tal cual y sólo se normaliza al salir: antes cada tecla pasaba por `toHalf`, así
@@ -30,7 +29,7 @@ function CountField({ value, onChange, disabled, label, compact = false }) {
 // nutrióloga fija cuántos equivalentes de cada grupo cubren el requerimiento (con una propuesta
 // automática como punto de partida) y los reparte entre los tiempos de comida; ese reparto es la
 // columna "Porción" del plan que recibe la paciente.
-export default function EquivalentsStep({ plan, value, onChange, locked, mealTimes, expediente, activeMeals, visibleMeals, mealLabels, onGoToCalculation }) {
+export default function EquivalentsStep({ plan, value, onChange, locked, expediente, activeMeals, onGoToCalculation }) {
   const groups = value?.groups || {}
   const distribution = value?.distribution || {}
   const hasTarget = plan?.targetKcal != null
@@ -40,10 +39,6 @@ export default function EquivalentsStep({ plan, value, onChange, locked, mealTim
   const totals = addTotals(equivalentTotals(groups), extrasTotals(extras))
   const adequacy = equivalentAdequacy(totals, hasTarget ? targets : null)
   const weightKg = Number(plan?.evaluation?.inputs?.weightKg) || null
-  const activeGroups = EQUIVALENT_TABLE.filter((group) => (Number(groups[group.code]) || 0) > 0 || EQUIVALENT_MEALS.some((meal) => (Number(distribution[meal.key]?.[group.code]) || 0) > 0))
-  // Columnas del reparto: los tiempos de comida del plan, más cualquiera que ya tenga equivalentes.
-  const meals = EQUIVALENT_MEALS.filter((meal) => !visibleMeals || visibleMeals.includes(meal.key) || Object.keys(distribution[meal.key] || {}).length > 0).map((meal) => ({ ...meal, label: mealLabels?.[meal.key] || meal.label }))
-  const distColumns = { gridTemplateColumns: `minmax(150px,1.6fr) 48px repeat(${meals.length},minmax(62px,1fr)) 104px` }
   const [catalogCode, setCatalogCode] = useState(null)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalog, setCatalog] = useState({ state: 'idle', items: [] })
@@ -86,15 +81,11 @@ export default function EquivalentsStep({ plan, value, onChange, locked, mealTim
     const next = suggestEquivalents(targets)
     emit(next, hasDistribution ? suggestDistribution(next, activeMeals) : distribution)
   }
-  const distribute = () => {
-    if (hasDistribution && !confirmReplace('Esto reemplaza el reparto que ya hiciste por tiempo de comida. ¿Continuar?')) return
-    emit(groups, suggestDistribution(groups, activeMeals))
-  }
   const catalogGroup = EQUIVALENT_TABLE.find((group) => group.code === catalogCode)
 
   return <>
-    <ModuleHeader eyebrow="PLAN ALIMENTARIO · EQUIVALENTES" title="Calcula los equivalentes" subtitle="Define cuántos equivalentes de cada grupo cubren el requerimiento y repártelos por tiempo de comida. Son las porciones que verá la paciente en su plan." action={<button type="button" className="primary" disabled={locked || !hasTarget} onClick={suggestGroups}>✦ Sugerir equivalentes</button>} />
-    {!hasTarget && <div className="eq-notice">Todavía no hay requerimiento guardado: sin él no se puede sugerir ni medir la adecuación. <button type="button" className="link-button" onClick={onGoToCalculation}>Ir a Plan alimentario</button></div>}
+    <ModuleHeader eyebrow="PLAN ALIMENTARIO · PORCIONES" title="Calcula las porciones" subtitle="Define cuántos equivalentes de cada grupo cubren el requerimiento. En el siguiente paso los repartes por tiempo de comida y eliges las recetas." action={<button type="button" className="primary" disabled={locked || !hasTarget} onClick={suggestGroups}>✦ Sugerir porciones</button>} />
+    {!hasTarget && <div className="eq-notice">Todavía no hay requerimiento guardado: sin él no se puede sugerir ni medir la adecuación. <button type="button" className="link-button" onClick={onGoToCalculation}>Ir a Dietocálculo</button></div>}
     {locked && <div className="eq-notice">Este plan ya está publicado: los equivalentes se muestran sólo para consulta.</div>}
 
     <div className="eq-layout">
@@ -131,7 +122,7 @@ export default function EquivalentsStep({ plan, value, onChange, locked, mealTim
               <div className="eq-bar"><i className={status} style={{ width: `${Math.min(100, adequacy[key] || 0)}%` }} /></div>
               <span className={'eq-chip ' + status}>{STATUS_LABEL[status]}</span>
             </div>
-          })}</div> : <p className="muted">Calcula el requerimiento en "Plan alimentario" para ver aquí la meta de energía y macronutrimentos.</p>}
+          })}</div> : <p className="muted">Calcula el requerimiento en "Dietocálculo" para ver aquí la meta de energía y macronutrimentos.</p>}
           {weightKg && <p className="muted eq-weight">Peso usado en el cálculo: {formatCount(weightKg)} kg.</p>}
         </section>
 
@@ -156,31 +147,11 @@ export default function EquivalentsStep({ plan, value, onChange, locked, mealTim
     </div>
 
     <section className="panel eq-distribution">
-      <div className="eq-panel-head"><div><p className="eyebrow">DISTRIBUCIÓN</p><h3>Equivalentes por tiempo de comida</h3><small className="muted">Es la columna "Porción" del plan que recibe la paciente. El reparto automático usa sólo los tiempos que ya tienen recetas.</small></div><button type="button" className="secondary" disabled={locked || !hasGroups} onClick={distribute}>Repartir automáticamente</button></div>
-      {activeGroups.length === 0 ? <p className="muted">Captura o sugiere los equivalentes de arriba para repartirlos entre los tiempos de comida.</p> : <div className="eq-dist-table" role="table">
-        <div className="eq-dist-row eq-head" role="row" style={distColumns}><span className="eq-group">Grupo</span><span>Total</span>{meals.map((meal) => <span key={meal.key}>{meal.label}{mealTimes?.[meal.key] ? <small>{formatTime(mealTimes[meal.key])}</small> : null}{activeMeals && !activeMeals.includes(meal.key) ? <small className="eq-inactive" title="Este tiempo de comida todavía no tiene recetas: no aparece en el plan impreso.">sin recetas</small> : null}</span>)}<span>Por repartir</span></div>
-        {activeGroups.map((group) => {
-          const remaining = remainingEquivalents(groups, distribution, group.code)
-          return <div className="eq-dist-row" role="row" style={distColumns} key={group.code}>
-            <span className="eq-group"><b>{group.label}</b>{group.sub && <small>{group.sub}</small>}</span>
-            <span><b>{formatCount(groups[group.code])}</b></span>
-            {meals.map((meal) => <CountField compact key={meal.key} value={distribution[meal.key]?.[group.code]} disabled={locked} label={`${group.label}${group.sub ? ` ${group.sub}` : ''} en ${meal.label}`} onChange={(next) => setMealCount(meal.key, group.code, next)} />)}
-            <span><i className={'eq-chip ' + (remaining === 0 ? 'ok' : remaining > 0 ? 'low' : 'high')}>{remaining === 0 ? '✓ Completo' : remaining > 0 ? `Faltan ${formatCount(remaining)}` : `Sobran ${formatCount(-remaining)}`}</i></span>
-          </div>
-        })}
-        <div className="eq-dist-row eq-meal-totals" role="row" style={distColumns}>
-          <span className="eq-group"><b>Aporte del tiempo</b><small>kcal · P / HC / L en gramos</small></span><span />
-          {meals.map((meal) => { const mealTotals = addTotals(equivalentTotals(distribution[meal.key]), extrasTotals(extras, meal.key)); return <span key={meal.key} className="eq-meal-total">{mealTotals.kcal > 0 ? <><b>{Math.round(mealTotals.kcal)} kcal</b><small>{formatCount(mealTotals.protein)} / {formatCount(mealTotals.carbs)} / {formatCount(mealTotals.fat)}</small></> : <small>—</small>}</span> })}
-          <span />
-        </div>
-      </div>}
-
       <div className="eq-extras">
-        <div className="eq-panel-head"><div><h3>Suplementos y bebidas</h3><small className="muted">Renglones que no son un grupo de equivalentes (un suplemento, una bebida): su aporte por porción y cuántas porciones tocan en cada tiempo. Salen en las indicaciones del plan.</small></div><button type="button" className="secondary" disabled={locked || extras.length >= 8} onClick={addExtra}>+ Agregar</button></div>
+        <div className="eq-panel-head"><div><h3>Suplementos y bebidas</h3><small className="muted">Renglones que no son un grupo de equivalentes (un suplemento, una bebida): su aporte por porción. Las porciones de cada tiempo se reparten en el paso Distribuye y salen en las indicaciones del plan.</small></div><button type="button" className="secondary" disabled={locked || extras.length >= 8} onClick={addExtra}>+ Agregar</button></div>
         {extras.map((extra, index) => <div className="eq-extra" key={extra.id || index}>
           <input className="eq-extra-name" value={extra.name} disabled={locked} placeholder="Nombre (ej. Proteína en polvo)" aria-label="Nombre del suplemento o bebida" onChange={(event) => setExtra(index, { name: event.target.value })} />
           {[['kcal', 'Kcal'], ['protein', 'Prot'], ['carbs', 'HdC'], ['fat', 'Líp']].map(([key, label]) => <label key={key}><small>{label}</small><input type="number" min="0" step="0.5" disabled={locked} value={extra[key] || ''} placeholder="0" onChange={(event) => setExtra(index, { [key]: Math.max(0, Number(event.target.value) || 0) })} /></label>)}
-          <div className="eq-extra-meals">{meals.map((meal) => <label key={meal.key}><small>{meal.label}</small><CountField compact value={extra.meals?.[meal.key]} disabled={locked} label={`${extra.name || 'Renglón'} en ${meal.label}`} onChange={(next) => { const mealsNext = { ...(extra.meals || {}) }; if (next > 0) mealsNext[meal.key] = next; else delete mealsNext[meal.key]; setExtra(index, { meals: mealsNext }) }} /></label>)}</div>
           {!locked && <button type="button" className="link-button" onClick={() => removeExtra(index)} aria-label="Quitar renglón" title="Quitar">×</button>}
         </div>)}
       </div>
