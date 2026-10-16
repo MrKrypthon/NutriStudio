@@ -72,19 +72,22 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
   const [timeline, setTimeline] = useState([])
   const [timelineState, setTimelineState] = useState('idle')
   const [statusFilter, setStatusFilter] = useState('ACTIVE')
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
   const [sortBy, setSortBy] = useState('recent')
   const [archiveState, setArchiveState] = useState('idle')
 
   useEffect(() => {
     setStatus('loading')
     const isNoNext = statusFilter === 'NO_NEXT'
-    patientsApi.list(`?status=${isNoNext ? 'ACTIVE' : statusFilter}${isNoNext ? '&noNext=1' : ''}`)
+    patientsApi.list(`?status=${isNoNext ? 'ACTIVE' : statusFilter}${isNoNext ? '&noNext=1' : ''}&page=${page}&pageSize=25`)
       .then((payload) => {
         setRows(payload?.items?.length ? payload.items.map((p, i) => [p.firstName.slice(0, 1) + p.lastName.slice(0, 1), `${p.firstName} ${p.lastName}`, `${sexLabel(p.sex) || 'Paciente'}`, p.nextAppointmentAt ? formatNextAppointment(p.nextAppointmentAt) : '—', p.nextAppointmentAt ? (APPOINTMENT_TYPE_LABELS[p.nextAppointmentType] || p.nextAppointmentType) : 'Sin cita próxima', ['coral', 'blue', 'purple', 'yellow'][i % 4], p.id, p]) : [])
+        setTotal(payload?.total ?? (payload?.items?.length || 0))
         setStatus('online')
       })
       .catch(() => setStatus('demo'))
-  }, [statusFilter])
+  }, [statusFilter, page])
 
   const loadTimeline = (patientId) => {
     setTimelineState('loading')
@@ -101,6 +104,7 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
   const visible = rows
     .filter((p) => [p[1], p[7]?.email, p[7]?.phone].filter(Boolean).join(' ').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (sortBy === 'name' ? a[1].localeCompare(b[1]) : new Date(b[7]?.createdAt || 0) - new Date(a[7]?.createdAt || 0)))
+  const pages = Math.max(1, Math.ceil((total || 0) / 25))
   // Se navega con el paciente en el mismo salto para que quede en la dirección: hacerlo en dos
   // pasos (elegir paciente y luego cambiar de módulo) dejaba la URL sin el id y recargar sacaba de
   // la pantalla.
@@ -148,15 +152,16 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
   }
 
   return <AppChrome active="Pacientes" setActive={setActive}><div className="content">
-    <ModuleHeader eyebrow={`TU ESPACIO · ${rows.length} ${statusFilter === 'ACTIVE' ? 'ACTIVOS' : statusFilter === 'ARCHIVED' ? 'ARCHIVADOS' : 'SIN CITA PRÓXIMA'}`} title="Pacientes" subtitle="Conoce el progreso y el contexto de cada persona." action={<div className="module-actions"><span className={'sync-label ' + status}>● {status === 'online' ? 'Sincronizados' : 'Datos de demostración'}</span><button className="primary" onClick={() => setActive('Nuevo paciente')}><span>+</span> Nuevo paciente</button></div>} />
-    <div className="filter-bar panel"><div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o email..." /></div><select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}><option value="ACTIVE">Activos</option><option value="ARCHIVED">Archivados</option><option value="NO_NEXT">Sin cita próxima</option></select></div>
+    <ModuleHeader eyebrow={`TU ESPACIO · ${status === 'online' ? total : rows.length} ${statusFilter === 'ACTIVE' ? 'ACTIVOS' : statusFilter === 'ARCHIVED' ? 'ARCHIVADOS' : 'SIN CITA PRÓXIMA'}`} title="Pacientes" subtitle="Conoce el progreso y el contexto de cada persona." action={<div className="module-actions"><span className={'sync-label ' + status}>● {status === 'online' ? 'Sincronizados' : 'Datos de demostración'}</span><button className="primary" onClick={() => setActive('Nuevo paciente')}><span>+</span> Nuevo paciente</button></div>} />
+    <div className="filter-bar panel"><div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, teléfono o email..." /></div><select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}><option value="ACTIVE">Activos</option><option value="ARCHIVED">Archivados</option><option value="NO_NEXT">Sin cita próxima</option></select></div>
     <div className="table-panel panel">
       <div className="table-meta">Mostrando <b>{visible.length} pacientes</b><label className="sort-select">Ordenar por: <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}><option value="recent">Más recientes</option><option value="name">Nombre A-Z</option></select></label></div>
       <div className="patient-table">
         <div className="table-head"><span>Paciente</span><span>Última consulta</span><span>Próxima cita</span><span>Estado</span><span /></div>
-        {visible.map((p, i) => <div className={'patient-row' + (selected?.[6] === p[6] ? ' selected' : '')} key={p[1]} onClick={() => openPatient(p)}><div className="patient-name"><span className={'person-avatar ' + p[5]}>{p[0]}</span><div><b>{p[1]}</b><small>{p[2]}</small></div></div><span className="muted">{p[7]?.lastConsultationAt ? formatUTCDate(p[7].lastConsultationAt) : '—'}</span><span><b className="appointment-date">{p[3]}</b><small className="muted">{p[4]}</small></span><span className={p[7]?.status === 'ARCHIVED' ? 'status pending' : 'status confirmed'}>{p[7]?.status === 'ARCHIVED' ? 'Archivado' : 'Activo'}</span><span className="row-arrow">→</span></div>)}
+        {visible.map((p, i) => <div className={'patient-row' + (selected?.[6] === p[6] ? ' selected' : '')} key={p[6] || p[1]} onClick={() => openPatient(p)}><div className="patient-name"><span className={'person-avatar ' + p[5]}>{p[0]}</span><div><b>{p[1]}</b><small>{p[2]}</small></div></div><span className="muted">{p[7]?.lastConsultationAt ? formatUTCDate(p[7].lastConsultationAt) : '—'}</span><span><b className="appointment-date">{p[3]}</b><small className="muted">{p[4]}</small></span><span className={p[7]?.status === 'ARCHIVED' ? 'status pending' : 'status confirmed'}>{p[7]?.status === 'ARCHIVED' ? 'Archivado' : 'Activo'}</span><span className="row-arrow">→</span></div>)}
         {status !== 'loading' && visible.length === 0 && <div className="result-empty"><span>◌</span><h3>{search.trim() ? 'Sin pacientes con esos filtros' : statusFilter === 'NO_NEXT' ? 'No hay pacientes sin cita próxima' : statusFilter === 'ARCHIVED' ? 'No hay pacientes archivados' : 'No hay pacientes aún'}</h3><p>Ajusta la búsqueda o crea un paciente nuevo.</p></div>}
       </div>
+      {status === 'online' && pages > 1 && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '12px 0' }}><button type="button" className="secondary" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>← Anterior</button><span className="muted">Página {page} de {pages}</span><button type="button" className="secondary" disabled={page >= pages} onClick={() => setPage((p) => p + 1)}>Siguiente →</button></div>}
     </div>
   </div>
 

@@ -1,3 +1,5 @@
+import { round1 } from './round.js'
+
 // Nutrición por porción de una receta a partir de sus ingredientes del catálogo. Vive aquí, y no en
 // cada lugar que la necesita, porque tres copias se desincronizaron: el script que vincula el
 // recetario sumaba sólo los macros y dejaba todas las recetas importadas sin micronutrientes.
@@ -13,11 +15,11 @@ function perServingFromIngredients(ingredients, portions) {
   const totals = emptyNutritionTotals()
   for (const item of ingredients || []) {
     const nutrition = item.ingredient?.nutrition || {}
-    const factor = Number(item.quantity) / 100
+    const factor = (Number(item.quantity) || 0) / 100
     for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor
   }
-  const servings = Number(portions) || 1
-  return Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round((value / servings) * 10) / 10]))
+  const servings = Math.max(1, Number(portions) || 1)
+  return Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, round1(value / servings)]))
 }
 
 export { RECIPE_NUTRITION_KEYS, emptyNutritionTotals, perServingFromIngredients }

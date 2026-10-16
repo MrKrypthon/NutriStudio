@@ -16,11 +16,16 @@ export default function ImportFoodsPage({ setActive }) {
   // Grams per equivalent (the SMAE math needs a real weight; without it the UI would fabricate one).
   const [grams, setGrams] = useState('100')
   const [saved, setSaved] = useState(false)
+  const [saveState, setSaveState] = useState('idle')
+  const [saveError, setSaveError] = useState('')
   const [translatedFrom, setTranslatedFrom] = useState(null)
 
   const search = async (e) => {
     e.preventDefault()
     if (query.trim().length < 2) return
+    // Resetear el estado de "guardado" al buscar de nuevo (antes quedaba pegado y no se podía
+    // importar un segundo alimento sin recargar).
+    setSaved(false); setSelected(null); setSaveState('idle'); setSaveError('')
     const result = await foodApi.search(query, source).catch(() => ({ items: [] }))
     setItems(result.items || [])
     setTranslatedFrom(result.translatedQuery || null)
@@ -28,16 +33,24 @@ export default function ImportFoodsPage({ setActive }) {
 
   const save = async () => {
     if (!selected) return
-    await ingredientsApi.import({
-      externalId: selected.externalId,
-      source: selected.source,
-      name: selected.name,
-      group,
-      unit: 'g',
-      nutrition: selected.nutrition,
-      equivalence: { group, serving: portion.trim() || '100 g', grams: Number(grams) > 0 ? Number(grams) : null },
-    }).catch(() => null)
-    setSaved(true)
+    setSaveState('saving'); setSaveError('')
+    try {
+      await ingredientsApi.import({
+        externalId: selected.externalId,
+        source: selected.source,
+        name: selected.name,
+        group,
+        unit: 'g',
+        nutrition: selected.nutrition,
+        equivalence: { group, serving: portion.trim() || '100 g', grams: Number(grams) > 0 ? Number(grams) : null },
+      })
+      setSaveState('idle')
+      setSaved(true)
+    } catch (error) {
+      // Antes se mostraba "Alimento guardado" aunque la importación fallara.
+      setSaveState('idle')
+      setSaveError(error.code === 'DEMO_MODE' ? 'Modo demostración: conecta el API para guardar el alimento.' : (error.message || 'No se pudo guardar el alimento.'))
+    }
   }
 
   return <AppChrome active="Importar alimentos" setActive={setActive}><div className="content import-review">
@@ -54,7 +67,7 @@ export default function ImportFoodsPage({ setActive }) {
     <div className="review-layout">
       <section>
         <div className="import-results-head"><b>{items.length || 0} resultados</b><span>Selecciona un alimento para revisar</span></div>
-        {items.map((item) => <button className={'review-result panel ' + (selected?.externalId === item.externalId ? 'selected' : '')} onClick={() => setSelected(item)} key={item.source + item.externalId}>
+        {items.map((item) => <button className={'review-result panel ' + (selected?.externalId === item.externalId ? 'selected' : '')} onClick={() => { setSelected(item); setSaved(false); setSaveError('') }} key={item.source + item.externalId}>
           <span className="import-result-icon">{item.imageUrl ? <img src={item.imageUrl} alt="" /> : '◉'}</span>
           <span><b>{item.name}</b><small>{SOURCE_LABELS[item.source] || item.source} · {item.serving.quantity}{item.serving.unit}</small></span>
           <span className="muted">{Math.round(item.nutrition.kcal || 0)} kcal</span>
@@ -78,7 +91,8 @@ export default function ImportFoodsPage({ setActive }) {
               <label>Porción equivalente<input value={portion} onChange={(e) => setPortion(e.target.value)} placeholder="Ej. 100 g, 1 pieza, 1/2 taza" /></label>
               <label>Gramos por equivalente<input type="number" min="0" value={grams} onChange={(e) => setGrams(e.target.value)} placeholder="Ej. 100" /><small className="muted" style={{ fontWeight: 400 }}>Peso real de 1 equivalente para el cálculo nutricional.</small></label>
               <div className="review-warning">ⓘ Revisa unidad, porción y grupo antes de importarlo al sistema de equivalentes.</div>
-              <button className="primary full-button" onClick={save}>Guardar en mi catálogo <span>→</span></button>
+              {saveError && <div className="form-error">⚠ {saveError}</div>}
+              <button className="primary full-button" disabled={saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : 'Guardar en mi catálogo'} <span>→</span></button>
             </>
           : saved
             ? <div className="saved-result"><span>✓</span><h2>Alimento guardado</h2><p>Ya puedes usarlo en tus recetas y planes nutricionales.</p><button className="primary" onClick={() => setActive('Ingredientes')}>Ir a ingredientes <span>→</span></button></div>

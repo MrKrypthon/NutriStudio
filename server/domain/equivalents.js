@@ -4,6 +4,7 @@
 // base ni la red: lo usan igual el servidor (guardar, PDF) y la pantalla (cálculo en vivo).
 
 import { PLAN_MEALS } from './planMeals.js'
+import { round1 } from './round.js'
 
 // Aporte nutrimental promedio de UN equivalente de cada grupo (SMAE). `badge` es el círculo con que
 // el plan impreso muestra el grupo: ahí cereales, leches y azúcares no se subdividen.
@@ -48,7 +49,6 @@ const toHalf = (value) => {
   if (!Number.isFinite(number) || number <= 0) return 0
   return Math.min(MAX_EQUIVALENTS, Math.round(number * 2) / 2)
 }
-const round1 = (value) => Math.round(value * 10) / 10
 
 // Requerimiento en gramos a partir de las kcal y el porcentaje de cada macronutrimento.
 function macroTargets({ kcal, carbsPercent, proteinPercent, fatPercent }) {
@@ -83,7 +83,11 @@ const adequacyStatus = (percent) => (percent == null ? 'none' : percent < 95 ? '
 // grasas completan los lípidos. Es un punto de partida para ajustar a mano, no una prescripción.
 function suggestEquivalents(targets) {
   const kcal = Number(targets?.kcal) || 0
-  if (kcal <= 0) return {}
+  const carbs = Number(targets?.carbs)
+  const protein = Number(targets?.protein)
+  const fat = Number(targets?.fat)
+  // Sin los tres macros, las restas de abajo daban NaN y el grupo quedaba en 0 en silencio.
+  if (kcal <= 0 || !Number.isFinite(carbs) || !Number.isFinite(protein) || !Number.isFinite(fat)) return {}
   const groups = {
     V: kcal < 1400 ? 3 : kcal < 2200 ? 4 : 5,
     F: kcal < 1400 ? 2 : kcal < 2000 ? 3 : 4,
@@ -92,12 +96,12 @@ function suggestEquivalents(targets) {
     G_CP: kcal < 1600 ? 1 : kcal < 2400 ? 2 : 3,
   }
   const partial = () => equivalentTotals(groups)
-  groups.C_SG = toHalf((targets.carbs - partial().carbs) / EQUIVALENT_BY_CODE.C_SG.carbs)
+  groups.C_SG = toHalf((carbs - partial().carbs) / EQUIVALENT_BY_CODE.C_SG.carbs)
   // La proteína que falta se reparte entre AOA muy bajo y bajo en grasa.
-  const animal = Math.max(0, (targets.protein - partial().protein) / 7)
+  const animal = Math.max(0, (protein - partial().protein) / 7)
   groups.AOA_B = toHalf(animal / 2)
   groups.AOA_MB = toHalf(animal - groups.AOA_B)
-  const missingFat = () => toHalf((targets.fat - partial().fat) / EQUIVALENT_BY_CODE.G_SP.fat)
+  const missingFat = () => toHalf((fat - partial().fat) / EQUIVALENT_BY_CODE.G_SP.fat)
   groups.G_SP = 0
   // Si para completar los lípidos harían falta demasiadas grasas añadidas, parte del AOA magro se
   // cambia por moderado en grasa: misma proteína, y los lípidos vienen del alimento y no del aceite.

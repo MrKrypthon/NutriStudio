@@ -4,9 +4,10 @@
 // cambiar el aporte. Este módulo no toca la base ni la red: lo usan el servidor y la pantalla.
 import { EQUIVALENT_BY_CODE, EQUIVALENT_TABLE } from './equivalents.js'
 import { scaleIngredientLine } from '../../src/lib/ingredientLines.js'
+import { foldText } from './text.js'
+import { round2 } from './round.js'
 
-const fold = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
-const round2 = (value) => Math.round(value * 100) / 100
+const fold = (value) => foldText(value).trim()
 const MACRO_KEYS = ['kcal', 'protein', 'carbs', 'fat']
 
 // Grupo del catálogo ("AOA MBAG", "Cereales S/G", "Leche con azúcar"…) → código del cuadro de
@@ -68,7 +69,7 @@ const catalogGroupForCode = (code) => CATALOG_GROUP_BY_CODE[code] || null
 // Frutas de poca energía (fresa, sandía, melón…): por composición no se distinguen de una verdura,
 // así que se reconocen por el nombre.
 const FRUIT_NAMES = /\b(fresas?|frambuesas?|zarzamoras?|moras?|arandanos?|sandia|melon|papaya|toronja|naranjas?|mandarinas?|duraznos?|guayabas?|pina|manzanas?|peras?|mangos?|uvas?|kiwis?|ciruelas?|cerezas?|tunas?|platanos?|higos?|granada|maracuya|chabacanos?|nectarinas?|lichis?|carambola|tejocotes?|capulin(es)?|mamey|zapote|guanabana|pitahaya|frutos? rojos?)\b/
-const foldName = (name) => String(name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+const foldName = (name) => foldText(name)
 
 function inferFamily(n, name = '') {
   if (!(n.kcal > 0)) return null

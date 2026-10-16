@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { BalanceTrend, CategoryDonut, IncomeExpenseChart, MethodDonut } from '../../components/FinanceCharts.jsx'
@@ -43,6 +43,9 @@ export default function FinancePage({ setActive }) {
   const [feesError, setFeesError] = useState('')
   const [entryBusy, setEntryBusy] = useState(null)
   const [selectedDay, setSelectedDay] = useState(null)
+  // Las tarifas solo se pueblan la primera vez: `load()` también corre al cambiar de rango y no
+  // debe pisar lo que la usuaria haya editado sin guardar.
+  const feesLoadedRef = useRef(false)
 
   const range = rangeFor(rangeKey)
   const load = useCallback(async () => {
@@ -50,7 +53,7 @@ export default function FinancePage({ setActive }) {
     try {
       const overview = await financeApi.overview(range.from, range.to)
       setData(overview)
-      setFeesForm(normalizeFees(overview.fees))
+      if (!feesLoadedRef.current) { setFeesForm(normalizeFees(overview.fees)); feesLoadedRef.current = true }
       setStatus('online')
     } catch (error) {
       if (error.code === 'DEMO_MODE') { setData(null); setStatus('demo') } else { setData(null); setStatus('error') }

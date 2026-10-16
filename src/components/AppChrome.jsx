@@ -44,7 +44,7 @@ export default function AppChrome({ active, setActive, crumb, children }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifData, setNotifData] = useState(null)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [sidebarOpen, setSidebarOpen] = useState(() => localStorage.getItem('nutri.sidebar') !== 'collapsed')
+  const [sidebarOpen, setSidebarOpen] = useState(() => { try { return localStorage.getItem('nutri.sidebar') !== 'collapsed' } catch { return true } })
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width:1000px)').matches)
   const [tip, setTip] = useState(null)
@@ -123,7 +123,7 @@ export default function AppChrome({ active, setActive, crumb, children }) {
   }, [])
 
   // Desktop keeps the sidebar preference in localStorage; on mobile the drawer always starts closed.
-  useEffect(() => { if (!isMobile) localStorage.setItem('nutri.sidebar', sidebarOpen ? 'open' : 'collapsed') }, [sidebarOpen, isMobile])
+  useEffect(() => { if (!isMobile) { try { localStorage.setItem('nutri.sidebar', sidebarOpen ? 'open' : 'collapsed') } catch { /* storage bloqueado */ } } }, [sidebarOpen, isMobile])
   const toggleSidebar = () => { if (isMobile) setDrawerOpen((open) => !open); else setSidebarOpen((open) => !open) }
   // El menú colapsado muestra solo iconos; al pasar el puntero aparece una etiqueta flotante con el
   // nombre de la sección. Se posiciona de forma fija (viewport) para que no la recorte el scroll del sidebar.
