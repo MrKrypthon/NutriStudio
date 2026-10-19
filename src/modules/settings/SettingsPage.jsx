@@ -235,7 +235,7 @@ export default function SettingsPage({ setActive }) {
         {activeSection === 'security' && <div className="panel settings-card">
           <h2>Privacidad y seguridad</h2>
           {/* Quien se registró con Google no tiene contraseña en Milpa: entra siempre con Google. */}
-          {sessionUser?.google && !sessionUser?.loginId ? <p>Entras con tu cuenta de Google{sessionUser.email ? <> (<b>{sessionUser.email}</b>)</> : null}. No necesitas contraseña: la seguridad de tu acceso la maneja Google.</p> : <>
+          {sessionUser?.googleOnly ? <p>Entras con tu cuenta de Google{sessionUser.email ? <> (<b>{sessionUser.email}</b>)</> : null}. No necesitas contraseña: la seguridad de tu acceso la maneja Google.</p> : <>
             <p>Cambia tu contraseña de acceso.{sessionUser?.loginId && <> Tu identificador para entrar es <b>{sessionUser.loginId}</b>.</>}</p>
             {pwState === 'error' && <div className="form-error">⚠ {pwError}</div>}
             {pwState === 'saved' && <span className="saved">● Contraseña actualizada</span>}
@@ -245,7 +245,7 @@ export default function SettingsPage({ setActive }) {
               <label>Confirmar nueva contraseña<input type="password" value={pwForm.confirmPassword} onChange={(e) => updatePw('confirmPassword', e.target.value)} /></label>
             </div>
             <button className="secondary" disabled={pwState === 'saving'} onClick={changePassword} style={{ marginTop: 16 }}>{pwState === 'saving' ? 'Guardando…' : 'Cambiar contraseña'}</button>
-            {sessionUser?.loginId && <GoogleLinkRow />}
+            <GoogleLinkRow />
           </>}
         </div>}
       </section>

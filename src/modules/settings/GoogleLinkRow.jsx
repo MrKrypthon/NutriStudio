@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { authApi } from '../../lib/api.js'
 import { useAuth } from '../../lib/AuthContext.jsx'
 import { renderGoogleButton } from '../../lib/googleIdentity.js'
+import { setToken } from '../../lib/auth.js'
 
-// Vincular Google a una cuenta que entra con identificador (fase 109). Se hace desde la sesión ya
+// Vincular Google a una cuenta que entra con contraseña (fase 109). Se hace desde la sesión ya
 // iniciada, nunca por coincidencia de correo: así nadie puede apropiarse del Google de otra persona.
 export default function GoogleLinkRow() {
   const { user, refreshPractice } = useAuth()
@@ -22,14 +23,15 @@ export default function GoogleLinkRow() {
   }, [clientId, user?.google, refreshPractice])
 
   const unlink = async () => {
-    if (!window.confirm('¿Desvincular tu cuenta de Google? Seguirás entrando con tu identificador y contraseña.')) return
+    if (!window.confirm('¿Desvincular tu cuenta de Google? Se cerrarán las sesiones abiertas con Google y seguirás entrando con tu contraseña.')) return
     setState('saving'); setError('')
-    try { await authApi.unlinkGoogle(); await refreshPractice(); setState('idle') } catch (err) { setState('error'); setError(err.message || 'No se pudo desvincular Google.') }
+    // Desvincular cierra las sesiones abiertas con Google; esta sigue con el token nuevo.
+    try { const { token } = await authApi.unlinkGoogle(); if (token) setToken(token); await refreshPractice(); setState('idle') } catch (err) { setState('error'); setError(err.message || 'No se pudo desvincular Google.') }
   }
 
   if (!clientId) return null
   return <div className="google-link-row">
-    <div><b>Entrar con Google</b><small>{user?.google ? 'Tu cuenta de Google ya está vinculada: puedes entrar con ella o con tu identificador.' : 'Vincula tu cuenta de Google para entrar con un clic.'}</small></div>
+    <div><b>Entrar con Google</b><small>{user?.google ? 'Tu cuenta de Google ya está vinculada: puedes entrar con ella o con tu contraseña.' : 'Vincula tu cuenta de Google para entrar con un clic.'}</small></div>
     {user?.google ? <button className="secondary" disabled={state === 'saving'} onClick={unlink}>{state === 'saving' ? 'Desvinculando…' : 'Desvincular'}</button> : <div className="google-link-button" ref={buttonRef} aria-busy={state === 'saving'} />}
     {state === 'linked' && <span className="saved">● Google vinculado</span>}
     {error && <div className="form-error">⚠ {error}</div>}

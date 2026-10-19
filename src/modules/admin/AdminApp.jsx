@@ -180,7 +180,7 @@ export default function AdminApp() {
           <div className="admin-practice-actions">
             <button className="primary" onClick={() => openPay(practice)}>Registrar pago</button>
             <button className="secondary" onClick={() => openSub(practice)}>Suscripción</button>
-            {practice.owner && (practice.owner.loginId || !practice.owner.google) && <button className="secondary" disabled={actionState === practice.id} onClick={() => resetPassword(practice)}>Nueva contraseña</button>}
+            {practice.owner && (practice.owner.loginId || practice.signupSource !== 'GOOGLE') && <button className="secondary" disabled={actionState === practice.id} onClick={() => resetPassword(practice)}>Nueva contraseña</button>}
             <button className={practice.status === 'ACTIVE' ? 'secondary admin-danger' : 'secondary'} disabled={actionState === practice.id} onClick={() => toggleStatus(practice)}>{practice.status === 'ACTIVE' ? 'Suspender' : 'Habilitar'}</button>
           </div>
         </article> })}</div>

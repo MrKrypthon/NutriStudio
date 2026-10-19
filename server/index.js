@@ -199,8 +199,10 @@ app.get('/health', async () => ({ status: 'ok', service: 'nutri-studio-api' }))
 
 // Sesión de la nutrióloga: el token y lo que la app necesita al entrar. `access` dice si la cuenta
 // puede usar el sistema o sólo ver la pantalla de pago.
+// Una cuenta abierta con Google y sin identificador sólo entra con Google (su contraseña es aleatoria).
+const isGoogleOnly = (user) => !user.loginId && user.practice?.signupSource === 'GOOGLE'
 const sessionPayload = (user) => ({
-  user: { id: user.id, name: user.name, email: user.email, role: user.role, loginId: user.loginId, google: Boolean(user.googleSub) },
+  user: { id: user.id, name: user.name, email: user.email, role: user.role, loginId: user.loginId, google: Boolean(user.googleSub), googleOnly: isGoogleOnly(user) },
   practice: { id: user.practice.id, name: user.practice.name, timeZone: user.practice.timeZone },
   access: practiceAccess(user.practice),
 })
@@ -301,11 +303,13 @@ app.post('/api/v1/auth/google/link', async (request, reply) => {
 
 app.post('/api/v1/auth/google/unlink', async (request, reply) => {
   const user = await prisma.user.findUnique({ where: { id: request.userId }, include: { practice: true } })
-  // Quien sólo entra con Google (sin identificador) se quedaría sin forma de entrar.
-  if (!user.loginId) return reply.code(409).send({ code: 'GOOGLE_ONLY', message: 'Tu cuenta entra sólo con Google; no se puede desvincular.', fields: {} })
-  const updated = await prisma.user.update({ where: { id: user.id }, data: { googleSub: null }, include: { practice: true } })
+  // Quien sólo entra con Google se quedaría sin forma de entrar.
+  if (isGoogleOnly(user)) return reply.code(409).send({ code: 'GOOGLE_ONLY', message: 'Tu cuenta entra sólo con Google; no se puede desvincular.', fields: {} })
+  // Desvincular cierra también las sesiones abiertas con ese Google; esta sigue con un token nuevo.
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { googleSub: null, sessionVersion: { increment: 1 } }, include: { practice: true } })
+  sessionVersionCache.delete(user.id)
   await logAudit(request, { action: 'google_unlinked', entity: 'User', entityId: user.id })
-  return sessionPayload(updated)
+  return signSession(updated)
 })
 
 app.get('/api/v1/auth/me', async (request, reply) => {
@@ -430,12 +434,14 @@ app.post('/api/v1/admin/practices', async (request, reply) => {
 
 // Nueva contraseña temporal para el dueño de una cuenta (por ejemplo, si olvidó la suya).
 app.post('/api/v1/admin/practices/:practiceId/reset-password', async (request, reply) => {
-  const user = await prisma.user.findFirst({ where: { practiceId: request.params.practiceId }, orderBy: { createdAt: 'asc' } })
+  const user = await prisma.user.findFirst({ where: { practiceId: request.params.practiceId }, orderBy: { createdAt: 'asc' }, include: { practice: true } })
   if (!user) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Cuenta no encontrada.', fields: {} })
+  // Una cuenta que sólo entra con Google no tiene contraseña que restablecer: se recupera con Google.
+  if (isGoogleOnly(user)) return reply.code(409).send({ code: 'GOOGLE_ONLY', message: 'Esta cuenta entra sólo con Google; no usa contraseña.', fields: {} })
   const tempPassword = generateTempPassword()
   // Restablecer es también recuperar la cuenta: se cierran todas sus sesiones y se quita el Google
   // vinculado (quien tuviera acceso no conserva otra puerta). Puede volver a vincularlo después.
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(tempPassword, 10), sessionVersion: { increment: 1 }, ...(user.loginId ? { googleSub: null } : {}) } })
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(tempPassword, 10), sessionVersion: { increment: 1 }, googleSub: null } })
   sessionVersionCache.delete(user.id)
   request.log.info({ practiceId: user.practiceId, adminId: request.adminId }, 'Contraseña restablecida desde el panel')
   return { name: user.name, email: user.email || null, loginId: user.loginId, tempPassword }
