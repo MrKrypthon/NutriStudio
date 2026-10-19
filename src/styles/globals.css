@@ -2403,3 +2403,10 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 .settings-pdf .pdfd-color{padding:4px 10px 4px 4px}
 .settings-pdf .pdfd-color input[type=color]{height:28px}
 @media(min-width:1100px){.settings-pdf .pdfd-toggles{grid-template-columns:1fr 1fr;column-gap:14px}}
+.google-link-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.google-link-row>div:first-child{flex:1;min-width:220px}
+.google-link-row b{display:block;font-size:13.5px;color:var(--ink)}
+.google-link-row small{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.google-link-button{width:260px;min-height:44px}
+.google-link-button[aria-busy="true"]{opacity:.5;pointer-events:none}
+.google-link-row .form-error{width:100%}

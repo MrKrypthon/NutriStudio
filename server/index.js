@@ -41,7 +41,7 @@ const SESSION_TTL = '7d'
 // Entrar con Google y leer su configuración (el client id) tampoco llevan sesión.
 const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login', '/api/v1/auth/google', '/api/v1/auth/config', '/api/v1/stripe/webhook'])
 // Sin suscripción pagada la cuenta sólo puede ver su sesión, cambiar su contraseña y pagar.
-const SUBSCRIPTION_FREE_ROUTES = new Set(['/api/v1/auth/me', '/api/v1/auth/logout', '/api/v1/auth/change-password', '/api/v1/billing', '/api/v1/billing/checkout', '/api/v1/billing/portal', '/api/v1/billing/sync'])
+const SUBSCRIPTION_FREE_ROUTES = new Set(['/api/v1/auth/me', '/api/v1/auth/logout', '/api/v1/auth/google/link', '/api/v1/auth/google/unlink', '/api/v1/auth/change-password', '/api/v1/billing', '/api/v1/billing/checkout', '/api/v1/billing/portal', '/api/v1/billing/sync'])
 // Practice logos and recipe photos are branding/content, not patient data, and need to load in a
 // plain <img src> (which can't send an Authorization header) both in-app and inside generated
 // PDFs/emails — so these routes are public by design, scoped by unguessable ids/file names.
@@ -225,31 +225,36 @@ async function createAccount({ signupSource, practiceName, name, email, loginId 
 
 app.get('/api/v1/auth/config', async () => ({ googleClientId: GOOGLE_CLIENT_ID || null }))
 
-// Entrar (o registrarse) con Google. El navegador obtiene de Google un token firmado (ID token);
-// aquí se verifica su firma y que sea para nuestra app. La primera vez se abre la cuenta, que queda
-// sin acceso hasta suscribirse. Una cuenta creada desde /admin con el mismo correo (verificado por
-// Google) se enlaza a esa cuenta de Google en vez de abrir otra.
-app.post('/api/v1/auth/google', async (request, reply) => {
-  if (!googleClient) return reply.code(503).send({ code: 'GOOGLE_NOT_CONFIGURED', message: 'El acceso con Google todavía no está activo en este servidor.', fields: {} })
+// Verifica el token firmado (ID token) que el navegador obtuvo de Google: firma, que sea para
+// nuestra app y que el correo esté verificado. Devuelve el perfil o responde el error.
+async function verifyGoogleCredential(request, reply) {
+  if (!googleClient) { reply.code(503).send({ code: 'GOOGLE_NOT_CONFIGURED', message: 'El acceso con Google todavía no está activo en este servidor.', fields: {} }); return null }
   const credential = request.body?.credential
-  if (!credential || typeof credential !== 'string') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Falta la respuesta de Google.', fields: {} })
+  if (!credential || typeof credential !== 'string') { reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Falta la respuesta de Google.', fields: {} }); return null }
   let profile
   try {
     const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID })
     profile = ticket.getPayload()
   } catch (err) {
     request.log.warn({ err: err.message }, 'Token de Google inválido')
-    return reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Google no confirmó tu cuenta. Intenta de nuevo.', fields: {} })
+    reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Google no confirmó tu cuenta. Intenta de nuevo.', fields: {} })
+    return null
   }
-  if (!profile?.sub || !profile.email || !profile.email_verified) return reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Tu cuenta de Google no tiene un correo verificado.', fields: {} })
+  if (!profile?.sub || !profile.email || !profile.email_verified) { reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Tu cuenta de Google no tiene un correo verificado.', fields: {} }); return null }
+  return profile
+}
+
+// Entrar (o registrarse) con Google. La cuenta se busca SÓLO por la identidad de Google (`sub`),
+// nunca por correo: el correo de un usuario se puede editar en Configuración sin verificarlo, y
+// enlazar por correo permitiría que alguien pusiera el Gmail de otra persona y la metiera en su
+// consulta (o le impidiera registrarse). La primera vez se abre una cuenta nueva, sin acceso hasta
+// suscribirse. Una cuenta del panel usa Google vinculándolo desde su sesión (POST /auth/google/link).
+app.post('/api/v1/auth/google', async (request, reply) => {
+  const profile = await verifyGoogleCredential(request, reply)
+  if (!profile) return reply
   const email = profile.email.toLowerCase()
 
   let user = await prisma.user.findFirst({ where: { googleSub: profile.sub }, include: { practice: true } })
-  if (!user) {
-    const byEmail = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' }, status: 'ACTIVE' }, include: { practice: true } })
-    if (byEmail?.googleSub) return reply.code(409).send({ code: 'EMAIL_LINKED_ELSEWHERE', message: 'Ese correo ya está enlazado a otra cuenta de Google.', fields: {} })
-    if (byEmail) user = await prisma.user.update({ where: { id: byEmail.id }, data: { googleSub: profile.sub }, include: { practice: true } })
-  }
   let created = false
   if (!user) {
     // Contraseña inutilizable: estas cuentas entran sólo con Google.
@@ -267,6 +272,27 @@ app.post('/api/v1/auth/google', async (request, reply) => {
 // symmetry with login and as a hook point for a future token-blacklist. Logging out is really
 // the client discarding its token.
 app.post('/api/v1/auth/logout', async (request, reply) => reply.code(204).send())
+
+// Vincular Google a la cuenta con la que ya se inició sesión (por ejemplo, una creada desde /admin):
+// desde ahí puede entrar también con ese Google. Una identidad de Google sirve para una sola cuenta.
+app.post('/api/v1/auth/google/link', async (request, reply) => {
+  const profile = await verifyGoogleCredential(request, reply)
+  if (!profile) return reply
+  const owner = await prisma.user.findFirst({ where: { googleSub: profile.sub }, select: { id: true } })
+  if (owner && owner.id !== request.userId) return reply.code(409).send({ code: 'GOOGLE_LINKED_ELSEWHERE', message: 'Esa cuenta de Google ya entra a otra consulta de Milpa.', fields: {} })
+  const user = await prisma.user.update({ where: { id: request.userId }, data: { googleSub: profile.sub }, include: { practice: true } })
+  await logAudit(request, { action: 'google_linked', entity: 'User', entityId: user.id, metadata: { googleEmail: profile.email.toLowerCase() } })
+  return sessionPayload(user)
+})
+
+app.post('/api/v1/auth/google/unlink', async (request, reply) => {
+  const user = await prisma.user.findUnique({ where: { id: request.userId }, include: { practice: true } })
+  // Quien sólo entra con Google (sin identificador) se quedaría sin forma de entrar.
+  if (!user.loginId) return reply.code(409).send({ code: 'GOOGLE_ONLY', message: 'Tu cuenta entra sólo con Google; no se puede desvincular.', fields: {} })
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { googleSub: null }, include: { practice: true } })
+  await logAudit(request, { action: 'google_unlinked', entity: 'User', entityId: user.id })
+  return sessionPayload(updated)
+})
 
 app.get('/api/v1/auth/me', async (request, reply) => {
   const user = await prisma.user.findUnique({ where: { id: request.userId }, include: { practice: true } })

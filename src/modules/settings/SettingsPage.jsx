@@ -4,6 +4,7 @@ import ModuleHeader from '../../components/ModuleHeader.jsx'
 import BrandMark from '../../components/BrandMark.jsx'
 import PdfDesignEditor from '../documents/PdfDesignEditor.jsx'
 import SubscriptionCard from './SubscriptionCard.jsx'
+import GoogleLinkRow from './GoogleLinkRow.jsx'
 import { authApi, practiceApi } from '../../lib/api.js'
 import { useAuth } from '../../lib/AuthContext.jsx'
 
@@ -241,6 +242,7 @@ export default function SettingsPage({ setActive }) {
               <label>Confirmar nueva contraseña<input type="password" value={pwForm.confirmPassword} onChange={(e) => updatePw('confirmPassword', e.target.value)} /></label>
             </div>
             <button className="secondary" disabled={pwState === 'saving'} onClick={changePassword} style={{ marginTop: 16 }}>{pwState === 'saving' ? 'Guardando…' : 'Cambiar contraseña'}</button>
+            {sessionUser?.loginId && <GoogleLinkRow />}
           </>}
         </div>}
       </section>
