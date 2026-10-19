@@ -137,6 +137,9 @@ model User {
   // la que entra (`sub` del token de Google). Únicos en todo el sistema; se valida al guardarlos.
   loginId        String?
   googleSub      String?
+  // Versión de sesión: va dentro del token y sube al cambiar o restablecer la contraseña, lo que
+  // cierra todas las sesiones abiertas (los tokens no se guardan en el servidor).
+  sessionVersion Int             @default(0)
   consultations  Consultation[]
   auditEvents    AuditEvent[]
   labAttachments LabAttachment[]

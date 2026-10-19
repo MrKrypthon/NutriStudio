@@ -7,6 +7,7 @@ import SubscriptionCard from './SubscriptionCard.jsx'
 import GoogleLinkRow from './GoogleLinkRow.jsx'
 import { authApi, practiceApi } from '../../lib/api.js'
 import { useAuth } from '../../lib/AuthContext.jsx'
+import { setToken } from '../../lib/auth.js'
 
 const TIME_ZONE_OPTIONS = [
   ['America/Mexico_City', 'Ciudad de México (GMT-6)'],
@@ -167,7 +168,9 @@ export default function SettingsPage({ setActive }) {
     setPwState('saving')
     setPwError('')
     try {
-      await authApi.changePassword(pwForm.currentPassword, pwForm.newPassword)
+      // Cambiar la contraseña cierra las demás sesiones; esta sigue con el token nuevo.
+      const { token } = await authApi.changePassword(pwForm.currentPassword, pwForm.newPassword)
+      if (token) setToken(token)
       setPwState('saved')
       setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
     } catch (err) {

@@ -51,6 +51,17 @@ const PUBLIC_ROUTE_PATTERNS = [/^\/api\/v1\/practice\/[^/]+\/logo$/, /^\/api\/v1
 // server/domain/accounts.js). Se cachea 30 s para no consultar en cada petición; quien cambia el
 // estado, la cobertura o la suscripción borra la entrada.
 const practiceStatusCache = new Map()
+// Versión de sesión de cada usuario (cacheada 30 s, como el acceso); un token con otra versión ya
+// no vale. Quien la sube borra la entrada para que el cierre sea inmediato en este servidor.
+const sessionVersionCache = new Map()
+async function currentSessionVersion(userId) {
+  const cached = sessionVersionCache.get(userId)
+  if (cached && cached.expires > Date.now()) return cached.version
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { sessionVersion: true, status: true } }).catch(() => null)
+  const version = user && user.status === 'ACTIVE' ? user.sessionVersion : null
+  sessionVersionCache.set(userId, { version, expires: Date.now() + 30000 })
+  return version
+}
 async function practiceAccessFor(practiceId) {
   const cached = practiceStatusCache.get(practiceId)
   if (cached && cached.expires > Date.now()) return cached.access
@@ -101,6 +112,8 @@ app.addHook('onRequest', async (request, reply) => {
     request.userId = payload.sub
     request.practiceId = payload.practiceId
     request.userRole = payload.role
+    // Contraseña cambiada o restablecida (o usuario desactivado): las sesiones anteriores se cierran.
+    if ((await currentSessionVersion(payload.sub)) !== (payload.sv || 0)) throw new Error('stale session')
     // Una cuenta suspendida no puede operar (se cachea para no consultar en cada petición).
     const access = await practiceAccessFor(request.practiceId)
     if (access.reason === 'SUSPENDED' || access.reason === 'NOT_FOUND') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
@@ -191,7 +204,8 @@ const sessionPayload = (user) => ({
   practice: { id: user.practice.id, name: user.practice.name, timeZone: user.practice.timeZone },
   access: practiceAccess(user.practice),
 })
-const signSession = (user) => ({ token: jwt.sign({ sub: user.id, practiceId: user.practiceId, role: user.role }, JWT_SECRET, { expiresIn: SESSION_TTL }), ...sessionPayload(user) })
+const signToken = (user) => jwt.sign({ sub: user.id, practiceId: user.practiceId, role: user.role, sv: user.sessionVersion || 0 }, JWT_SECRET, { expiresIn: SESSION_TTL })
+const signSession = (user) => ({ token: signToken(user), ...sessionPayload(user) })
 
 // Se entra con el correo o con el identificador que dio el administrador (un identificador nunca
 // lleva «@»). El correo sólo es único por práctica, así que se toma el primer usuario activo.
@@ -419,7 +433,10 @@ app.post('/api/v1/admin/practices/:practiceId/reset-password', async (request, r
   const user = await prisma.user.findFirst({ where: { practiceId: request.params.practiceId }, orderBy: { createdAt: 'asc' } })
   if (!user) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Cuenta no encontrada.', fields: {} })
   const tempPassword = generateTempPassword()
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(tempPassword, 10) } })
+  // Restablecer es también recuperar la cuenta: se cierran todas sus sesiones y se quita el Google
+  // vinculado (quien tuviera acceso no conserva otra puerta). Puede volver a vincularlo después.
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(tempPassword, 10), sessionVersion: { increment: 1 }, ...(user.loginId ? { googleSub: null } : {}) } })
+  sessionVersionCache.delete(user.id)
   request.log.info({ practiceId: user.practiceId, adminId: request.adminId }, 'Contraseña restablecida desde el panel')
   return { name: user.name, email: user.email || null, loginId: user.loginId, tempPassword }
 })
@@ -672,9 +689,11 @@ app.post('/api/v1/auth/change-password', async (request, reply) => {
   const valid = await bcrypt.compare(currentPassword, user.passwordHash)
   if (!valid) return reply.code(400).send({ code: 'INVALID_PASSWORD', message: 'La contraseña actual no es correcta.', fields: { currentPassword: true } })
   const passwordHash = await bcrypt.hash(newPassword, 10)
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } })
+  // Cierra las demás sesiones; esta sigue con el token nuevo que se devuelve.
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { passwordHash, sessionVersion: { increment: 1 } } })
+  sessionVersionCache.delete(user.id)
   await logAudit(request, { action: 'password_changed', entity: 'User', entityId: user.id })
-  return reply.code(204).send()
+  return { token: signToken(updated) }
 })
 
 const LOGO_MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }

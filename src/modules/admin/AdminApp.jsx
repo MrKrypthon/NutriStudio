@@ -129,7 +129,7 @@ export default function AdminApp() {
     } catch (error) { setNewState('error'); setNewError(error.message || 'No se pudo crear la cuenta.') }
   }
   const resetPassword = async (practice) => {
-    if (!window.confirm(`¿Generar una contraseña nueva para "${practice.name}"? La actual dejará de funcionar.`)) return
+    if (!window.confirm(`¿Generar una contraseña nueva para "${practice.name}"? La actual dejará de funcionar, se cerrarán sus sesiones abiertas y se desvinculará su Google.`)) return
     setActionState(practice.id); setActionError('')
     try {
       const result = await adminApi.resetPassword(practice.id)
