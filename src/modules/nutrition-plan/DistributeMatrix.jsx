@@ -68,7 +68,8 @@ export default function DistributeMatrix({ value, onChange, meals, hiddenMeals, 
         })}
       </div>
 
-      {rows.length === 0 && extras.length === 0 && <p className="muted dm-empty">Este menú todavía no tiene porciones calculadas. <button type="button" className="link-button" onClick={onGoToPortions}>Calcúlalas en el paso Porciones</button> para repartirlas aquí; mientras tanto puedes elegir recetas.</p>}
+      {rows.length === 0 && extras.length === 0 && locked && <p className="muted dm-empty">Este menú se armó sin porciones por grupo: sólo con recetas.</p>}
+      {rows.length === 0 && extras.length === 0 && !locked && <p className="muted dm-empty">Este menú todavía no tiene porciones calculadas. <button type="button" className="link-button" onClick={onGoToPortions}>Calcúlalas en el paso Porciones</button> para repartirlas aquí; mientras tanto puedes elegir recetas.</p>}
 
       {rows.map((group) => {
         const total = Number(groups[group.code]) || 0

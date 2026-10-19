@@ -13,6 +13,7 @@ import { NutritionEngineError, computeEnergyRequirement, computeMacros } from '.
 import { adjustmentFactor, applyRecipeAdjustments, buildMenuSnapshot, normalizeRecipeAdjustments, sanitizeJpeg } from './domain/documents.js'
 import { PLAN_MEAL_KEYS, normalizeActiveMeals, normalizeMealLabels, normalizeMealNotes, normalizeMealTimes } from './domain/planMeals.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
+import { asciiFileName, normalizePdfTheme, planFileName } from './domain/pdfTheme.js'
 import { normalizeEquivalentPlan, normalizeMenus } from './domain/equivalents.js'
 import { emptyNutritionTotals, perServingFromIngredients } from './domain/recipeNutrition.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
@@ -139,7 +140,7 @@ app.get('/api/v1/practice', async (request, reply) => {
   const practice = await prisma.practice.findUnique({ where: { id: request.practiceId } })
   if (!practice) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Práctica no encontrada.', fields: {} })
   const user = await prisma.user.findUnique({ where: { id: request.userId }, select: USER_PUBLIC_SELECT })
-  return { ...practice, user }
+  return { ...practice, pdfTheme: normalizePdfTheme(practice.pdfTheme), user }
 })
 
 app.put('/api/v1/practice', async (request, reply) => {
@@ -161,6 +162,12 @@ app.put('/api/v1/practice', async (request, reply) => {
     })
   }
   return { ...practice, user }
+})
+
+// Diseño del plan en PDF: se guarda ya normalizado (un valor raro vuelve al de por defecto).
+app.put('/api/v1/practice/pdf-theme', async (request) => {
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { pdfTheme: normalizePdfTheme(request.body?.theme) } })
+  return { pdfTheme: normalizePdfTheme(practice.pdfTheme) }
 })
 
 // Guardar sólo las tarifas (la pantalla de Finanzas no tiene por qué reenviar nombre/zona horaria).
@@ -1504,7 +1511,8 @@ app.get('/api/v1/plans', async (request) => {
   const { status } = request.query
   const plans = await prisma.nutritionPlan.findMany({
     where: { patient: { practiceId: request.practiceId }, ...(status ? { status } : {}) },
-    include: { patient: true, mealSlots: { select: { dayOfWeek: true } } },
+    // Las recetas (nombre y foto) dan la tira de fotos de cada tarjeta del listado.
+    include: { patient: true, mealSlots: { select: { dayOfWeek: true, recipeId: true, recipe: { select: { id: true, name: true, imageFile: true } } } } },
     orderBy: { updatedAt: 'desc' },
     take: 200,
   })
@@ -1538,6 +1546,33 @@ app.post('/api/v1/plans/:planId/reactivate', async (request, reply) => {
   // Un plan que ya se había publicado vuelve a publicado, con su menú congelado intacto: reactivarlo
   // no debe reabrir a edición un plan entregado.
   return prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: plan.publishedAt ? 'PUBLISHED' : 'DRAFT' } })
+})
+
+// "Editar como nueva versión": un plan publicado (o cancelado) no se reabre; se copia a un borrador
+// nuevo con el cálculo, las porciones, los menús, las indicaciones y las recetas de la semana. El
+// original queda como estaba. Va a la consulta en curso de la paciente si hay una.
+app.post('/api/v1/plans/:planId/duplicate', async (request, reply) => {
+  const source = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } }, include: { mealSlots: true } })
+  if (!source) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
+  const [openConsultation, latest] = await Promise.all([
+    prisma.consultation.findFirst({ where: { patientId: source.patientId, status: 'IN_PROGRESS' }, orderBy: { createdAt: 'desc' }, select: { id: true } }),
+    prisma.nutritionPlan.aggregate({ where: { patientId: source.patientId }, _max: { version: true } }),
+  ])
+  const copyJson = (value) => (value == null ? undefined : value)
+  const plan = await prisma.nutritionPlan.create({
+    data: {
+      patientId: source.patientId,
+      consultationId: openConsultation?.id || source.consultationId,
+      version: (latest._max.version || source.version || 1) + 1,
+      goal: source.goal, formula: source.formula, activityMethod: source.activityMethod, activityFactor: source.activityFactor, metsPayload: copyJson(source.metsPayload),
+      targetKcal: source.targetKcal, carbsPercent: source.carbsPercent, proteinPercent: source.proteinPercent, fatPercent: source.fatPercent, evaluation: copyJson(source.evaluation),
+      mealTimes: copyJson(source.mealTimes), equivalents: copyJson(source.equivalents), menus: copyJson(source.menus), mealLabels: copyJson(source.mealLabels), mealNotes: copyJson(source.mealNotes),
+      activeMeals: source.activeMeals, recipeAdjustments: copyJson(source.recipeAdjustments), hydrationNote: source.hydrationNote, recommendations: source.recommendations,
+      mealSlots: { create: source.mealSlots.map((slot) => ({ dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: slot.recipeId, servings: slot.servings, notes: slot.notes })) },
+    },
+  })
+  await logAudit(request, { action: 'created', entity: 'NutritionPlan', entityId: plan.id, patientId: plan.patientId, metadata: { duplicatedFrom: source.id } })
+  return reply.code(201).send(plan)
 })
 
 app.patch('/api/v1/plans/:planId', async (request, reply) => {
@@ -2139,7 +2174,7 @@ async function buildPlanHeader(patient, practice, user) {
 
 // Reúne lo que necesita drawNutritionPlan: lo asíncrono (archivos de fotos, medición más reciente)
 // se resuelve aquí porque el dibujo con pdfkit es síncrono.
-async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) {
+async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer, themeOverride = null) {
   const menu = await loadPlanMenu(plan)
   const imageDirectory = recipeImageDir()
   const images = new Map()
@@ -2165,6 +2200,7 @@ async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) 
     hydrationNote: plan.hydrationNote,
     logo: logoBuffer,
     images,
+    theme: normalizePdfTheme(themeOverride || practice?.pdfTheme),
   }
 }
 
@@ -2232,8 +2268,11 @@ app.get('/api/v1/plans/:planId/preview-pdf', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId } }, include: { patient: true } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   const { practice, user, logoBuffer } = await loadPracticeBranding(practiceId, request.userId)
-  const pdf = await renderNutritionPlanPdf(await loadNutritionPlanData(plan, plan.patient, practice, user, logoBuffer))
-  return reply.type('application/pdf').header('Content-Disposition', 'inline; filename="plan-de-alimentacion.pdf"').header('Cache-Control', 'no-store').send(pdf)
+  // `?theme=` (JSON) dibuja con un diseño que todavía no se guarda: la vista previa del editor.
+  let themeOverride = null
+  if (typeof request.query?.theme === 'string' && request.query.theme.length < 2000) { try { themeOverride = JSON.parse(request.query.theme) } catch { themeOverride = null } }
+  const pdf = await renderNutritionPlanPdf(await loadNutritionPlanData(plan, plan.patient, practice, user, logoBuffer, themeOverride))
+  return reply.type('application/pdf').header('Content-Disposition', contentDisposition('inline', planFileName(`${plan.patient.firstName} ${plan.patient.lastName}`, plan.publishedAt || new Date()))).header('Cache-Control', 'no-store').send(pdf)
 })
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
@@ -2242,7 +2281,17 @@ app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
   return generated
 })
 
-app.get('/api/v1/documents/:documentId/download', async (request, reply) => { const practiceId = request.practiceId; const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } }); if (!document?.storageKey) return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'Genera el documento antes de descargarlo.', fields: {} }); const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey); const file = await readFile(filePath); return reply.type('application/pdf').header('Content-Disposition', `attachment; filename="${document.storageKey}"`).send(file) })
+app.get('/api/v1/documents/:documentId/download', async (request, reply) => { const practiceId = request.practiceId; const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } }, include: { patient: true, plan: { select: { publishedAt: true } } } }); if (!document?.storageKey) return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'Genera el documento antes de descargarlo.', fields: {} }); const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey); const file = await readFile(filePath); return reply.type('application/pdf').header('Content-Disposition', contentDisposition('attachment', documentFileName(document))).send(file) })
+
+// Nombre legible del archivo descargado (el guardado en disco sigue siendo <id>-v<n>.pdf).
+const DOCUMENT_FILE_TITLES = { consultation_report: 'Informe de consulta', consultation_export: 'Expediente', consultation_clinical: 'Informe clínico' }
+function documentFileName(document) {
+  const patientName = document.patient ? `${document.patient.firstName} ${document.patient.lastName}` : ''
+  if (document.type === 'nutrition_plan') return planFileName(patientName, document.plan?.publishedAt || document.generatedAt || new Date())
+  return planFileName(patientName, document.generatedAt || new Date()).replace('Plan de alimentación', DOCUMENT_FILE_TITLES[document.type] || 'Documento')
+}
+// filename= lleva un respaldo sin acentos; filename*= el nombre completo en UTF-8 (RFC 6266).
+const contentDisposition = (kind, fileName) => `${kind}; filename="${asciiFileName(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
 
 app.post('/api/v1/documents/:documentId/deliver', async (request, reply) => {
   const practiceId = request.practiceId

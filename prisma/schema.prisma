@@ -75,6 +75,9 @@ model Practice {
   logoUrl            String?
   // Dirección del consultorio; sale en el pie del plan de alimentación entregado.
   address            String?
+  // Diseño del plan de alimentación en PDF (colores, tipografía, ondas, logo); ver
+  // server/domain/pdfTheme.js. Vacío = blanco y negro.
+  pdfTheme           Json?
   businessHours      Json?
   // Tarifas por tipo de cita, en centavos: { INITIAL, FOLLOW_UP, QUICK_CONTROL, EMERGENCY }.
   fees               Json?

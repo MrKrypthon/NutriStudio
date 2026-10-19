@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import BrandMark from '../../components/BrandMark.jsx'
+import PdfDesignEditor from '../documents/PdfDesignEditor.jsx'
 import { authApi, practiceApi } from '../../lib/api.js'
 import { useAuth } from '../../lib/AuthContext.jsx'
 
@@ -17,6 +18,7 @@ const DEFAULT_HOURS = { label: 'Lunes a viernes', ranges: [{ start: '09:00', end
 const NAV_SECTIONS = [
   ['profile', '◉ Perfil profesional'],
   ['identity', '◆ Identidad visual'],
+  ['pdf', '▤ Diseño del PDF'],
   ['hours', '◷ Horarios y disponibilidad'],
   ['security', '▣ Privacidad y seguridad'],
 ]
@@ -46,7 +48,7 @@ export default function SettingsPage({ setActive }) {
   const [pwState, setPwState] = useState('idle')
   const [pwError, setPwError] = useState('')
   const fileInputRef = useRef(null)
-  const sectionRefs = { profile: useRef(null), identity: useRef(null), hours: useRef(null), security: useRef(null) }
+  const sectionRefs = { profile: useRef(null), identity: useRef(null), pdf: useRef(null), hours: useRef(null), security: useRef(null) }
 
   useEffect(() => {
     practiceApi.get()
@@ -171,6 +173,10 @@ export default function SettingsPage({ setActive }) {
             <button className="secondary" onClick={pickLogo} disabled={logoState === 'uploading'}>{logoState === 'uploading' ? 'Subiendo…' : 'Cambiar logo'}</button>
             <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} onChange={onLogoSelected} />
           </div>
+        </div>
+        <div className="panel settings-card" ref={sectionRefs.pdf}>
+          <div><h2>Diseño del plan en PDF</h2><p>Colores, tipografía y adornos del plan de alimentación que descargas y envías. Por defecto sale en blanco y negro con tu logo.</p></div>
+          {loadState === 'ready' && <PdfDesignEditor key={logoVersion} />}
         </div>
         <div className="panel settings-card" ref={sectionRefs.hours}>
           <h2>Horarios de atención</h2>

@@ -115,6 +115,16 @@ function planProgress(plan) {
   ]
   return { progress: Math.round((steps.filter(Boolean).length / steps.length) * 100), nextStep: PLAN_STEP_LABELS[steps.findIndex((done) => !done)] || 'Entrega' }
 }
+// Paso en el que se retoma un plan: el primero que falta. Un plan cerrado (publicado/cancelado) se
+// abre en Guardar, donde están el PDF y el envío, o en Distribuye si nunca se publicó.
+function resumeStep(plan) {
+  if (!isEditablePlan(plan)) return plan?.publishedAt ? STEP.DELIVERY : STEP.DISTRIBUTION
+  if (plan.targetKcal == null) return plan.goal || (plan.evaluation && Object.keys(plan.evaluation).length) ? STEP.CALCULATION : STEP.EVALUATION
+  if (!Object.keys(plan.equivalents?.groups || {}).length) return STEP.EQUIVALENTS
+  const days = new Set((plan.mealSlots || []).filter((slot) => slot.recipeId).map((slot) => slot.dayOfWeek))
+  return days.size >= 5 ? STEP.DELIVERY : STEP.DISTRIBUTION
+}
+const STATUS_TONE = { DRAFT: 'draft', READY: 'ready', PUBLISHED: 'published', SUPERSEDED: 'muted', CANCELLED: 'cancelled' }
 const planUpdatedLabel = (iso) => { const d = new Date(iso); const days = Math.floor((Date.now() - d.getTime()) / 86400000); if (days <= 0) return 'hoy'; if (days === 1) return 'ayer'; return `hace ${days} días` }
 const consultationReason = (plan) => plan?.consultation?.sections?.find((section) => section.sectionKey === 'summary')?.payload?.['Motivo de consulta'] || plan?.consultation?.sections?.find((section) => section.sectionKey === 'summary')?.payload?.reason || null
 
@@ -167,6 +177,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [hubPlans, setHubPlans] = useState([])
   const [hubState, setHubState] = useState('loading')
   const [hubQuery, setHubQuery] = useState('')
+  const [hubFilter, setHubFilter] = useState('all')
   const [chooserOpen, setChooserOpen] = useState(false)
   const { patient } = usePatient(activePatientId)
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
@@ -235,8 +246,9 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const notesPendingRef = useRef(null)
   // Los guardados de las indicaciones van en fila: uno a la vez y siempre con lo último escrito.
   const notesChainRef = useRef(Promise.resolve())
-  // Un plan publicado es de sólo lectura (el servidor responde 409 a cualquier cambio).
-  const planLocked = plan?.status === 'PUBLISHED'
+  // Un plan publicado es de sólo lectura (el servidor responde 409 a cualquier cambio); uno
+  // cancelado también, hasta que se reactive.
+  const planLocked = !!plan && !isEditablePlan(plan)
   // Lo "actual" para las respuestas que llegan tarde: plan abierto, paciente, recetas, medición.
   const planIdRef = useRef(null)
   planIdRef.current = plan?.id || null
@@ -489,32 +501,59 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     }
   }
 
-  // Abre un plan desde el listado: los borradores/listos continúan en el wizard; los
-  // publicados/reemplazados/cancelados se ven con el menú congelado (solo lectura).
-  const openPlan = async (item) => {
+  // Abre un plan desde el listado, siempre en el constructor: los borradores/listos se retoman en
+  // el paso que falta; los publicados/cancelados se ven completos en sólo lectura (pasos, semana,
+  // PDF y envío), no sólo su menú.
+  const openPlan = async (item, { step: startStep = null } = {}) => {
     if (!item) return
     setPlanActionState(item.id)
-    const editable = isEditablePlan(item)
-    if (editable) { planEpochRef.current += 1; planOpeningRef.current += 1 }
+    planEpochRef.current += 1
+    planOpeningRef.current += 1
     try {
       // Lo que quedara por guardar del plan abierto se envía antes de leer el que se abre.
       if (notesPendingRef.current) await flushNotes()
       const full = await plansApi.get(item.id)
-      if (isEditablePlan(full)) {
-        planEpochRef.current += 1
-        applyPlan(full, { recipeIds: recipesRef.current.length ? new Set(recipesRef.current.map((recipe) => recipe.id)) : null })
-        setStep(0)
-        setView('wizard')
-      } else {
-        setPreviewPlan(full)
-      }
+      planEpochRef.current += 1
+      // En un plan cerrado no se descartan recetas archivadas: es lo que se le entregó.
+      applyPlan(full, { recipeIds: isEditablePlan(full) && recipesRef.current.length ? new Set(recipesRef.current.map((recipe) => recipe.id)) : null })
+      setStep(startStep ?? resumeStep(full))
+      setView('wizard')
+      requestAnimationFrame(() => { const body = window.document.querySelector('.plan-body'); if (body) body.scrollTop = 0 })
     } catch {
       // La lista queda como estaba; si la carga de la paciente esperaba a este plan, se repite.
-      if (editable) loadPlanDataRef.current()
+      loadPlanDataRef.current()
     } finally {
-      if (editable) planOpeningRef.current -= 1
+      planOpeningRef.current -= 1
       setPlanActionState('idle')
     }
+  }
+
+  // "Editar como nueva versión": copia el plan a un borrador nuevo y lo abre en Distribuye.
+  const duplicatePlan = async (item) => {
+    if (!item) return
+    setPlanActionState(item.id)
+    try {
+      if (notesPendingRef.current) await flushNotes()
+      const created = await plansApi.duplicate(item.id)
+      if (item.patientId && item.patientId !== activePatientRef.current) setActivePatientId(item.patientId)
+      setMode('patient')
+      await openPlan(created, { step: STEP.DISTRIBUTION })
+      const pid = created.patientId
+      patientsApi.plans(pid).then((response) => { if (activePatientRef.current === pid) setPlans(response.items || []) }).catch(() => {})
+      loadHub()
+    } catch { setPlanActionState('idle') }
+  }
+
+  // Reactivar desde el constructor deja el plan como estaba antes de cancelarlo.
+  const reactivateOpenPlan = async () => {
+    if (!plan) return
+    try {
+      const updated = await plansApi.reactivate(plan.id)
+      mergePlan(updated)
+      const pid = activePatientRef.current
+      if (pid) patientsApi.plans(pid).then((response) => { if (activePatientRef.current === pid) setPlans(response.items || []) }).catch(() => {})
+      loadHub()
+    } catch { /* el aviso sigue a la vista */ }
   }
 
   const changePlanStatus = async (item, action) => {
@@ -526,16 +565,15 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     } catch { /* deja la lista */ } finally { setPlanActionState('idle') }
   }
 
-  // Abrir un plan desde el hub: un borrador/listo pasa al wizard de ese paciente; un plan ya
-  // cerrado (publicado/cancelado) se ve en el modal del menú sin salir del hub.
+  // Abrir un plan desde el hub: pasa al constructor de esa paciente con el plan abierto.
   const openPlanFromHub = (item) => {
-    if (item.status === 'DRAFT' || item.status === 'READY') {
-      // La carga de datos de la paciente corre a la par y no pisa el plan que abre openPlan.
-      setActivePatientId(item.patientId)
-      setMode('patient')
-      openPlan(item)
-      return
-    }
+    // La carga de datos de la paciente corre a la par y no pisa el plan que abre openPlan.
+    setActivePatientId(item.patientId)
+    setMode('patient')
+    openPlan(item)
+  }
+  // Vista rápida del menú de un plan, sin salir del listado.
+  const quickLook = (item) => {
     setPlanActionState(item.id)
     plansApi.get(item.id).then((full) => setPreviewPlan(full)).catch(() => {}).finally(() => setPlanActionState('idle'))
   }
@@ -775,12 +813,21 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     // Cada paso empieza arriba (antes heredaba el scroll del anterior y se abría a media página).
     requestAnimationFrame(() => { const body = window.document.querySelector('.plan-body'); if (body) body.scrollTop = 0 })
   }
+  // Pasos ya resueltos (✓ en la barra), con lo que hay en pantalla.
+  const filledDays = new Set(Object.entries(slots).filter(([, recipeId]) => recipeId).map(([key]) => key.split(':')[0])).size
+  const stepDone = [
+    !!(plan?.goal || (plan?.evaluation && Object.keys(plan.evaluation).length)),
+    plan?.targetKcal != null,
+    Object.keys(notesForm.equivalents?.groups || {}).length > 0,
+    filledDays >= 5,
+    plan?.status === 'PUBLISHED' || plan?.status === 'SUPERSEDED',
+  ]
   // Reintenta lo que no se pudo guardar (indicaciones pendientes y la semana tal como está).
   const retrySave = () => { if (notesPendingRef.current) flushNotes(); if (saveState === 'error') persistSlots(slots) }
   // Un solo estado de guardado para todo el plan (semana + indicaciones): antes un fallo al
   // guardar equivalentes, horas o ajustes no se veía fuera del paso de la semana.
   const combinedSave = planLocked ? 'locked' : saveState === 'error' || notesSaveState === 'error' ? 'error' : saveState === 'saving' || notesSaveState === 'saving' || notesSaveState === 'editing' ? 'saving' : 'saved'
-  const syncLabel = <span className={'sync-label ' + (combinedSave === 'saving' ? 'loading' : combinedSave === 'error' ? 'demo' : 'online')}>{combinedSave === 'saving' ? '● Guardando…' : combinedSave === 'error' ? '● Error al guardar' : combinedSave === 'locked' ? '● Publicado · sólo lectura' : plan ? '● Sincronizado' : '● Sin plan en borrador'}</span>
+  const syncLabel = <span className={'sync-label ' + (combinedSave === 'saving' ? 'loading' : combinedSave === 'error' ? 'demo' : 'online')}>{combinedSave === 'saving' ? '● Guardando…' : combinedSave === 'error' ? '● Error al guardar' : combinedSave === 'locked' ? (plan?.status === 'CANCELLED' ? '● Cancelado · sólo lectura' : '● Publicado · sólo lectura') : plan ? '● Sincronizado' : '● Sin plan en borrador'}</span>
 
   const openPicker = (mealType, day = null) => { if (planLocked) return; setPickerSearch(pendingRecipeName || ''); setPickerRestriction(''); setPickerDetail(null); if (pendingRecipeName) onConsumeRecipeName?.(); setPickerTarget({ mealType, day }) }
   const closePicker = () => { setPickerTarget(null); setPickerDetail(null) }
@@ -999,34 +1046,67 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     </div>
   }
 
+  // Tarjeta de un plan en los listados: fotos de sus recetas, estado, energía y avance. Todo plan se
+  // abre en el constructor (los cerrados en sólo lectura); de uno cerrado sale una versión nueva.
+  const renderPlanCard = (item, { withPatient = false } = {}) => {
+    const { progress } = planProgress(item)
+    const editable = isEditablePlan(item)
+    const busy = planActionState === item.id
+    const slotsOfPlan = item.mealSlots || []
+    const planRecipes = [...new Map(slotsOfPlan.filter((slot) => slot.recipe).map((slot) => [slot.recipe.id, slot.recipe])).values()]
+    const days = new Set(slotsOfPlan.filter((slot) => slot.recipeId).map((slot) => slot.dayOfWeek)).size
+    const open = () => (withPatient ? openPlanFromHub(item) : openPlan(item))
+    const cancel = () => { if (window.confirm('¿Cancelar este plan? Podrás reactivarlo después.')) changePlanStatus(item, 'cancel') }
+    const meta = [withPatient && `v${item.version}`, item.targetKcal ? `${item.targetKcal.toLocaleString('es-MX')} kcal/día` : 'Sin dietocálculo', `${days}/7 días con recetas`, item.publishedAt ? `publicado ${planUpdatedLabel(item.publishedAt)}` : `actualizado ${planUpdatedLabel(item.updatedAt || item.createdAt)}`].filter(Boolean)
+    return <article className={'plan-card-item pc-' + (STATUS_TONE[item.status] || 'muted')} key={item.id}>
+      <button type="button" className="pc-main" disabled={busy} onClick={open} title={editable ? 'Continuar este plan' : 'Abrir el plan completo (sólo lectura)'}>
+        <span className="pc-photos" aria-hidden="true">
+          {planRecipes.slice(0, 4).map((recipe, index) => <span key={recipe.id}>{recipeThumb(recipe, index, 'pc-thumb')}</span>)}
+          {planRecipes.length > 4 && <span className="pc-more">+{planRecipes.length - 4}</span>}
+          {planRecipes.length === 0 && <span className="pc-empty">🥗</span>}
+        </span>
+        <span className="pc-info">
+          <span className="pc-title"><b>{withPatient ? `${item.patient.firstName} ${item.patient.lastName}` : `Plan v${item.version}`}</b><i className={'pc-status ' + (STATUS_TONE[item.status] || 'muted')}>{PLAN_STATUS_LABEL[item.status] || item.status}</i></span>
+          <small>{meta.join(' · ')}</small>
+          {item.goal && <small className="pc-goal">{item.goal}</small>}
+        </span>
+      </button>
+      {editable && <div className="plan-card-progress"><div className="pp-bar"><i style={{ width: `${progress}%` }} /></div><b>{progress}%</b></div>}
+      <div className="plan-card-actions">
+        <button type="button" className={editable ? 'primary' : 'secondary'} disabled={busy} onClick={open}>{busy ? 'Abriendo…' : editable ? `Continuar en ${steps[resumeStep(item)]}` : 'Abrir plan'}</button>
+        {!editable && <button type="button" className="secondary" disabled={busy} onClick={() => duplicatePlan(item)} title="Copia este plan a un borrador nuevo para cambiarlo; el original no se toca">Editar como nueva versión</button>}
+        {item.status === 'PUBLISHED' && <button type="button" className="link-button" disabled={busy} onClick={() => quickLook(item)}>Vista rápida</button>}
+        {editable && <button type="button" className="link-button pc-cancel" disabled={busy} onClick={cancel}>Cancelar</button>}
+        {item.status === 'CANCELLED' && <button type="button" className="link-button" disabled={busy} onClick={() => changePlanStatus(item, 'reactivate')}>Reactivar</button>}
+      </div>
+    </article>
+  }
+  const planGroups = (items) => [
+    ['pending', 'En curso', items.filter((item) => isEditablePlan(item))],
+    ['done', 'Guardados y asignados', items.filter((item) => item.status === 'PUBLISHED' || item.status === 'SUPERSEDED')],
+    ['cancelled', 'Cancelados', items.filter((item) => item.status === 'CANCELLED')],
+  ]
+
   const renderHub = () => {
     const query = hubQuery.trim().toLowerCase()
     const filtered = hubPlans.filter((item) => !query || `${item.patient.firstName} ${item.patient.lastName}`.toLowerCase().includes(query))
-    const groups = [
-      ['Pendientes', filtered.filter((item) => item.status === 'DRAFT' || item.status === 'READY')],
-      ['Realizados', filtered.filter((item) => item.status === 'PUBLISHED' || item.status === 'SUPERSEDED')],
-      ['Cancelados', filtered.filter((item) => item.status === 'CANCELLED')],
-    ]
+    const allGroups = planGroups(filtered)
+    const groups = hubFilter === 'all' ? allGroups : allGroups.filter(([key]) => key === hubFilter)
     return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio">
       <ModuleHeader eyebrow="PLANIFICACIÓN · CONSTRUCTOR" title="Planes alimenticios" subtitle="Todos los planes de tu consulta: retoma un borrador donde lo dejaste o revisa los anteriores." action={<button className="primary" onClick={() => setChooserOpen(true)}><span>+</span> Nuevo plan</button>} />
-      <div className="hub-toolbar panel"><div className="search-field">⌕ <input value={hubQuery} onChange={(event) => setHubQuery(event.target.value)} placeholder="Buscar por paciente..." /></div></div>
+      <div className="hub-toolbar panel"><div className="search-field">⌕ <input value={hubQuery} onChange={(event) => setHubQuery(event.target.value)} placeholder="Buscar por paciente..." /></div>
+        <div className="hub-filters" role="tablist" aria-label="Filtrar planes">{[['all', 'Todos', filtered.length], ...allGroups.map(([key, label, items]) => [key, label, items.length])].map(([key, label, count]) => <button type="button" role="tab" aria-selected={hubFilter === key} className={hubFilter === key ? 'active' : ''} key={key} onClick={() => setHubFilter(key)}>{label}<i>{count}</i></button>)}</div>
+      </div>
       {/* En escritorio el contenido no scrollea como página: sólo este cuerpo lo hace (ver el layout
           de altura completa en globals.css). Sin él, los grupos de planes se recortaban abajo. */}
       <div className="module-body plans-scroll">
       {hubState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando planes…</h3></div>}
       {hubState === 'error' && <div className="form-error">⚠ No se pudieron cargar los planes.</div>}
       {hubState === 'ready' && filtered.length === 0 && <div className="result-empty panel"><span>◌</span><h3>{query ? 'Sin planes de ese paciente' : 'Todavía no hay planes'}</h3><p>Crea el primero con "+ Nuevo plan".</p></div>}
-      {hubState === 'ready' && groups.map(([title, items]) => items.length > 0 && <section className="plans-group" key={title}>
+      {hubState === 'ready' && filtered.length > 0 && groups.every(([, , items]) => items.length === 0) && <div className="result-empty panel"><span>◌</span><h3>Nada en esta pestaña</h3><p>Prueba con “Todos”.</p></div>}
+      {hubState === 'ready' && groups.map(([key, title, items]) => items.length > 0 && <section className="plans-group" key={key}>
         <p className="eyebrow">{title.toUpperCase()} · {items.length}</p>
-        <div className="plan-cards">{items.map((item) => { const { progress, nextStep } = planProgress(item); const editable = item.status === 'DRAFT' || item.status === 'READY'; return <article className={'plan-card-item' + (editable ? ' editable' : '')} key={item.id}>
-          <div className="plan-card-info"><b>{item.patient.firstName} {item.patient.lastName}</b><small>{PLAN_STATUS_LABEL[item.status] || item.status} · v{item.version} · {editable ? `${nextStep} pendiente · ` : ''}actualizado {planUpdatedLabel(item.updatedAt || item.createdAt)}</small></div>
-          <div className="plan-card-progress"><div className="pp-bar"><i style={{ width: `${progress}%` }} /></div><b>{progress}%</b></div>
-          <div className="plan-card-actions">
-            <button className="secondary" disabled={planActionState === item.id} onClick={() => openPlanFromHub(item)}>{editable ? 'Continuar' : 'Ver menú'}</button>
-            {editable && <button className="link-button" disabled={planActionState === item.id} onClick={() => changePlanStatus(item, 'cancel')}>Cancelar</button>}
-            {item.status === 'CANCELLED' && <button className="link-button" disabled={planActionState === item.id} onClick={() => changePlanStatus(item, 'reactivate')}>Reactivar</button>}
-          </div>
-        </article> })}</div>
+        <div className="plan-cards">{items.map((item) => renderPlanCard(item, { withPatient: true }))}</div>
       </section>)}
       </div>
       {chooserOpen && <div className="modal-backdrop" onClick={() => setChooserOpen(false)}><div className="modal" onClick={(event) => event.stopPropagation()}>
@@ -1049,25 +1129,13 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   if (mode === 'hub') return renderHub()
 
   const renderPlansOverview = () => {
-    const groups = [
-      ['Pendientes', plans.filter((item) => item.status === 'DRAFT' || item.status === 'READY')],
-      ['Realizados', plans.filter((item) => item.status === 'PUBLISHED' || item.status === 'SUPERSEDED')],
-      ['Cancelados', plans.filter((item) => item.status === 'CANCELLED')],
-    ]
+    const groups = planGroups(plans)
     return <div className="plans-overview">
-      <div className="plans-overview-head"><div><p className="eyebrow">PLANIFICACIÓN · PLANES</p><h1>Planes de {patientName}</h1><p className="subtitle">Retoma un borrador donde lo dejaste o revisa los planes anteriores.</p></div><button className="primary" onClick={() => createPlan()} disabled={createPlanState === 'creating'}><span>+</span> {createPlanState === 'creating' ? 'Creando…' : 'Nuevo plan'}</button></div>
+      <div className="plans-overview-head"><div><p className="eyebrow">PLANIFICACIÓN · PLANES</p><h1>Planes alimenticios</h1><p className="subtitle">Retoma un borrador donde lo dejaste, abre uno entregado o haz una versión nueva a partir de él.</p></div><button className="primary" onClick={() => createPlan()} disabled={createPlanState === 'creating'}><span>+</span> {createPlanState === 'creating' ? 'Creando…' : 'Nuevo plan'}</button></div>
       {plans.length === 0 && <div className="result-empty panel"><span>◌</span><h3>Sin planes todavía</h3><p>Crea el primer plan de {patientName}.</p></div>}
-      {groups.map(([title, items]) => items.length > 0 && <section className="plans-group" key={title}>
+      {groups.map(([key, title, items]) => items.length > 0 && <section className="plans-group" key={key}>
         <p className="eyebrow">{title.toUpperCase()} · {items.length}</p>
-        <div className="plan-cards">{items.map((item) => { const { progress, nextStep } = planProgress(item); const editable = item.status === 'DRAFT' || item.status === 'READY'; return <article className={'plan-card-item' + (editable ? ' editable' : '')} key={item.id}>
-          <div className="plan-card-info"><b>{PLAN_STATUS_LABEL[item.status] || item.status} · v{item.version}</b><small>{editable ? `${nextStep} pendiente · ` : ''}actualizado {planUpdatedLabel(item.updatedAt || item.createdAt)}</small></div>
-          <div className="plan-card-progress"><div className="pp-bar"><i style={{ width: `${progress}%` }} /></div><b>{progress}%</b></div>
-          <div className="plan-card-actions">
-            <button className="secondary" disabled={planActionState === item.id} onClick={() => openPlan(item)}>{editable ? 'Continuar' : 'Ver menú'}</button>
-            {editable && <button className="link-button" disabled={planActionState === item.id} onClick={() => changePlanStatus(item, 'cancel')}>Cancelar</button>}
-            {item.status === 'CANCELLED' && <button className="link-button" disabled={planActionState === item.id} onClick={() => changePlanStatus(item, 'reactivate')}>Reactivar</button>}
-          </div>
-        </article> })}</div>
+        <div className="plan-cards">{items.map((item) => renderPlanCard(item))}</div>
       </section>)}
     </div>
   }
@@ -1077,22 +1145,37 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Selecciona a quién le vas a diseñar el plan para comenzar.</p><select value="" onChange={(e) => onSelectPatient?.(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></div>
   </div></AppChrome>
 
-  return <AppChrome active="Constructor de plan" setActive={setActive}><div className={'content plan-studio' + (view === 'list' ? '' : ' plan-wizard')}>{view === 'list' ? <><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><button className="back-button" onClick={() => { setMode('hub'); loadHub() }}>← Todos los planes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>{view === 'list' ? `${plans.length} plan(es) · el borrador se guarda solo` : planLocked ? 'Plan guardado y asignado · sólo lectura' : 'Borrador · Se guarda automáticamente'}</span></div></div><label className="patient-switch">Paciente<select value={activePatientId || ''} onChange={(e) => { const nextId = e.target.value; if (!nextId) return; setActivePatientId(nextId); setMode('patient'); onSelectPatient?.(nextId) }}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>{renderPlansOverview()}</> : <>
+  return <AppChrome active="Constructor de plan" setActive={setActive}><div className={'content plan-studio' + (view === 'list' ? '' : ' plan-wizard')}>{view === 'list' ? <><div className="plan-header plan-list-header">
+      <div className="plan-header-who">
+        <button type="button" className="plan-header-back" onClick={() => { setMode('hub'); loadHub() }} title="Todos los planes" aria-label="Volver a todos los planes">←</button>
+        <span className="person-avatar coral">{patientInitials}</span>
+        <div><b>{patientName}</b><small>{plans.length === 1 ? '1 plan' : `${plans.length} planes`} · el borrador se guarda solo</small></div>
+      </div>
+      <div className="plan-header-tools"><button type="button" className="link-button" onClick={() => setActive('Pacientes')}>Pacientes</button><label className="patient-switch">Paciente<select value={activePatientId || ''} onChange={(e) => { const nextId = e.target.value; if (!nextId) return; setActivePatientId(nextId); setMode('patient'); onSelectPatient?.(nextId) }}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>
+    </div>{renderPlansOverview()}</> : <>
     {/* Una sola barra: quién es la paciente, los pasos y el estado. Antes eran dos tarjetas que
         se comían ~220 px de alto y dejaban poco espacio al paso. */}
     <div className="plan-header">
       <div className="plan-header-who">
         <button type="button" className="plan-header-back" onClick={() => setView('list')} title={`Planes de ${patientName}`} aria-label={`Volver a los planes de ${patientName}`}>←</button>
         <span className="person-avatar coral">{patientInitials}</span>
-        <div><b>{patientName}</b><small>{planLocked ? 'Guardado y asignado · sólo lectura' : 'Borrador · se guarda solo'}</small></div>
+        <div><b>{patientName}</b><small>{plan ? `Plan v${plan.version} · ` : ''}{plan?.status === 'CANCELLED' ? 'Cancelado' : planLocked ? 'Publicado' : 'Borrador · se guarda solo'}</small></div>
       </div>
-      <nav className="plan-steps" ref={stepsNavRef}>{steps.map((x, i) => <button className={step === i ? 'active' : ''} aria-current={step === i ? 'step' : undefined} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</nav>
+      <nav className="plan-steps" ref={stepsNavRef}>{steps.map((x, i) => <button className={(step === i ? 'active' : '') + (stepDone[i] ? ' done' : '')} aria-current={step === i ? 'step' : undefined} onClick={() => selectStep(i)} key={x} title={stepDone[i] ? `${x} · listo` : x}><span>{stepDone[i] && step !== i ? '✓' : i + 1}</span>{x}</button>)}</nav>
       <div className="plan-header-tools">{syncLabel}</div>
     </div>
 
     <div className="plan-body">
 
-    {planLocked && <div className="eq-notice plan-locked-notice"><b>Este plan ya está guardado y asignado: es de sólo lectura.</b> El menú quedó congelado; para cambiarlo crea un plan nuevo. {step !== STEP.DELIVERY && <button type="button" className="link-button" onClick={() => selectStep(STEP.DELIVERY)}>Ir a Guardar</button>}<button type="button" className="link-button" onClick={() => setView('list')}>Ver los planes de la paciente</button></div>}
+    {planLocked && <div className="eq-notice plan-locked-notice">
+      <span className="plan-locked-icon" aria-hidden="true">{plan.status === 'CANCELLED' ? '⏸' : '🔒'}</span>
+      <div><b>{plan.status === 'CANCELLED' ? 'Este plan está cancelado.' : `Plan guardado y asignado${plan.publishedAt ? ` el ${new Date(plan.publishedAt).toLocaleDateString('es-MX', { day: 'numeric', month: 'long' })}` : ''}.`}</b> <span>{plan.status === 'CANCELLED' ? 'Puedes revisarlo; reactívalo para seguir con él o haz una versión nueva.' : 'Puedes revisar todos los pasos; para cambiar algo, haz una versión nueva (el original se conserva tal cual se entregó).'}</span></div>
+      <div className="plan-locked-actions">
+        <button type="button" className="primary" disabled={planActionState === plan.id} onClick={() => duplicatePlan(plan)}>{planActionState === plan.id ? 'Creando…' : 'Editar como nueva versión'}</button>
+        {plan.status === 'CANCELLED' && <button type="button" className="secondary" onClick={reactivateOpenPlan}>Reactivar</button>}
+        {plan.publishedAt && plan.status !== 'CANCELLED' && step !== STEP.DELIVERY && <button type="button" className="link-button" onClick={() => selectStep(STEP.DELIVERY)}>PDF y envío</button>}
+      </div>
+    </div>}
 
     {plan?.consultation && (() => {
       const ex = readExpediente(plan)
@@ -1226,11 +1309,11 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       {renderPicker()}
     </>}
 
-    {step === STEP.DELIVERY && <DocumentPage setActive={setActive} patientId={activePatientId} planId={plan?.id || null} embedded onPublished={handlePublished} />}
+    {step === STEP.DELIVERY && <DocumentPage key={`${plan?.id}-${plan?.status === 'CANCELLED'}`} setActive={setActive} patientId={activePatientId} planId={plan?.id || null} embedded onPublished={handlePublished} />}
 
     </div>
 
-    <div className="wizard-footer"><button className="secondary" onClick={() => selectStep(Math.max(0, step - 1))}>← Anterior</button><span>{combinedSave === 'saving' ? 'Guardando…' : combinedSave === 'error' ? <>Error al guardar los últimos cambios · <button type="button" className="link-button" onClick={retrySave}>Reintentar</button></> : combinedSave === 'locked' ? 'Plan publicado · sólo lectura' : 'Guardado automáticamente'}</span><button className="primary" style={step === STEP.DELIVERY ? { visibility: 'hidden' } : undefined} disabled={step === STEP.DELIVERY} onClick={() => selectStep(Math.min(step + 1, STEP.DELIVERY))}>Siguiente <span>→</span></button></div>
+    <div className="wizard-footer"><button className="secondary" onClick={() => selectStep(Math.max(0, step - 1))}>← Anterior</button><span>{combinedSave === 'saving' ? 'Guardando…' : combinedSave === 'error' ? <>Error al guardar los últimos cambios · <button type="button" className="link-button" onClick={retrySave}>Reintentar</button></> : combinedSave === 'locked' ? (plan?.status === 'CANCELLED' ? 'Plan cancelado · sólo lectura' : 'Plan publicado · sólo lectura') : 'Guardado automáticamente'}</span><button className="primary" style={step === STEP.DELIVERY ? { visibility: 'hidden' } : undefined} disabled={step === STEP.DELIVERY} onClick={() => selectStep(Math.min(step + 1, STEP.DELIVERY))}>Siguiente <span>→</span></button></div>
   </>}
   </div>
   {renderPreviewModal()}
