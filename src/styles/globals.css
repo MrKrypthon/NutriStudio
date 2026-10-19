@@ -1803,3 +1803,33 @@ button.recall-pick{width:100%;border:0;background:none;font:inherit;color:inheri
 .access-log-what b{display:block;font-size:12px}
 .access-log-device{color:var(--muted);font-size:11px;text-align:right}
 @media(max-width:640px){.access-log-row{grid-template-columns:1fr}.access-log-device{text-align:left}}
+/* Importar resultados de laboratorio (Bioquímico) */
+.lab-heading-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.lab-import-modal{width:min(980px,calc(100vw - 32px));max-height:calc(100vh - 48px);display:flex;flex-direction:column}
+.lab-import-progress{display:flex;gap:14px;align-items:flex-start;padding:18px;border-radius:12px;background:var(--soft,#f4f6f3)}
+.lab-import-progress b{display:block;font-size:13px}
+.lab-import-progress small{display:block;color:var(--muted);margin:4px 0 10px;font-size:11px}
+.lab-import-summary{display:flex;flex-wrap:wrap;gap:6px 18px;align-items:baseline;font-size:12px;margin-bottom:10px}
+.lab-import-warn{color:#9a6a00}
+.lab-import-table{overflow:auto;border:1px solid var(--line);border-radius:12px;flex:1;min-height:0}
+.lab-import-group>.eyebrow{margin:0;padding:10px 12px 4px;background:#fafbf9;border-top:1px solid var(--line)}
+.lab-import-group:first-of-type>.eyebrow{border-top:0}
+.lab-import-row{display:grid;grid-template-columns:34px minmax(180px,1.6fr) 90px 100px 120px 110px;gap:8px;align-items:start;padding:7px 12px}
+.lab-import-row input:not([type=checkbox]),.lab-import-row select{width:100%;min-width:0;height:32px;padding:4px 8px;font-size:12px;border:1px solid var(--line);border-radius:7px;background:#fff}
+.lab-import-head{position:sticky;top:0;z-index:1;background:#fff;border-bottom:1px solid var(--line);font:600 10px 'DM Sans';color:var(--muted);text-transform:uppercase;letter-spacing:.3px;align-items:center}
+.lab-import-check{display:flex;align-items:center;justify-content:center;height:32px}
+.lab-import-name small{display:block;margin-top:3px;font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lab-import-existing{color:#9a6a00 !important;white-space:normal !important}
+.lab-import-existing label{display:inline-flex;gap:5px;align-items:center;font-weight:400;font-size:10px;margin:0}
+.lab-import-row.excluded{opacity:.45}
+.lab-import-text-toggle{margin-top:10px;align-self:flex-start}
+.lab-import-text{max-height:180px;overflow:auto;background:#f6f7f5;border-radius:8px;padding:10px;font-size:10px;white-space:pre-wrap}
+.lab-import-attach{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:12px}
+.lab-import-notice{padding:10px 14px;border-radius:10px;background:color-mix(in srgb,var(--green) 9%,#fff);color:var(--green);font-size:12px}
+.modal .lab-import-row label,.modal .lab-import-attach,.modal .lab-import-existing label{margin:0;font-size:inherit}
+@media(max-width:760px){.lab-import-row{grid-template-columns:30px 1fr 1fr}.lab-import-head{display:none}.lab-import-name{grid-column:2 / 4}}
+.modal .lab-import-existing label,.modal label.lab-import-attach,.modal label.lab-import-check{display:flex;flex-direction:row;align-items:center;gap:6px;margin:0;font-weight:500;color:inherit}
+.modal label.lab-import-attach{font-size:12px;margin-top:12px}
+.modal .lab-import-existing label{font-size:10px;color:#9a6a00}
+.modal .lab-import-row input[type=checkbox],.modal .lab-import-attach input[type=checkbox],.modal .lab-import-existing input[type=checkbox]{width:15px;height:15px;margin:0;padding:0;flex:0 0 auto}
+.modal .lab-import-row input:not([type=checkbox]),.modal .lab-import-row select{margin-top:0;padding:4px 8px;height:32px;display:block}

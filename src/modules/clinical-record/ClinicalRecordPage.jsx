@@ -16,6 +16,8 @@ import { shouldAutoClose } from '../../lib/consultationSession.js'
 import { SEX_OPTIONS, normalizeSex } from '../../lib/sex.js'
 import { mergeValues, splitUpdates } from '../../lib/patientFields.js'
 import { saveBlob } from '../../lib/download.js'
+import { interpretLab } from '../../lib/labs/interpret.js'
+import LabImportModal from './LabImportModal.jsx'
 import { deviceLabel } from '../../lib/device.js'
 import { planFileName } from '../../../server/domain/pdfTheme.js'
 
@@ -170,26 +172,6 @@ function Subsection({ groups, value, onChange }) {
   return <><SubTabs tabs={groups.map((g) => [g[0], g[1]])} value={active} onChange={onChange} /><div className="sub-body">{groups.find((g) => g[0] === active)?.[2]}</div></>
 }
 
-// Interpretación de un estudio frente a su rango de referencia: admite "70-100", "<200" o ">40".
-function interpretLab(value, range) {
-  const v = Number(String(value ?? '').replace(',', '.'))
-  if (!Number.isFinite(v) || v === 0 && String(value).trim() === '') return null
-  const r = String(range || '').trim()
-  let m = r.match(/^([<>])\s*(-?\d+(?:[.,]\d+)?)/)
-  if (m) {
-    const bound = Number(m[2].replace(',', '.'))
-    return m[1] === '<' ? (v < bound ? 'Normal' : 'Elevado') : (v > bound ? 'Normal' : 'Bajo')
-  }
-  m = r.match(/(-?\d+(?:[.,]\d+)?)\s*(?:-|–|a )\s*(-?\d+(?:[.,]\d+)?)/i)
-  if (m) {
-    const min = Number(m[1].replace(',', '.'))
-    const max = Number(m[2].replace(',', '.'))
-    if (v < min) return 'Bajo'
-    if (v > max) return 'Elevado'
-    return 'Normal'
-  }
-  return null
-}
 
 // Transcribes live via the browser's own Web Speech API (Chrome/Edge only) — no audio file is
 // ever recorded or uploaded, so this doesn't depend on the file-storage decision the project
@@ -971,6 +953,40 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     updateField('Estudios', [...labs, { ...labForm, status: interpretLab(labForm.value, labForm.range) || labForm.status, id: `${Date.now()}` }])
     setLabForm(null)
   }
+  // Importar resultados desde un PDF o una foto (lectura local: texto del PDF u OCR). Lo confirmado
+  // en la revisión se agrega a "Estudios"; un estudio que ya estaba se reemplaza si así se eligió.
+  const labFileRef = useRef(null)
+  const [labImport, setLabImport] = useState(null)
+  const [labNotice, setLabNotice] = useState('')
+  const pickLabFile = () => { setLabNotice(''); labFileRef.current?.click() }
+  const onLabFile = (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (file) setLabImport({ file, canAttach: Boolean(consultation) && (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) })
+  }
+  const analyzeAttachment = async (attachment) => {
+    setLabNotice(''); setUploadError('')
+    try {
+      const blob = await labAttachmentsApi.downloadBlob(attachment.id)
+      setLabImport({ file: new File([blob], attachment.fileName || 'analisis.pdf', { type: 'application/pdf' }), canAttach: false })
+    } catch (error) { setUploadState('error'); setUploadError(error.message || 'No se pudo abrir el PDF para analizarlo.') }
+  }
+  const applyLabImport = async (rows, { attach, studyDate }) => {
+    let next = [...labs]
+    let added = 0
+    let replaced = 0
+    rows.forEach((row, index) => {
+      const entry = { name: row.name.trim(), value: String(row.value).trim(), unit: row.unit.trim(), range: row.range.trim(), status: row.status, source: 'pdf', ...(studyDate ? { date: studyDate } : {}) }
+      const at = row.replace ? next.findIndex((lab) => String(lab.name || '').trim().toLowerCase() === entry.name.toLowerCase()) : -1
+      if (at >= 0) { next[at] = { ...next[at], ...entry }; replaced += 1 }
+      else { next = [...next, { ...entry, id: `${Date.now()}-${index}` }]; added += 1 }
+    })
+    updateField('Estudios', next)
+    if (attach && labImport?.file) await uploadLabAttachment(labImport.file)
+    setLabImport(null)
+    setSub('estudios')
+    setLabNotice([added && `${added} estudio${added === 1 ? '' : 's'} agregado${added === 1 ? '' : 's'}`, replaced && `${replaced} actualizado${replaced === 1 ? '' : 's'}`].filter(Boolean).join(' y ') + ' desde el PDF. Revisa la lista: se guarda sola.')
+  }
   const removeLab = (id) => updateField('Estudios', labs.filter((lab) => lab.id !== id))
   const updateLabValue = (id, value) => updateField('Estudios', labs.map((lab) => (lab.id === id ? { ...lab, value, status: (lab.range ? interpretLab(value, lab.range) : null) || lab.status } : lab)))
   const updateLabStatus = (id, status) => updateField('Estudios', labs.map((lab) => (lab.id === id ? { ...lab, status } : lab)))
@@ -1242,11 +1258,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
       : tab === 'Bioquímico' ? <div className="clinical-layout">
         <section className="record-main panel">
-          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 3 DE 12</p><h1>Bioquímico</h1><p className="subtitle">Los estudios son opcionales en la primera consulta: se sugieren y suelen traerse en la segunda. Registra los valores que traiga el paciente.</p></div><button className="primary" onClick={() => { setSub('estudios'); openLabForm() }}>+ Agregar estudio</button></div>
+          <div className="section-heading"><div><p className="eyebrow">SECCIÓN 3 DE 12</p><h1>Bioquímico</h1><p className="subtitle">Los estudios son opcionales en la primera consulta: se sugieren y suelen traerse en la segunda. Registra los valores que traiga el paciente.</p></div><div className="lab-heading-actions"><button className="secondary" onClick={() => { setSub('estudios'); pickLabFile() }} title="Lee el PDF o la foto de los resultados y propone los valores para revisarlos">⇪ Importar PDF</button><button className="primary" onClick={() => { setSub('estudios'); openLabForm() }}>+ Agregar estudio</button></div><input ref={labFileRef} type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp" hidden onChange={onLabFile} /></div>
           <Subsection value={sub} onChange={setSub} groups={[
             ['estudios', 'Solicitud y estudios', <div className="sub-stack" key="est">
               <FormCard title="Solicitud de estudios" fields={['Estudios solicitados|*', 'Notas de bioquímico|*']} values={currentValues} onFieldChange={updateField} />
-              {!labs.length && <div className="lab-empty"><span>▧</span><b>Sin estudios adjuntos</b><small>Registra los resultados manualmente con "+ Agregar estudio".</small></div>}
+              {labNotice && <div className="lab-import-notice">✓ {labNotice}</div>}
+              {!labs.length && <div className="lab-empty"><span>▧</span><b>Sin estudios registrados</b><small>Importa el PDF de resultados con «⇪ Importar PDF» o captúralos con «+ Agregar estudio».</small></div>}
               {labForm && <div className="diagnosis-form panel">
                 <p className="eyebrow">NUEVO ESTUDIO</p>
                 <div className="form-grid three">
@@ -1259,13 +1276,13 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
                 {interpretLab(labForm.value, labForm.range) && <p className="lab-hint">Interpretación automática según el rango: <b>{interpretLab(labForm.value, labForm.range)}</b>. Puedes cambiarla en “Estado”.</p>}
                 <div className="modal-actions"><button type="button" className="secondary" onClick={closeLabForm}>Cancelar</button><button className="primary" disabled={!labForm.name} onClick={saveLab}>Guardar estudio</button></div>
               </div>}
-              {labsEvaluated.length > 0 && <div className="lab-list">{labsEvaluated.map((lab) => <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><select className={'lab-status lab-status-' + (LAB_STATUS_TONE[lab.status] || 'pendiente')} value={lab.status} onChange={(e) => updateLabStatus(lab.id, e.target.value)} title="Estado del estudio">{LAB_STATUSES.map((s) => <option value={s} key={s}>{s}</option>)}</select><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div>)}</div>}
+              {labsEvaluated.length > 0 && <div className="lab-list">{labsEvaluated.map((lab) => <div className="lab-row" key={lab.id}><div><b>{lab.name}</b><small>{lab.unit}{lab.range ? ` · ref. ${lab.range}` : ''}{lab.date ? ` · toma ${lab.date.split('-').reverse().join('/')}` : ''}{lab.source === 'pdf' ? ' · del PDF' : ''}</small></div><input value={lab.value} onChange={(e) => updateLabValue(lab.id, e.target.value)} /><select className={'lab-status lab-status-' + (LAB_STATUS_TONE[lab.status] || 'pendiente')} value={lab.status} onChange={(e) => updateLabStatus(lab.id, e.target.value)} title="Estado del estudio">{LAB_STATUSES.map((s) => <option value={s} key={s}>{s}</option>)}</select><button type="button" className="link-button" onClick={() => removeLab(lab.id)}>Quitar</button></div>)}</div>}
             </div>],
             ['adjuntos', 'Adjuntos PDF', <div className="sub-stack" key="adj">
-              <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName} y captura sus valores arriba a mano; todavía no hay lectura automática.</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
+              <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName}; con «Analizar» se leen sus valores y se proponen para «Estudios».</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
               {uploadState === 'error' && <div className="form-error">⚠ {uploadError}</div>}
               {!attachments.length && <div className="lab-empty"><span>▤</span><b>Sin PDF adjuntos</b><small>Sube el estudio en PDF que te compartió el paciente.</small></div>}
-              {attachments.length > 0 && <div className="lab-list">{attachments.map((attachment) => <div className="lab-row attachment-row" key={attachment.id}><div><b>{attachment.fileName}</b><small>{(attachment.fileSize / 1024).toFixed(0)} KB · subido por {attachment.uploadedBy?.name || '—'}</small></div><button type="button" className="link-button" onClick={() => downloadLabAttachment(attachment)}>Ver</button><button type="button" className="link-button" onClick={() => removeLabAttachment(attachment)}>Quitar</button></div>)}</div>}
+              {attachments.length > 0 && <div className="lab-list">{attachments.map((attachment) => <div className="lab-row attachment-row" key={attachment.id}><div><b>{attachment.fileName}</b><small>{(attachment.fileSize / 1024).toFixed(0)} KB · subido por {attachment.uploadedBy?.name || '—'}</small></div><button type="button" className="link-button" onClick={() => downloadLabAttachment(attachment)}>Ver</button><button type="button" className="link-button" disabled={locked} onClick={() => analyzeAttachment(attachment)} title="Leer los valores del PDF y proponerlos para Estudios">Analizar</button><button type="button" className="link-button" onClick={() => removeLabAttachment(attachment)}>Quitar</button></div>)}</div>}
             </div>],
           ]} />
         </section>
@@ -1674,6 +1691,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       <div className="wizard-footer"><NavButton className="secondary nav-btn" disabled={TABS.indexOf(tab) === 0} onClick={() => setTab(TABS[TABS.indexOf(tab) - 1])}>← Anterior</NavButton><span>{saveLabel}</span><NavButton className="primary nav-btn" disabled={TABS.indexOf(tab) === TABS.length - 1} onClick={() => setTab(TABS[TABS.indexOf(tab) + 1])}>Siguiente <span>→</span></NavButton></div>
     </fieldset>}
   </div>
+  {labImport && <LabImportModal file={labImport.file} existing={labs} canAttach={labImport.canAttach} onApply={applyLabImport} onClose={() => setLabImport(null)} />}
   {accessLog && <div className="modal-backdrop" onClick={() => setAccessLog(null)}><div className="modal access-log-modal" onClick={(e) => e.stopPropagation()}>
     <div className="modal-head"><div><p className="eyebrow">REGISTRO DE ACCESOS</p><h2>¿Quién ha consultado este expediente?</h2><span className="modal-subtitle">Cada apertura del expediente o del historial (agrupadas por media hora) y cada PDF generado o descargado, con usuario, fecha, hora y equipo. Las ediciones están en la línea de tiempo del paciente.</span></div><button type="button" aria-label="Cerrar" onClick={() => setAccessLog(null)}>×</button></div>
     {accessLog.state === 'loading' && <p className="muted">Cargando…</p>}

@@ -4,6 +4,8 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "postinstall": "node tools/copy-ocr-assets.mjs",
+    "predev": "node tools/copy-ocr-assets.mjs",
     "dev": "vite",
     "api": "node server/index.js",
     "dev:all": "concurrently -k -n API,WEB -c green,blue \"npm run api\" \"VITE_API_URL=http://localhost:3001/api/v1 npm run dev\"",
@@ -27,20 +29,25 @@
     "db:import-base": "node prisma/import-base-alimentos.js",
     "predev:all": "node prisma/sync-dev.js",
     "db:sync": "node prisma/sync-dev.js",
-    "db:migrate-patient-sections": "node prisma/tools/migrate-patient-sections.js"
+    "db:migrate-patient-sections": "node prisma/tools/migrate-patient-sections.js",
+    "prebuild": "node tools/copy-ocr-assets.mjs"
   },
   "dependencies": {
     "@fastify/cors": "latest",
     "@prisma/client": "^6.19.0",
+    "@tesseract.js-data/eng": "^1.0.0",
+    "@tesseract.js-data/spa": "^1.0.0",
     "@vitejs/plugin-react": "latest",
     "bcryptjs": "^3.0.3",
     "dotenv": "^16.4.7",
     "fastify": "latest",
     "jsonwebtoken": "^9.0.3",
+    "pdfjs-dist": "^6.4.299",
     "pdfkit": "^0.17.2",
     "react": "latest",
     "react-dom": "latest",
     "recharts": "^3.10.1",
+    "tesseract.js": "^7.0.0",
     "vite": "latest"
   },
   "devDependencies": {
