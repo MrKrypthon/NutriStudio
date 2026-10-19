@@ -3,6 +3,8 @@ dist/
 storage/documents/*.pdf
 storage/logos/*
 storage/ingredients/*
+storage/lab-attachments/*
+*.traineddata
 .env
 *.local
 DIETOCALCULO.xlsx
@@ -29,3 +31,6 @@ prisma/data/link-smae-unmatched.json
 
 # Libro fuente del SMAE (escaneo con derechos de autor): se lee con prisma/tools/smae-libro/, no se versiona
 SMAE*.pdf
+
+# Motor y modelos del OCR: se copian de node_modules (tools/copy-ocr-assets.mjs)
+public/ocr/
