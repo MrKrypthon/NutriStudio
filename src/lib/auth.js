@@ -17,3 +17,8 @@ export function clearToken() {
 let unauthorizedHandler = null
 export function onUnauthorized(handler) { unauthorizedHandler = handler }
 export function notifyUnauthorized() { unauthorizedHandler?.() }
+
+// Igual para un 402 (suscripción vencida a media sesión): AuthProvider muestra la pantalla de pago.
+let subscriptionRequiredHandler = null
+export function onSubscriptionRequired(handler) { subscriptionRequiredHandler = handler }
+export function notifySubscriptionRequired() { subscriptionRequiredHandler?.() }

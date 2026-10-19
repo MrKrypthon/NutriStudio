@@ -87,6 +87,19 @@ model Practice {
   status             PracticeStatus      @default(ACTIVE)
   paymentMethod      PaymentMethod?
   paidUntil          DateTime?
+  // Suscripción con Stripe (fase 108). El estado es el de Stripe (trialing, active, past_due,
+  // canceled, unpaid, incomplete…); `paidUntil` sigue siendo la cobertura y el webhook la mueve al
+  // fin del periodo pagado. `stripeSyncedAt` guarda la fecha del último evento aplicado para no
+  // retroceder si Stripe entrega los avisos fuera de orden.
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  subscriptionStatus   String?
+  subscriptionInterval String?
+  cancelAtPeriodEnd    Boolean           @default(false)
+  stripeSyncedAt       DateTime?
+  // Cómo se abrió la cuenta (fase 109): 'ADMIN' (creada desde /admin) o 'GOOGLE' (registro con
+  // Google). Vacío = práctica anterior a las cuentas de pago, que no se bloquea por falta de pago.
+  signupSource         String?
   transactions       Transaction[]
   users              User[]
   patients           Patient[]
@@ -102,6 +115,9 @@ model Practice {
   smaeFoods          SmaeFood[]
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt
+
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
 }
 
 model User {
@@ -117,6 +133,10 @@ model User {
   licenseNumber  String?
   role           UserRole        @default(NUTRITIONIST)
   status         RecordStatus    @default(ACTIVE)
+  // Identificador para entrar sin correo (cuentas creadas desde /admin) y la cuenta de Google con
+  // la que entra (`sub` del token de Google). Únicos en todo el sistema; se valida al guardarlos.
+  loginId        String?
+  googleSub      String?
   consultations  Consultation[]
   auditEvents    AuditEvent[]
   labAttachments LabAttachment[]
@@ -125,6 +145,9 @@ model User {
 
   @@unique([practiceId, email])
   @@index([practiceId, status])
+  @@index([loginId])
+  @@index([googleSub])
+  @@index([email])
 }
 
 model Patient {
@@ -546,9 +569,20 @@ model Transaction {
   method      PaymentMethod?
   concept     String?
   occurredAt  DateTime       @default(now())
+  // Factura de Stripe que originó el pago (los registrados a mano en /admin no llevan).
+  stripeInvoiceId String?
   createdAt   DateTime       @default(now())
 
   @@index([practiceId, occurredAt])
+  @@index([stripeInvoiceId])
+}
+
+// Avisos (webhooks) de Stripe ya procesados: Stripe puede reenviar el mismo evento, y cada uno debe
+// aplicarse una sola vez.
+model StripeEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
 }
 
 // Cuenta de administrador del SaaS (independiente de los usuarios de cada práctica).
