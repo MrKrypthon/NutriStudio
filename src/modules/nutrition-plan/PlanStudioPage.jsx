@@ -104,6 +104,7 @@ const slotKey = (day, mealType) => `${day}:${mealType}`
 // Pasos del asistente, en orden, como en Avena: dietocálculo, porciones (equivalentes por grupo),
 // distribuye (reparto por tiempo, recetas, semana e indicaciones) y guardar.
 const STEP = { EVALUATION: 0, CALCULATION: 1, EQUIVALENTS: 2, DISTRIBUTION: 3, DELIVERY: 4 }
+const DIST_SECTIONS = [['dist-portions', 'Porciones y recetas'], ['dist-adequacy', 'Adecuación'], ['dist-week', 'Semana'], ['dist-micros', 'Micronutrientes'], ['dist-optionals', 'Indicaciones']]
 const PLAN_STATUS_LABEL = { DRAFT: 'Borrador', READY: 'Listo', PUBLISHED: 'Publicado', SUPERSEDED: 'Reemplazado', CANCELLED: 'Cancelado' }
 const PLAN_STEP_LABELS = ['Evaluación', 'Dietocálculo', 'Distribuye', 'Semana', 'Guardar']
 // Mismo cálculo de avance que el dashboard de Hoy: pasos Evaluación → Dietocálculo → recetas →
@@ -176,6 +177,25 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const patientName = patient ? `${patient.firstName} ${patient.lastName}` : 'Cargando…'
   const patientInitials = patient ? `${patient.firstName[0] || ''}${patient.lastName[0] || ''}` : '··'
   const [step, setStep] = useState(0)
+  const stepsNavRef = useRef(null)
+  // Secciones del paso Distribuye, con su barra fija para saltar entre ellas (la pantalla es larga).
+  const [distSection, setDistSection] = useState(DIST_SECTIONS[0][0])
+  const goToSection = (id) => window.document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  useEffect(() => {
+    if (step !== STEP.DISTRIBUTION) return undefined
+    // Se escucha en captura: en escritorio desplaza el cuerpo del paso; en el celular, la página.
+    const onScroll = () => {
+      const line = (window.document.querySelector('.dist-nav')?.getBoundingClientRect().bottom || 0) + 24
+      let current = DIST_SECTIONS[0][0]
+      for (const [id] of DIST_SECTIONS) { const element = window.document.getElementById(id); if (element && element.getBoundingClientRect().top <= line) current = id }
+      setDistSection(current)
+    }
+    window.document.addEventListener('scroll', onScroll, true)
+    onScroll()
+    return () => window.document.removeEventListener('scroll', onScroll, true)
+  }, [step])
+  // En el celular los pasos se desplazan de lado: el actual siempre a la vista.
+  useEffect(() => { stepsNavRef.current?.querySelector('.active')?.scrollIntoView({ block: 'nearest', inline: 'center' }) }, [step])
   const steps = ['Evaluación', 'Dietocálculo', 'Porciones', 'Distribuye', 'Guardar']
 
   const [patients, setPatients] = useState([])
@@ -995,9 +1015,9 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         <p className="eyebrow">MENÚS DEL PLAN</p>
         <button type="button" className={!activeMenu ? 'selected' : ''} onClick={() => setMenuTab('base')}>Menú base</button>
         {extraMenus.map((menu) => <button type="button" key={menu.id} className={activeMenu?.id === menu.id ? 'selected' : ''} onClick={() => setMenuTab(menu.id)}>{menu.name}</button>)}
-        {!planLocked && extraMenus.length < 4 && <button type="button" className="menu-add" onClick={addMenu}>+ Agregar menú</button>}
+        {!planLocked && extraMenus.length < 4 && <><button type="button" className="menu-add" onClick={addMenu} title={'Un plan puede llevar más de un menú (por ejemplo, días de entrenamiento con más energía): cada uno con sus días y su propio cuadro de equivalentes.'}>+ Agregar menú</button>{extraMenus.length === 0 && <small className="muted menu-hint">Para días con otra energía (entrenamiento, fin de semana).</small>}</>}
       </div>
-      {!activeMenu && <small className="muted">{extraMenus.length ? `El menú base aplica ${baseMenuDays.length ? `en ${baseMenuDays.map((day) => day.label.toLowerCase()).join(', ')}` : 'en ningún día: todos están asignados a otro menú'}.` : 'Un plan puede llevar más de un menú (por ejemplo, días de entrenamiento con más energía): cada uno con sus días y su propio cuadro de equivalentes.'}</small>}
+      {!activeMenu && extraMenus.length > 0 && <small className="muted">{`El menú base aplica ${baseMenuDays.length ? `en ${baseMenuDays.map((day) => day.label.toLowerCase()).join(', ')}` : 'en ningún día: todos están asignados a otro menú'}.`}</small>}
       {activeMenu && <div className="menu-settings">
         <label>Nombre<input value={activeMenu.name} disabled={planLocked} maxLength={40} onChange={(event) => updateMenu(activeMenu.id, { name: event.target.value })} /></label>
         <div className="menu-days"><small>Días que usan este menú</small><div>{DAYS.map((day) => <label key={day.n} className={(activeMenu.days || []).includes(day.n) ? 'on' : ''}><input type="checkbox" disabled={planLocked} checked={(activeMenu.days || []).includes(day.n)} onChange={() => toggleMenuDay(activeMenu, day.n)} />{day.label.slice(0, 3)}</label>)}</div></div>
@@ -1095,6 +1115,18 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Selecciona a quién le vas a diseñar el plan para comenzar.</p><select value="" onChange={(e) => onSelectPatient?.(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></div>
   </div></AppChrome>
 
+  return <AppChrome active="Constructor de plan" setActive={setActive}><div className={'content plan-studio' + (view === 'list' ? '' : ' plan-wizard')}>{view === 'list' ? <><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><button className="back-button" onClick={() => { setMode('hub'); loadHub() }}>← Todos los planes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>{view === 'list' ? `${plans.length} plan(es) · el borrador se guarda solo` : planLocked ? 'Plan guardado y asignado · sólo lectura' : 'Borrador · Se guarda automáticamente'}</span></div></div><label className="patient-switch">Paciente<select value={activePatientId || ''} onChange={(e) => { const nextId = e.target.value; if (!nextId) return; setActivePatientId(nextId); setMode('patient'); onSelectPatient?.(nextId) }}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>{renderPlansOverview()}</> : <>
+    {/* Una sola barra: quién es la paciente, los pasos y el estado. Antes eran dos tarjetas que
+        se comían ~220 px de alto y dejaban poco espacio al paso. */}
+    <div className="plan-header">
+      <div className="plan-header-who">
+        <button type="button" className="plan-header-back" onClick={() => setView('list')} title={`Planes de ${patientName}`} aria-label={`Volver a los planes de ${patientName}`}>←</button>
+        <span className="person-avatar coral">{patientInitials}</span>
+        <div><b>{patientName}</b><small>{planLocked ? 'Guardado y asignado · sólo lectura' : 'Borrador · se guarda solo'}</small></div>
+      </div>
+      <nav className="plan-steps" ref={stepsNavRef}>{steps.map((x, i) => <button className={step === i ? 'active' : ''} aria-current={step === i ? 'step' : undefined} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</nav>
+      <div className="plan-header-tools">{syncLabel}</div>
+    </div>
   return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><button className="back-button" onClick={() => { setMode('hub'); loadHub() }}>← Todos los planes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>{view === 'list' ? `${plans.length} plan(es) · el borrador se guarda solo` : planLocked ? 'Plan guardado y asignado · sólo lectura' : 'Borrador · Se guarda automáticamente'}</span></div></div><label className="patient-switch">Paciente<select value={activePatientId || ''} onChange={(e) => { const nextId = e.target.value; if (!nextId) return; setActivePatientId(nextId); setMode('patient'); onSelectPatient?.(nextId) }}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>{view === 'list' ? renderPlansOverview() : <><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
   return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio"><div className="patient-context"><button className="back-button" onClick={() => setActive('Pacientes')}>← Pacientes</button><button className="back-button" onClick={() => { setMode('hub'); loadHub() }}>← Todos los planes</button><div className="clinical-person"><span className="person-avatar coral">{patientInitials}</span><div><h2>{patientName}</h2><span>{view === 'list' ? `${plans.length} plan(es) · el borrador se guarda solo` : 'Borrador · Se guarda automáticamente'}</span></div></div><label className="patient-switch">Paciente<select value={activePatientId || ''} onChange={(e) => { const nextId = e.target.value; if (!nextId) return; flushNotes(); setActivePatientId(nextId); setMode('patient'); onSelectPatient?.(nextId) }}>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>{view === 'list' ? renderPlansOverview() : <><div className="plan-steps">{steps.map((x, i) => <button className={step === i ? 'active' : ''} onClick={() => selectStep(i)} key={x}><span>{i + 1}</span>{x}</button>)}</div>
 
@@ -1112,8 +1144,9 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         const brief = [ex.allergies.length && `Alergias / intolerancias: ${ex.allergies.join(' · ')}`, ex.avoid.length && `Evitar: ${ex.avoid.join(' · ')}`, ex.prefers && `Prefiere: ${ex.prefers}`].filter(Boolean)
         return brief.length ? <div className="plan-context-brief"><b>Del expediente</b>{brief.map((text) => <span key={text}>{text}</span>)}</div> : null
       }
-      return <div className="form-card plan-context-card">
-        <div className="plan-context-head"><div><p className="eyebrow">RESUMEN DEL EXPEDIENTE</p><b>Datos que alimentan este plan</b></div><button type="button" className="secondary" disabled={planLocked} onClick={() => { const goal = buildExpedienteGoal(plan); if (goal) updateForm('goal', goal); updateNotes('recommendations', buildExpedienteRecommendations(plan)) }}>Aplicar al objetivo y recomendaciones</button></div>
+      // Abierto en Evaluación; en Dietocálculo empieza plegado para dejar espacio al cálculo.
+      return <details className="form-card plan-context-card" key={step} open={step === STEP.EVALUATION}>
+        <summary className="plan-context-head"><div><p className="eyebrow">RESUMEN DEL EXPEDIENTE</p><b>Datos que alimentan este plan</b>{step !== STEP.EVALUATION && <small className="muted">Toca para ver motivo, diagnósticos y laboratorio</small>}</div><button type="button" className="secondary" disabled={planLocked} onClick={(event) => { event.preventDefault(); const goal = buildExpedienteGoal(plan); if (goal) updateForm('goal', goal); updateNotes('recommendations', buildExpedienteRecommendations(plan)) }}>Aplicar al objetivo y recomendaciones</button></summary>
         {ex.reason && <p className="plan-context-reason"><b>Motivo:</b> {ex.reason}</p>}
         {ex.diagnoses.length > 0 && <div className="plan-context-diagnoses">{ex.diagnoses.map((diagnosis) => <span key={diagnosis.id}><b>{diagnosis.domain}</b> {diagnosis.problem}</span>)}</div>}
         <div className="plan-context-grid">
@@ -1123,7 +1156,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
           {ex.prefers && <div><small>Preferencias</small><p>{ex.prefers}</p></div>}
           {ex.outOfRange.length > 0 && <div><small>Laboratorio a vigilar</small><p>{ex.outOfRange.map((lab) => `${lab.name} ${lab.value ?? ''} ${lab.unit || ''} (${String(lab.status).toLowerCase()})`).join(' · ')}</p></div>}
         </div>
-      </div>
+      </details>
     })()}
 
     {step === STEP.EVALUATION && <><ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="Resumen del expediente y del último cálculo guardado en el paso Dietocálculo." action={<button className="secondary" onClick={() => selectStep(1)}>Ir al cálculo →</button>} /><div className="plan-grid"><div className="plan-card panel"><h3>Datos antropométricos</h3><div className="form-grid three"><label>Sexo<input value={sexLabel(patient?.sex) || '—'} readOnly /></label><label>Fecha nacimiento<input value={formatUTCDate(patient?.birthDate) || '—'} readOnly /></label><label>Edad<input value={computeAge(patient?.birthDate) ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label><label>Peso actual<input value={plan?.evaluation?.inputs?.weightKg ? `${plan.evaluation.inputs.weightKg} kg` : '—'} readOnly /></label><label>Talla<input value={plan?.evaluation?.inputs?.heightCm ? `${plan.evaluation.inputs.heightCm} cm` : '—'} readOnly /></label><label>IMC calculado<input value={plan?.evaluation?.bmi ?? '—'} readOnly /></label></div></div><div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3>{plan?.evaluation?.idealWeightRange ? <div className="ideal-number">{plan.evaluation.idealWeightRange.minKg} <small>– {plan.evaluation.idealWeightRange.maxKg} kg</small></div> : <p className="muted">Calcula el requerimiento en el paso "Dietocálculo" para ver el rango.</p>}<p className="muted">Rango estimado para su estatura</p></div><div className="plan-card panel full"><h3>Objetivo terapéutico</h3>{plan?.goal ? <p>{plan.goal}</p> : <p className="muted">Sin definir todavía — se guarda junto con el cálculo en el paso "Dietocálculo".</p>}</div></div></>}
@@ -1136,26 +1169,29 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     </>}
 
     {step === STEP.DISTRIBUTION && <>
-      <ModuleHeader eyebrow="PLAN ALIMENTARIO · DISTRIBUYE" title="Distribuye y elige recetas" subtitle="Reparte las porciones entre los tiempos de comida, elige las recetas de cada uno y acomódalas en los días de la semana." action={syncLabel} />
+      <ModuleHeader eyebrow="PLAN ALIMENTARIO · DISTRIBUYE" title="Distribuye y elige recetas" subtitle="Reparte las porciones entre los tiempos de comida, elige las recetas de cada uno y acomódalas en los días de la semana." />
       {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando plan y recetas…</h3></div>}
       {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar el plan o el catálogo de recetas.</div>}
       {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan en borrador</h3><p>Crea un plan para {patientName} antes de distribuir recetas.</p><button className="primary" disabled={createPlanState === 'creating'} onClick={() => createPlan()}>{createPlanState === 'creating' ? 'Creando…' : 'Crear plan'}</button>{createPlanState === 'error' && <div className="form-error">⚠ No se pudo crear el plan.</div>}</div>}
       {loadState === 'ready' && plan && <>
+        <nav className="dist-nav" aria-label="Secciones de Distribuye">{DIST_SECTIONS.map(([id, label]) => <button type="button" key={id} className={distSection === id ? 'active' : ''} onClick={() => goToSection(id)}>{label}{id === 'dist-week' && <small>{DAYS.reduce((sum, day) => sum + visibleMeals.filter((meal) => slots[slotKey(day.n, meal.key)]).length, 0)}/{visibleMeals.length * DAYS.length}</small>}</button>)}</nav>
         {renderMenuTabs()}
         {activeMenu && currentMenuDays.length === 0 && <div className="eq-notice">“{activeMenu.name}” todavía no tiene días: márcalos arriba (o en la fila de días de la sección Tiempo) para poder llenarlo con recetas.</div>}
+        <div id="dist-portions" className="dist-anchor" />
         <DistributeMatrix value={currentEquivalents} onChange={setCurrentEquivalents} meals={visibleMeals} hiddenMeals={hiddenMeals} mealTimes={notesForm.mealTimes} suggestedTimes={Object.fromEntries(visibleMeals.map((meal) => [meal.key, notesForm.mealTimes?.[meal.key] ? null : mealSuggestion.times[meal.key]]))} locked={planLocked} recipesFor={(key) => mealRecipes(key, currentMenuDays)} renderThumb={recipeThumb} adjustedCount={(key) => mealRecipes(key, currentMenuDays).filter((recipe) => notesForm.recipeAdjustments?.[adjustmentKey(key, recipe.id)]).length} mealRecipeKcal={(key) => averageKcalForMeal(key, currentMenuDays)} servingsFor={mealServingsFor} onServings={changeServings} onViewRecipes={(meal) => setSuggestMeal(meal)} onAdjust={(meal) => setAdjustMeal(meal)} onRenameMeal={renameMeal} onRemoveMeal={removeMeal} onAddMeal={addMeal} onTimeChange={(key, time) => updateNotes('mealTimes', { ...notesForm.mealTimes, [key]: time })} onDistribute={distributeCurrent} onGoToPortions={() => selectStep(STEP.EQUIVALENTS)} />
+        <div id="dist-adequacy" className="dist-anchor" />
         {renderAdequacy()}
-        <section className="panel tg-panel">
+        <section className="panel tg-panel" id="dist-week">
           <div className="dm-title"><div><h3>Tiempo</h3><small className="muted">Las preparaciones de cada día. Toca una celda para cambiarla por otra de las recetas elegidas{extraMenus.length ? '; con el menú de cada día eliges qué cuadro de porciones le toca' : ''}.</small></div></div>
           <div className="dm-scroll"><div className="tg-table">
             <div className="tg-row tg-head"><span>Tiempo</span>{DAYS.map((day) => <div key={day.n}><b>{day.label}</b>{extraMenus.length > 0 && <select value={menuOfDay(day.n)?.id || 'base'} disabled={planLocked} onChange={(event) => (event.target.value === 'base' ? setDayMenu(day.n, null) : setDayMenu(day.n, event.target.value))} aria-label={`Menú del ${day.label}`}><option value="base">Menú base</option>{extraMenus.map((menu) => <option value={menu.id} key={menu.id}>{menu.name}</option>)}</select>}</div>)}</div>
             {visibleMeals.map((meal) => <div className="tg-row" key={meal.key}><span>{meal.label}</span>{DAYS.map((day) => { const recipe = recipeById(slots[slotKey(day.n, meal.key)]); return <button type="button" className={'tg-cell' + (recipe ? '' : ' empty')} key={day.n} disabled={planLocked && !recipe} onClick={() => setDayPick({ meal, day: day.n })} title={recipe ? `${recipe.name} · ${day.label}` : `Elegir ${meal.label} del ${day.label}`}>
-              {recipe ? <>{recipeThumb(recipe, day.n, 'tg-photo')}<small>{recipe.name}</small>{notesForm.recipeAdjustments?.[adjustmentKey(meal.key, recipe.id)] && <i className="tg-adjusted" title="Con cantidades ajustadas para este plan">ajustada</i>}</> : <small>Sin recetas seleccionadas para {meal.label}{extraMenus.length ? ` en ${menuOfDay(day.n)?.name || 'Menú base'}` : ''}</small>}
+              {recipe ? <>{recipeThumb(recipe, day.n, 'tg-photo')}<small>{recipe.name}</small>{notesForm.recipeAdjustments?.[adjustmentKey(meal.key, recipe.id)] && <i className="tg-adjusted" title="Con cantidades ajustadas para este plan">ajustada</i>}</> : <><span className="tg-plus" aria-hidden="true">+</span><small>{planLocked ? 'Sin receta' : 'Elegir receta'}</small></>}
             </button> })}</div>)}
             <div className="tg-row tg-foot"><span>Macros y micros</span>{DAYS.map((day) => <button type="button" className="secondary" key={day.n} onClick={() => setDayInfo(day.n)}>Ver para {day.label}</button>)}</div>
           </div></div>
         </section>
-    {<div className="panel adequacy-panel">
+    {<div className="panel adequacy-panel" id="dist-micros">
       <h3>% Adecuación de micronutrientes</h3>
       {adequacyState === 'loading' && <p className="muted">Calculando…</p>}
       {adequacyState === 'error' && <div className="form-error">⚠ No se pudo calcular la adecuación de micronutrientes.</div>}
@@ -1179,7 +1215,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
         {adequacy.nutrients.some((n) => n.noData) && <p className="muted adequacy-note">"Sin dato": el catálogo de alimentos no trae valores de {adequacy.nutrients.filter((n) => n.noData).map((n) => n.label).join(', ')}. Es información que falta en el catálogo, no un consumo de cero.</p>}
       </>}
     </div>}
-        <div className="optionals">
+        <div className="optionals" id="dist-optionals">
           <p className="eyebrow">OPCIONALES · LOS VE LA PACIENTE EN SU PLAN</p>
           <span className="saved">{planLocked ? '● Sólo lectura' : notesSaveState === 'saving' ? '● Guardando…' : notesSaveState === 'editing' ? '● Editando…' : notesSaveState === 'error' ? '⚠ Error al guardar' : '● Guardado'}</span>
           <details className="panel optional-block" open>

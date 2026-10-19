@@ -19,7 +19,9 @@ export default function DistributeMatrix({ value, onChange, meals, hiddenMeals, 
   const distribution = value?.distribution || {}
   const extras = value?.extras || []
   const rows = EQUIVALENT_TABLE.filter((group) => (Number(groups[group.code]) || 0) > 0 || EQUIVALENT_MEALS.some((meal) => (Number(distribution[meal.key]?.[group.code]) || 0) > 0))
-  const columns = { gridTemplateColumns: `minmax(190px,1.5fr) repeat(${meals.length},minmax(118px,1fr))` }
+  // Las columnas salen del CSS (.dm-row) con el número de tiempos; en el celular la primera es más
+  // angosta y se queda fija al desplazar de lado.
+  const columns = { '--dm-cols': meals.length }
   const emit = (nextDistribution, nextExtras = extras) => onChange({ groups, distribution: nextDistribution, extras: nextExtras })
   const setMealCount = (mealKey, code, count) => {
     const meal = { ...(distribution[mealKey] || {}) }
