@@ -4,6 +4,7 @@ import { parseLocation, pathFor } from './routes.js'
 import { growTextareas } from '../lib/autoGrow.js'
 
 import LoginPage from '../modules/auth/LoginPage.jsx'
+import PaywallPage from '../modules/settings/PaywallPage.jsx'
 import DashboardPage from '../modules/dashboard/DashboardPage.jsx'
 import AgendaPage from '../modules/calendar/AgendaPage.jsx'
 import PatientsPage from '../modules/patients/PatientsPage.jsx'
@@ -26,7 +27,7 @@ import SettingsPage from '../modules/settings/SettingsPage.jsx'
 import FinancePage from '../modules/finance/FinancePage.jsx'
 
 export default function App() {
-  const { status } = useAuth()
+  const { status, access } = useAuth()
   const initial = parseLocation(window.location.pathname)
   const [active, setActiveState] = useState(() => initial.module)
   // Sin paciente por defecto: antes arrancaba con el paciente de demostración, así que Consultas y
@@ -126,6 +127,8 @@ export default function App() {
 
   if (status === 'checking') return null
   if (status === 'anonymous') return <LoginPage />
+  // Cuenta sin suscripción pagada: sólo la pantalla de pago (fase 109).
+  if (access && !access.allowed) return <PaywallPage />
 
   if (active === 'Hoy') return <DashboardPage setActive={setActive} onStartConsultation={startConsultation} onNewAppointment={goToNewAppointment} onOpenAgendaFiltered={goToAgendaFiltered} onOpenPlan={(pid) => go('Constructor de plan', { patientId: pid })} />
   if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} autoOpenNew={autoOpenNewAppointment} autoOpenPatientId={newAppointmentPatientId} onConsumeAutoOpen={() => { setAutoOpenNewAppointment(false); setNewAppointmentPatientId('') }} autoFilter={autoAgendaFilter} onConsumeAutoFilter={() => setAutoAgendaFilter(null)} />

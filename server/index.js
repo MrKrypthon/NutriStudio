@@ -17,6 +17,11 @@ import { asciiFileName, normalizePdfTheme, planFileName } from './domain/pdfThem
 import { normalizeEquivalentPlan, normalizeMenus } from './domain/equivalents.js'
 import { emptyNutritionTotals, perServingFromIngredients } from './domain/recipeNutrition.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
+import Stripe from 'stripe'
+import { OAuth2Client } from 'google-auth-library'
+import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId } from './domain/accounts.js'
+import { copyCatalog } from './domain/catalogCopy.js'
+import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
 // 10 MB PDF becomes ~13.3 MB as base64 JSON text, see POST /consultations/:id/lab-attachments.
@@ -32,22 +37,27 @@ const SESSION_TTL = '7d'
 // Public routes need no session: the login endpoint itself, and Fastify's own CORS
 // preflight (@fastify/cors replies to OPTIONS before this hook runs, but excluded here too
 // in case that ever changes) and health check.
-const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login'])
+// El webhook de Stripe no trae sesión: se autentica con la firma `Stripe-Signature`.
+// Entrar con Google y leer su configuración (el client id) tampoco llevan sesión.
+const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login', '/api/v1/auth/google', '/api/v1/auth/config', '/api/v1/stripe/webhook'])
+// Sin suscripción pagada la cuenta sólo puede ver su sesión, cambiar su contraseña y pagar.
+const SUBSCRIPTION_FREE_ROUTES = new Set(['/api/v1/auth/me', '/api/v1/auth/logout', '/api/v1/auth/change-password', '/api/v1/billing', '/api/v1/billing/checkout', '/api/v1/billing/portal', '/api/v1/billing/sync'])
 // Practice logos and recipe photos are branding/content, not patient data, and need to load in a
 // plain <img src> (which can't send an Authorization header) both in-app and inside generated
 // PDFs/emails — so these routes are public by design, scoped by unguessable ids/file names.
 const PUBLIC_ROUTE_PATTERNS = [/^\/api\/v1\/practice\/[^/]+\/logo$/, /^\/api\/v1\/recipes\/images\/[^/]+$/, /^\/api\/v1\/ingredients\/images\/[^/]+$/]
 
-// Estado de cada práctica (tenant) del SaaS, cacheado 30 s para no consultar en cada petición.
+// Acceso de cada práctica (tenant) del SaaS: suspendida, sin pagar o con acceso (ver
+// server/domain/accounts.js). Se cachea 30 s para no consultar en cada petición; quien cambia el
+// estado, la cobertura o la suscripción borra la entrada.
 const practiceStatusCache = new Map()
-async function isPracticeActive(practiceId) {
-  if (!practiceId) return true
+async function practiceAccessFor(practiceId) {
   const cached = practiceStatusCache.get(practiceId)
-  if (cached && cached.expires > Date.now()) return cached.active
-  const practice = await prisma.practice.findUnique({ where: { id: practiceId }, select: { status: true } }).catch(() => null)
-  const active = practice?.status === 'ACTIVE'
-  practiceStatusCache.set(practiceId, { active, expires: Date.now() + 30000 })
-  return active
+  if (cached && cached.expires > Date.now()) return cached.access
+  const practice = await prisma.practice.findUnique({ where: { id: practiceId }, select: { status: true, signupSource: true, paidUntil: true } }).catch(() => null)
+  const access = practiceAccess(practice)
+  practiceStatusCache.set(practiceId, { access, expires: Date.now() + 30000 })
+  return access
 }
 
 // Campos públicos del usuario. Nunca exponer `passwordHash`: GET/PUT /practice devolvían el
@@ -92,7 +102,10 @@ app.addHook('onRequest', async (request, reply) => {
     request.practiceId = payload.practiceId
     request.userRole = payload.role
     // Una cuenta suspendida no puede operar (se cachea para no consultar en cada petición).
-    if (!(await isPracticeActive(request.practiceId))) return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
+    const access = await practiceAccessFor(request.practiceId)
+    if (access.reason === 'SUSPENDED' || access.reason === 'NOT_FOUND') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
+    // Sin suscripción pagada: sólo la sesión y la pantalla de pago (402 = pago requerido).
+    if (!access.allowed && !SUBSCRIPTION_FREE_ROUTES.has(pathname)) return reply.code(402).send({ code: 'SUBSCRIPTION_REQUIRED', message: 'Tu suscripción no está activa. Suscríbete para seguir usando Milpa.', fields: {} })
   } catch {
     return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Tu sesión expiró o no es válida. Inicia sesión de nuevo.', fields: {} })
   }
@@ -171,17 +184,83 @@ const consultationClosed = (consultation, reply) => {
 
 app.get('/health', async () => ({ status: 'ok', service: 'nutri-studio-api' }))
 
+// Sesión de la nutrióloga: el token y lo que la app necesita al entrar. `access` dice si la cuenta
+// puede usar el sistema o sólo ver la pantalla de pago.
+const sessionPayload = (user) => ({
+  user: { id: user.id, name: user.name, email: user.email, role: user.role, loginId: user.loginId, google: Boolean(user.googleSub) },
+  practice: { id: user.practice.id, name: user.practice.name, timeZone: user.practice.timeZone },
+  access: practiceAccess(user.practice),
+})
+const signSession = (user) => ({ token: jwt.sign({ sub: user.id, practiceId: user.practiceId, role: user.role }, JWT_SECRET, { expiresIn: SESSION_TTL }), ...sessionPayload(user) })
+
+// Se entra con el correo o con el identificador que dio el administrador (un identificador nunca
+// lleva «@»). El correo sólo es único por práctica, así que se toma el primer usuario activo.
 app.post('/api/v1/auth/login', async (request, reply) => {
   const { email, password } = request.body || {}
-  if (!email || !password) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Email y contraseña son obligatorios.', fields: { email: !email, password: !password } })
-  // Email is only unique per practice, not globally — this picks the first active match.
-  // Fine for today's single-practice, single-user reality; revisit if multi-practice logins matter later.
-  const user = await prisma.user.findFirst({ where: { email, status: 'ACTIVE' }, include: { practice: true } })
+  const login = String(email || '').trim()
+  if (!login || !password) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Correo o identificador y contraseña son obligatorios.', fields: { email: !login, password: !password } })
+  const where = login.includes('@') ? { email: { equals: login, mode: 'insensitive' } } : { loginId: normalizeLoginId(login) }
+  const user = await prisma.user.findFirst({ where: { ...where, status: 'ACTIVE' }, include: { practice: true } })
   const valid = user ? await bcrypt.compare(password, user.passwordHash) : false
-  if (!user || !valid) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Email o contraseña incorrectos.', fields: {} })
+  if (!user || !valid) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Correo, identificador o contraseña incorrectos.', fields: {} })
   if (user.practice.status === 'SUSPENDED') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
-  const token = jwt.sign({ sub: user.id, practiceId: user.practiceId, role: user.role }, JWT_SECRET, { expiresIn: SESSION_TTL })
-  return { token, user: { id: user.id, name: user.name, email: user.email, role: user.role }, practice: { id: user.practice.id, name: user.practice.name, timeZone: user.practice.timeZone } }
+  return signSession(user)
+})
+
+// ── Cuentas nuevas (fase 109) ───────────────────────────────────────────────
+// Práctica de donde sale el catálogo inicial (alimentos, libro SMAE, recetas) de cada cuenta nueva.
+const CATALOG_PRACTICE_ID = process.env.CATALOG_PRACTICE_ID || process.env.DEFAULT_PRACTICE_ID || '00000000-0000-0000-0000-000000000001'
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || ''
+const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null
+
+// Abre una cuenta: práctica + su nutriólogo (dueño) + copia del catálogo, todo o nada.
+async function createAccount({ signupSource, practiceName, name, email, loginId = null, googleSub = null, passwordHash, paidUntil = null }) {
+  return prisma.$transaction(async (tx) => {
+    const practice = await tx.practice.create({ data: { name: practiceName || defaultPracticeName(name), signupSource, paidUntil } })
+    const user = await tx.user.create({ data: { practiceId: practice.id, name, email: email || '', loginId, googleSub, passwordHash, role: 'OWNER' }, include: { practice: true } })
+    await copyCatalog(tx, CATALOG_PRACTICE_ID, practice.id)
+    return user
+  }, { maxWait: 10000, timeout: 120000 })
+}
+
+app.get('/api/v1/auth/config', async () => ({ googleClientId: GOOGLE_CLIENT_ID || null }))
+
+// Entrar (o registrarse) con Google. El navegador obtiene de Google un token firmado (ID token);
+// aquí se verifica su firma y que sea para nuestra app. La primera vez se abre la cuenta, que queda
+// sin acceso hasta suscribirse. Una cuenta creada desde /admin con el mismo correo (verificado por
+// Google) se enlaza a esa cuenta de Google en vez de abrir otra.
+app.post('/api/v1/auth/google', async (request, reply) => {
+  if (!googleClient) return reply.code(503).send({ code: 'GOOGLE_NOT_CONFIGURED', message: 'El acceso con Google todavía no está activo en este servidor.', fields: {} })
+  const credential = request.body?.credential
+  if (!credential || typeof credential !== 'string') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Falta la respuesta de Google.', fields: {} })
+  let profile
+  try {
+    const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID })
+    profile = ticket.getPayload()
+  } catch (err) {
+    request.log.warn({ err: err.message }, 'Token de Google inválido')
+    return reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Google no confirmó tu cuenta. Intenta de nuevo.', fields: {} })
+  }
+  if (!profile?.sub || !profile.email || !profile.email_verified) return reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Tu cuenta de Google no tiene un correo verificado.', fields: {} })
+  const email = profile.email.toLowerCase()
+
+  let user = await prisma.user.findFirst({ where: { googleSub: profile.sub }, include: { practice: true } })
+  if (!user) {
+    const byEmail = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' }, status: 'ACTIVE' }, include: { practice: true } })
+    if (byEmail?.googleSub) return reply.code(409).send({ code: 'EMAIL_LINKED_ELSEWHERE', message: 'Ese correo ya está enlazado a otra cuenta de Google.', fields: {} })
+    if (byEmail) user = await prisma.user.update({ where: { id: byEmail.id }, data: { googleSub: profile.sub }, include: { practice: true } })
+  }
+  let created = false
+  if (!user) {
+    // Contraseña inutilizable: estas cuentas entran sólo con Google.
+    const passwordHash = await bcrypt.hash(generateTempPassword(32), 10)
+    user = await createAccount({ signupSource: 'GOOGLE', name: profile.name || email.split('@')[0], email, googleSub: profile.sub, passwordHash })
+    created = true
+    request.log.info({ practiceId: user.practiceId }, 'Cuenta nueva con Google')
+  }
+  if (user.status !== 'ACTIVE') return reply.code(403).send({ code: 'ACCOUNT_DISABLED', message: 'Este usuario está desactivado. Contacta al administrador.', fields: {} })
+  if (user.practice.status === 'SUSPENDED') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
+  return { ...signSession(user), created }
 })
 
 // Stateless JWT: there is no server-side session to invalidate yet, so this only exists for
@@ -192,7 +271,7 @@ app.post('/api/v1/auth/logout', async (request, reply) => reply.code(204).send()
 app.get('/api/v1/auth/me', async (request, reply) => {
   const user = await prisma.user.findUnique({ where: { id: request.userId }, include: { practice: true } })
   if (!user) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Sesión inválida.', fields: {} })
-  return { user: { id: user.id, name: user.name, email: user.email, role: user.role }, practice: { id: user.practice.id, name: user.practice.name, timeZone: user.practice.timeZone } }
+  return sessionPayload(user)
 })
 
 app.get('/api/v1/practice', async (request, reply) => {
@@ -246,25 +325,77 @@ app.post('/api/v1/admin/auth/login', async (request, reply) => {
   return { token, admin: { id: admin.id, name: admin.name, email: admin.email } }
 })
 
+// Cuántas cuentas lleva creadas el administrador y qué identificador sugerir para la siguiente.
+async function adminAccountQuota() {
+  const used = await prisma.practice.count({ where: { signupSource: 'ADMIN' } })
+  let sequence = used + 1
+  while (await prisma.user.findFirst({ where: { loginId: suggestLoginId(sequence) }, select: { id: true } })) sequence += 1
+  return { used, limit: ADMIN_ACCOUNT_LIMIT, suggestedLoginId: suggestLoginId(sequence) }
+}
+
 app.get('/api/v1/admin/practices', async () => {
   const practices = await prisma.practice.findMany({
-    include: { _count: { select: { patients: true, users: true } }, transactions: { select: { amountCents: true } } },
+    include: {
+      _count: { select: { patients: true, users: true } },
+      transactions: { select: { amountCents: true } },
+      users: { select: { name: true, email: true, loginId: true, googleSub: true }, orderBy: { createdAt: 'asc' }, take: 1 },
+    },
     orderBy: { createdAt: 'asc' },
   })
   return {
+    adminAccounts: await adminAccountQuota(),
     items: practices.map((practice) => ({
       id: practice.id,
       name: practice.name,
       status: practice.status,
+      signupSource: practice.signupSource,
+      owner: practice.users[0] ? { name: practice.users[0].name, email: practice.users[0].email || null, loginId: practice.users[0].loginId, google: Boolean(practice.users[0].googleSub) } : null,
       paymentMethod: practice.paymentMethod,
       paidUntil: practice.paidUntil,
       createdAt: practice.createdAt,
       patients: practice._count.patients,
       users: practice._count.users,
+      subscriptionStatus: practice.subscriptionStatus,
+      subscriptionInterval: practice.subscriptionInterval,
+      cancelAtPeriodEnd: practice.cancelAtPeriodEnd,
       collectedCents: practice.transactions.reduce((sum, item) => sum + item.amountCents, 0),
       transactionCount: practice.transactions.length,
     })),
   }
+})
+
+// Crear una cuenta desde el panel (las primeras 100, ADMIN_ACCOUNT_LIMIT). La persona entra con su
+// identificador (o su correo, si se dio) y una contraseña temporal que se muestra una sola vez.
+app.post('/api/v1/admin/practices', async (request, reply) => {
+  const { name, practiceName, email, loginId, paidUntil } = request.body || {}
+  const personName = String(name || '').trim().slice(0, 120)
+  const id = normalizeLoginId(loginId)
+  const mail = String(email || '').trim().toLowerCase().slice(0, 160)
+  const fields = { name: !personName, loginId: !isValidLoginId(id), email: Boolean(mail) && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail) }
+  if (fields.name || fields.loginId || fields.email) {
+    const message = fields.name ? 'Escribe el nombre del nutriólogo.' : fields.loginId ? 'El identificador lleva de 3 a 30 caracteres: minúsculas, números, punto o guion, sin espacios ni «@».' : 'El correo no es válido.'
+    return reply.code(400).send({ code: 'VALIDATION_ERROR', message, fields })
+  }
+  const coverage = paidUntil ? new Date(paidUntil) : null
+  if (coverage && Number.isNaN(coverage.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha de cobertura inválida.', fields: { paidUntil: true } })
+  const quota = await adminAccountQuota()
+  if (quota.used >= ADMIN_ACCOUNT_LIMIT) return reply.code(409).send({ code: 'ADMIN_LIMIT_REACHED', message: `Ya se crearon las ${ADMIN_ACCOUNT_LIMIT} cuentas del panel. Las siguientes se registran con Google.`, fields: {} })
+  if (await prisma.user.findFirst({ where: { loginId: id }, select: { id: true } })) return reply.code(409).send({ code: 'LOGIN_ID_TAKEN', message: 'Ese identificador ya lo usa otra cuenta.', fields: { loginId: true } })
+  if (mail && await prisma.user.findFirst({ where: { email: { equals: mail, mode: 'insensitive' }, status: 'ACTIVE' }, select: { id: true } })) return reply.code(409).send({ code: 'EMAIL_TAKEN', message: 'Ese correo ya lo usa otra cuenta.', fields: { email: true } })
+  const tempPassword = generateTempPassword()
+  const user = await createAccount({ signupSource: 'ADMIN', practiceName: String(practiceName || '').trim().slice(0, 120), name: personName, email: mail, loginId: id, passwordHash: await bcrypt.hash(tempPassword, 10), paidUntil: coverage })
+  request.log.info({ practiceId: user.practiceId, adminId: request.adminId }, 'Cuenta creada desde el panel')
+  return reply.code(201).send({ practiceId: user.practiceId, practiceName: user.practice.name, name: user.name, email: user.email || null, loginId: user.loginId, tempPassword })
+})
+
+// Nueva contraseña temporal para el dueño de una cuenta (por ejemplo, si olvidó la suya).
+app.post('/api/v1/admin/practices/:practiceId/reset-password', async (request, reply) => {
+  const user = await prisma.user.findFirst({ where: { practiceId: request.params.practiceId }, orderBy: { createdAt: 'asc' } })
+  if (!user) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Cuenta no encontrada.', fields: {} })
+  const tempPassword = generateTempPassword()
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: await bcrypt.hash(tempPassword, 10) } })
+  request.log.info({ practiceId: user.practiceId, adminId: request.adminId }, 'Contraseña restablecida desde el panel')
+  return { name: user.name, email: user.email || null, loginId: user.loginId, tempPassword }
 })
 
 app.patch('/api/v1/admin/practices/:practiceId', async (request, reply) => {
@@ -314,8 +445,196 @@ app.post('/api/v1/admin/transactions', async (request, reply) => {
     const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate()
     next.setDate(Math.min(day, lastDay))
     await prisma.practice.update({ where: { id: practice.id }, data: { paidUntil: next, ...(validMethod ? { paymentMethod: validMethod } : {}) } })
+    practiceStatusCache.delete(practice.id)
   }
   return reply.code(201).send(created)
+})
+
+// ── Suscripción del SaaS con Stripe (fase 108) ───────────────────────────────
+// Se configura con variables de entorno (ver .env.example): sin STRIPE_SECRET_KEY la sección de
+// suscripción dice que los pagos en línea no están activos y nada más cambia. El cobro ocurre en la
+// página de Stripe (Checkout) y la tarjeta y las facturas se administran en su portal; aquí sólo
+// se guarda el estado que Stripe nos avisa por webhook.
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null
+const STRIPE_PRICES = { month: process.env.STRIPE_PRICE_MONTHLY || '', year: process.env.STRIPE_PRICE_YEARLY || '' }
+const APP_URL = (process.env.APP_URL || 'http://localhost:5173').replace(/\/$/, '')
+// Un error de Stripe (llave inválida, red caída, precio inexistente) no debe llegar crudo a la pantalla.
+const stripeFailed = (request, reply, err) => {
+  request.log.error({ err: err.message, type: err.type }, 'Error de Stripe')
+  return reply.code(502).send({ code: 'STRIPE_ERROR', message: 'No se pudo conectar con Stripe. Intenta de nuevo en unos minutos.', fields: {} })
+}
+const billingUnavailable = (reply) => reply.code(503).send({ code: 'BILLING_NOT_CONFIGURED', message: 'Los pagos en línea todavía no están activos en este servidor.', fields: {} })
+
+// Los precios cambian poco: se piden a Stripe una vez cada 10 minutos.
+let priceCache = { at: 0, items: [] }
+async function loadPrices() {
+  if (!stripe) return []
+  if (Date.now() - priceCache.at < 10 * 60 * 1000) return priceCache.items
+  const items = []
+  for (const interval of SUBSCRIPTION_INTERVALS) {
+    if (!STRIPE_PRICES[interval]) continue
+    try {
+      const price = await stripe.prices.retrieve(STRIPE_PRICES[interval])
+      if (price.active) items.push({ interval, amountCents: price.unit_amount, currency: price.currency })
+    } catch (err) {
+      app.log.warn({ err: err.message, interval }, 'No se pudo leer el precio de Stripe')
+    }
+  }
+  priceCache = { at: Date.now(), items }
+  return items
+}
+
+const billingView = async (practice) => ({
+  configured: Boolean(stripe),
+  testMode: Boolean(process.env.STRIPE_SECRET_KEY?.startsWith('sk_test_')),
+  status: practice.subscriptionStatus,
+  interval: practice.subscriptionInterval,
+  cancelAtPeriodEnd: practice.cancelAtPeriodEnd,
+  paidUntil: practice.paidUntil,
+  hasCustomer: Boolean(practice.stripeCustomerId),
+  prices: await loadPrices(),
+})
+
+// Aplica una suscripción de Stripe a su práctica. `eventCreated` (segundos) evita que un aviso
+// atrasado deshaga uno más nuevo; una sincronización directa (sin evento) siempre aplica.
+async function applySubscription(subscription, eventCreated = null) {
+  const customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer?.id
+  const byMetadata = practiceIdFromMetadata(subscription)
+  const practice = (byMetadata && await prisma.practice.findUnique({ where: { id: byMetadata } }))
+    || (customerId && await prisma.practice.findFirst({ where: { stripeCustomerId: customerId } }))
+  if (!practice) { app.log.warn({ subscription: subscription.id }, 'Suscripción de Stripe sin práctica conocida'); return null }
+  if (eventCreated && isStaleEvent(eventCreated, practice.stripeSyncedAt)) return practice
+  const syncedAt = eventCreated ? new Date(eventCreated * 1000) : new Date()
+  practiceStatusCache.delete(practice.id)
+  return prisma.practice.update({ where: { id: practice.id }, data: { ...practicePatchFromSubscription(subscription, practice.paidUntil), stripeSyncedAt: syncedAt } })
+}
+
+// Una factura pagada extiende la cobertura hasta el fin del periodo que paga (también si salió en
+// $0 por un cupón o un periodo de prueba) y, si hubo cobro, queda una sola vez en el historial de
+// pagos del panel /admin.
+async function recordInvoicePayment(invoice) {
+  const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id
+  const practice = customerId && await prisma.practice.findFirst({ where: { stripeCustomerId: customerId } })
+  if (!practice) { app.log.warn({ invoice: invoice.id }, 'Factura de Stripe sin práctica conocida'); return }
+  const end = invoicePeriodEnd(invoice)
+  if (end && invoiceSubscriptionId(invoice) && (!practice.paidUntil || end > practice.paidUntil)) {
+    await prisma.practice.update({ where: { id: practice.id }, data: { paidUntil: end } })
+    practiceStatusCache.delete(practice.id)
+  }
+  if (!invoice.amount_paid || invoice.amount_paid <= 0) return
+  const existing = await prisma.transaction.findFirst({ where: { stripeInvoiceId: invoice.id } })
+  if (existing) return
+  const paidAt = invoice.status_transitions?.paid_at ? new Date(invoice.status_transitions.paid_at * 1000) : new Date()
+  await prisma.transaction.create({ data: { practiceId: practice.id, amountCents: invoice.amount_paid, method: 'CARD', concept: invoiceConcept(practice.subscriptionInterval), occurredAt: paidAt, stripeInvoiceId: invoice.id } })
+}
+
+app.get('/api/v1/billing', async (request) => {
+  const practice = await prisma.practice.findUnique({ where: { id: request.practiceId } })
+  return billingView(practice)
+})
+
+app.post('/api/v1/billing/checkout', async (request, reply) => {
+  try {
+    if (!stripe) return billingUnavailable(reply)
+    const interval = request.body?.interval
+    if (!SUBSCRIPTION_INTERVALS.includes(interval) || !STRIPE_PRICES[interval]) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Elige el plan mensual o el anual.', fields: { interval: true } })
+    let practice = await prisma.practice.findUnique({ where: { id: request.practiceId } })
+    if (LIVE_SUBSCRIPTION_STATUSES.includes(practice.subscriptionStatus)) return reply.code(409).send({ code: 'ALREADY_SUBSCRIBED', message: 'Ya tienes una suscripción. Cambia de plan o de tarjeta en «Administrar suscripción».', fields: {} })
+    if (!practice.stripeCustomerId) {
+      const user = await prisma.user.findUnique({ where: { id: request.userId }, select: { email: true, name: true } })
+      const customer = await stripe.customers.create({ email: user?.email || undefined, name: practice.name, metadata: { practiceId: practice.id } })
+      practice = await prisma.practice.update({ where: { id: practice.id }, data: { stripeCustomerId: customer.id } })
+    }
+    const session = await stripe.checkout.sessions.create({
+      mode: 'subscription',
+      customer: practice.stripeCustomerId,
+      client_reference_id: practice.id,
+      line_items: [{ price: STRIPE_PRICES[interval], quantity: 1 }],
+      subscription_data: { metadata: { practiceId: practice.id } },
+      metadata: { practiceId: practice.id },
+      locale: 'es',
+      allow_promotion_codes: true,
+      success_url: `${APP_URL}/configuracion?suscripcion=ok`,
+      cancel_url: `${APP_URL}/configuracion?suscripcion=cancelada`,
+    })
+    await logAudit(request, { action: 'subscription_checkout_started', entity: 'Practice', entityId: practice.id, metadata: { interval } })
+    return { url: session.url }
+  } catch (err) {
+    if (err.type?.startsWith('Stripe')) return stripeFailed(request, reply, err)
+    throw err
+  }
+})
+
+// Portal de Stripe: cambiar tarjeta o plan, ver facturas y cancelar.
+app.post('/api/v1/billing/portal', async (request, reply) => {
+  try {
+    if (!stripe) return billingUnavailable(reply)
+    const practice = await prisma.practice.findUnique({ where: { id: request.practiceId } })
+    if (!practice.stripeCustomerId) return reply.code(409).send({ code: 'NO_SUBSCRIPTION', message: 'Todavía no tienes una suscripción.', fields: {} })
+    const session = await stripe.billingPortal.sessions.create({ customer: practice.stripeCustomerId, return_url: `${APP_URL}/configuracion?suscripcion=portal` })
+    return { url: session.url }
+  } catch (err) {
+    if (err.type?.startsWith('Stripe')) return stripeFailed(request, reply, err)
+    throw err
+  }
+})
+
+// Al volver de Stripe se pide el estado directo, sin esperar el webhook (que en desarrollo local
+// sólo llega si está corriendo `stripe listen`).
+app.post('/api/v1/billing/sync', async (request, reply) => {
+  try {
+    if (!stripe) return billingUnavailable(reply)
+    let practice = await prisma.practice.findUnique({ where: { id: request.practiceId } })
+    if (practice.stripeCustomerId) {
+      const { data } = await stripe.subscriptions.list({ customer: practice.stripeCustomerId, status: 'all', limit: 1, expand: ['data.latest_invoice'] })
+      if (data[0]) practice = (await applySubscription(data[0])) || practice
+    }
+    return billingView(practice)
+  } catch (err) {
+    if (err.type?.startsWith('Stripe')) return stripeFailed(request, reply, err)
+    throw err
+  }
+})
+
+// Webhook: Stripe firma el cuerpo exacto, así que esta ruta lee el JSON crudo (un parser propio,
+// encapsulado en este plugin para no afectar a las demás rutas).
+await app.register(async (scope) => {
+  scope.addContentTypeParser('application/json', { parseAs: 'buffer' }, (request, body, done) => done(null, body))
+  scope.post('/api/v1/stripe/webhook', async (request, reply) => {
+    if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) return billingUnavailable(reply)
+    let event
+    try {
+      event = stripe.webhooks.constructEvent(request.body, request.headers['stripe-signature'], process.env.STRIPE_WEBHOOK_SECRET)
+    } catch (err) {
+      return reply.code(400).send({ code: 'INVALID_SIGNATURE', message: 'Firma de Stripe inválida.', fields: {} })
+    }
+    try {
+      await prisma.stripeEvent.create({ data: { id: event.id, type: event.type } })
+    } catch (err) {
+      if (err.code === 'P2002') return { received: true, duplicate: true }
+      throw err
+    }
+    try {
+      const object = event.data.object
+      if (event.type === 'checkout.session.completed' && object.mode === 'subscription') {
+        const practiceId = practiceIdFromMetadata(object)
+        const customerId = typeof object.customer === 'string' ? object.customer : object.customer?.id
+        if (practiceId && customerId) await prisma.practice.updateMany({ where: { id: practiceId, stripeCustomerId: null }, data: { stripeCustomerId: customerId } })
+        const subscriptionId = typeof object.subscription === 'string' ? object.subscription : object.subscription?.id
+        if (subscriptionId) await applySubscription(await stripe.subscriptions.retrieve(subscriptionId, { expand: ['latest_invoice'] }))
+      } else if (['customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted', 'customer.subscription.paused', 'customer.subscription.resumed'].includes(event.type)) {
+        await applySubscription(object, event.created)
+      } else if (event.type === 'invoice.paid') {
+        await recordInvoicePayment(object)
+      }
+    } catch (err) {
+      // Que Stripe lo reintente: se olvida el evento para que el reintento sí se procese.
+      await prisma.stripeEvent.delete({ where: { id: event.id } }).catch(() => {})
+      request.log.error({ err, event: event.id }, 'Error al procesar el webhook de Stripe')
+      return reply.code(500).send({ code: 'WEBHOOK_FAILED', message: 'No se pudo procesar el aviso.', fields: {} })
+    }
+    return { received: true }
+  })
 })
 
 app.post('/api/v1/auth/change-password', async (request, reply) => {

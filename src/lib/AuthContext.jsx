@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { authApi } from './api.js'
-import { clearToken, getToken, onUnauthorized, setToken } from './auth.js'
+import { clearToken, getToken, onSubscriptionRequired, onUnauthorized, setToken } from './auth.js'
 
 const AuthContext = createContext(null)
 
@@ -8,6 +8,9 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [practice, setPractice] = useState(null)
   const [status, setStatus] = useState('checking') // checking | authenticated | anonymous
+  // ¿La cuenta puede usar el sistema? { allowed, reason, inGrace } — sin suscripción pagada la app
+  // sólo muestra la pantalla de pago (fase 109).
+  const [access, setAccess] = useState(null)
 
   const logout = useCallback(() => {
     // Fire this while the token is still attached — it's the last authenticated call this
@@ -16,37 +19,53 @@ export function AuthProvider({ children }) {
     clearToken()
     setUser(null)
     setPractice(null)
+    setAccess(null)
     setStatus('anonymous')
   }, [])
 
-  useEffect(() => { onUnauthorized(() => { clearToken(); setUser(null); setPractice(null); setStatus('anonymous') }) }, [])
+  const applySession = useCallback((response) => {
+    setUser(response.user)
+    setPractice(response.practice)
+    setAccess(response.access || { allowed: true })
+  }, [])
+
+  useEffect(() => { onUnauthorized(() => { clearToken(); setUser(null); setPractice(null); setAccess(null); setStatus('anonymous') }) }, [])
+  useEffect(() => { onSubscriptionRequired(() => setAccess({ allowed: false, reason: 'SUBSCRIPTION_REQUIRED' })) }, [])
 
   useEffect(() => {
     if (!getToken()) { setStatus('anonymous'); return }
     authApi.me()
-      .then((response) => { setUser(response.user); setPractice(response.practice); setStatus('authenticated') })
+      .then((response) => { applySession(response); setStatus('authenticated') })
       .catch(() => { clearToken(); setStatus('anonymous') })
-  }, [])
+  }, [applySession])
 
   const login = useCallback(async (email, password) => {
     const response = await authApi.login(email, password)
     setToken(response.token)
-    setUser(response.user)
-    setPractice(response.practice)
+    applySession(response)
     setStatus('authenticated')
-  }, [])
+  }, [applySession])
+
+  // Entrar (o registrarse) con Google: `credential` es el token que entrega el botón de Google.
+  const loginWithGoogle = useCallback(async (credential) => {
+    const response = await authApi.google(credential)
+    setToken(response.token)
+    applySession(response)
+    setStatus('authenticated')
+    return response
+  }, [applySession])
 
   // Re-sync user/practice after profile/logo edits in Configuración so the sidebar (which reads
   // them from here) updates without a full reload.
   const refreshPractice = useCallback(async () => {
     try {
       const response = await authApi.me()
-      setUser(response.user)
-      setPractice(response.practice)
-    } catch { /* keep the current state; a reload will retry */ }
-  }, [])
+      applySession(response)
+      return response
+    } catch { return null /* keep the current state; a reload will retry */ }
+  }, [applySession])
 
-  return <AuthContext.Provider value={{ user, practice, status, login, logout, refreshPractice }}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, practice, status, access, login, loginWithGoogle, logout, refreshPractice }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

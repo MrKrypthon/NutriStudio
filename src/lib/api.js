@@ -1,4 +1,4 @@
-import { getToken, notifyUnauthorized } from './auth.js'
+import { getToken, notifySubscriptionRequired, notifyUnauthorized } from './auth.js'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -36,7 +36,9 @@ export async function apiRequest(path, options = {}) {
     try { error = await response.json() } catch { /* Response may not contain JSON. */ }
     // A rejected login attempt is also a 401 but isn't a session loss; any other 401 (even without
     // our JSON code) means the session is dead and should close.
-    if (response.status === 401 && error.code !== 'INVALID_CREDENTIALS') notifyUnauthorized()
+    if (response.status === 401 && error.code !== 'INVALID_CREDENTIALS' && error.code !== 'INVALID_GOOGLE_TOKEN') notifyUnauthorized()
+    // La suscripción venció a media sesión: la app cambia a la pantalla de pago.
+    if (response.status === 402) notifySubscriptionRequired()
     throw Object.assign(new Error(error.message), error)
   }
 
@@ -61,6 +63,8 @@ async function downloadBlobRequest(path, fallbackMessage) {
 
 export const authApi = {
   login: (email, password) => apiRequest('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
+  config: () => apiRequest('/auth/config'),
+  google: (credential) => apiRequest('/auth/google', { method: 'POST', body: JSON.stringify({ credential }) }),
   logout: () => apiRequest('/auth/logout', { method: 'POST' }),
   me: () => apiRequest('/auth/me'),
   changePassword: (currentPassword, newPassword) => apiRequest('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
@@ -79,6 +83,14 @@ export const practiceApi = {
   // Public route (no Authorization header needed) so it can be used directly as an <img src> —
   // in the app, inside generated PDFs would need the file on disk instead, see server/index.js.
   logoUrl: (practiceId) => `${API_BASE}/practice/${practiceId}/logo`,
+}
+
+// Suscripción del SaaS (Stripe): checkout y portal devuelven la URL de Stripe a la que se redirige.
+export const billingApi = {
+  get: () => apiRequest('/billing'),
+  checkout: (interval) => apiRequest('/billing/checkout', { method: 'POST', body: JSON.stringify({ interval }) }),
+  portal: () => apiRequest('/billing/portal', { method: 'POST' }),
+  sync: () => apiRequest('/billing/sync', { method: 'POST' }),
 }
 
 export const financeApi = {

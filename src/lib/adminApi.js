@@ -34,6 +34,8 @@ export const adminApi = {
   login: (email, password) => adminRequest('/admin/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
   practices: () => adminRequest('/admin/practices'),
   updatePractice: (id, payload) => adminRequest(`/admin/practices/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  createPractice: (payload) => adminRequest('/admin/practices', { method: 'POST', body: JSON.stringify(payload) }),
+  resetPassword: (id) => adminRequest(`/admin/practices/${id}/reset-password`, { method: 'POST' }),
   transactions: () => adminRequest('/admin/transactions'),
   addTransaction: (payload) => adminRequest('/admin/transactions', { method: 'POST', body: JSON.stringify(payload) }),
 }

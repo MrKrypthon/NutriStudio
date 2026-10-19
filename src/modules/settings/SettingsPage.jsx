@@ -3,6 +3,7 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import BrandMark from '../../components/BrandMark.jsx'
 import PdfDesignEditor from '../documents/PdfDesignEditor.jsx'
+import SubscriptionCard from './SubscriptionCard.jsx'
 import { authApi, practiceApi } from '../../lib/api.js'
 import { useAuth } from '../../lib/AuthContext.jsx'
 
@@ -15,13 +16,24 @@ const TIME_ZONE_OPTIONS = [
 
 const DEFAULT_HOURS = { label: 'Lunes a viernes', ranges: [{ start: '09:00', end: '13:00' }, { start: '15:00', end: '19:00' }] }
 
+// Una sección a la vez (no todo de corrido): el menú cambia la vista y la sección queda en la
+// dirección (?seccion=…) para que recargar o volver de Stripe abra la misma.
 const NAV_SECTIONS = [
   ['profile', '◉ Perfil profesional'],
+  ['billing', '◈ Suscripción'],
   ['identity', '◆ Identidad visual'],
   ['pdf', '▤ Diseño del PDF'],
   ['hours', '◷ Horarios y disponibilidad'],
   ['security', '▣ Privacidad y seguridad'],
 ]
+const SECTION_KEYS = NAV_SECTIONS.map(([key]) => key)
+// Secciones que se guardan con «Guardar cambios»; las demás tienen su propio botón.
+const FORM_SECTIONS = ['profile', 'hours']
+const initialSection = () => {
+  const params = new URLSearchParams(window.location.search)
+  if (params.has('suscripcion')) return 'billing'
+  return SECTION_KEYS.includes(params.get('seccion')) ? params.get('seccion') : 'profile'
+}
 
 const readAsDataUrl = (file) => new Promise((resolve, reject) => {
   const reader = new FileReader()
@@ -31,7 +43,7 @@ const readAsDataUrl = (file) => new Promise((resolve, reject) => {
 })
 
 export default function SettingsPage({ setActive }) {
-  const { refreshPractice } = useAuth()
+  const { refreshPractice, user: sessionUser } = useAuth()
   const [loadState, setLoadState] = useState('loading')
   const [practiceName, setPracticeName] = useState('')
   const [practiceId, setPracticeId] = useState('')
@@ -43,12 +55,13 @@ export default function SettingsPage({ setActive }) {
   const [logoVersion, setLogoVersion] = useState(0)
   const [hasLogo, setHasLogo] = useState(false)
   const [editingHours, setEditingHours] = useState(false)
-  const [activeSection, setActiveSection] = useState('profile')
+  const [activeSection, setActiveSection] = useState(initialSection)
+  // Cambios del perfil u horarios sin guardar: el botón sigue a la vista aunque se cambie de sección.
+  const [dirty, setDirty] = useState(false)
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [pwState, setPwState] = useState('idle')
   const [pwError, setPwError] = useState('')
   const fileInputRef = useRef(null)
-  const sectionRefs = { profile: useRef(null), identity: useRef(null), pdf: useRef(null), hours: useRef(null), security: useRef(null) }
 
   useEffect(() => {
     practiceApi.get()
@@ -72,7 +85,7 @@ export default function SettingsPage({ setActive }) {
       .catch(() => setLoadState('error'))
   }, [])
 
-  const update = (key, value) => { setForm((prev) => ({ ...prev, [key]: value })); setSaveState('idle') }
+  const update = (key, value) => { setForm((prev) => ({ ...prev, [key]: value })); setSaveState('idle'); setDirty(true) }
   const updateHours = (patch) => update('businessHours', { ...form.businessHours, ...patch })
   const updateRange = (index, patch) => {
     const ranges = form.businessHours.ranges.map((range, i) => (i === index ? { ...range, ...patch } : range))
@@ -86,6 +99,7 @@ export default function SettingsPage({ setActive }) {
     if (!trimmed.name || !trimmed.userName || !trimmed.userEmail) {
       setSaveState('error')
       setError('El nombre de la práctica, el nombre profesional y el email son obligatorios.')
+      setActiveSection('profile')
       return
     }
     const badRange = (form.businessHours?.ranges || []).find((range) => !range.start || !range.end || range.start >= range.end)
@@ -93,6 +107,7 @@ export default function SettingsPage({ setActive }) {
       setSaveState('error')
       setError('En los horarios de atención, la hora de inicio debe ser antes que la de cierre.')
       setEditingHours(true)
+      setActiveSection('hours')
       return
     }
     setSaveState('saving')
@@ -101,6 +116,7 @@ export default function SettingsPage({ setActive }) {
       await practiceApi.update({ ...form, ...trimmed })
       refreshPractice()
       setSaveState('saved')
+      setDirty(false)
       setEditingHours(false)
     } catch (err) {
       setSaveState('error')
@@ -108,7 +124,14 @@ export default function SettingsPage({ setActive }) {
     }
   }
 
-  const goToSection = (key) => { setActiveSection(key); sectionRefs[key].current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('seccion') === activeSection) return
+    params.set('seccion', activeSection)
+    window.history.replaceState(window.history.state, '', `${window.location.pathname}?${params}`)
+  }, [activeSection])
+
+  const goToSection = (key) => { setActiveSection(key); window.scrollTo({ top: 0 }) }
 
   const pickLogo = () => fileInputRef.current?.click()
 
@@ -155,17 +178,17 @@ export default function SettingsPage({ setActive }) {
   const initials = form.userName ? form.userName.split(' ').map((p) => p[0]).slice(0, 2).join('').toUpperCase() : 'GA'
 
   return <AppChrome active="Configuración" setActive={setActive}><div className="content settings-content">
-    <ModuleHeader eyebrow="TU PRÁCTICA" title="Configuración" subtitle="Personaliza tu espacio de trabajo y la experiencia de tus pacientes." action={saveState === 'saved' ? <span className="saved">● Cambios guardados</span> : <button className="primary" disabled={loadState !== 'ready' || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : 'Guardar cambios'}</button>} />
+    <ModuleHeader eyebrow="TU PRÁCTICA" title="Configuración" subtitle="Personaliza tu espacio de trabajo y la experiencia de tus pacientes." action={saveState === 'saved' ? <span className="saved">● Cambios guardados</span> : !FORM_SECTIONS.includes(activeSection) && !dirty ? null : <button className="primary" disabled={loadState !== 'ready' || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : 'Guardar cambios'}</button>} />
     {saveState === 'error' && <div className="form-error">⚠ {error}</div>}
     {loadState === 'loading' && <p className="muted">Cargando configuración…</p>}
     {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar la configuración — el API no responde. Verifica que el servidor esté activo para poder editar y guardar.</div>}
     <div className="settings-layout">
-      <aside className="settings-nav panel">{NAV_SECTIONS.map(([key, label]) => <button key={key} className={activeSection === key ? 'active' : ''} onClick={() => goToSection(key)}>{label}</button>)}</aside>
+      <aside className="settings-nav panel">{NAV_SECTIONS.map(([key, label]) => <button key={key} className={activeSection === key ? 'active' : ''} aria-current={activeSection === key ? 'page' : undefined} onClick={() => goToSection(key)}>{label}{dirty && FORM_SECTIONS.includes(key) && <i className="settings-dirty" title="Cambios sin guardar" />}</button>)}</aside>
       <section className="settings-main">
-        <div className="panel settings-card" ref={sectionRefs.profile}>
+        {activeSection === 'profile' && <div className="panel settings-card">
           <div className="settings-card-head"><div><h2>Perfil profesional</h2><p>Esta información aparece en tus informes y comunicaciones.</p></div><span className="avatar settings-avatar">{initials}</span></div>
           <div className="form-grid">
-            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => { setPracticeName(e.target.value); setSaveState('idle') }} /></label>
+            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => { setPracticeName(e.target.value); setSaveState('idle'); setDirty(true) }} /></label>
             <label>Especialidad<input value={form.userSpecialty} onChange={(e) => update('userSpecialty', e.target.value)} placeholder="Ej. Nutrióloga clínica" /></label>
             <label>Email de trabajo<input value={form.userEmail} onChange={(e) => update('userEmail', e.target.value)} /></label>
             <label>Teléfono<input value={form.userPhone} onChange={(e) => update('userPhone', e.target.value)} placeholder="Ej. +52 55 1234 5678" /></label>
@@ -173,8 +196,9 @@ export default function SettingsPage({ setActive }) {
             <label>Dirección del consultorio<input value={form.address} onChange={(e) => update('address', e.target.value)} placeholder="Ej. C. 131 x 146, Fracc. Los Héroes" /></label>
             <label>Tipo de establecimiento<input value={form.establishmentType} maxLength={80} onChange={(e) => update('establishmentType', e.target.value)} placeholder="Ej. Consultorio de nutrición" /><small className="muted">Sale en el encabezado del expediente clínico, junto con el nombre y la dirección.</small></label>
           </div>
-        </div>
-        <div className="panel settings-card" ref={sectionRefs.identity}>
+        </div>}
+        {activeSection === 'billing' && <SubscriptionCard />}
+        {activeSection === 'identity' && <div className="panel settings-card">
           <div><h2>Identidad visual</h2><p>El logo se incluirá en informes y planes nutricionales.</p></div>
           <div className="logo-row">
             {hasLogo ? <img src={`${practiceApi.logoUrl(practiceId)}?v=${logoVersion}`} alt="Logo de la práctica" className="brand-mark logo-preview" /> : <BrandMark size={28} />}
@@ -182,12 +206,12 @@ export default function SettingsPage({ setActive }) {
             <button className="secondary" onClick={pickLogo} disabled={logoState === 'uploading'}>{logoState === 'uploading' ? 'Subiendo…' : 'Cambiar logo'}</button>
             <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} onChange={onLogoSelected} />
           </div>
-        </div>
-        <div className="panel settings-card" ref={sectionRefs.pdf}>
-          <div><h2>Diseño del plan en PDF</h2><p>Colores, tipografía y adornos del plan de alimentación que descargas y envías. Por defecto sale en blanco y negro con tu logo.</p></div>
+        </div>}
+        {activeSection === 'pdf' && <div className="panel settings-card settings-pdf">
+          <div className="settings-card-head"><div><h2>Diseño del plan en PDF</h2><p>Colores, tipografía y adornos del plan que descargas y envías. Por defecto sale en blanco y negro con tu logo.</p></div></div>
           {loadState === 'ready' && <PdfDesignEditor key={logoVersion} />}
-        </div>
-        <div className="panel settings-card" ref={sectionRefs.hours}>
+        </div>}
+        {activeSection === 'hours' && <div className="panel settings-card">
           <h2>Horarios de atención</h2>
           <p>Configura la disponibilidad que se mostrará al agendar citas.</p>
           {editingHours ? (
@@ -203,19 +227,22 @@ export default function SettingsPage({ setActive }) {
             <div className="schedule-row"><b>{form.businessHours.label}</b>{form.businessHours.ranges.map((range, i) => <span key={i}>{range.start} – {range.end}</span>)}<button className="link-button" onClick={() => setEditingHours(true)}>Editar</button></div>
           )}
           <div className="schedule-row"><b>Zona horaria</b><select value={form.timeZone} onChange={(e) => update('timeZone', e.target.value)}>{TIME_ZONE_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>
-        </div>
-        <div className="panel settings-card" ref={sectionRefs.security}>
+        </div>}
+        {activeSection === 'security' && <div className="panel settings-card">
           <h2>Privacidad y seguridad</h2>
-          <p>Cambia tu contraseña de acceso.</p>
-          {pwState === 'error' && <div className="form-error">⚠ {pwError}</div>}
-          {pwState === 'saved' && <span className="saved">● Contraseña actualizada</span>}
-          <div className="form-grid">
-            <label>Contraseña actual<input type="password" value={pwForm.currentPassword} onChange={(e) => updatePw('currentPassword', e.target.value)} /></label>
-            <label>Nueva contraseña<input type="password" value={pwForm.newPassword} onChange={(e) => updatePw('newPassword', e.target.value)} /></label>
-            <label>Confirmar nueva contraseña<input type="password" value={pwForm.confirmPassword} onChange={(e) => updatePw('confirmPassword', e.target.value)} /></label>
-          </div>
-          <button className="secondary" disabled={pwState === 'saving'} onClick={changePassword} style={{ marginTop: 16 }}>{pwState === 'saving' ? 'Guardando…' : 'Cambiar contraseña'}</button>
-        </div>
+          {/* Quien se registró con Google no tiene contraseña en Milpa: entra siempre con Google. */}
+          {sessionUser?.google && !sessionUser?.loginId ? <p>Entras con tu cuenta de Google{sessionUser.email ? <> (<b>{sessionUser.email}</b>)</> : null}. No necesitas contraseña: la seguridad de tu acceso la maneja Google.</p> : <>
+            <p>Cambia tu contraseña de acceso.{sessionUser?.loginId && <> Tu identificador para entrar es <b>{sessionUser.loginId}</b>.</>}</p>
+            {pwState === 'error' && <div className="form-error">⚠ {pwError}</div>}
+            {pwState === 'saved' && <span className="saved">● Contraseña actualizada</span>}
+            <div className="form-grid">
+              <label>Contraseña actual<input type="password" value={pwForm.currentPassword} onChange={(e) => updatePw('currentPassword', e.target.value)} /></label>
+              <label>Nueva contraseña<input type="password" value={pwForm.newPassword} onChange={(e) => updatePw('newPassword', e.target.value)} /></label>
+              <label>Confirmar nueva contraseña<input type="password" value={pwForm.confirmPassword} onChange={(e) => updatePw('confirmPassword', e.target.value)} /></label>
+            </div>
+            <button className="secondary" disabled={pwState === 'saving'} onClick={changePassword} style={{ marginTop: 16 }}>{pwState === 'saving' ? 'Guardando…' : 'Cambiar contraseña'}</button>
+          </>}
+        </div>}
       </section>
     </div>
   </div></AppChrome>
