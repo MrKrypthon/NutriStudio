@@ -194,10 +194,13 @@ export const documentsApi = {
   createForClinicalReport: (consultationId) => apiRequest('/documents/consultation-clinical', { method: 'POST', body: JSON.stringify({ consultationId }) }),
   generate: (id) => apiRequest(`/documents/${id}/generate`, { method: 'POST' }),
   deliver: (id) => apiRequest(`/documents/${id}/deliver`, { method: 'POST' }),
+  undeliver: (id) => apiRequest(`/documents/${id}/undeliver`, { method: 'POST' }),
   // A plain <a href> click can't carry the Authorization header the download route requires
   // (every /api/v1/* route needs a session) — fetch it as an authenticated request instead and
   // hand back a Blob the caller can wrap in an object URL to trigger the actual download.
   downloadBlob: (id) => downloadBlobRequest(`/documents/${id}/download`, 'No se pudo descargar el documento.'),
+  // Para el visor de la app: el mismo PDF, registrado como consulta ("vio") y no como descarga.
+  previewBlob: (id) => downloadBlobRequest(`/documents/${id}/download?inline=1`, 'No se pudo abrir el documento.'),
 }
 
 export const labAttachmentsApi = {

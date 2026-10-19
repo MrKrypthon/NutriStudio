@@ -703,6 +703,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }
   const ACCESS_DOC_TITLES = { consultation_export: 'el expediente completo', consultation_report: 'el informe de consulta', consultation_clinical: 'el informe clínico', nutrition_plan: 'el plan de alimentación' }
   const describeAccess = (item) => {
+    if (item.action === 'viewed' && item.entity === 'Document') return `Vio ${ACCESS_DOC_TITLES[item.type] || 'un documento'}${item.version ? ` (versión ${item.version})` : ''} en pantalla`
     if (item.action === 'viewed') return item.scope === 'history' ? 'Consultó el historial de consultas' : 'Abrió el expediente de una consulta'
     if (item.entity === 'LabAttachment') return `Abrió el PDF de laboratorio «${item.fileName || 'adjunto'}»`
     const what = ACCESS_DOC_TITLES[item.type] || 'un documento'
