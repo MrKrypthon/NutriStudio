@@ -241,6 +241,11 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [plans, setPlans] = useState([])
   const [view, setView] = useState('list')
   const [planActionState, setPlanActionState] = useState('idle')
+  // Aviso de una acción de plan que falló (abrir, duplicar, cancelar, reactivar, crear): antes el
+  // botón sólo volvía a su estado normal y no se sabía que no había pasado nada.
+  const [planNotice, setPlanNotice] = useState('')
+  const failNotice = (error, fallback) => setPlanNotice(error?.code === 'DEMO_MODE' ? 'Modo demostración: conecta el API para trabajar con planes.' : (error?.message || fallback))
+  useEffect(() => { if (!planNotice) return undefined; const timer = setTimeout(() => setPlanNotice(''), 7000); return () => clearTimeout(timer) }, [planNotice])
   const [previewPlan, setPreviewPlan] = useState(null)
   // Tiempo de comida con el ajuste de porciones / las sugerencias de recetas abiertos.
   const [adjustMeal, setAdjustMeal] = useState(null)
@@ -282,7 +287,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const slotsDirtyRef = useRef(null)
   const flushPromiseRef = useRef(null)
 
-  useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   // El hub lista todos los planes de la práctica (sin elegir paciente antes).
   const loadHub = useCallback(() => {
@@ -518,8 +523,9 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       setCreatePlanState('idle')
       loadHub()
       patientsApi.plans(targetId).then((response) => { if (activePatientRef.current === targetId) setPlans(response.items || []) }).catch(() => {})
-    } catch {
+    } catch (error) {
       setCreatePlanState('error')
+      failNotice(error, 'No se pudo crear el plan.')
       // La carga de la paciente pudo haberse saltado el plan esperando a éste: se repite.
       loadPlanDataRef.current()
     } finally {
@@ -542,10 +548,12 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       planEpochRef.current += 1
       // En un plan cerrado no se descartan recetas archivadas: es lo que se le entregó.
       applyPlan(full, { recipeIds: isEditablePlan(full) && recipesRef.current.length ? new Set(recipesRef.current.map((recipe) => recipe.id)) : null })
-      setStep(startStep ?? resumeStep(full))
+      // Desde Recetas → "Asignar al plan", un plan editable abre en Distribuye (donde se asigna).
+      setStep(startStep ?? (pendingRecipeNameRef.current && isEditablePlan(full) ? STEP.DISTRIBUTION : resumeStep(full)))
       setView('wizard')
       requestAnimationFrame(() => { const body = window.document.querySelector('.plan-body'); if (body) body.scrollTop = 0 })
-    } catch {
+    } catch (error) {
+      failNotice(error, 'No se pudo abrir el plan.')
       // La lista queda como estaba; si la carga de la paciente esperaba a este plan, se repite.
       loadPlanDataRef.current()
     } finally {
@@ -567,7 +575,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       const pid = created.patientId
       patientsApi.plans(pid).then((response) => { if (activePatientRef.current === pid) setPlans(response.items || []) }).catch(() => {})
       loadHub()
-    } catch { setPlanActionState('idle') }
+    } catch (error) { setPlanActionState('idle'); failNotice(error, 'No se pudo crear la nueva versión del plan.') }
   }
 
   // Reactivar desde el constructor deja el plan como estaba antes de cancelarlo.
@@ -579,7 +587,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       const pid = activePatientRef.current
       if (pid) patientsApi.plans(pid).then((response) => { if (activePatientRef.current === pid) setPlans(response.items || []) }).catch(() => {})
       loadHub()
-    } catch { /* el aviso sigue a la vista */ }
+    } catch (error) { failNotice(error, 'No se pudo reactivar el plan.') }
   }
 
   const changePlanStatus = async (item, action) => {
@@ -588,7 +596,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       await (action === 'cancel' ? plansApi.cancel(item.id) : plansApi.reactivate(item.id))
       await loadPlanData()
       loadHub()
-    } catch { /* deja la lista */ } finally { setPlanActionState('idle') }
+    } catch (error) { failNotice(error, action === 'cancel' ? 'No se pudo cancelar el plan.' : 'No se pudo reactivar el plan.') } finally { setPlanActionState('idle') }
   }
 
   // Abrir un plan desde el hub: pasa al constructor de esa paciente con el plan abierto.
@@ -601,7 +609,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   // Vista rápida del menú de un plan, sin salir del listado.
   const quickLook = (item) => {
     setPlanActionState(item.id)
-    plansApi.get(item.id).then((full) => setPreviewPlan(full)).catch(() => {}).finally(() => setPlanActionState('idle'))
+    plansApi.get(item.id).then((full) => setPreviewPlan(full)).catch((error) => failNotice(error, 'No se pudo cargar el menú del plan.')).finally(() => setPlanActionState('idle'))
   }
 
   const startNewPlanFor = (pid) => {
@@ -1125,16 +1133,20 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     ['cancelled', 'Cancelados', items.filter((item) => item.status === 'CANCELLED')],
   ]
 
+  const noticeToast = planNotice ? <div className="plan-toast" role="alert"><span>⚠ {planNotice}</span><button type="button" aria-label="Cerrar aviso" onClick={() => setPlanNotice('')}>×</button></div> : null
+
   const renderHub = () => {
     const query = hubQuery.trim().toLowerCase()
     const filtered = hubPlans.filter((item) => !query || `${item.patient?.firstName || ''} ${item.patient?.lastName || ''}`.toLowerCase().includes(query))
     const allGroups = planGroups(filtered)
     const groups = hubFilter === 'all' ? allGroups : allGroups.filter(([key]) => key === hubFilter)
-    return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio">
+    return <AppChrome active="Constructor de plan" setActive={setActive}><div className="content plan-studio">{noticeToast}
       <ModuleHeader eyebrow="PLANIFICACIÓN · CONSTRUCTOR" title="Planes alimenticios" subtitle="Todos los planes de tu consulta: retoma un borrador donde lo dejaste o revisa los anteriores." action={<button className="primary" onClick={() => setChooserOpen(true)}><span>+</span> Nuevo plan</button>} />
       <div className="hub-toolbar panel"><div className="search-field">⌕ <input value={hubQuery} onChange={(event) => setHubQuery(event.target.value)} placeholder="Buscar por paciente..." /></div>
         <div className="hub-filters" role="tablist" aria-label="Filtrar planes">{[['all', 'Todos', filtered.length], ...allGroups.map(([key, label, items]) => [key, label, items.length])].map(([key, label, count]) => <button type="button" role="tab" aria-selected={hubFilter === key} className={hubFilter === key ? 'active' : ''} key={key} onClick={() => setHubFilter(key)}>{label}<i>{count}</i></button>)}</div>
       </div>
+      {/* Desde Recetas → "Asignar al plan" se llega aquí sin paciente: se dice qué sigue. */}
+      {pendingRecipeName && <div className="plan-assign-banner panel"><span>✦</span><p>Elige el plan donde quieres poner <b>«{pendingRecipeName}»</b>: se abrirá en el paso Distribuye con la receta ya buscada.</p><button type="button" className="link-button" onClick={() => onConsumeRecipeName?.()}>No asignar</button></div>}
       {/* En escritorio el contenido no scrollea como página: sólo este cuerpo lo hace (ver el layout
           de altura completa en globals.css). Sin él, los grupos de planes se recortaban abajo. */}
       <div className="module-body plans-scroll">
@@ -1183,7 +1195,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     <div className="result-empty panel"><span>◌</span><h3>Elige un paciente</h3><p>Selecciona a quién le vas a diseñar el plan para comenzar.</p><select value="" onChange={(e) => onSelectPatient?.(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></div>
   </div></AppChrome>
 
-  return <AppChrome active="Constructor de plan" setActive={setActive}><div className={'content plan-studio' + (view === 'list' ? '' : ' plan-wizard')}>{view === 'list' ? <><div className="plan-header plan-list-header">
+  return <AppChrome active="Constructor de plan" setActive={setActive}><div className={'content plan-studio' + (view === 'list' ? '' : ' plan-wizard')}>{noticeToast}{view === 'list' ? <><div className="plan-header plan-list-header">
       <div className="plan-header-who">
         <button type="button" className="plan-header-back" onClick={() => { setMode('hub'); loadHub() }} title="Todos los planes" aria-label="Volver a todos los planes">←</button>
         <span className="person-avatar coral">{patientInitials}</span>

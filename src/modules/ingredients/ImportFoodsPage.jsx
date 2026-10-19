@@ -19,17 +19,29 @@ export default function ImportFoodsPage({ setActive }) {
   const [saveState, setSaveState] = useState('idle')
   const [saveError, setSaveError] = useState('')
   const [translatedFrom, setTranslatedFrom] = useState(null)
+  // idle | short | searching | done | error: antes la búsqueda no mostraba que estaba trabajando y un
+  // fallo de USDA/Open Food Facts se veía igual que "0 resultados".
+  const [searchState, setSearchState] = useState('idle')
+  const [searchError, setSearchError] = useState('')
 
   const search = async (e) => {
     e.preventDefault()
-    if (query.trim().length < 2) return
+    if (query.trim().length < 2) { setSearchState('short'); return }
     // Resetear el estado de "guardado" al buscar de nuevo (antes quedaba pegado y no se podía
     // importar un segundo alimento sin recargar).
     setSaved(false); setSelected(null); setSaveState('idle'); setSaveError('')
-    const result = await foodApi.search(query, source).catch(() => ({ items: [] }))
-    setItems(result.items || [])
-    setTranslatedFrom(result.translatedQuery || null)
+    setSearchState('searching'); setSearchError('')
+    try {
+      const result = await foodApi.search(query, source)
+      setItems(result.items || [])
+      setTranslatedFrom(result.translatedQuery || null)
+      setSearchState('done')
+    } catch (error) {
+      setItems([]); setTranslatedFrom(null); setSearchState('error')
+      setSearchError(error.code === 'DEMO_MODE' ? 'Modo demostración: conecta el API para buscar alimentos.' : (error.message || 'No se pudo consultar las fuentes externas. Intenta de nuevo.'))
+    }
   }
+  const importAnother = () => { setSaved(false); setSelected(null); setSaveError('') }
 
   const save = async () => {
     if (!selected) return
@@ -59,20 +71,22 @@ export default function ImportFoodsPage({ setActive }) {
     <form className="import-search panel" onSubmit={search}>
       <div className="search-field">⌕ <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Busca un alimento..." /></div>
       <select value={source} onChange={(e) => setSource(e.target.value)}><option value="all">Todas las fuentes</option><option value="usda">USDA</option><option value="openfoodfacts">Open Food Facts</option></select>
-      <button className="primary">Buscar <span>→</span></button>
+      <button className="primary" disabled={searchState === 'searching'}>{searchState === 'searching' ? 'Buscando…' : 'Buscar'} <span>→</span></button>
     </form>
+    {searchState === 'short' && <p className="muted" style={{ margin: '-10px 0 16px' }}>Escribe al menos 2 letras para buscar.</p>}
+    {searchState === 'error' && <div className="form-error" style={{ marginBottom: 16 }}>⚠ {searchError}</div>}
 
     {translatedFrom && <p className="muted" style={{ margin: '-10px 0 16px' }}>Buscado como "{translatedFrom}" (traducción automática del catálogo local)</p>}
 
     <div className="review-layout">
       <section>
-        <div className="import-results-head"><b>{items.length || 0} resultados</b><span>Selecciona un alimento para revisar</span></div>
+        <div className="import-results-head"><b>{searchState === 'searching' ? 'Buscando…' : `${items.length || 0} resultado${items.length === 1 ? '' : 's'}`}</b><span>Selecciona un alimento para revisar</span></div>
         {items.map((item) => <button className={'review-result panel ' + (selected?.externalId === item.externalId ? 'selected' : '')} onClick={() => { setSelected(item); setSaved(false); setSaveError('') }} key={item.source + item.externalId}>
           <span className="import-result-icon">{item.imageUrl ? <img src={item.imageUrl} alt="" /> : '◉'}</span>
           <span><b>{item.name}</b><small>{SOURCE_LABELS[item.source] || item.source} · {item.serving.quantity}{item.serving.unit}</small></span>
           <span className="muted">{Math.round(item.nutrition.kcal || 0)} kcal</span>
         </button>)}
-        {!items.length && <div className="import-empty panel"><span>⌕</span><h2>Busca para ver resultados</h2><p>El alimento aún no se agregará hasta que lo revises.</p></div>}
+        {!items.length && searchState !== 'searching' && <div className="import-empty panel"><span>⌕</span><h2>{searchState === 'done' ? 'Sin resultados' : 'Busca para ver resultados'}</h2><p>{searchState === 'done' ? 'Prueba con otro nombre o con otra fuente.' : 'El alimento aún no se agregará hasta que lo revises.'}</p></div>}
       </section>
 
       <aside className="review-panel panel">
@@ -95,7 +109,7 @@ export default function ImportFoodsPage({ setActive }) {
               <button className="primary full-button" disabled={saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : 'Guardar en mi catálogo'} <span>→</span></button>
             </>
           : saved
-            ? <div className="saved-result"><span>✓</span><h2>Alimento guardado</h2><p>Ya puedes usarlo en tus recetas y planes nutricionales.</p><button className="primary" onClick={() => setActive('Ingredientes')}>Ir a ingredientes <span>→</span></button></div>
+            ? <div className="saved-result"><span>✓</span><h2>Alimento guardado</h2><p>Ya puedes usarlo en tus recetas y planes nutricionales.</p><div className="form-actions" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>{items.length > 1 && <button type="button" className="secondary" onClick={importAnother}>Importar otro de la lista</button>}<button className="primary" onClick={() => setActive('Ingredientes')}>Ir a ingredientes <span>→</span></button></div></div>
             : <div className="result-empty"><span>◌</span><h3>Selecciona un resultado</h3><p>Aquí podrás validar nutrientes y equivalencias antes de guardar.</p></div>}
       </aside>
     </div>

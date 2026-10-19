@@ -75,6 +75,8 @@ model Practice {
   logoUrl            String?
   // Dirección del consultorio; sale en el pie del plan de alimentación entregado.
   address            String?
+  // Tipo de establecimiento para el encabezado del expediente (NOM-004-SSA3-2012, 5.2.1).
+  establishmentType  String?
   // Diseño del plan de alimentación en PDF (colores, tipografía, ondas, logo); ver
   // server/domain/pdfTheme.js. Vacío = blanco y negro.
   pdfTheme           Json?
@@ -134,6 +136,11 @@ model Patient {
   birthDate          DateTime?
   sex                String?
   occupation         String?
+  // Ficha de identificación del expediente (NOM-004-SSA3-2012, 5.2.3 y 5.9): domicilio, CURP
+  // (identificador de la NOM-024-SSA3-2012) y número de expediente único dentro del consultorio.
+  address            String?
+  curp               String?
+  recordNumber       Int?
   email              String?
   phone              String?
   status             RecordStatus     @default(ACTIVE)
@@ -152,6 +159,7 @@ model Patient {
 
   @@index([practiceId, lastName, firstName])
   @@index([practiceId, status])
+  @@unique([practiceId, recordNumber])
 }
 
 model Appointment {

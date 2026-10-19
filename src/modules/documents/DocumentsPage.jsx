@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
-import { documentsApi } from '../../lib/api.js'
+import { documentsApi, patientsApi } from '../../lib/api.js'
 import { planFileName } from '../../../server/domain/pdfTheme.js'
 import { saveBlob } from '../../lib/download.js'
 
@@ -16,6 +16,14 @@ const FALLBACK = [
 ]
 
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX') : 'Sin generar')
+const DOWNLOAD_TITLES = { consultation_report: 'Informe de consulta', consultation_export: 'Expediente', nutrition_plan: 'Plan de alimentación' }
+// Mismo nombre legible que da el servidor ("Informe de consulta - Paciente - fecha.pdf"), en vez del
+// nombre interno del archivo (<id>-v<n>.pdf).
+const downloadName = (doc) => {
+  const name = doc.patient ? `${doc.patient.firstName} ${doc.patient.lastName}` : ''
+  const date = doc.type === 'nutrition_plan' ? (doc.plan?.publishedAt || doc.generatedAt || new Date()) : (doc.generatedAt || new Date())
+  return planFileName(name, date).replace('Plan de alimentación', DOWNLOAD_TITLES[doc.type] || 'Documento')
+}
 
 const rowFor = (item) => [
   DOC_TYPE_LABELS[item.type] || 'Documento',
@@ -26,7 +34,7 @@ const rowFor = (item) => [
   item.deliveredAt || item.generatedAt ? 'confirmed' : 'pending',
 ]
 
-export default function DocumentsPage({ setActive }) {
+export default function DocumentsPage({ setActive, onOpenPatient }) {
   const [items, setItems] = useState([])
   const [state, setState] = useState('loading')
   const [typeFilter, setTypeFilter] = useState('all')
@@ -34,11 +42,24 @@ export default function DocumentsPage({ setActive }) {
   const [detail, setDetail] = useState(null)
   const [detailState, setDetailState] = useState('idle')
   const [detailError, setDetailError] = useState('')
+  // "Generar documento": los PDF salen de un plan (Constructor, paso Guardar) o de una consulta
+  // (Expediente), así que primero se elige paciente y tipo. Antes abría el generador sin paciente y
+  // sólo podía mostrar "no se pudo cargar".
+  const [genOpen, setGenOpen] = useState(false)
+  const [genPatients, setGenPatients] = useState(null)
+  const [genForm, setGenForm] = useState({ patientId: '', kind: 'plan' })
+  const openGenerate = () => {
+    setGenForm({ patientId: '', kind: 'plan' }); setGenOpen(true)
+    if (!genPatients) patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setGenPatients(payload.items || [])).catch(() => setGenPatients([]))
+  }
+  const goGenerate = () => { if (genForm.patientId) onOpenPatient?.(genForm.patientId, genForm.kind === 'plan' ? 'Constructor de plan' : 'Expediente') }
 
   useEffect(() => {
     documentsApi.list()
       .then((response) => { setItems(response.items || []); setState('online') })
-      .catch(() => { setItems([]); setState('demo') })
+      // Sólo sin API (modo demostración) se muestran los ejemplos; si el API falla, se dice: antes
+      // un error mostraba documentos inventados como si fueran reales.
+      .catch((error) => { setItems([]); setState(error.code === 'DEMO_MODE' ? 'demo' : 'error') })
   }, [])
 
   const filteredItems = items.filter((item) => typeFilter === 'all' || item.type === typeFilter)
@@ -62,7 +83,7 @@ export default function DocumentsPage({ setActive }) {
     setDetailError('')
     try {
       const blob = await documentsApi.downloadBlob(detail.id)
-      saveBlob(blob, detail.type === 'nutrition_plan' ? planFileName(detail.patient ? `${detail.patient.firstName} ${detail.patient.lastName}` : '', detail.plan?.publishedAt || detail.generatedAt || new Date()) : detail.storageKey)
+      saveBlob(blob, downloadName(detail))
       setDetailState('idle')
     } catch (error) {
       setDetailState('error')
@@ -88,7 +109,7 @@ export default function DocumentsPage({ setActive }) {
   const detailRow = detail ? rowFor(detail) : null
 
   return <AppChrome active="Documentos" setActive={setActive}><div className="content documents-content">
-    <ModuleHeader eyebrow="DOCUMENTOS · ARCHIVOS CLÍNICOS" title="Documentos" subtitle="Informes y planes vinculados a tus pacientes." action={<div className="module-actions"><span className={'sync-label ' + state}>● {state === 'online' ? 'Sincronizados' : 'Vista demo'}</span><button className="primary" onClick={() => setActive('Documento')}><span>+</span> Generar documento</button></div>} />
+    <ModuleHeader eyebrow="DOCUMENTOS · ARCHIVOS CLÍNICOS" title="Documentos" subtitle="Informes y planes vinculados a tus pacientes." action={<div className="module-actions"><span className={'sync-label ' + (state === 'error' ? 'demo' : state)}>● {state === 'online' ? 'Sincronizados' : state === 'loading' ? 'Cargando…' : state === 'error' ? 'Sin conexión' : 'Vista demo'}</span><button className="primary" onClick={openGenerate}><span>+</span> Generar documento</button></div>} />
 
     <div className="document-stats">
       <div className="panel"><span className="stat-icon mint">▣</span><div><b>{allRows.length}</b><small>Documentos disponibles</small></div></div>
@@ -113,15 +134,17 @@ export default function DocumentsPage({ setActive }) {
           </div>)
         : visibleItems.map((item) => {
             const row = rowFor(item)
-            return <div className="documents-row" key={item.id} onClick={() => openDetail(item)} style={{ cursor: 'pointer' }}>
+            return <div className="documents-row" key={item.id} onClick={() => openDetail(item)} style={{ cursor: 'pointer' }} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(item) } }}>
               <span className="document-name"><i>▤</i><span><b>{row[0]}</b><small>{row[3]}</small></span></span>
               <span className="muted">{row[1]}</span>
               <span className="muted">{row[2]}</span>
               <span className={'status ' + (row[5] === 'confirmed' ? 'confirmed' : 'pending')}>{row[4]}</span>
-              <button className="row-arrow" onClick={(e) => { e.stopPropagation(); openDetail(item) }}>→</button>
+              <button className="row-arrow" aria-label={`Ver ${row[0]} de ${row[1]}`} onClick={(e) => { e.stopPropagation(); openDetail(item) }}>→</button>
             </div>
           })}
-      {visibleRows.length === 0 && <div className="result-empty"><span>◌</span><h3>Sin documentos con esos filtros</h3><p>Ajusta la búsqueda o el filtro de tipo.</p></div>}
+      {state === 'loading' && <div className="result-empty"><span className="loading-dot">●</span><h3>Cargando documentos…</h3></div>}
+      {state === 'error' && <div className="form-error">⚠ No se pudieron cargar los documentos. Revisa la conexión y vuelve a intentar.</div>}
+      {(state === 'online' || state === 'demo') && visibleRows.length === 0 && <div className="result-empty"><span>◌</span><h3>Sin documentos con esos filtros</h3><p>Ajusta la búsqueda o el filtro de tipo.</p></div>}
     </div>
   </div>
 
@@ -144,6 +167,17 @@ export default function DocumentsPage({ setActive }) {
         ? <button className="primary" disabled={detailState === 'working'} onClick={downloadPdf}>{detailState === 'working' ? '…' : 'Descargar PDF'} <span>→</span></button>
         : <p className="muted">Todavía no se genera el PDF.</p>}
     </div>
+  </div></div>}
+
+  {genOpen && <div className="modal-backdrop" onClick={() => setGenOpen(false)}><div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-head"><div><p className="eyebrow">NUEVO DOCUMENTO</p><h2>Generar documento</h2><span className="modal-subtitle">El PDF se arma con el plan o la consulta del paciente.</span></div><button type="button" aria-label="Cerrar" onClick={() => setGenOpen(false)}>×</button></div>
+    <label>Paciente<select value={genForm.patientId} onChange={(e) => setGenForm((prev) => ({ ...prev, patientId: e.target.value }))}><option value="">{genPatients ? 'Selecciona…' : 'Cargando pacientes…'}</option>{(genPatients || []).map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label>
+    <div className="notify-options" style={{ margin: '12px 0' }}>
+      <label><input type="radio" name="gen-kind" checked={genForm.kind === 'plan'} onChange={() => setGenForm((prev) => ({ ...prev, kind: 'plan' }))} /> Plan de alimentación</label>
+      <label><input type="radio" name="gen-kind" checked={genForm.kind === 'report'} onChange={() => setGenForm((prev) => ({ ...prev, kind: 'report' }))} /> Informe o expediente de consulta</label>
+    </div>
+    <p className="muted">{genForm.kind === 'plan' ? 'Te llevamos al constructor del plan: en el paso Guardar se publica y se genera el PDF.' : 'Te llevamos al expediente: el botón «Generar expediente» arma el informe para el paciente, el informe clínico o el expediente completo.'}</p>
+    <div className="modal-actions"><button type="button" className="secondary" onClick={() => setGenOpen(false)}>Cancelar</button><button type="button" className="primary" disabled={!genForm.patientId} onClick={goGenerate}>Continuar <span>→</span></button></div>
   </div></div>}
   </AppChrome>
 }

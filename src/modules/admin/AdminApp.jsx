@@ -28,6 +28,8 @@ export default function AdminApp() {
   const [subForm, setSubForm] = useState({ paymentMethod: 'TRANSFER', paidUntil: todayIso() })
   const [subState, setSubState] = useState('idle')
   const [actionState, setActionState] = useState('idle')
+  const [actionError, setActionError] = useState('')
+  const [payError, setPayError] = useState('')
 
   const load = useCallback(async () => {
     setLoadState('loading')
@@ -61,21 +63,24 @@ export default function AdminApp() {
   }
   const logout = () => { clearAdminToken(); setAdmin(null); setAuthed(false) }
 
+  // Suspender deja a la cuenta sin acceso: se confirma antes, y un fallo se avisa (antes se tragaba).
   const toggleStatus = async (practice) => {
-    setActionState(practice.id)
-    try { await adminApi.updatePractice(practice.id, { status: practice.status === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE' }); await load() } catch { /* retry */ } finally { setActionState('idle') }
+    const suspending = practice.status === 'ACTIVE'
+    if (suspending && !window.confirm(`¿Suspender "${practice.name}"? Sus usuarios no podrán entrar hasta que la habilites.`)) return
+    setActionState(practice.id); setActionError('')
+    try { await adminApi.updatePractice(practice.id, { status: suspending ? 'SUSPENDED' : 'ACTIVE' }); await load() } catch (error) { setActionError(error.message || 'No se pudo cambiar el estado de la cuenta.') } finally { setActionState('idle') }
   }
-  const openPay = (practice) => { setPayFor(practice); setPayForm({ amount: '', method: practice.paymentMethod || 'TRANSFER', concept: 'Suscripción', date: todayIso(), extendMonths: '1' }); setPayState('idle') }
+  const openPay = (practice) => { setPayFor(practice); setPayForm({ amount: '', method: practice.paymentMethod || 'TRANSFER', concept: 'Suscripción', date: todayIso(), extendMonths: '1' }); setPayState('idle'); setPayError('') }
   const submitPay = async (event) => {
     event.preventDefault()
     const amountCents = pesosToCents(payForm.amount)
-    if (amountCents <= 0) { setPayState('error'); return }
-    setPayState('saving')
+    if (amountCents <= 0) { setPayState('error'); setPayError('Escribe un monto mayor a cero.'); return }
+    setPayState('saving'); setPayError('')
     try {
       await adminApi.addTransaction({ practiceId: payFor.id, amountCents, method: payForm.method, concept: payForm.concept, occurredAt: `${payForm.date}T12:00:00.000Z`, extendMonths: Number(payForm.extendMonths) || 0 })
       setPayFor(null)
       await load()
-    } catch { setPayState('error') }
+    } catch (error) { setPayState('error'); setPayError(error.message || 'No se pudo registrar el pago.') }
   }
   const openSub = (practice) => { setSubFor(practice); setSubForm({ paymentMethod: practice.paymentMethod || 'TRANSFER', paidUntil: practice.paidUntil ? new Date(practice.paidUntil).toISOString().slice(0, 10) : todayIso() }); setSubState('idle') }
   const submitSub = async (event) => {
@@ -116,6 +121,7 @@ export default function AdminApp() {
         <div className="admin-section-head"><div><h2>Cuentas</h2><p>Habilita o deshabilita el acceso, y gestiona su suscripción.</p></div></div>
         {loadState === 'loading' && <p className="muted">Cargando cuentas…</p>}
         {loadState === 'error' && <div className="form-error">⚠ No se pudieron cargar las cuentas.</div>}
+        {actionError && <div className="form-error">⚠ {actionError}</div>}
         <div className="admin-practice-list">{practices.map((practice) => { const coverage = coverageLabel(practice.paidUntil); return <article className={'panel admin-practice' + (practice.status === 'SUSPENDED' ? ' suspended' : '')} key={practice.id}>
           <div className="admin-practice-main">
             <div className="admin-practice-name"><b>{practice.name}</b><span className={'admin-badge ' + (practice.status === 'ACTIVE' ? 'ok' : 'danger')}>{practice.status === 'ACTIVE' ? 'Activa' : 'Suspendida'}</span></div>
@@ -145,7 +151,7 @@ export default function AdminApp() {
         <div className="form-row"><label>Monto (MXN) *<input type="number" min="0" step="0.01" value={payForm.amount} onChange={(e) => setPayForm((p) => ({ ...p, amount: e.target.value }))} autoFocus required /></label><label>Fecha<input type="date" value={payForm.date} onChange={(e) => setPayForm((p) => ({ ...p, date: e.target.value }))} required /></label></div>
         <div className="form-row"><label>Método de pago<select value={payForm.method} onChange={(e) => setPayForm((p) => ({ ...p, method: e.target.value }))}>{PAYMENT_METHODS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label>Extender cobertura<select value={payForm.extendMonths} onChange={(e) => setPayForm((p) => ({ ...p, extendMonths: e.target.value }))}><option value="0">No extender</option><option value="1">1 mes</option><option value="3">3 meses</option><option value="6">6 meses</option><option value="12">12 meses</option></select></label></div>
         <label>Concepto<input value={payForm.concept} onChange={(e) => setPayForm((p) => ({ ...p, concept: e.target.value }))} placeholder="Ej. Suscripción mensual" /></label>
-        {payState === 'error' && <div className="form-error">⚠ Revisa el monto y que el API esté activo.</div>}
+        {payState === 'error' && <div className="form-error">⚠ {payError || 'No se pudo registrar el pago.'}</div>}
         <div className="modal-actions"><button type="button" className="secondary" onClick={() => setPayFor(null)}>Cancelar</button><button className="primary" disabled={payState === 'saving'}>{payState === 'saving' ? 'Guardando…' : 'Registrar pago'} <span>→</span></button></div>
       </form>
     </div></div>}

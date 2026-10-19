@@ -35,7 +35,7 @@ export default function SettingsPage({ setActive }) {
   const [loadState, setLoadState] = useState('loading')
   const [practiceName, setPracticeName] = useState('')
   const [practiceId, setPracticeId] = useState('')
-  const [form, setForm] = useState({ timeZone: 'America/Mexico_City', userName: '', userEmail: '', userSpecialty: '', userPhone: '', userLicenseNumber: '', address: '', businessHours: DEFAULT_HOURS })
+  const [form, setForm] = useState({ timeZone: 'America/Mexico_City', userName: '', userEmail: '', userSpecialty: '', userPhone: '', userLicenseNumber: '', establishmentType: '', address: '', businessHours: DEFAULT_HOURS })
   const [saveState, setSaveState] = useState('idle')
   const [error, setError] = useState('')
   const [logoState, setLogoState] = useState('idle')
@@ -64,6 +64,7 @@ export default function SettingsPage({ setActive }) {
           userPhone: practice.user?.phone || '',
           userLicenseNumber: practice.user?.licenseNumber || '',
           address: practice.address || '',
+          establishmentType: practice.establishmentType || '',
           businessHours: practice.businessHours || DEFAULT_HOURS,
         })
         setLoadState('ready')
@@ -85,6 +86,13 @@ export default function SettingsPage({ setActive }) {
     if (!trimmed.name || !trimmed.userName || !trimmed.userEmail) {
       setSaveState('error')
       setError('El nombre de la práctica, el nombre profesional y el email son obligatorios.')
+      return
+    }
+    const badRange = (form.businessHours?.ranges || []).find((range) => !range.start || !range.end || range.start >= range.end)
+    if (badRange) {
+      setSaveState('error')
+      setError('En los horarios de atención, la hora de inicio debe ser antes que la de cierre.')
+      setEditingHours(true)
       return
     }
     setSaveState('saving')
@@ -157,12 +165,13 @@ export default function SettingsPage({ setActive }) {
         <div className="panel settings-card" ref={sectionRefs.profile}>
           <div className="settings-card-head"><div><h2>Perfil profesional</h2><p>Esta información aparece en tus informes y comunicaciones.</p></div><span className="avatar settings-avatar">{initials}</span></div>
           <div className="form-grid">
-            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => setPracticeName(e.target.value)} /></label>
+            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => { setPracticeName(e.target.value); setSaveState('idle') }} /></label>
             <label>Especialidad<input value={form.userSpecialty} onChange={(e) => update('userSpecialty', e.target.value)} placeholder="Ej. Nutrióloga clínica" /></label>
             <label>Email de trabajo<input value={form.userEmail} onChange={(e) => update('userEmail', e.target.value)} /></label>
             <label>Teléfono<input value={form.userPhone} onChange={(e) => update('userPhone', e.target.value)} placeholder="Ej. +52 55 1234 5678" /></label>
             <label>Cédula profesional<input value={form.userLicenseNumber} onChange={(e) => update('userLicenseNumber', e.target.value)} placeholder="Ej. 1489853" /></label>
             <label>Dirección del consultorio<input value={form.address} onChange={(e) => update('address', e.target.value)} placeholder="Ej. C. 131 x 146, Fracc. Los Héroes" /></label>
+            <label>Tipo de establecimiento<input value={form.establishmentType} maxLength={80} onChange={(e) => update('establishmentType', e.target.value)} placeholder="Ej. Consultorio de nutrición" /><small className="muted">Sale en el encabezado del expediente clínico, junto con el nombre y la dirección.</small></label>
           </div>
         </div>
         <div className="panel settings-card" ref={sectionRefs.identity}>

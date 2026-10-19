@@ -31,11 +31,11 @@ export default function NewMaterialPage({ setActive, materialId }) {
   }, [materialId])
 
   const save = async () => {
-    if (!title || !category) return
+    if (!title.trim() || !category) { setSaveState('error'); setSaveError('Escribe un título para el material.'); return }
     setSaveState('saving')
     setSaveError('')
     try {
-      const payload = { title, category, description, body, color, readMinutes }
+      const payload = { title: title.trim(), category, description: description.trim(), body, color, readMinutes: Math.max(1, Math.round(Number(readMinutes) || 1)) }
       if (materialId) await educationApi.update(materialId, payload)
       else await educationApi.create(payload)
       setSaveState('idle')
@@ -45,7 +45,7 @@ export default function NewMaterialPage({ setActive, materialId }) {
 
   return <AppChrome active="Educación" setActive={setActive}><div className="content new-recipe">
     <button className="back-button" onClick={() => setActive('Educación')}>← Educación</button>
-    <ModuleHeader eyebrow="BIBLIOTECA · MATERIAL EDUCATIVO" title={materialId ? 'Editar material' : 'Crear material'} subtitle="Comparte contenido claro que refuerce lo trabajado en consulta." action={<span className="draft-label">Borrador</span>} />
+    <ModuleHeader eyebrow="BIBLIOTECA · MATERIAL EDUCATIVO" title={materialId ? 'Editar material' : 'Crear material'} subtitle="Comparte contenido claro que refuerce lo trabajado en consulta." action={saveState === 'loading' ? <span className="draft-label">Cargando…</span> : undefined} />
 
     {saved
       ? <div className="success-panel panel">
@@ -69,7 +69,7 @@ export default function NewMaterialPage({ setActive, materialId }) {
             {saveState === 'error' && <div className="form-error">⚠ {saveError}</div>}
             <div className="form-actions">
               <button type="button" className="secondary" onClick={() => setActive('Educación')}>Cancelar</button>
-              <button type="button" className="primary" disabled={!title || !category || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : 'Guardar material'} <span>→</span></button>
+              <button type="button" className="primary" disabled={!title.trim() || !category || saveState === 'saving' || saveState === 'loading'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : 'Guardar material'} <span>→</span></button>
             </div>
           </section>
           <aside className="panel recipe-preview">

@@ -132,7 +132,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   }, [days])
 
   useEffect(() => { loadAppointments() }, [loadAppointments])
-  useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   // The grid header used to say a hardcoded "GMT-6" — the practice's real time zone is what the
   // appointments are stored against, so show its actual UTC offset instead.
@@ -261,28 +261,31 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   const goPrev = () => setAnchor((prev) => addDays(prev, -step))
   const goNext = () => setAnchor((prev) => addDays(prev, step))
 
-  const confirmAppointment = async (id) => {
-    try {
-      const updated = await appointmentsApi.confirm(id)
-      setAppointments((prev) => prev.map((a) => (a.id === id ? updated : a)))
-      return true
-    } catch {
-      // Se propaga el fallo: el diálogo no debe cerrarse como si hubiera confirmado.
-      return false
-    }
-  }
-  // Un clic en una cita "por confirmar" ya no confirma directo: pide "¿Deseas confirmar la cita?"
-  // y recién al aceptar llama a la API, para que un clic accidental no cambie el estado de la cita.
+  // Ficha de la cita: un clic abre sus datos y las acciones que corresponden a su estado. Antes un
+  // clic en una confirmada iniciaba la consulta de golpe (también por accidente o en citas pasadas),
+  // no había forma de cancelar ni de marcar inasistencia, y un bloqueo no se podía quitar.
   const askConfirm = (appointment) => { setConfirmError(''); setConfirmTarget(appointment) }
-  const resolveConfirm = async () => {
-    if (!confirmTarget) return
-    setConfirmSaving(true)
-    setConfirmError('')
-    const ok = await confirmAppointment(confirmTarget.id)
-    setConfirmSaving(false)
-    if (ok) setConfirmTarget(null)
-    else setConfirmError('No se pudo confirmar la cita. Intenta de nuevo.')
+  const closeSheet = () => { if (!confirmSaving) setConfirmTarget(null) }
+  const runSheetAction = async (action) => {
+    const target = confirmTarget
+    if (!target || confirmSaving) return
+    if (action === 'cancel' && !window.confirm(target.type === 'BLOCK' ? '¿Quitar este bloqueo de tu agenda?' : '¿Cancelar esta cita? El horario quedará libre.')) return
+    setConfirmSaving(action); setConfirmError('')
+    try {
+      if (action === 'confirm') {
+        const updated = await appointmentsApi.confirm(target.id)
+        setAppointments((prev) => prev.map((a) => (a.id === target.id ? updated : a)))
+        setConfirmTarget(updated)
+      } else {
+        await (action === 'cancel' ? appointmentsApi.cancel(target.id) : appointmentsApi.noShow(target.id))
+        setAppointments((prev) => prev.filter((a) => a.id !== target.id))
+        setConfirmTarget(null)
+      }
+    } catch (error) {
+      setConfirmError(error.code === 'DEMO_MODE' ? 'Modo demostración: conecta el API para cambiar la cita.' : (error.message || 'No se pudo actualizar la cita. Intenta de nuevo.'))
+    } finally { setConfirmSaving(false) }
   }
+  const startFromSheet = (appointment, withAppointment = true) => { setConfirmTarget(null); onStartConsultation?.(appointment.patientId, withAppointment ? appointment.id : null) }
 
   const duplicatedLabels = useMemo(() => {
     const counts = new Map()
@@ -515,13 +518,16 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
                 const confirmed = isConfirmedLike(appointment.status) && !isBlockEvent
                 const isPast = appointment.endAt ? new Date(appointment.endAt).getTime() < nowMs : false
                 const name = isBlockEvent ? 'Bloqueo' : appointment.patient ? `${appointment.patient.firstName} ${appointment.patient.lastName}` : 'Paciente'
-                const onClick = (e) => { e.stopPropagation(); if (pending) askConfirm(appointment); else if (confirmed) onStartConsultation?.(appointment.patientId, appointment.id) }
+                const onClick = (e) => { e.stopPropagation(); askConfirm(appointment) }
                 return <div
                   className={`event ${color}-event${isPast ? ' past' : ''}${dragId === appointment.id ? ' dragging' : ''}`}
-                  style={{ top, height, cursor: pending || confirmed ? 'pointer' : 'default' }}
+                  style={{ top, height, cursor: 'pointer' }}
                   onClick={onClick}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e) } }}
                   key={appointment.id}
-                  title={pending ? 'Clic para confirmar la cita' : confirmed ? 'Clic para iniciar la consulta' : 'Arrastra para mover de fecha u hora'}
+                  title={`${pending ? 'Por confirmar' : confirmed ? 'Confirmada' : isBlockEvent ? 'Bloqueo' : 'Cita'}: clic para ver opciones · arrastra para moverla`}
                   draggable
                   onDragStart={() => startDrag(appointment)}
                   onDragEnd={() => { setDragId(null); setDragDuration(null); setDropKey(null) }}
@@ -572,10 +578,31 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     </form>
   </div></div>}
 
-  {confirmTarget && <div className="modal-backdrop" onClick={() => !confirmSaving && setConfirmTarget(null)}><div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
-    <div className="modal-head"><div><p className="eyebrow">POR CONFIRMAR</p><h2>¿Deseas confirmar la cita?</h2><span className="modal-subtitle">{confirmTarget.patient ? `${confirmTarget.patient.firstName} ${confirmTarget.patient.lastName}` : 'Paciente'} · {new Date(confirmTarget.startAt).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', timeZone: 'UTC' })} · {String(new Date(confirmTarget.startAt).getUTCHours()).padStart(2, '0')}:{String(new Date(confirmTarget.startAt).getUTCMinutes()).padStart(2, '0')}</span></div><button onClick={() => !confirmSaving && setConfirmTarget(null)}>×</button></div>
-    {confirmError && <div className="form-error">⚠ {confirmError}</div>}
-    <div className="modal-actions"><button type="button" className="secondary" onClick={() => setConfirmTarget(null)} disabled={confirmSaving}>Cancelar</button><button type="button" className="primary" onClick={resolveConfirm} disabled={confirmSaving}>{confirmSaving ? 'Confirmando…' : 'Confirmar cita'} <span>→</span></button></div>
-  </div></div>}
+  {confirmTarget && (() => {
+    const a = confirmTarget
+    const isBlockSheet = a.type === 'BLOCK'
+    const pendingSheet = a.status === 'PENDING_CONFIRMATION'
+    const done = a.status === 'COMPLETED'
+    const start = new Date(a.startAt)
+    const minutes = a.endAt ? Math.round((new Date(a.endAt) - start) / 60000) : 60
+    const started = start.getTime() <= nowMs
+    const when = `${start.toLocaleDateString('es-MX', { weekday: 'short', day: '2-digit', month: 'short', timeZone: 'UTC' })} · ${String(start.getUTCHours()).padStart(2, '0')}:${String(start.getUTCMinutes()).padStart(2, '0')} · ${minutes} min`
+    return <div className="modal-backdrop" onClick={closeSheet}><div className="modal confirm-modal appointment-sheet" onClick={(e) => e.stopPropagation()}>
+      <div className="modal-head"><div><p className="eyebrow">{isBlockSheet ? 'BLOQUEO' : pendingSheet ? 'POR CONFIRMAR' : done ? 'ATENDIDA' : 'CONFIRMADA'}</p><h2>{isBlockSheet ? 'Horario bloqueado' : a.patient ? `${a.patient.firstName} ${a.patient.lastName}` : 'Paciente'}</h2><span className="modal-subtitle">{when}{isBlockSheet ? '' : ` · ${TYPE_LABELS[a.type] || a.type}`}</span></div><button type="button" aria-label="Cerrar" onClick={closeSheet}>×</button></div>
+      {(a.internalNote || a.patientNote) && <div className="appointment-sheet-notes">{a.internalNote && <p><b>Nota interna</b>{a.internalNote}</p>}{a.patientNote && <p><b>Para el paciente</b>{a.patientNote}</p>}</div>}
+      {pendingSheet && <p className="muted">Confírmala cuando el paciente responda. Si ya llegó, puedes iniciar la consulta directamente.</p>}
+      {!isBlockSheet && !done && <p className="muted appointment-sheet-hint">Para cambiar la fecha u hora, arrastra la cita en el calendario.</p>}
+      {confirmError && <div className="form-error">⚠ {confirmError}</div>}
+      <div className="modal-actions appointment-sheet-actions">
+        {!done && <button type="button" className="link-button danger" disabled={!!confirmSaving} onClick={() => runSheetAction('cancel')}>{confirmSaving === 'cancel' ? 'Cancelando…' : isBlockSheet ? 'Quitar bloqueo' : 'Cancelar cita'}</button>}
+        {!isBlockSheet && !done && started && <button type="button" className="link-button" disabled={!!confirmSaving} onClick={() => runSheetAction('noshow')}>{confirmSaving === 'noshow' ? 'Guardando…' : 'No asistió'}</button>}
+        <span className="appointment-sheet-spacer" />
+        {pendingSheet && <button type="button" className="secondary" disabled={!!confirmSaving} onClick={() => runSheetAction('confirm')}>{confirmSaving === 'confirm' ? 'Confirmando…' : 'Confirmar cita'}</button>}
+        {!isBlockSheet && !done && a.patientId && <button type="button" className="primary" disabled={!!confirmSaving} onClick={() => startFromSheet(a)}>Iniciar consulta <span>→</span></button>}
+        {done && a.patientId && <button type="button" className="primary" onClick={() => startFromSheet(a, false)}>Abrir expediente <span>→</span></button>}
+        {isBlockSheet && <button type="button" className="secondary" onClick={closeSheet}>Cerrar</button>}
+      </div>
+    </div></div>
+  })()}
   </AppChrome>
 }

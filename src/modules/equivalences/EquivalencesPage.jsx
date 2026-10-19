@@ -40,6 +40,8 @@ function FoodDetail({ food, onClose, onSaved }) {
   const set = (key, value) => setDraft((prev) => ({ ...prev, [key]: value }))
   const pending = Object.keys(review)
   const dirty = Object.keys(draft).length > 0
+  // Cerrar con cambios sin guardar pregunta antes (el fondo ya los protegía; × y "Cerrar" no).
+  const close = () => { if (!dirty || window.confirm('Tienes cambios sin guardar en este alimento. ¿Descartarlos?')) onClose() }
   const save = async (values) => {
     setState('saving'); setError('')
     try { onSaved(await smaeApi.update(food.id, values)); setDraft({}); setState('idle') }
@@ -48,7 +50,7 @@ function FoodDetail({ food, onClose, onSaved }) {
   // "Confirmar" da por buenos los valores que se ven en las celdas marcadas (más lo editado).
   const confirmAll = () => save({ ...Object.fromEntries(pending.filter((key) => COLUMNS.some(([column]) => column === key)).map((key) => [key, food.nutrients?.[key] ?? null])), ...(review.name ? { name: food.name } : {}), ...(review.unit ? { unit: food.unit } : {}), ...(review.qty && food.qty != null ? { qty: Number(food.qty) } : {}), ...draft })
   return <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !dirty) onClose() }}><div className="modal smae-detail">
-    <div className="modal-head"><div><p className="eyebrow">{food.group.toUpperCase()} · SMAE 5ª ED. · HOJA {food.page}, RENGLÓN {food.row}</p><h2>{food.name}</h2><span className="modal-subtitle">1 equivalente = {formatQty(food)} {food.unit || ''} · valores por equivalente. Deja un campo vacío para "ND" (no determinado).</span></div><button onClick={onClose} aria-label="Cerrar">×</button></div>
+    <div className="modal-head"><div><p className="eyebrow">{food.group.toUpperCase()} · SMAE 5ª ED. · HOJA {food.page}, RENGLÓN {food.row}</p><h2>{food.name}</h2><span className="modal-subtitle">1 equivalente = {formatQty(food)} {food.unit || ''} · valores por equivalente. Deja un campo vacío para "ND" (no determinado).</span></div><button onClick={close} aria-label="Cerrar">×</button></div>
     {pending.length > 0 && <div className="smae-review-note"><b>{pending.length} dato{pending.length === 1 ? '' : 's'} por revisar.</b> La lectura automática del libro no es segura en las celdas marcadas: compáralas con tu ejemplar (hoja {food.page}) y corrige o confirma.</div>}
     <div className="smae-fields">{COLUMNS.map(([key, label, unit]) => {
       const flag = review[key]
@@ -62,7 +64,7 @@ function FoodDetail({ food, onClose, onSaved }) {
     })}</div>
     {error && <div className="form-error">⚠ {error}</div>}
     <div className="modal-actions">
-      <button type="button" className="secondary" onClick={onClose}>Cerrar</button>
+      <button type="button" className="secondary" onClick={close}>Cerrar</button>
       {pending.length > 0 && <button type="button" className="secondary" disabled={state === 'saving'} onClick={confirmAll}>{dirty ? 'Guardar y confirmar todo' : 'Confirmar: está correcto'}</button>}
       <button type="button" className="primary" disabled={!dirty || state === 'saving'} onClick={() => save(draft)}>{state === 'saving' ? 'Guardando…' : 'Guardar cambios'}</button>
     </div>
@@ -116,7 +118,7 @@ export default function EquivalencesPage({ setActive }) {
       {totals.foods > 0 && <div className="panel smae-table-panel">
         <div className="smae-table-scroll"><table className="smae-table">
           <thead><tr><th className="smae-name">Alimento</th><th>Cantidad</th><th>Unidad</th>{COLUMNS.map(([key, label, unit, short]) => <th key={key} title={`${label}${unit ? ` (${unit})` : ''}`}>{short}</th>)}<th>Hoja</th></tr></thead>
-          <tbody>{data.items.map((food) => { const review = food.review || {}; return <tr key={food.id} className={Object.keys(review).length ? 'has-review' : ''} onClick={() => setSelected(food)}>
+          <tbody>{data.items.map((food) => { const review = food.review || {}; return <tr key={food.id} className={Object.keys(review).length ? 'has-review' : ''} onClick={() => setSelected(food)} tabIndex={0} onKeyDown={(event) => { if (event.key === 'Enter') setSelected(food) }}>
             <td className={'smae-name' + (review.name ? ' flagged' : '')}><b>{food.name}</b>{!group && <small>{food.group}</small>}</td>
             <td className={review.qty ? 'flagged' : ''}>{formatQty(food)}</td>
             <td className={review.unit ? 'flagged' : ''}>{food.unit}</td>

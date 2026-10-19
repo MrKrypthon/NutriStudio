@@ -91,7 +91,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
         setSelected((prev) => list.find((recipe) => recipe.id === prev?.id) || list[0] || null)
         setStatus('online')
       })
-      .catch(() => setStatus('demo'))
+      .catch((error) => { if (error.code === 'DEMO_MODE') setStatus('demo'); else { setItems([]); setSelected(null); setTotal(0); setStatus('error') } })
   }
 
   useEffect(() => {
@@ -136,6 +136,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   }
   const removeRecipeImage = async () => {
     if (!isReal) return
+    if (!window.confirm(`¿Quitar la foto de "${selected.name}"? También dejará de salir en los planes.`)) return
     setImageError('')
     setImageState('saving')
     try {
@@ -150,6 +151,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
 
   const archive = async () => {
     if (!isReal) return
+    if (!window.confirm(`¿Archivar "${selected.name}"? Ya no aparecerá en el catálogo ni en las sugerencias; los planes que la usan no cambian.`)) return
     setArchiveState('archiving')
     setArchiveError('')
     try { await recipesApi.archive(selected.id); setArchiveState('idle'); load() }
@@ -173,7 +175,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   const hasApproxIngredients = linkedIngredients.some((item) => item.ingredient.group === 'Aproximados Menu 500')
 
   return <AppChrome active="Recetas" setActive={setActive}><div className="content recipe-workspace">
-    <ModuleHeader eyebrow="BIBLIOTECA · RECETAS LOCALES" title="Recetas" subtitle="Tu catálogo propio, listo para personalizar en cada plan." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizado' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span><button className="primary" onClick={startCreate}><span>+</span> Nueva receta</button></div>} />
+    <ModuleHeader eyebrow="BIBLIOTECA · RECETAS LOCALES" title="Recetas" subtitle="Tu catálogo propio, listo para personalizar en cada plan." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizado' : status === 'loading' ? 'Cargando…' : status === 'error' ? 'Sin conexión' : 'Vista demo'}</span><button className="primary" onClick={startCreate}><span>+</span> Nueva receta</button></div>} />
 
     <div className="recipe-toolbar panel">
       <div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre..." /></div>
@@ -184,7 +186,8 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
     <div className="recipe-layout">
       <section className="recipe-catalog">
         <div className="catalog-meta">{total === 0 ? 'Sin recetas' : `${firstOnPage}–${lastOnPage} de ${total} receta${total === 1 ? '' : 's'}`} <span>Fuente: catálogo Nutri Studio</span></div>
-        {status !== 'loading' && items.length === 0 && <div className="result-empty panel"><span>◌</span><h3>No hay recetas con esos filtros</h3><p>Ajusta la búsqueda o crea una receta nueva.</p></div>}
+        {status === 'error' && <div className="form-error">⚠ No se pudieron cargar las recetas.</div>}
+        {status !== 'loading' && status !== 'error' && items.length === 0 && <div className="result-empty panel"><span>◌</span><h3>No hay recetas con esos filtros</h3><p>Ajusta la búsqueda o crea una receta nueva.</p></div>}
         <div className="recipe-grid">{items.map((recipe, i) => <button className={'recipe-card panel ' + (selected?.id === recipe.id ? 'recipe-selected' : '')} onClick={() => setSelected(recipe)} key={recipe.id}><RecipeImage recipe={recipe} colorIndex={i} className="recipe-image" /><div className="recipe-body"><span className="recipe-meal">{MEAL_TYPE_LABELS[recipe.mealTypes?.[0]] || recipe.mealTypes?.[0] || 'Receta'}{recipe.timeMinutes ? ` · ${recipe.timeMinutes} min` : ''}</span><h3>{recipe.name}</h3><p>{Math.round(recipe.nutrition?.kcal || 0)} kcal {recipe.source ? '· por porción' : '· Ingredientes revisados'}</p></div></button>)}</div>
         {total > 0 && <div className="recipe-pagination panel">
           <label>Mostrar <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))}>{[12, 24, 48, 96].map((size) => <option value={size} key={size}>{size}</option>)}</select> por página</label>

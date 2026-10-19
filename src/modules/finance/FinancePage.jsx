@@ -30,6 +30,14 @@ const EXPENSE_CATEGORIES = ['Insumos', 'Renta', 'Servicios', 'Equipo', 'Publicid
 const APPOINTMENT_TYPE_LABELS = Object.fromEntries(APPOINTMENT_TYPE_FEES)
 const EMPTY_FORM = { amount: '', date: todayIso(), category: 'Insumos', method: 'CASH', description: '' }
 
+// Tarifa en pesos: mientras se escribe se conserva el texto tal cual y se convierte a centavos al
+// salir. Antes cada tecla pasaba por centavos y de vuelta, así que el punto de "450.50" se borraba.
+function FeeInput({ cents, onChange }) {
+  const [text, setText] = useState(null)
+  const shown = text != null ? text : (cents ? String(centsToPesos(cents)) : '')
+  return <input type="number" min="0" step="0.01" inputMode="decimal" value={shown} placeholder="0" onChange={(event) => { setText(event.target.value); onChange(pesosToCents(event.target.value)) }} onBlur={() => setText(null)} />
+}
+
 export default function FinancePage({ setActive }) {
   const [rangeKey, setRangeKey] = useState('month')
   const [data, setData] = useState(null)
@@ -42,6 +50,7 @@ export default function FinancePage({ setActive }) {
   const [feesState, setFeesState] = useState('idle')
   const [feesError, setFeesError] = useState('')
   const [entryBusy, setEntryBusy] = useState(null)
+  const [entryError, setEntryError] = useState('')
   const [selectedDay, setSelectedDay] = useState(null)
   // Las tarifas solo se pueblan la primera vez: `load()` también corre al cambiar de rango y no
   // debe pisar lo que la usuaria haya editado sin guardar.
@@ -89,8 +98,8 @@ export default function FinancePage({ setActive }) {
 
   const removeEntry = async (id) => {
     if (!window.confirm('¿Eliminar este movimiento? Esta acción no se puede deshacer.')) return
-    setEntryBusy(id)
-    try { await financeApi.removeEntry(id); await load() } catch { /* el movimiento queda; se puede reintentar */ } finally { setEntryBusy(null) }
+    setEntryBusy(id); setEntryError('')
+    try { await financeApi.removeEntry(id); await load() } catch (error) { setEntryError(error.code === 'DEMO_MODE' ? 'Modo demostración: no se puede eliminar.' : (error.message || 'No se pudo eliminar el movimiento.')) } finally { setEntryBusy(null) }
   }
 
   const saveFees = async () => {
@@ -125,7 +134,7 @@ export default function FinancePage({ setActive }) {
     <div className="finance-grid">
       <section className="panel finance-chart">
         <div className="finance-section-head"><div><h2>Ingresos y egresos</h2><p>{range.label} · ingresos en verde, egresos en rojo.</p></div>
-          <div className="view-switch">{RANGES.map(([key, label]) => <button className={rangeKey === key ? 'selected' : ''} onClick={() => setRangeKey(key)} key={key}>{label}</button>)}</div>
+          <div className="view-switch">{RANGES.map(([key, label]) => <button className={rangeKey === key ? 'selected' : ''} onClick={() => { setRangeKey(key); setSelectedDay(null) }} key={key}>{label}</button>)}</div>
         </div>
         <IncomeExpenseChart daily={data?.daily || []} selectedDate={selectedDay} onSelectDay={setSelectedDay} />
       </section>
@@ -148,6 +157,7 @@ export default function FinancePage({ setActive }) {
 
     <section className="panel finance-movements">
       <div className="finance-section-head"><div><h2>Movimientos</h2><p>{selectedDay ? `Mostrando el ${formatShortDay(selectedDay)}.` : `${range.label} · ingresos automáticos por consulta y egresos que registras.`}</p></div>{selectedDay && <button className="secondary" onClick={() => setSelectedDay(null)}>Ver todo el periodo</button>}</div>
+      {entryError && <div className="form-error">⚠ {entryError}</div>}
       {status === 'loading' && <p className="muted">Cargando movimientos…</p>}
       {status !== 'loading' && visibleEntries.length === 0 && <p className="finance-empty muted">{selectedDay ? 'Ese día no tuvo movimientos.' : 'Todavía no hay movimientos en este periodo. Los ingresos aparecen solos al terminar una consulta.'}</p>}
       {visibleEntries.length > 0 && <div className="finance-table">
@@ -157,14 +167,14 @@ export default function FinancePage({ setActive }) {
           <span className="finance-desc"><b>{entry.type === 'INCOME' ? (entry.patientName || 'Consulta') : (entry.category || 'Gasto')}</b><small>{entry.type === 'INCOME' ? (APPOINTMENT_TYPE_LABELS[entry.appointmentType] || 'Consulta') : (entry.description || 'Egreso del consultorio')}</small></span>
           <span className="finance-method">{entry.method ? PAYMENT_METHOD_LABELS[entry.method] : '—'}</span>
           <span className="finance-amount">{entry.type === 'INCOME' ? '+' : '−'}{formatMoney(entry.amountCents)}</span>
-          <button className="finance-remove" disabled={entryBusy === entry.id} onClick={() => removeEntry(entry.id)} title="Eliminar movimiento">×</button>
+          <button className="finance-remove" disabled={entryBusy === entry.id} onClick={() => removeEntry(entry.id)} title="Eliminar movimiento" aria-label="Eliminar movimiento">×</button>
         </div>)}
       </div>}
     </section>
 
     <section className="panel finance-fees">
       <div className="finance-section-head"><div><h2>Tarifas por tipo de cita</h2><p>Con estos precios se calcula el ingreso automático al terminar una consulta.</p></div><button className="primary" disabled={feesState === 'saving'} onClick={saveFees}>{feesState === 'saving' ? 'Guardando…' : feesState === 'saved' ? 'Guardado ✓' : 'Guardar tarifas'}</button></div>
-      <div className="finance-fee-grid">{APPOINTMENT_TYPE_FEES.map(([key, label]) => <label key={key}>{label}<div className="finance-fee-input"><span>$</span><input type="number" min="0" step="0.01" value={feesForm[key] ? centsToPesos(feesForm[key]) : ''} placeholder="0" onChange={(event) => setFeesForm((prev) => ({ ...prev, [key]: pesosToCents(event.target.value) }))} /></div></label>)}</div>
+      <div className="finance-fee-grid">{APPOINTMENT_TYPE_FEES.map(([key, label]) => <label key={key}>{label}<div className="finance-fee-input"><span>$</span><FeeInput cents={feesForm[key]} onChange={(cents) => setFeesForm((prev) => ({ ...prev, [key]: cents }))} /></div></label>)}</div>
       {APPOINTMENT_TYPE_FEES.every(([key]) => !feesForm[key]) && <p className="finance-fee-hint">Aún no defines tarifas: al terminar una consulta podrás capturar el monto a mano. Al guardarlas, el ingreso se calculará solo.</p>}
       {feesError && <div className="form-error">⚠ {feesError}</div>}
     </section>

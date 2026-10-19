@@ -143,7 +143,8 @@ export default function NewRecipePage({ setActive, recipeId }) {
 
   const save = async () => {
     const textLines = ingredientsText.split('\n').map((line) => line.trim()).filter(Boolean)
-    if (!name || (!chosen.length && !textLines.length) || chosen.some((x) => Number(x.quantity) <= 0)) return
+    if (!name.trim() || (!chosen.length && !textLines.length) || chosen.some((x) => Number(x.quantity) <= 0)) return
+    const safePortions = Math.max(1, Math.round(Number(portions) || 1))
     setSaveState('saving')
     setSaveError('')
     // The quantity editor is labeled and computed in grams (per-100g nutrition math); persist that
@@ -151,7 +152,7 @@ export default function NewRecipePage({ setActive, recipeId }) {
     const ingredients = chosen.map((item) => ({ ingredientId: item.id, quantity: item.quantity, unit: 'g', equivalence: item.equivalence }))
     try {
       if (recipeId) {
-        await recipesApi.update(recipeId, { name, mealTypes: [MEAL_TYPE_KEYS[meal]], portions, ingredientsText: textLines, instructions: instructions || 'Preparación pendiente de completar.' })
+        await recipesApi.update(recipeId, { name: name.trim(), mealTypes: [MEAL_TYPE_KEYS[meal]], portions: safePortions, ingredientsText: textLines, instructions: instructions || 'Preparación pendiente de completar.' })
         // Imported recipes have free-text ingredients but no catalog rows; replacing with an empty
         // list would be rejected by the API, so only touch linked ingredients when there are some.
         // For imported recipes the linked list is the SMAE calculation, so save it even when empty
@@ -159,7 +160,7 @@ export default function NewRecipePage({ setActive, recipeId }) {
         if (recipeSource) await recipesApi.replaceIngredients(recipeId, ingredients)
         else if (ingredients.length) await recipesApi.replaceIngredients(recipeId, ingredients)
       } else {
-        const created = await recipesApi.create({ name, mealTypes: [MEAL_TYPE_KEYS[meal]], portions, restrictions: [], ingredientsText: textLines, instructions: instructions || 'Preparación pendiente de completar.', ingredients })
+        const created = await recipesApi.create({ name: name.trim(), mealTypes: [MEAL_TYPE_KEYS[meal]], portions: safePortions, restrictions: [], ingredientsText: textLines, instructions: instructions || 'Preparación pendiente de completar.', ingredients })
         // A failed recalc would leave the recipe with 0-kcal nutrition and the success panel
         // would still say "guardada" — surface it instead of swallowing it. Free-text-only recipes
         // have no catalog macros to compute from, so skip the recalc entirely.
@@ -184,6 +185,8 @@ export default function NewRecipePage({ setActive, recipeId }) {
 
   const textIngredientCount = ingredientsText.split('\n').filter((line) => line.trim()).length
   const hasAnyIngredient = chosen.length > 0 || textIngredientCount > 0
+  // Por qué "Guardar" está deshabilitado: antes el botón se apagaba sin decir qué faltaba.
+  const missing = !name.trim() ? 'Escribe el nombre de la receta.' : !hasAnyIngredient ? 'Agrega al menos un ingrediente (del catálogo o en texto libre).' : chosen.some((x) => Number(x.quantity) <= 0) ? 'Hay ingredientes con 0 g: escribe su cantidad o quítalos.' : ''
 
   return <AppChrome active={recipeId ? 'Editar receta' : 'Nueva receta'} setActive={setActive}><div className="content new-recipe">
     <button className="back-button" onClick={() => setActive('Recetas')}>← Recetas</button>
@@ -198,20 +201,21 @@ export default function NewRecipePage({ setActive, recipeId }) {
       <section className="panel recipe-form">
         <div className="form-section-title"><span>01</span><div><h2>Información de la receta</h2><p>Define cómo aparecerá en el plan del paciente.</p></div></div>
         <label>Nombre de la receta *<input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej. Bowl de pollo con verduras" /></label>
-        <div className="form-grid"><label>Tiempo de comida<select value={meal} onChange={(e) => setMeal(e.target.value)}>{MEAL_TYPE_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></label><label>Porciones<input type="number" value={portions} min="1" onChange={(e) => setPortions(Number(e.target.value))} /></label></div>
+        <div className="form-grid"><label>Tiempo de comida<select value={meal} onChange={(e) => setMeal(e.target.value)}>{MEAL_TYPE_OPTIONS.map((option) => <option key={option}>{option}</option>)}</select></label><label>Porciones<input type="number" value={portions || ''} min="1" onChange={(e) => setPortions(Number(e.target.value))} onBlur={() => setPortions((value) => Math.max(1, Math.round(Number(value) || 1)))} /></label></div>
         <div className="form-section-title second"><span>02</span><div><h2>Ingredientes locales</h2><p>Busca en tu catálogo (Sistema Mexicano de Equivalentes) y ajusta sus cantidades.</p></div></div>
         <div className="search-field">⌕ <input value={ingredientSearch} onChange={(e) => setIngredientSearch(e.target.value)} placeholder="Buscar ingrediente (mín. 2 letras)..." /></div>
         {ingredientSearch.trim().length >= 2 && searchState === 'error' && <p className="muted" style={{ margin: '10px 0' }}>No se pudo buscar — el API no responde.</p>}
         {ingredientSearch.trim().length >= 2 && searchState === 'online' && catalog.length === 0 && <p className="muted" style={{ margin: '10px 0' }}>Sin resultados para "{ingredientSearch.trim()}".</p>}
         <div className="ingredient-suggestions">{catalog.map((item) => <button type="button" onClick={() => add(item)} className={chosen.some((x) => x.id === item.id) ? 'added' : ''} key={item.id}><span>+</span>{item.name}<small>{item.group}</small></button>)}</div>
-        <div className="recipe-form-ingredients">{chosen.map((item) => <div key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.name}</b><small>{item.group} · {item.serving || 'Equivalencia local'}</small></div><input type="number" value={item.quantity} onChange={(e) => update(item.id, 'quantity', e.target.value)} /><span className="unit-label">g</span><button type="button" onClick={() => setChosen(chosen.filter((x) => x.id !== item.id))}>×</button></div>)}</div>
+        <div className="recipe-form-ingredients">{chosen.map((item) => <div key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.name}</b><small>{item.group} · {item.serving || 'Equivalencia local'}</small></div><input type="number" value={item.quantity} onChange={(e) => update(item.id, 'quantity', e.target.value)} /><span className="unit-label">g</span><button type="button" aria-label={`Quitar ${item.name}`} onClick={() => setChosen(chosen.filter((x) => x.id !== item.id))}>×</button></div>)}</div>
         {recipeSource && <div className="smae-hint"><p>Vincula ingredientes del catálogo SMAE con sus gramos para <b>contrastar</b> el cálculo contra los valores originales del recetario. Si falta algún ingrediente, agrégalo en <b>Ingredientes › Aproximados Menu 500</b>.</p><button type="button" className="link-button" onClick={() => setActive('Ingredientes')}>Ir a Ingredientes →</button></div>}
         <label style={{ marginTop: 14 }}>Ingredientes en texto libre<textarea className="wide-textarea" value={ingredientsText} onChange={(e) => setIngredientsText(e.target.value)} placeholder={'Uno por línea, ej.\n2 tazas de harina de almendras\n3 huevos'} /></label>
         <p className="muted" style={{ fontSize: 9, marginTop: 4 }}>Para recetas del recetario importado sin ingredientes ligados al catálogo. Se muestran tal cual y se escalan al ajustar porciones.</p>
         <div className="form-section-title second"><span>03</span><div><h2>Preparación</h2><p>Estos pasos se mostrarán al paciente.</p></div></div>
         <textarea className="wide-textarea" value={instructions} onChange={(e) => setInstructions(e.target.value)} placeholder="Escribe los pasos de preparación..." />
         {saveState === 'error' && <div className="form-error">⚠ {saveError}</div>}
-        <div className="form-actions"><button type="button" className="secondary" onClick={() => setActive('Recetas')}>Cancelar</button><button type="button" className="primary" disabled={!name || !hasAnyIngredient || chosen.some((x) => Number(x.quantity) <= 0) || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : recipeId ? 'Guardar cambios' : 'Guardar receta'} <span>→</span></button></div>
+        {missing && <p className="muted form-missing">ⓘ {missing}</p>}
+        <div className="form-actions"><button type="button" className="secondary" onClick={() => setActive('Recetas')}>Cancelar</button><button type="button" className="primary" disabled={!!missing || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : recipeId ? 'Guardar cambios' : 'Guardar receta'} <span>→</span></button></div>
       </section>
       <aside className="panel recipe-preview"><p className="eyebrow">VISTA PREVIA</p><div className={imageFile ? 'recipe-preview-image has-photo' : 'recipe-preview-image coral'}>{imageFile ? <img src={recipesApi.imageUrl(imageFile)} alt={name || 'Receta'} /> : '✦'}</div><span className="recipe-meal">{meal}</span><h2>{name || 'Nombre de tu receta'}</h2><p className="muted">Receta propia · {chosen.length + textIngredientCount} ingredientes</p><div className="preview-note">{chosen.length ? 'La nutrición se calculará automáticamente a partir de las cantidades guardadas.' : 'Los ingredientes en texto libre se escalan al ajustar porciones.'}</div></aside>
     </div>)}

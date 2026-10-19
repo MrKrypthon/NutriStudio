@@ -6,11 +6,12 @@ import { patientsApi, templatesApi } from '../../lib/api.js'
 const TYPE_LABELS = { clinical: 'Expediente', plan: 'Plan nutricional' }
 const TAB_TYPES = { Todas: null, Expedientes: 'clinical', 'Planes nutricionales': 'plan' }
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
-const formatUTCDate = (iso) => { const d = new Date(iso); return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
+// Fecha de última edición: marca de tiempo real, en el día local.
+const formatUTCDate = (iso) => { const d = new Date(iso); return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}` }
 const detailFor = (template) => template.type === 'clinical' ? `${Object.keys(template.sections || {}).length} sección(es)` : `${(template.mealSlots || []).length} comida(s) asignadas`
 const emptyForm = () => ({ name: '', type: 'clinical', description: '', patientId: '' })
 
-export default function TemplatesPage({ setActive, onSelectPatient }) {
+export default function TemplatesPage({ setActive, onOpenPatient }) {
   const [tab, setTab] = useState('Todas')
   const [templates, setTemplates] = useState([])
   const [status, setStatus] = useState('loading')
@@ -29,6 +30,10 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
   const [editError, setEditError] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const [deleteState, setDeleteState] = useState('idle')
+  const [deleteError, setDeleteError] = useState('')
+  // El "¿Confirmar borrado?" se desarma solo: antes quedaba armado indefinidamente y un clic
+  // distraído minutos después borraba la plantilla sin volver a preguntar.
+  useEffect(() => { if (!confirmDeleteId) return undefined; const timer = setTimeout(() => setConfirmDeleteId(null), 4000); return () => clearTimeout(timer) }, [confirmDeleteId])
 
   const loadTemplates = () => {
     setStatus('loading')
@@ -38,7 +43,7 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
   }
 
   useEffect(loadTemplates, [])
-  useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   const visible = templates.filter((t) => !TAB_TYPES[tab] || t.type === TAB_TYPES[tab])
 
@@ -97,14 +102,14 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
   }
 
   const deleteTemplate = async (template) => {
-    if (confirmDeleteId !== template.id) { setConfirmDeleteId(template.id); return }
+    if (confirmDeleteId !== template.id) { setConfirmDeleteId(template.id); setDeleteError(''); return }
     setDeleteState('saving')
     try {
       await templatesApi.remove(template.id)
       setConfirmDeleteId(null)
       setDeleteState('idle')
       loadTemplates()
-    } catch { setDeleteState('idle'); setConfirmDeleteId(null) }
+    } catch (error) { setDeleteState('idle'); setConfirmDeleteId(null); setDeleteError(error.message || 'No se pudo eliminar la plantilla.') }
   }
 
   const applyTemplate = async () => {
@@ -112,10 +117,9 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
     setApplyState('applying')
     try {
       await templatesApi.apply(applyTarget.id, applyPatientId)
-      onSelectPatient?.(applyPatientId)
       closeApply()
-      loadTemplates()
-      setActive(applyTarget.type === 'clinical' ? 'Expediente' : 'Constructor de plan')
+      // Paciente y módulo en un solo salto, para que la dirección lleve al paciente (recargar no saca).
+      onOpenPatient?.(applyPatientId, applyTarget.type === 'clinical' ? 'Expediente' : 'Constructor de plan')
     } catch (error) {
       setApplyState('error')
       setApplyError(error.message || 'No se pudo aplicar la plantilla.')
@@ -129,6 +133,7 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
     {status === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando plantillas…</h3></div>}
     {status !== 'loading' && visible.length === 0 && <div className="result-empty panel"><span>◌</span><h3>No hay plantillas aquí todavía</h3><p>Crea una a partir del expediente o plan de un paciente.</p></div>}
 
+    {deleteError && <div className="form-error" style={{ marginBottom: 12 }}>⚠ {deleteError}</div>}
     <div className="template-grid">
       {visible.map((template) => <div className="template-card panel" key={template.id}>
         <div className={'template-icon ' + (template.type === 'clinical' ? 'mint' : 'coral')}>✦</div>

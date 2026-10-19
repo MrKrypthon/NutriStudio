@@ -25,6 +25,7 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
   const [archiveState, setArchiveState] = useState('idle')
   const [archiveError, setArchiveError] = useState('')
   const [shareState, setShareState] = useState('idle')
+  const [sharedId, setSharedId] = useState(null)
   const [attachState, setAttachState] = useState('idle')
   const [removeState, setRemoveState] = useState('idle')
   const [attachError, setAttachError] = useState('')
@@ -38,7 +39,7 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
     const query = params.toString() ? `?${params}` : ''
     educationApi.list(query)
       .then((response) => { const list = response.items || []; setItems(list); setStatus('online'); setCategoryOptions((prev) => [...new Set([...prev, ...list.map((item) => item.category).filter(Boolean)])]) })
-      .catch(() => setStatus('demo'))
+      .catch((error) => { if (error.code === 'DEMO_MODE') setStatus('demo'); else { setItems([]); setStatus('error') } })
   }
 
   useEffect(() => {
@@ -52,17 +53,22 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
   const startCreate = () => { onSelectMaterial?.(null); setActive('Nuevo material') }
   const startEdit = (material) => { if (!isReal) return; onSelectMaterial?.(material.id); setActive('Editar material') }
 
+  // Copia el material para pegarlo en WhatsApp o un correo. El aviso aparece en el botón que se usó
+  // (tarjeta o detalle): antes, desde la tarjeta, no había ninguna señal de que se hubiera copiado.
   const share = async (material) => {
-    setShareState('copying')
+    setShareState('copying'); setSharedId(material.id)
     try {
       await navigator.clipboard.writeText(`${material.title}\n\n${material.body}`)
       setShareState('copied')
-      setTimeout(() => setShareState('idle'), 1800)
     } catch { setShareState('error') }
+    setTimeout(() => { setShareState('idle'); setSharedId(null) }, 2200)
   }
+  const shareLabel = (material, idle) => (sharedId !== material.id ? idle : shareState === 'copied' ? '✓ Copiado' : shareState === 'error' ? 'No se pudo copiar' : idle)
+  const openDetail = (material) => { setDetail(material); setArchiveError(''); setAttachError(''); setArchiveState('idle') }
 
   const archive = async (material) => {
     if (!isReal) return
+    if (!window.confirm(`¿Archivar "${material.title}"? Dejará de aparecer en la biblioteca.`)) return
     setArchiveState('archiving')
     setArchiveError('')
     try { await educationApi.archive(material.id); setArchiveState('idle'); setDetail(null); load() }
@@ -98,40 +104,41 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
       const blob = await educationApi.downloadAttachmentBlob(detail.id)
       saveBlob(blob, detail.attachmentFileName || 'material')
       setAttachState('idle')
-      setAttachState('idle')
-    } catch { setAttachState('idle') }
+    } catch (error) { setAttachState('idle'); setAttachError(error.message || 'No se pudo descargar el archivo.') }
   }
 
   const removeAttachment = async () => {
     if (!detail?.attachmentStorageKey) return
-    setRemoveState('removing')
+    if (!window.confirm(`¿Quitar el archivo "${detail.attachmentFileName}" de este material?`)) return
+    setRemoveState('removing'); setAttachError('')
     try {
       const updated = await educationApi.removeAttachment(detail.id)
       setDetail(updated)
       setRemoveState('idle')
       load()
-    } catch { setRemoveState('idle') }
+    } catch (error) { setRemoveState('idle'); setAttachError(error.message || 'No se pudo quitar el archivo.') }
   }
 
   return <AppChrome active="Educación" setActive={setActive}><div className="content education-content">
-    <ModuleHeader eyebrow={`BIBLIOTECA · ${items.length} MATERIALES`} title="Educación nutricional" subtitle="Materiales que puedes compartir para acompañar el cambio de hábitos." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizado' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span><button className="primary" onClick={startCreate}><span>+</span> Nuevo material</button></div>} />
+    <ModuleHeader eyebrow={`BIBLIOTECA · ${items.length} MATERIALES`} title="Educación nutricional" subtitle="Materiales que puedes compartir para acompañar el cambio de hábitos." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizado' : status === 'loading' ? 'Cargando…' : status === 'error' ? 'Sin conexión' : 'Vista demo'}</span><button className="primary" onClick={startCreate}><span>+</span> Nuevo material</button></div>} />
 
     <div className="education-toolbar panel">
       <div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar material..." /></div>
       <select value={category} onChange={(e) => setCategory(e.target.value)}><option value="">Todas las categorías</option>{categoryOptions.map((c) => <option value={c} key={c}>{c}</option>)}</select>
     </div>
 
-    {status !== 'loading' && items.length === 0 && <div className="result-empty panel"><span>◌</span><h3>No hay materiales con esos filtros</h3><p>Ajusta la búsqueda o crea un material nuevo.</p></div>}
+    {status === 'error' && <div className="form-error">⚠ No se pudieron cargar los materiales. Revisa la conexión y vuelve a intentar.</div>}
+    {status !== 'loading' && status !== 'error' && items.length === 0 && <div className="result-empty panel"><span>◌</span><h3>No hay materiales con esos filtros</h3><p>Ajusta la búsqueda o crea un material nuevo.</p></div>}
 
     <div className="education-grid">{items.map((material) => <article className="education-card panel" key={material.id}>
-      <button type="button" className="education-cover-button" onClick={() => setDetail(material)}>
+      <button type="button" className="education-cover-button" onClick={() => openDetail(material)} aria-label={`Ver ${material.title}`}>
         <div className={'education-cover ' + (material.color || CATEGORY_COLORS[material.category] || 'mint')}><span>✦</span><small>{material.attachmentStorageKey ? (material.attachmentMime === 'application/pdf' ? 'PDF' : 'IMG') : 'TEXTO'}</small></div>
       </button>
       <div className="education-body">
         <span className="recipe-meal">{material.category}</span>
         <h3>{material.title}</h3>
         <p>{material.description}</p>
-        <div><small>Lectura · {material.readMinutes} min{material.attachmentStorageKey ? ' · 📎 con adjunto' : ''}</small><button onClick={() => share(material)}>Compartir ↗</button></div>
+        <div><small>Lectura · {material.readMinutes} min{material.attachmentStorageKey ? ' · 📎 con adjunto' : ''}</small><button onClick={() => share(material)}>{shareLabel(material, 'Compartir ↗')}</button></div>
       </div>
     </article>)}</div>
 
@@ -157,7 +164,7 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
           {archiveError && <span className="form-error" style={{ display: 'block', width: '100%' }}>⚠ {archiveError}</span>}
           {isReal && <button className="secondary" disabled={archiveState === 'archiving'} onClick={() => archive(detail)}>{archiveState === 'archiving' ? 'Archivando…' : 'Archivar'}</button>}
           {isReal && <button className="secondary" onClick={() => startEdit(detail)}>Editar</button>}
-          <button className="primary" onClick={() => share(detail)}>{shareState === 'copied' ? '✓ Copiado' : 'Copiar contenido'}</button>
+          <button className="primary" onClick={() => share(detail)}>{shareLabel(detail, 'Copiar contenido')}</button>
         </div>
       </div>
     </div>}

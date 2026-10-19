@@ -62,7 +62,7 @@ export default function IngredientsPage({ setActive }) {
           setSelected((prev) => list.find((item) => item.id === prev?.id) || list[0] || null)
           setStatus('online')
         })
-        .catch(() => setStatus('demo'))
+        .catch((error) => { if (error.code === 'DEMO_MODE') setStatus('demo'); else { setItems([]); setSelected(null); setStatus('error') } })
     }, 300)
     return () => clearTimeout(timer)
   }, [search, group, reloadKey])
@@ -130,6 +130,7 @@ export default function IngredientsPage({ setActive }) {
   }
   const removeIngredientImage = async () => {
     if (!selected) return
+    if (!window.confirm(`¿Quitar la imagen de ${selected.name}?`)) return
     setImageError('')
     setImageState('saving')
     try {
@@ -143,7 +144,7 @@ export default function IngredientsPage({ setActive }) {
   }
 
   return <AppChrome active="Ingredientes" setActive={setActive}><div className="content ingredient-workspace">
-    <ModuleHeader eyebrow="BIBLIOTECA · INGREDIENTES LOCALES" title="Ingredientes" subtitle="Datos nutricionales revisados y equivalencias de tu práctica." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizados' : status === 'loading' ? 'Cargando…' : 'Vista demo'}</span><button className="secondary" onClick={() => setShowForm((value) => !value)}><span>+</span> Nuevo ingrediente</button><button className="primary" onClick={() => setActive('Importar alimentos')}><span>+</span> Importar alimento</button></div>} />
+    <ModuleHeader eyebrow="BIBLIOTECA · INGREDIENTES LOCALES" title="Ingredientes" subtitle="Datos nutricionales revisados y equivalencias de tu práctica." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizados' : status === 'loading' ? 'Cargando…' : status === 'error' ? 'Sin conexión' : 'Vista demo'}</span><button className="secondary" onClick={() => setShowForm((value) => !value)}><span>+</span> Nuevo ingrediente</button><button className="primary" onClick={() => setActive('Importar alimentos')}><span>+</span> Importar alimento</button></div>} />
 
     <div className="group-pills">{GROUPS.map((g) => <button className={group === g ? 'selected' : ''} onClick={() => setGroup(g)} key={g}>{g}</button>)}</div>
 
@@ -174,7 +175,8 @@ export default function IngredientsPage({ setActive }) {
       <section>
         <div className="filter-bar panel"><div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar ingrediente..." /></div></div>
         <div className="ingredient-list panel">
-          {status !== 'loading' && items.length === 0 && <div className="result-empty"><span>◌</span><h3>No hay ingredientes con esos filtros</h3><p>Ajusta la búsqueda o el grupo.</p></div>}
+          {status === 'error' && <div className="form-error">⚠ No se pudieron cargar los ingredientes.</div>}
+          {status !== 'loading' && status !== 'error' && items.length === 0 && <div className="result-empty"><span>◌</span><h3>No hay ingredientes con esos filtros</h3><p>Ajusta la búsqueda o el grupo.</p></div>}
           {items.map((item) => <button className={'ingredient-row ' + (selected?.id === item.id ? 'ingredient-selected' : '')} onClick={() => setSelected(item)} key={item.id}>
             <span className="ingredient-icon">{item.imageFile ? <img src={ingredientsApi.imageUrl(item.imageFile)} alt="" /> : groupIcon(item)}</span>
             <div><b>{item.name}</b><small>{item.group} · Porción {item.equivalence?.serving || 'por definir'}</small></div>

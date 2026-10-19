@@ -7,7 +7,9 @@ import { sexLabel } from '../../lib/sex.js'
 
 const STATUS_LABELS = { IN_PROGRESS: 'En progreso', COMPLETED: 'Completada', DRAFT: 'Borrador' }
 const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
-const formatUTCDate = (iso) => { const d = new Date(iso); return `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
+// Inicio de una consulta: marca de tiempo real, se muestra en el día local (en UTC, una consulta de
+// la tarde-noche aparecía con fecha del día siguiente).
+const formatLocalDate = (iso) => { const d = new Date(iso); return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}` }
 const summarize = (consultation) => consultation.plans?.some((p) => p.status === 'PUBLISHED') ? 'Plan publicado' : consultation.sections?.length ? `${consultation.sections.length} sección(es) registradas` : 'Sin registros aún'
 
 // Antes esta pantalla arrastraba el paciente de demostración por defecto (el mismo id fijo que usaba
@@ -21,7 +23,7 @@ export default function ConsultationsPage({ setActive, patientId, onSelectPatien
   const [patientsState, setPatientsState] = useState('loading')
   const historyRef = useRef(null)
 
-  useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => { setPatients(payload.items || []); setPatientsState('ready') }).catch(() => setPatientsState('error')) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => { setPatients(payload.items || []); setPatientsState('ready') }).catch(() => setPatientsState('error')) }, [])
 
   const selectedIsReal = patients.some((p) => p.id === patientId)
   const patient = selectedIsReal ? (patientRecord ? `${patientRecord.firstName} ${patientRecord.lastName}` : 'Cargando…') : 'Sin paciente seleccionado'
@@ -41,7 +43,7 @@ export default function ConsultationsPage({ setActive, patientId, onSelectPatien
 
   return <AppChrome active="Consultas" setActive={setActive}><div className="content consultation-content">
     <ModuleHeader eyebrow="CONSULTAS · SESIÓN DE HOY" title="Nueva sesión" subtitle="Registra la consulta y crea el siguiente paso para tu paciente." action={selectedIsReal ? <button className="secondary" onClick={() => historyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>Historial de sesiones</button> : undefined} />
-    <div className="session-selector panel"><span className="person-avatar coral">{patientInitials}</span><div><p className="eyebrow">PACIENTE</p><b>{patient}</b><small>{selectedIsReal ? `${sexLabel(patientRecord?.sex) || 'Paciente'}${lastSession ? ` · Última consulta: ${formatUTCDate(lastSession.startedAt || lastSession.createdAt)}` : ' · Sin consultas previas'}` : 'Elige a quién vas a atender'}</small></div><label className="patient-switch">Paciente<select value={selectedIsReal ? patientId || '' : ''} onChange={(e) => onSelectPatient?.(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>
+    <div className="session-selector panel"><span className="person-avatar coral">{patientInitials}</span><div><p className="eyebrow">PACIENTE</p><b>{patient}</b><small>{selectedIsReal ? `${sexLabel(patientRecord?.sex) || 'Paciente'}${lastSession ? ` · Última consulta: ${formatLocalDate(lastSession.startedAt || lastSession.createdAt)}` : ' · Sin consultas previas'}` : 'Elige a quién vas a atender'}</small></div><label className="patient-switch">Paciente<select value={selectedIsReal ? patientId || '' : ''} onChange={(e) => onSelectPatient?.(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label></div>
 
     {patientsState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando pacientes…</h3></div>}
     {patientsState === 'error' && <div className="form-error">⚠ No se pudo cargar la lista de pacientes.</div>}
@@ -61,7 +63,7 @@ export default function ConsultationsPage({ setActive, patientId, onSelectPatien
         {loadState === 'loading' && <p className="muted">Cargando historial…</p>}
         {loadState === 'error' && <p className="muted">No se pudo cargar el historial de consultas.</p>}
         {loadState === 'ready' && sessions.length === 0 && <p className="muted">Todavía no hay consultas registradas para {patient}.</p>}
-        {sessions.map((session) => <div className="recent-row" key={session.id}><span className="recent-date">{formatUTCDate(session.startedAt || session.createdAt)}</span><b>{STATUS_LABELS[session.status] || session.status}</b><span className="muted">{summarize(session)}</span><span className={'status ' + (session.status === 'COMPLETED' ? 'confirmed' : 'pending')}>{STATUS_LABELS[session.status] || session.status}</span><button className="row-arrow" title="Abrir esta sesión en el expediente" onClick={() => onOpenSession?.(patientId, session.id)}>→</button></div>)}
+        {sessions.map((session) => <div className="recent-row" key={session.id}><span className="recent-date">{formatLocalDate(session.startedAt || session.createdAt)}</span><b>{STATUS_LABELS[session.status] || session.status}</b><span className="muted">{summarize(session)}</span><span className={'status ' + (session.status === 'COMPLETED' ? 'confirmed' : 'pending')}>{STATUS_LABELS[session.status] || session.status}</span><button className="row-arrow" title="Abrir esta sesión en el expediente" onClick={() => onOpenSession?.(patientId, session.id)}>→</button></div>)}
       </div>
     </>}
   </div></AppChrome>

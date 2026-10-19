@@ -89,6 +89,8 @@ export const financeApi = {
 }
 
 export const patientsApi = {
+  // Quién abrió el expediente, generó o descargó sus documentos (registro de accesos).
+  accessLog: (id) => apiRequest(`/patients/${id}/access-log`),
   list: (query = '') => apiRequest(`/patients${query}`),
   get: (id) => apiRequest(`/patients/${id}`),
   create: (payload) => apiRequest('/patients', { method: 'POST', body: JSON.stringify(payload) }),
@@ -113,6 +115,8 @@ export const appointmentsApi = {
   create: (payload) => apiRequest('/appointments', { method: 'POST', body: JSON.stringify(payload) }),
   confirm: (id) => apiRequest(`/appointments/${id}/confirm`, { method: 'POST' }),
   complete: (id) => apiRequest(`/appointments/${id}/complete`, { method: 'POST' }),
+  cancel: (id) => apiRequest(`/appointments/${id}/cancel`, { method: 'POST' }),
+  noShow: (id) => apiRequest(`/appointments/${id}/no-show`, { method: 'POST' }),
   move: (id, startAt, durationMinutes) => apiRequest(`/appointments/${id}`, { method: 'PATCH', body: JSON.stringify({ startAt, durationMinutes }) }),
 }
 
@@ -166,7 +170,8 @@ export const clinicalApi = {
   // cancelar la petición al desmontar la pantalla o al cerrar la pestaña y se perdería lo escrito.
   saveSection: (consultationId, sectionKey, payload, updatedAt, options = {}) => apiRequest(`/consultations/${consultationId}/sections/${sectionKey}`, { method: 'PUT', body: JSON.stringify({ payload, updatedAt }), ...options }),
   complete: (id, payload = {}) => apiRequest(`/consultations/${id}/complete`, { method: 'POST', body: JSON.stringify(payload) }),
-  reopen: (id) => apiRequest(`/consultations/${id}/reopen`, { method: 'POST' }),
+  // El motivo es obligatorio: queda como nota aclaratoria en la bitácora y en el PDF del expediente.
+  reopen: (id, reason) => apiRequest(`/consultations/${id}/reopen`, { method: 'POST', body: JSON.stringify({ reason }) }),
   registerMeasurement: (consultationId, payload) => apiRequest(`/consultations/${consultationId}/measurements`, { method: 'POST', body: JSON.stringify(payload) }),
   addDiagnosis: (consultationId, payload) => apiRequest(`/consultations/${consultationId}/diagnoses`, { method: 'POST', body: JSON.stringify(payload) }),
   updateDiagnosis: (consultationId, diagnosisId, payload) => apiRequest(`/consultations/${consultationId}/diagnoses/${diagnosisId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
