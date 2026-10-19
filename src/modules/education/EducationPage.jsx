@@ -147,7 +147,7 @@ export default function EducationPage({ setActive, onSelectMaterial }) {
         <div className="modal-head"><h2>{detail.title}</h2><button onClick={() => setDetail(null)}>×</button></div>
         <span className="recipe-meal">{detail.category} · {detail.readMinutes} min</span>
         <p className="muted" style={{ margin: '14px 0' }}>{detail.description}</p>
-        <p style={{ fontSize: 12, lineHeight: 1.6, color: '#45564d', whiteSpace: 'pre-wrap' }}>{detail.body}</p>
+        <p style={{ fontSize: 12, lineHeight: 1.6, color: 'var(--muted)', whiteSpace: 'pre-wrap' }}>{detail.body}</p>
         {isReal && <div className="material-attachment">
           <b>Archivo adjunto</b>
           {detail.attachmentStorageKey
