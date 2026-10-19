@@ -136,7 +136,7 @@ export default function TemplatesPage({ setActive, onSelectPatient }) {
         <h3>{template.name}</h3>
         {template.description && <p className="template-description">{template.description}</p>}
         <p>{detailFor(template)}</p>
-        <div className="template-footer"><span>Usada {template.usageCount} vez(es) · {formatUTCDate(template.updatedAt)}</span><button onClick={() => openApply(template)}>Usar plantilla →</button></div>
+        <div className="template-footer"><span>Usada {template.usageCount ?? 0} vez(es) · {formatUTCDate(template.updatedAt)}</span><button onClick={() => openApply(template)}>Usar plantilla →</button></div>
         <div className="template-card-actions"><button className="link-button" onClick={() => openEdit(template)}>Editar</button><button className={'link-button ' + (confirmDeleteId === template.id ? 'danger' : '')} onClick={() => deleteTemplate(template)} disabled={deleteState === 'saving'}>{confirmDeleteId === template.id ? '¿Confirmar borrado?' : 'Eliminar'}</button></div>
       </div>)}
     </div>

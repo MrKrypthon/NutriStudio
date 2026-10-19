@@ -3,6 +3,7 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { documentsApi } from '../../lib/api.js'
 import { planFileName } from '../../../server/domain/pdfTheme.js'
+import { saveBlob } from '../../lib/download.js'
 
 const TYPE_FILTERS = [['all', 'Todos'], ['consultation_report', 'Informes'], ['consultation_export', 'Expedientes'], ['nutrition_plan', 'Planes']]
 const DOC_TYPE_LABELS = { consultation_report: 'Informe de consulta', consultation_export: 'Expediente completo', nutrition_plan: 'Plan de alimentación' }
@@ -61,12 +62,7 @@ export default function DocumentsPage({ setActive }) {
     setDetailError('')
     try {
       const blob = await documentsApi.downloadBlob(detail.id)
-      const url = URL.createObjectURL(blob)
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = detail.type === 'nutrition_plan' ? planFileName(detail.patient ? `${detail.patient.firstName} ${detail.patient.lastName}` : '', detail.plan?.publishedAt || detail.generatedAt || new Date()) : detail.storageKey
-      link.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, detail.type === 'nutrition_plan' ? planFileName(detail.patient ? `${detail.patient.firstName} ${detail.patient.lastName}` : '', detail.plan?.publishedAt || detail.generatedAt || new Date()) : detail.storageKey)
       setDetailState('idle')
     } catch (error) {
       setDetailState('error')

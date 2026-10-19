@@ -5,7 +5,13 @@ import { recipeIngredientLines } from '../../../server/domain/documents.js'
 
 // El factor se guarda con dos decimales y entre 0.1 y 10, igual que lo normaliza el servidor.
 export const clampFactor = (value) => { const number = Number(value); return Number.isFinite(number) && number > 0 ? Math.min(10, Math.max(0.1, Math.round(number * 100) / 100)) : 1 }
-export const formatFactor = (value) => String(Math.round(Number(value) * 100) / 100)
+export const formatFactor = (value) => { const number = Number(value); return Number.isFinite(number) ? String(Math.round(number * 100) / 100) : '1' }
+
+// Utillidades de presentación/comparación que compartían los modales de recetas (antes había una
+// copia en cada uno y podían divergir).
+export const round1 = (value) => Math.round((Number(value) || 0) * 10) / 10
+export const formatCount = (value) => String(Math.round((Number(value) || 0) * 100) / 100)
+export const sameItems = (a, b) => JSON.stringify((a || []).map((item) => [item.ingredientId, item.name, item.grams])) === JSON.stringify((b || []).map((item) => [item.ingredientId, item.name, item.grams]))
 
 // Renglones de una receta como le tocan a la paciente: de "rinde N porciones" a las porciones que
 // se sirven en el tiempo de comida, multiplicadas además por el factor del ajuste.

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import { documentsApi, patientsApi, plansApi, templatesApi } from '../../lib/api.js'
+import { saveBlob } from '../../lib/download.js'
 import { usePatient } from '../../lib/usePatient.js'
 import { planFileName } from '../../../server/domain/pdfTheme.js'
 import PdfDesignEditor from './PdfDesignEditor.jsx'
@@ -122,12 +123,7 @@ export default function DocumentPage({ setActive, patientId, planId = null, embe
     if (!document?.storageKey) return
     try {
       const blob = await documentsApi.downloadBlob(document.id)
-      const url = URL.createObjectURL(blob)
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = planFileName(patientName, plan?.publishedAt || document.generatedAt || new Date())
-      link.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, planFileName(patientName, plan?.publishedAt || document.generatedAt || new Date()))
     } catch (err) {
       setError(err.message || 'No se pudo descargar el PDF.')
     }

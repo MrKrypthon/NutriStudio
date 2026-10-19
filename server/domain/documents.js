@@ -1,6 +1,7 @@
 import { EQUIVALENT_BY_CODE, mealBadgePortions } from './equivalents.js'
 import { itemsEquivalents, normalizeItems, recipeItems } from './recipeEquivalents.js'
 import { PLAN_MEALS, PLAN_MEAL_KEYS, formatMealTime, normalizeMealLabels, normalizeMealTimes } from './planMeals.js'
+import { foldText } from './text.js'
 
 // Nombre de cada tiempo de comida en el plan entregado (todas las colaciones son "Colación" y se
 // distinguen por su hora, como en el formato en papel) y su orden en el día.
@@ -37,7 +38,7 @@ const EQUIVALENT_GROUPS = [
 ]
 
 function equivalentGroupCode(group) {
-  const name = String(group || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+  const name = foldText(group)
   if (!name) return null
   if (name.startsWith('verdura')) return 'V'
   if (name.startsWith('fruta')) return 'F'

@@ -35,6 +35,7 @@ export default function FollowupsPage({ setActive }) {
   const [form, setForm] = useState(emptyForm)
   const [submitState, setSubmitState] = useState('idle')
   const [submitError, setSubmitError] = useState('')
+  const [actionError, setActionError] = useState('')
 
   const loadTasks = useCallback(async () => {
     setStatus('loading')
@@ -58,10 +59,14 @@ export default function FollowupsPage({ setActive }) {
   const visible = tasks.filter((t) => (filter === 'Todos' || (filter === 'Completados' ? t.status === 'completed' : t.status === 'pending')) && (!q || `${t.patient?.firstName || ''} ${t.patient?.lastName || ''}`.toLowerCase().includes(q)))
 
   const markDelivered = async (id) => {
+    setActionError('')
     try {
       const updated = await tasksApi.complete(id)
       setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)))
-    } catch { /* The row keeps its previous state; the professional can retry. */ }
+    } catch (error) {
+      // Antes el fallo se tragaba en silencio (o permitía doble clic → 409).
+      setActionError(error.code === 'DEMO_MODE' ? 'Modo demostración: no se guardará.' : 'No se pudo marcar como entregado. Intenta de nuevo.')
+    }
   }
 
   const openModal = () => { setForm(emptyForm()); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
@@ -70,7 +75,7 @@ export default function FollowupsPage({ setActive }) {
 
   const submit = async (event) => {
     event.preventDefault()
-    if (status !== 'online') { closeModal(); return }
+    if (status !== 'online') { setSubmitState('error'); setSubmitError('Modo demostración: conecta el API para crear seguimientos.'); return }
     if (!form.patientId) { setSubmitError('Selecciona un paciente.'); return }
     setSubmitState('saving')
     setSubmitError('')
@@ -98,6 +103,8 @@ export default function FollowupsPage({ setActive }) {
       <div className="search-field">⌕ <input placeholder="Buscar paciente..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
       <div className="view-switch">{['Todos', 'Pendientes', 'Completados'].map((x) => <button className={filter === x ? 'selected' : ''} onClick={() => setFilter(x)} key={x}>{x}</button>)}</div>
     </div>
+
+    {actionError && <div className="form-error" style={{ marginBottom: 12 }}>⚠ {actionError}</div>}
 
     <div className="followup-table panel">
       <div className="followup-head"><span>Paciente</span><span>Documento pendiente</span><span>Fecha límite</span><span>Vencimiento</span><span>Estado</span><span /></div>

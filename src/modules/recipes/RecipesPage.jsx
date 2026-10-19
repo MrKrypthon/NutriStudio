@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { recipesApi } from '../../lib/api.js'
@@ -62,12 +62,14 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   const [mealType, setMealType] = useState('')
   const [restriction, setRestriction] = useState('')
   const [archiveState, setArchiveState] = useState('idle')
+  const [archiveError, setArchiveError] = useState('')
   const [imageState, setImageState] = useState('idle')
   const [imageError, setImageError] = useState('')
   const [servings, setServings] = useState(1)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(12)
   const [total, setTotal] = useState(FALLBACK.length)
+  const [restrictionOptions, setRestrictionOptions] = useState(() => [...new Set(FALLBACK.flatMap((recipe) => recipe.restrictions || []))])
 
   const load = () => {
     setStatus('loading')
@@ -81,6 +83,10 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
       .then((response) => {
         const list = response.items || []
         setItems(list)
+        // Acumular las restricciones (no derivarlas de `items`, que viene ya filtrado por
+        // restricción): si no, al elegir una el <select> se queda solo con esa opción y no se puede
+        // cambiar a otra sin recargar.
+        setRestrictionOptions((prev) => [...new Set([...prev, ...list.flatMap((recipe) => recipe.restrictions || [])])])
         setTotal(response.total ?? list.length)
         setSelected((prev) => list.find((recipe) => recipe.id === prev?.id) || list[0] || null)
         setStatus('online')
@@ -100,7 +106,6 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   // A new recipe starts at one serving; re-selecting one shouldn't silently keep a previous scale.
   useEffect(() => { setServings(1) }, [selected?.id])
 
-  const restrictionOptions = useMemo(() => [...new Set(items.flatMap((recipe) => recipe.restrictions || []))], [items])
   const isReal = status === 'online' && selected && !String(selected.id).startsWith('demo-')
   const totalPages = Math.max(Math.ceil(total / pageSize), 1)
   const firstOnPage = total === 0 ? 0 : (page - 1) * pageSize + 1
@@ -146,8 +151,9 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   const archive = async () => {
     if (!isReal) return
     setArchiveState('archiving')
+    setArchiveError('')
     try { await recipesApi.archive(selected.id); setArchiveState('idle'); load() }
-    catch { setArchiveState('error') }
+    catch (error) { setArchiveState('idle'); setArchiveError(error.code === 'DEMO_MODE' ? 'Modo demostración: no se guardará.' : (error.message || 'No se pudo archivar la receta.')) }
   }
 
   const changeServings = (delta) => setServings((value) => Math.max(0.5, round1(value + delta)))
@@ -233,6 +239,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
 
           <button className="primary detail-assign" onClick={() => onAssignRecipe ? onAssignRecipe(selected.name) : setActive('Constructor de plan')}>Asignar al plan <span>→</span></button>
           {isReal && <button className="link-button" disabled={archiveState === 'archiving'} onClick={archive}>{archiveState === 'archiving' ? 'Archivando…' : 'Archivar receta'}</button>}
+          {archiveError && <div className="form-error">⚠ {archiveError}</div>}
         </div>
       </aside>}
     </div>
