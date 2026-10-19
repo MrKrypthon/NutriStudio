@@ -125,7 +125,7 @@ const recentAccess = new Map()
 async function logAccess(request, { patientId, scope, action = 'viewed', entity = 'Patient', entityId = null, metadata = {} }) {
   if (!patientId || !request.userId) return
   if (action === 'viewed') {
-    const key = `${request.userId}:${patientId}:${scope}`
+    const key = `${request.userId}:${patientId}:${scope}:${entityId || ''}`
     const now = Date.now()
     if (now - (recentAccess.get(key) || 0) < ACCESS_WINDOW_MS) return
     recentAccess.set(key, now)
@@ -432,31 +432,64 @@ app.get('/api/v1/patients', async (request) => {
   // Cada palabra debe aparecer en algún campo: así "Laura Méndez" encuentra a la paciente aunque
   // nombre y apellidos vivan en columnas distintas (antes se buscaba la frase entera en cada una).
   const terms = String(search).trim().split(/\s+/).filter(Boolean).slice(0, 6)
+  const termsWhere = terms.length ? { AND: terms.map((term) => ({ OR: [{ firstName: { contains: term, mode: 'insensitive' } }, { lastName: { contains: term, mode: 'insensitive' } }, { email: { contains: term, mode: 'insensitive' } }, { phone: { contains: term, mode: 'insensitive' } }] })) } : {}
+  // "Sin cita próxima" (RF-04): ACTIVE patients with no upcoming, non-cancelled appointment.
+  const noNextWhere = { appointments: { none: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } } }
   const where = {
     practiceId: request.practiceId,
     status: status === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE',
-    ...(terms.length ? { AND: terms.map((term) => ({ OR: [{ firstName: { contains: term, mode: 'insensitive' } }, { lastName: { contains: term, mode: 'insensitive' } }, { email: { contains: term, mode: 'insensitive' } }, { phone: { contains: term, mode: 'insensitive' } }] })) } : {}),
-    // "Sin cita próxima" (RF-04): ACTIVE patients with no upcoming, non-cancelled appointment.
-    ...(noNext === '1' ? { appointments: { none: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } } } : {}),
+    ...termsWhere,
+    ...(noNext === '1' ? noNextWhere : {}),
   }
-  const [rawItems, total] = await prisma.$transaction([
+  // La lista de Pacientes pide `summary=1`: además de la última consulta y la próxima cita trae el
+  // plan vigente, el peso más reciente, si hay una consulta abierta, los documentos por entregar y
+  // los conteos de cada pestaña. Los selectores de paciente de otros módulos no lo piden.
+  const summary = request.query.summary === '1'
+  const [rawItems, total, ...tabCounts] = await prisma.$transaction([
     prisma.patient.findMany({
       where,
       orderBy: sort === 'recent' ? [{ createdAt: 'desc' }] : sort === 'name' ? [{ firstName: 'asc' }, { lastName: 'asc' }] : [{ lastName: 'asc' }, { firstName: 'asc' }],
       skip: (currentPage - 1) * take,
       take,
       include: {
-        consultations: { orderBy: { startedAt: 'desc' }, take: 1, select: { startedAt: true } },
+        consultations: { orderBy: { startedAt: { sort: 'desc', nulls: 'last' } }, take: 1, select: { startedAt: true } },
         appointments: { where: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, orderBy: { startAt: 'asc' }, take: 1, select: { startAt: true, type: true } },
+        ...(summary ? {
+          plans: { where: { status: { not: 'CANCELLED' } }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, version: true, targetKcal: true, publishedAt: true } },
+          measurements: { where: { weightKg: { not: null } }, orderBy: { measuredAt: 'desc' }, take: 2, select: { weightKg: true, measuredAt: true } },
+          _count: { select: { consultations: true, documents: { where: { generatedAt: { not: null }, deliveredAt: null, type: { in: ['nutrition_plan', 'consultation_report', 'consultation_clinical'] } } } } },
+        } : {}),
       },
     }),
     prisma.patient.count({ where }),
+    ...(summary ? [
+      prisma.patient.count({ where: { practiceId: request.practiceId, status: 'ACTIVE', ...termsWhere } }),
+      prisma.patient.count({ where: { practiceId: request.practiceId, status: 'ACTIVE', ...termsWhere, ...noNextWhere } }),
+      prisma.patient.count({ where: { practiceId: request.practiceId, status: 'ARCHIVED', ...termsWhere } }),
+    ] : []),
   ])
+  const openConsultations = summary && rawItems.length
+    ? await prisma.consultation.findMany({ where: { patientId: { in: rawItems.map((patient) => patient.id) }, status: { in: ['DRAFT', 'IN_PROGRESS'] } }, orderBy: { createdAt: 'desc' }, select: { id: true, patientId: true } })
+    : []
   // The list only ever needs "when did I last see this patient" and "what's their next
   // appointment" -- flatten both one-row relations into plain fields instead of shipping the
   // full arrays. Before this, "Próxima cita" was a hardcoded "Sin cita" placeholder.
-  const items = rawItems.map(({ consultations, appointments, ...patient }) => ({ ...patient, lastConsultationAt: consultations[0]?.startedAt || null, nextAppointmentAt: appointments[0]?.startAt || null, nextAppointmentType: appointments[0]?.type || null }))
-  return { items, page: currentPage, pageSize: take, total }
+  const items = rawItems.map(({ consultations, appointments, plans, measurements, _count, ...patient }) => ({
+    ...patient,
+    lastConsultationAt: consultations[0]?.startedAt || null,
+    nextAppointmentAt: appointments[0]?.startAt || null,
+    nextAppointmentType: appointments[0]?.type || null,
+    ...(summary ? {
+      currentPlan: plans[0] || null,
+      lastWeightKg: measurements[0] ? Number(measurements[0].weightKg) : null,
+      lastWeightAt: measurements[0]?.measuredAt || null,
+      previousWeightKg: measurements[1] ? Number(measurements[1].weightKg) : null,
+      consultationCount: _count.consultations,
+      pendingDocuments: _count.documents,
+      openConsultationId: openConsultations.find((consultation) => consultation.patientId === patient.id)?.id || null,
+    } : {}),
+  }))
+  return { items, page: currentPage, pageSize: take, total, ...(summary ? { counts: { ACTIVE: tabCounts[0], NO_NEXT: tabCounts[1], ARCHIVED: tabCounts[2] } } : {}) }
 })
 
 const emptyToNull = (value) => (value === undefined ? undefined : value === '' ? null : value)
@@ -1905,10 +1938,22 @@ app.post('/api/v1/documents/consultation-clinical', async (request, reply) => {
   return reply.code(201).send(document)
 })
 
+// Lista de documentos: sólo lo que la pantalla muestra (nombre y número de expediente del paciente,
+// versión y estado del plan, fecha de la consulta), no el registro completo del paciente ni el
+// plan entero. Antes se cortaba en 100 sin avisar; ahora el tope es 500 y se informa el total.
+const DOCUMENT_LIST_INCLUDE = {
+  patient: { select: { id: true, firstName: true, lastName: true, recordNumber: true, status: true } },
+  plan: { select: { id: true, version: true, status: true, publishedAt: true, targetKcal: true } },
+  consultation: { select: { id: true, startedAt: true, createdAt: true, status: true } },
+}
 app.get('/api/v1/documents', async (request) => {
   const { patientId, type } = request.query
-  const documents = await prisma.document.findMany({ where: { patientId: patientId || undefined, type: type || undefined, patient: { practiceId: request.practiceId } }, include: { patient: true, plan: true }, orderBy: { createdAt: 'desc' }, take: 100 })
-  return { items: documents }
+  const where = { patientId: patientId || undefined, type: type || undefined, patient: { practiceId: request.practiceId } }
+  const [documents, total] = await prisma.$transaction([
+    prisma.document.findMany({ where, include: DOCUMENT_LIST_INCLUDE, orderBy: [{ generatedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }], take: 500 }),
+    prisma.document.count({ where }),
+  ])
+  return { items: documents, total }
 })
 
 // Paleta de marca para los PDFs clínicos — espejo de los tokens de src/styles/globals.css
@@ -2625,8 +2670,10 @@ app.get('/api/v1/documents/:documentId/download', async (request, reply) => {
   const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey)
   try {
     const file = await readFile(filePath)
-    await logAccess(request, { patientId: document.patientId, scope: 'document', action: 'downloaded', entity: 'Document', entityId: document.id, metadata: { type: document.type, version: document.version, consultationId: document.consultationId } })
-    return reply.type('application/pdf').header('Content-Disposition', contentDisposition('attachment', documentFileName(document))).send(file)
+    // ?inline=1: el visor de la app (se abre en pantalla, no se guarda) y queda como "vio" en la bitácora.
+    const inline = request.query?.inline === '1'
+    await logAccess(request, { patientId: document.patientId, scope: 'document', action: inline ? 'viewed' : 'downloaded', entity: 'Document', entityId: document.id, metadata: { type: document.type, version: document.version, consultationId: document.consultationId } })
+    return reply.type('application/pdf').header('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', documentFileName(document))).header('Cache-Control', 'no-store').send(file)
   } catch {
     return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'El archivo del documento no está disponible.', fields: {} })
   }
@@ -2647,9 +2694,18 @@ app.post('/api/v1/documents/:documentId/deliver', async (request, reply) => {
   const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } })
   if (!document) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
   if (!document.generatedAt) return reply.code(409).send({ code: 'DOCUMENT_NOT_GENERATED', message: 'Genera el documento antes de entregarlo.', fields: {} })
-  const delivered = await prisma.document.update({ where: { id: document.id }, data: { deliveredAt: new Date() } })
+  const delivered = await prisma.document.update({ where: { id: document.id }, data: { deliveredAt: new Date() }, include: DOCUMENT_LIST_INCLUDE })
   await logAudit(request, { action: 'delivered', entity: 'Document', entityId: document.id, patientId: document.patientId, metadata: { type: document.type } })
   return delivered
+})
+
+// Deshacer una entrega marcada por error (queda en la bitácora).
+app.post('/api/v1/documents/:documentId/undeliver', async (request, reply) => {
+  const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId: request.practiceId } } })
+  if (!document) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
+  const updated = await prisma.document.update({ where: { id: document.id }, data: { deliveredAt: null }, include: DOCUMENT_LIST_INCLUDE })
+  await logAudit(request, { action: 'undelivered', entity: 'Document', entityId: document.id, patientId: document.patientId, metadata: { type: document.type } })
+  return updated
 })
 
 // ── Equivalencias: alimentos del libro SMAE 5ª ed. (tabla SmaeFood) ─────────────────────────────
