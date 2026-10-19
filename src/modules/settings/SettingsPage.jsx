@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import BrandMark from '../../components/BrandMark.jsx'
+import PdfDesignEditor from '../documents/PdfDesignEditor.jsx'
 import { authApi, practiceApi } from '../../lib/api.js'
 import { useAuth } from '../../lib/AuthContext.jsx'
 
@@ -17,6 +18,7 @@ const DEFAULT_HOURS = { label: 'Lunes a viernes', ranges: [{ start: '09:00', end
 const NAV_SECTIONS = [
   ['profile', '◉ Perfil profesional'],
   ['identity', '◆ Identidad visual'],
+  ['pdf', '▤ Diseño del PDF'],
   ['hours', '◷ Horarios y disponibilidad'],
   ['security', '▣ Privacidad y seguridad'],
 ]
@@ -33,7 +35,7 @@ export default function SettingsPage({ setActive }) {
   const [loadState, setLoadState] = useState('loading')
   const [practiceName, setPracticeName] = useState('')
   const [practiceId, setPracticeId] = useState('')
-  const [form, setForm] = useState({ timeZone: 'America/Mexico_City', userName: '', userEmail: '', userSpecialty: '', userPhone: '', userLicenseNumber: '', address: '', businessHours: DEFAULT_HOURS })
+  const [form, setForm] = useState({ timeZone: 'America/Mexico_City', userName: '', userEmail: '', userSpecialty: '', userPhone: '', userLicenseNumber: '', establishmentType: '', address: '', businessHours: DEFAULT_HOURS })
   const [saveState, setSaveState] = useState('idle')
   const [error, setError] = useState('')
   const [logoState, setLogoState] = useState('idle')
@@ -46,7 +48,7 @@ export default function SettingsPage({ setActive }) {
   const [pwState, setPwState] = useState('idle')
   const [pwError, setPwError] = useState('')
   const fileInputRef = useRef(null)
-  const sectionRefs = { profile: useRef(null), identity: useRef(null), hours: useRef(null), security: useRef(null) }
+  const sectionRefs = { profile: useRef(null), identity: useRef(null), pdf: useRef(null), hours: useRef(null), security: useRef(null) }
 
   useEffect(() => {
     practiceApi.get()
@@ -62,6 +64,7 @@ export default function SettingsPage({ setActive }) {
           userPhone: practice.user?.phone || '',
           userLicenseNumber: practice.user?.licenseNumber || '',
           address: practice.address || '',
+          establishmentType: practice.establishmentType || '',
           businessHours: practice.businessHours || DEFAULT_HOURS,
         })
         setLoadState('ready')
@@ -83,6 +86,13 @@ export default function SettingsPage({ setActive }) {
     if (!trimmed.name || !trimmed.userName || !trimmed.userEmail) {
       setSaveState('error')
       setError('El nombre de la práctica, el nombre profesional y el email son obligatorios.')
+      return
+    }
+    const badRange = (form.businessHours?.ranges || []).find((range) => !range.start || !range.end || range.start >= range.end)
+    if (badRange) {
+      setSaveState('error')
+      setError('En los horarios de atención, la hora de inicio debe ser antes que la de cierre.')
+      setEditingHours(true)
       return
     }
     setSaveState('saving')
@@ -155,12 +165,13 @@ export default function SettingsPage({ setActive }) {
         <div className="panel settings-card" ref={sectionRefs.profile}>
           <div className="settings-card-head"><div><h2>Perfil profesional</h2><p>Esta información aparece en tus informes y comunicaciones.</p></div><span className="avatar settings-avatar">{initials}</span></div>
           <div className="form-grid">
-            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => setPracticeName(e.target.value)} /></label>
+            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => { setPracticeName(e.target.value); setSaveState('idle') }} /></label>
             <label>Especialidad<input value={form.userSpecialty} onChange={(e) => update('userSpecialty', e.target.value)} placeholder="Ej. Nutrióloga clínica" /></label>
             <label>Email de trabajo<input value={form.userEmail} onChange={(e) => update('userEmail', e.target.value)} /></label>
             <label>Teléfono<input value={form.userPhone} onChange={(e) => update('userPhone', e.target.value)} placeholder="Ej. +52 55 1234 5678" /></label>
             <label>Cédula profesional<input value={form.userLicenseNumber} onChange={(e) => update('userLicenseNumber', e.target.value)} placeholder="Ej. 1489853" /></label>
             <label>Dirección del consultorio<input value={form.address} onChange={(e) => update('address', e.target.value)} placeholder="Ej. C. 131 x 146, Fracc. Los Héroes" /></label>
+            <label>Tipo de establecimiento<input value={form.establishmentType} maxLength={80} onChange={(e) => update('establishmentType', e.target.value)} placeholder="Ej. Consultorio de nutrición" /><small className="muted">Sale en el encabezado del expediente clínico, junto con el nombre y la dirección.</small></label>
           </div>
         </div>
         <div className="panel settings-card" ref={sectionRefs.identity}>
@@ -171,6 +182,10 @@ export default function SettingsPage({ setActive }) {
             <button className="secondary" onClick={pickLogo} disabled={logoState === 'uploading'}>{logoState === 'uploading' ? 'Subiendo…' : 'Cambiar logo'}</button>
             <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} onChange={onLogoSelected} />
           </div>
+        </div>
+        <div className="panel settings-card" ref={sectionRefs.pdf}>
+          <div><h2>Diseño del plan en PDF</h2><p>Colores, tipografía y adornos del plan de alimentación que descargas y envías. Por defecto sale en blanco y negro con tu logo.</p></div>
+          {loadState === 'ready' && <PdfDesignEditor key={logoVersion} />}
         </div>
         <div className="panel settings-card" ref={sectionRefs.hours}>
           <h2>Horarios de atención</h2>

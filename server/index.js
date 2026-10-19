@@ -13,6 +13,7 @@ import { NutritionEngineError, computeEnergyRequirement, computeMacros } from '.
 import { adjustmentFactor, applyRecipeAdjustments, buildMenuSnapshot, normalizeRecipeAdjustments, sanitizeJpeg } from './domain/documents.js'
 import { PLAN_MEAL_KEYS, normalizeActiveMeals, normalizeMealLabels, normalizeMealNotes, normalizeMealTimes } from './domain/planMeals.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
+import { asciiFileName, normalizePdfTheme, planFileName } from './domain/pdfTheme.js'
 import { normalizeEquivalentPlan, normalizeMenus } from './domain/equivalents.js'
 import { emptyNutritionTotals, perServingFromIngredients } from './domain/recipeNutrition.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
@@ -113,6 +114,61 @@ async function logAudit(request, { action, entity, entityId, patientId, metadata
   }
 }
 
+// Registro de accesos al expediente (trazabilidad, NOM-024-SSA3-2012 6.6.1; confidencialidad,
+// NOM-004-SSA3-2012 5.5 y 5.7): además de quién edita, queda quién abre el expediente o el
+// historial y quién descarga sus documentos, con fecha, hora y equipo. Las aperturas repetidas del
+// mismo usuario al mismo expediente se agrupan en ventanas de 30 minutos (cada recarga o cambio de
+// pestaña vuelve a pedir los datos y llenaría la bitácora); las descargas se registran todas.
+const ACCESS_ACTIONS = ['viewed', 'downloaded', 'generated']
+const ACCESS_WINDOW_MS = 30 * 60 * 1000
+const recentAccess = new Map()
+async function logAccess(request, { patientId, scope, action = 'viewed', entity = 'Patient', entityId = null, metadata = {} }) {
+  if (!patientId || !request.userId) return
+  if (action === 'viewed') {
+    const key = `${request.userId}:${patientId}:${scope}`
+    const now = Date.now()
+    if (now - (recentAccess.get(key) || 0) < ACCESS_WINDOW_MS) return
+    recentAccess.set(key, now)
+    if (recentAccess.size > 5000) for (const [entryKey, at] of recentAccess) if (now - at > ACCESS_WINDOW_MS) recentAccess.delete(entryKey)
+  }
+  await logAudit(request, { action, entity, entityId: entityId || patientId, patientId, metadata: { scope, ...metadata } })
+}
+
+// Número de expediente (NOM-004-SSA3-2012, 5.9): consecutivo por consultorio, único y permanente.
+// Se asigna al dar de alta al paciente y, para los que ya existían, la primera vez que se consultan.
+// Los pacientes que aún no tienen número lo reciben por orden de alta, para que el consecutivo
+// refleje la antigüedad del expediente y no el orden en que alguien los abrió.
+async function ensureRecordNumber(patient) {
+  if (!patient || patient.recordNumber) return patient
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const { _max } = await tx.patient.aggregate({ where: { practiceId: patient.practiceId }, _max: { recordNumber: true } })
+        const pending = await tx.patient.findMany({ where: { practiceId: patient.practiceId, recordNumber: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { id: true } })
+        let next = _max.recordNumber || 0
+        for (const item of pending) await tx.patient.update({ where: { id: item.id }, data: { recordNumber: ++next } })
+      })
+      return prisma.patient.findUnique({ where: { id: patient.id } })
+    } catch (error) {
+      if (error.code !== 'P2002' && error.code !== 'P2034') throw error
+    }
+  }
+  return prisma.patient.findUnique({ where: { id: patient.id } })
+}
+
+// CURP (identificador del paciente en la NOM-024-SSA3-2012): 18 caracteres con la estructura oficial.
+const CURP_PATTERN = /^[A-Z][AEIOUX][A-Z]{2}\d{6}[HMX][A-Z]{2}[B-DF-HJ-NP-TV-Z]{3}[A-Z\d]\d$/
+const normalizeCurp = (value) => String(value || '').trim().toUpperCase()
+
+// Una consulta cerrada es inalterable (NOM-004-SSA3-2012, 5.11; NOM-024-SSA3-2012, 5.9): antes el
+// bloqueo existía sólo en pantalla y el servidor aceptaba cambios. Para corregirla hay que reabrirla
+// con un motivo, y cada cambio posterior queda en la bitácora con su versión anterior.
+const consultationClosed = (consultation, reply) => {
+  if (consultation?.status !== 'COMPLETED') return false
+  reply.code(409).send({ code: 'CONSULTATION_CLOSED', message: 'La consulta está cerrada. Reábrela indicando el motivo para corregirla.', fields: {} })
+  return true
+}
+
 app.get('/health', async () => ({ status: 'ok', service: 'nutri-studio-api' }))
 
 app.post('/api/v1/auth/login', async (request, reply) => {
@@ -143,13 +199,13 @@ app.get('/api/v1/practice', async (request, reply) => {
   const practice = await prisma.practice.findUnique({ where: { id: request.practiceId } })
   if (!practice) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Práctica no encontrada.', fields: {} })
   const user = await prisma.user.findUnique({ where: { id: request.userId }, select: USER_PUBLIC_SELECT })
-  return { ...practice, user }
+  return { ...practice, pdfTheme: normalizePdfTheme(practice.pdfTheme), user }
 })
 
 app.put('/api/v1/practice', async (request, reply) => {
-  const { name, timeZone, address, userName, userEmail, userSpecialty, userPhone, userLicenseNumber, businessHours, fees } = request.body || {}
+  const { name, timeZone, address, establishmentType, userName, userEmail, userSpecialty, userPhone, userLicenseNumber, businessHours, fees } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
-  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(address !== undefined ? { address: String(address).trim().slice(0, 200) || null } : {}), ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(establishmentType !== undefined ? { establishmentType: String(establishmentType || '').trim().slice(0, 80) || null } : {}), ...(address !== undefined ? { address: String(address).trim().slice(0, 200) || null } : {}), ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
   let user = await prisma.user.findUnique({ where: { id: request.userId }, select: USER_PUBLIC_SELECT })
   if (user) {
     user = await prisma.user.update({
@@ -165,6 +221,12 @@ app.put('/api/v1/practice', async (request, reply) => {
     })
   }
   return { ...practice, user }
+})
+
+// Diseño del plan en PDF: se guarda ya normalizado (un valor raro vuelve al de por defecto).
+app.put('/api/v1/practice/pdf-theme', async (request) => {
+  const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { pdfTheme: normalizePdfTheme(request.body?.theme) } })
+  return { pdfTheme: normalizePdfTheme(practice.pdfTheme) }
 })
 
 // Guardar sólo las tarifas (la pantalla de Finanzas no tiene por qué reenviar nombre/zona horaria).
@@ -362,20 +424,25 @@ app.delete('/api/v1/recipes/:recipeId/image', async (request, reply) => {
 })
 
 app.get('/api/v1/patients', async (request) => {
-  const { search = '', status = 'ACTIVE', page = 1, pageSize = 25, noNext } = request.query
+  const { search = '', status = 'ACTIVE', page = 1, pageSize = 25, noNext, sort } = request.query
   const currentPage = Math.max(Number(page) || 1, 1)
-  const take = Math.min(Math.max(Number(pageSize) || 25, 1), 100)
+  // Los selectores de paciente (Agenda, Consultas, Seguimientos, Plantillas, Constructor) piden la
+  // lista completa de activos; con el tope anterior de 25/100 los demás no se podían elegir.
+  const take = Math.min(Math.max(Number(pageSize) || 25, 1), 500)
+  // Cada palabra debe aparecer en algún campo: así "Laura Méndez" encuentra a la paciente aunque
+  // nombre y apellidos vivan en columnas distintas (antes se buscaba la frase entera en cada una).
+  const terms = String(search).trim().split(/\s+/).filter(Boolean).slice(0, 6)
   const where = {
     practiceId: request.practiceId,
-    status,
-    ...(search ? { OR: [{ firstName: { contains: search, mode: 'insensitive' } }, { lastName: { contains: search, mode: 'insensitive' } }, { email: { contains: search, mode: 'insensitive' } }, { phone: { contains: search, mode: 'insensitive' } }] } : {}),
+    status: status === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE',
+    ...(terms.length ? { AND: terms.map((term) => ({ OR: [{ firstName: { contains: term, mode: 'insensitive' } }, { lastName: { contains: term, mode: 'insensitive' } }, { email: { contains: term, mode: 'insensitive' } }, { phone: { contains: term, mode: 'insensitive' } }] })) } : {}),
     // "Sin cita próxima" (RF-04): ACTIVE patients with no upcoming, non-cancelled appointment.
     ...(noNext === '1' ? { appointments: { none: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } } } : {}),
   }
   const [rawItems, total] = await prisma.$transaction([
     prisma.patient.findMany({
       where,
-      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      orderBy: sort === 'recent' ? [{ createdAt: 'desc' }] : sort === 'name' ? [{ firstName: 'asc' }, { lastName: 'asc' }] : [{ lastName: 'asc' }, { firstName: 'asc' }],
       skip: (currentPage - 1) * take,
       take,
       include: {
@@ -395,10 +462,12 @@ app.get('/api/v1/patients', async (request) => {
 const emptyToNull = (value) => (value === undefined ? undefined : value === '' ? null : value)
 
 app.post('/api/v1/patients', async (request, reply) => {
-  const { firstName, lastName, email, phone, birthDate, sex, occupation, consentDataAt } = request.body || {}
+  const { firstName, lastName, email, phone, birthDate, sex, occupation, consentDataAt, address, curp } = request.body || {}
   if (!firstName || !lastName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido son obligatorios.', fields: { firstName: !firstName, lastName: !lastName } })
+  if (curp && !CURP_PATTERN.test(normalizeCurp(curp))) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La CURP no tiene un formato válido (18 caracteres).', fields: { curp: true } })
   if (birthDate && Number.isNaN(new Date(birthDate).getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha de nacimiento inválida.', fields: { birthDate: true } })
-  const patient = await prisma.patient.create({ data: { practiceId: request.practiceId, firstName, lastName, email: emptyToNull(email), phone: emptyToNull(phone), sex: sex === undefined || sex === null || sex === '' ? null : String(sex), occupation: emptyToNull(occupation), birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: consentDataAt ? new Date(consentDataAt) : undefined } })
+  const created = await prisma.patient.create({ data: { practiceId: request.practiceId, address: emptyToNull(address ? String(address).trim().slice(0, 240) : null), curp: curp ? normalizeCurp(curp) : null, firstName, lastName, email: emptyToNull(email), phone: emptyToNull(phone), sex: sex === undefined || sex === null || sex === '' ? null : String(sex), occupation: emptyToNull(occupation), birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: consentDataAt ? new Date(consentDataAt) : undefined } })
+  const patient = await ensureRecordNumber(created)
   return reply.code(201).send(patient)
 })
 
@@ -409,6 +478,7 @@ app.get('/api/v1/patients/:patientId', async (request, reply) => {
   })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   const { appointments, ...rest } = patient
+  if (!rest.recordNumber) rest.recordNumber = (await ensureRecordNumber(rest))?.recordNumber ?? null
   return { ...rest, nextAppointmentAt: appointments[0]?.startAt || null, nextAppointmentType: appointments[0]?.type || null }
 })
 
@@ -416,7 +486,8 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
   const practiceId = request.practiceId
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
-  const { firstName, lastName, email, phone, birthDate, sex, occupation, status } = request.body || {}
+  const { firstName, lastName, email, phone, birthDate, sex, occupation, status, address, curp } = request.body || {}
+  if (curp && !CURP_PATTERN.test(normalizeCurp(curp))) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La CURP no tiene un formato válido (18 caracteres).', fields: { curp: true } })
   if ((firstName !== undefined && !firstName) || (lastName !== undefined && !lastName)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido no pueden quedar vacíos.', fields: { firstName: firstName !== undefined && !firstName, lastName: lastName !== undefined && !lastName } })
   if (status !== undefined && !['ACTIVE', 'ARCHIVED'].includes(status)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Estado inválido.', fields: { status: true } })
   const updated = await prisma.patient.update({
@@ -429,13 +500,17 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
       ...(birthDate !== undefined ? { birthDate: birthDate ? new Date(birthDate) : null } : {}),
       ...(sex !== undefined ? { sex } : {}),
       ...(occupation !== undefined ? { occupation: emptyToNull(occupation) } : {}),
+      ...(address !== undefined ? { address: emptyToNull(address ? String(address).trim().slice(0, 240) : null) } : {}),
+      ...(curp !== undefined ? { curp: curp ? normalizeCurp(curp) : null } : {}),
       ...(status !== undefined ? { status, archivedAt: status === 'ARCHIVED' ? new Date() : null } : {}),
     },
   })
   if (status !== undefined && status !== patient.status) {
     await logAudit(request, { action: status === 'ARCHIVED' ? 'archived' : 'reactivated', entity: 'Patient', entityId: patient.id, patientId: patient.id })
   } else {
-    await logAudit(request, { action: 'updated', entity: 'Patient', entityId: patient.id, patientId: patient.id })
+    // Qué datos de identificación cambiaron (sin copiar los valores: son datos personales).
+    const changedFields = ['firstName', 'lastName', 'email', 'phone', 'birthDate', 'sex', 'occupation', 'address', 'curp'].filter((key) => request.body?.[key] !== undefined && String(request.body[key] ?? '') !== String(patient[key] instanceof Date ? patient[key].toISOString().slice(0, 10) : patient[key] ?? ''))
+    await logAudit(request, { action: 'updated', entity: 'Patient', entityId: patient.id, patientId: patient.id, metadata: { fields: changedFields } })
   }
   return updated
 })
@@ -452,7 +527,7 @@ app.get('/api/v1/patients/:patientId/timeline', async (request, reply) => {
     prisma.consultation.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.nutritionPlan.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.document.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
-    prisma.auditEvent.findMany({ where: { practiceId, metadata: { path: ['patientId'], equals: patientId } }, include: { user: true }, orderBy: { createdAt: 'desc' }, take: 20 }),
+    prisma.auditEvent.findMany({ where: { practiceId, metadata: { path: ['patientId'], equals: patientId }, action: { notIn: ACCESS_ACTIONS } }, include: { user: true }, orderBy: { createdAt: 'desc' }, take: 20 }),
   ])
   const events = [
     ...appointments.map((a) => ({ kind: 'appointment', date: a.startAt, status: a.status, subtype: a.type, id: a.id })),
@@ -464,10 +539,25 @@ app.get('/api/v1/patients/:patientId/timeline', async (request, reply) => {
   return { items: events }
 })
 
+// Registro de accesos de un paciente: quién abrió su expediente o descargó sus documentos.
+app.get('/api/v1/patients/:patientId/access-log', async (request, reply) => {
+  const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
+  if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  const take = Math.min(Math.max(Number(request.query.pageSize) || 100, 1), 300)
+  const events = await prisma.auditEvent.findMany({
+    where: { practiceId: request.practiceId, action: { in: ACCESS_ACTIONS }, metadata: { path: ['patientId'], equals: patient.id } },
+    include: { user: { select: { name: true } } },
+    orderBy: { createdAt: 'desc' },
+    take,
+  })
+  return { items: events.map((event) => ({ id: event.id, at: event.createdAt, action: event.action, entity: event.entity, userName: event.user?.name || 'Usuario eliminado', scope: event.metadata?.scope || null, type: event.metadata?.type || null, version: event.metadata?.version ?? null, fileName: event.metadata?.fileName || null, consultationId: event.metadata?.consultationId || null, agent: event.metadata?.origin?.agent || '', ip: event.metadata?.origin?.ip || null })) }
+})
+
 app.get('/api/v1/patients/:patientId/consultations', async (request, reply) => {
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   const consultations = await prisma.consultation.findMany({ where: { patientId: request.params.patientId }, include: { sections: true, measurements: true, diagnoses: true, plans: true }, orderBy: { createdAt: 'desc' } })
+  await logAccess(request, { patientId: patient.id, scope: 'history' })
   return { items: consultations }
 })
 
@@ -534,6 +624,7 @@ app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => 
 app.get('/api/v1/consultations/:consultationId', async (request, reply) => {
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } }, include: { patient: true, appointment: true, sections: true, measurements: true, diagnoses: true, plans: true, labAttachments: { orderBy: { createdAt: 'desc' }, include: { uploadedBy: { select: { name: true } } } } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  await logAccess(request, { patientId: consultation.patientId, scope: 'consultation', entity: 'Consultation', entityId: consultation.id, metadata: { consultationId: consultation.id } })
   return consultation
 })
 
@@ -547,6 +638,7 @@ const labAttachmentDir = () => path.resolve(process.env.LAB_ATTACHMENT_STORAGE_P
 app.post('/api/v1/consultations/:consultationId/lab-attachments', async (request, reply) => {
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  if (consultationClosed(consultation, reply)) return
   const { fileName, dataUrl } = request.body || {}
   const match = typeof dataUrl === 'string' && dataUrl.match(/^data:(application\/pdf);base64,(.+)$/)
   if (!match || !fileName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube un archivo PDF.', fields: { dataUrl: true } })
@@ -563,10 +655,11 @@ app.post('/api/v1/consultations/:consultationId/lab-attachments', async (request
 })
 
 app.get('/api/v1/lab-attachments/:attachmentId/download', async (request, reply) => {
-  const attachment = await prisma.labAttachment.findFirst({ where: { id: request.params.attachmentId, consultation: { patient: { practiceId: request.practiceId } } } })
+  const attachment = await prisma.labAttachment.findFirst({ where: { id: request.params.attachmentId, consultation: { patient: { practiceId: request.practiceId } } }, include: { consultation: { select: { patientId: true } } } })
   if (!attachment) return reply.code(404).send({ code: 'ATTACHMENT_NOT_FOUND', message: 'Adjunto no encontrado.', fields: {} })
   try {
     const file = await readFile(path.join(labAttachmentDir(), attachment.storageKey))
+    await logAccess(request, { patientId: attachment.consultation.patientId, scope: 'lab', action: 'downloaded', entity: 'LabAttachment', entityId: attachment.id, metadata: { fileName: attachment.fileName, consultationId: attachment.consultationId } })
     return reply.type('application/pdf').header('Content-Disposition', `inline; filename="${safeFileName(attachment.fileName)}"`).send(file)
   } catch {
     return reply.code(404).send({ code: 'ATTACHMENT_NOT_FOUND', message: 'El archivo del adjunto no está disponible.', fields: {} })
@@ -574,9 +667,11 @@ app.get('/api/v1/lab-attachments/:attachmentId/download', async (request, reply)
 })
 
 app.delete('/api/v1/lab-attachments/:attachmentId', async (request, reply) => {
-  const attachment = await prisma.labAttachment.findFirst({ where: { id: request.params.attachmentId, consultation: { patient: { practiceId: request.practiceId } } } })
+  const attachment = await prisma.labAttachment.findFirst({ where: { id: request.params.attachmentId, consultation: { patient: { practiceId: request.practiceId } } }, include: { consultation: true } })
   if (!attachment) return reply.code(404).send({ code: 'ATTACHMENT_NOT_FOUND', message: 'Adjunto no encontrado.', fields: {} })
+  if (consultationClosed(attachment.consultation, reply)) return
   await prisma.labAttachment.delete({ where: { id: attachment.id } })
+  await logAudit(request, { action: 'deleted', entity: 'LabAttachment', entityId: attachment.id, patientId: attachment.consultation.patientId, metadata: { fileName: attachment.fileName, consultationId: attachment.consultationId } })
   await unlink(path.join(labAttachmentDir(), attachment.storageKey)).catch(() => {})
   return reply.code(204).send()
 })
@@ -610,8 +705,11 @@ app.post('/api/v1/consultations/:consultationId/reopen', async (request, reply) 
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   const open = await prisma.consultation.findFirst({ where: { patientId: consultation.patientId, status: 'IN_PROGRESS' } })
   if (open && open.id !== consultation.id) return reply.code(409).send({ code: 'CONSULTATION_ALREADY_OPEN', message: 'Este paciente ya tiene una consulta en curso. Ciérrala antes de reabrir otra.', fields: {} })
+  // El motivo es obligatorio: queda en la bitácora y en el PDF del expediente como nota aclaratoria.
+  const reason = String(request.body?.reason || '').trim().slice(0, 500)
+  if (consultation.status === 'COMPLETED' && reason.length < 5) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Escribe el motivo de la corrección (al menos 5 caracteres).', fields: { reason: true } })
   const updated = await prisma.consultation.update({ where: { id: consultation.id }, data: { status: 'IN_PROGRESS' } })
-  await logAudit(request, { action: 'reopened', entity: 'Consultation', entityId: consultation.id, patientId: consultation.patientId, metadata: {} })
+  await logAudit(request, { action: 'reopened', entity: 'Consultation', entityId: consultation.id, patientId: consultation.patientId, metadata: { reason, consultationId: consultation.id } })
   return updated
 })
 
@@ -619,13 +717,17 @@ app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (req
   const { payload = {}, completionState = 'in_progress', updatedAt } = request.body || {}
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  if (consultationClosed(consultation, reply)) return
   const existing = await prisma.clinicalSection.findUnique({ where: { consultationId_sectionKey: { consultationId: consultation.id, sectionKey: request.params.sectionKey } } })
   if (existing && updatedAt && new Date(updatedAt).getTime() !== new Date(existing.lastSavedAt).getTime()) return reply.code(409).send({ code: 'CONCURRENT_EDIT', message: 'La sección cambió en otra sesión. Recarga antes de guardar.', fields: {} })
   const section = await prisma.clinicalSection.upsert({ where: { consultationId_sectionKey: { consultationId: consultation.id, sectionKey: request.params.sectionKey } }, create: { consultationId: consultation.id, sectionKey: request.params.sectionKey, payload, completionState, lastSavedBy: request.userId || 'system' }, update: { payload, completionState, lastSavedBy: request.userId || 'system' } })
   // Registro de ediciones del expediente: sólo cuando el contenido cambió de verdad (el autosave
   // dispara cada 800 ms; sin esta comparación el historial se llenaría de eventos idénticos).
   const changed = !existing || JSON.stringify(existing.payload || {}) !== JSON.stringify(payload || {})
-  if (changed) await logAudit(request, { action: existing ? 'updated' : 'created', entity: 'ClinicalSection', entityId: section.id, patientId: consultation.patientId, metadata: { sectionKey: request.params.sectionKey, fields: Object.keys(payload || {}).length } })
+  // Una consulta que ya se había cerrado (completedAt) y se reabrió: se guarda lo que decía antes del
+  // cambio, para poder reconstruir la versión original (registro de auditoría, NOM-024-SSA3-2012 3.42).
+  const afterClose = Boolean(consultation.completedAt)
+  if (changed) await logAudit(request, { action: existing ? 'updated' : 'created', entity: 'ClinicalSection', entityId: section.id, patientId: consultation.patientId, metadata: { consultationId: consultation.id, ...(afterClose ? { afterClose: true, previous: existing?.payload ?? null } : {}), sectionKey: request.params.sectionKey, fields: Object.keys(payload || {}).length } })
   return section
 })
 
@@ -638,6 +740,7 @@ app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (req
 app.post('/api/v1/consultations/:consultationId/measurements', async (request, reply) => {
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  if (consultationClosed(consultation, reply)) return
   const { measuredAt, weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes } = request.body || {}
   const at = measuredAt ? new Date(measuredAt) : new Date()
   const values = { patientId: consultation.patientId, consultationId: consultation.id, measuredAt: at, weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes }
@@ -655,6 +758,7 @@ app.post('/api/v1/consultations/:consultationId/measurements', async (request, r
 app.post('/api/v1/consultations/:consultationId/diagnoses', async (request, reply) => {
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  if (consultationClosed(consultation, reply)) return
   const { domain, code, problem, etiology, evidence } = request.body || {}
   if (!domain || !problem) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Dominio y problema son obligatorios.', fields: { domain: !domain, problem: !problem } })
   const diagnosis = await prisma.diagnosis.create({ data: { consultationId: consultation.id, domain, code: code || null, problem, etiology: etiology || null, evidence: evidence || null } })
@@ -665,6 +769,7 @@ app.post('/api/v1/consultations/:consultationId/diagnoses', async (request, repl
 app.patch('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async (request, reply) => {
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  if (consultationClosed(consultation, reply)) return
   const diagnosis = await prisma.diagnosis.findFirst({ where: { id: request.params.diagnosisId, consultationId: consultation.id } })
   if (!diagnosis) return reply.code(404).send({ code: 'DIAGNOSIS_NOT_FOUND', message: 'Diagnóstico no encontrado.', fields: {} })
   const { domain, code, problem, etiology, evidence } = request.body || {}
@@ -686,6 +791,7 @@ app.patch('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async 
 app.delete('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async (request, reply) => {
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  if (consultationClosed(consultation, reply)) return
   const diagnosis = await prisma.diagnosis.findFirst({ where: { id: request.params.diagnosisId, consultationId: consultation.id } })
   if (!diagnosis) return reply.code(404).send({ code: 'DIAGNOSIS_NOT_FOUND', message: 'Diagnóstico no encontrado.', fields: {} })
   await prisma.diagnosis.delete({ where: { id: diagnosis.id } })
@@ -693,8 +799,10 @@ app.delete('/api/v1/consultations/:consultationId/diagnoses/:diagnosisId', async
   return reply.code(204).send()
 })
 
-app.get('/api/v1/appointments', async (request) => {
+app.get('/api/v1/appointments', async (request, reply) => {
   const { from, to } = request.query
+  // Sin rango válido, `new Date(undefined)` llegaba a Prisma como Invalid Date → 500.
+  if (Number.isNaN(new Date(from).getTime()) || Number.isNaN(new Date(to).getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Rango de fechas inválido.', fields: { from: 'invalid', to: 'invalid' } })
   const appointments = await prisma.appointment.findMany({ where: { practiceId: request.practiceId, startAt: { gte: new Date(from), lte: new Date(to) }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, include: { patient: true }, orderBy: { startAt: 'asc' } })
   return { items: appointments }
 })
@@ -767,6 +875,21 @@ app.post('/api/v1/appointments/:appointmentId/complete', async (request, reply) 
   if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
   return prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'COMPLETED' }, include: { patient: true } })
 })
+
+// Cancelar una cita (o quitar un bloqueo) y marcar que el paciente no asistió. Las dos liberan el
+// horario: el listado y la revisión de empalmes ya excluyen CANCELLED y NO_SHOW. Una cita atendida
+// no se cancela (su consulta e ingreso ya existen).
+for (const [route, status, action] of [['cancel', 'CANCELLED', 'cancelled'], ['no-show', 'NO_SHOW', 'no_show']]) {
+  app.post(`/api/v1/appointments/:appointmentId/${route}`, async (request, reply) => {
+    const appointment = await prisma.appointment.findFirst({ where: { id: request.params.appointmentId, practiceId: request.practiceId } })
+    if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
+    if (appointment.status === 'COMPLETED') return reply.code(409).send({ code: 'APPOINTMENT_COMPLETED', message: 'La cita ya se atendió; no se puede cambiar.', fields: {} })
+    if (status === 'NO_SHOW' && (appointment.type === 'BLOCK' || appointment.startAt > new Date())) return reply.code(409).send({ code: 'APPOINTMENT_NOT_STARTED', message: 'Sólo se marca inasistencia en una cita cuya hora ya pasó.', fields: {} })
+    const updated = await prisma.appointment.update({ where: { id: appointment.id }, data: { status }, include: { patient: true } })
+    await logAudit(request, { action, entity: 'Appointment', entityId: appointment.id, patientId: appointment.patientId })
+    return updated
+  })
+}
 
 // Move a cita (drag & drop in Agenda): change its startAt/endAt keeping the existing duration
 // unless one is provided. Validates the target slot against overlaps like creation does.
@@ -940,7 +1063,6 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
     for (const field of PLAN_TEMPLATE_FIELDS) if (settings[field] != null) data[field] = settings[field]
     if (Object.keys(data).length) await prisma.nutritionPlan.update({ where: { id: plan.id }, data })
   }
-  const slots = template.mealSlots || []
   // Normaliza igual que la distribución (valida día/tiempo y deduplica por día+tiempo): una
   // plantilla con slots crudos duplicados violaría @@unique([planId, dayOfWeek, mealType]) → 500.
   const slots = normalizeMealSlots(template.mealSlots)
@@ -1543,8 +1665,9 @@ app.get('/api/v1/plans', async (request, reply) => {
   if (status && !PLAN_STATUSES.includes(status)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Estado de plan no válido.', fields: { status: 'invalid' } })
   const plans = await prisma.nutritionPlan.findMany({
     where: { patient: { practiceId: request.practiceId }, ...(status ? { status } : {}) },
-    // El hub solo necesita el nombre de la paciente, no todos sus datos sensibles.
-    include: { patient: { select: { id: true, firstName: true, lastName: true } }, mealSlots: { select: { dayOfWeek: true } } },
+    // El hub solo necesita el nombre de la paciente, no todos sus datos sensibles; las recetas (nombre
+    // y foto) dan la tira de fotos de cada tarjeta del listado.
+    include: { patient: { select: { id: true, firstName: true, lastName: true } }, mealSlots: { select: { dayOfWeek: true, recipeId: true, recipe: { select: { id: true, name: true, imageFile: true } } } } },
     orderBy: { updatedAt: 'desc' },
     take: 200,
   })
@@ -1582,6 +1705,33 @@ app.post('/api/v1/plans/:planId/reactivate', async (request, reply) => {
   const updated = await prisma.nutritionPlan.update({ where: { id: plan.id }, data: { status: plan.publishedAt ? 'PUBLISHED' : 'DRAFT' } })
   await logAudit(request, { action: 'reactivated', entity: 'NutritionPlan', entityId: updated.id, patientId: plan.patientId })
   return updated
+})
+
+// "Editar como nueva versión": un plan publicado (o cancelado) no se reabre; se copia a un borrador
+// nuevo con el cálculo, las porciones, los menús, las indicaciones y las recetas de la semana. El
+// original queda como estaba. Va a la consulta en curso de la paciente si hay una.
+app.post('/api/v1/plans/:planId/duplicate', async (request, reply) => {
+  const source = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } }, include: { mealSlots: true } })
+  if (!source) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
+  const [openConsultation, latest] = await Promise.all([
+    prisma.consultation.findFirst({ where: { patientId: source.patientId, status: 'IN_PROGRESS' }, orderBy: { createdAt: 'desc' }, select: { id: true } }),
+    prisma.nutritionPlan.aggregate({ where: { patientId: source.patientId }, _max: { version: true } }),
+  ])
+  const copyJson = (value) => (value == null ? undefined : value)
+  const plan = await prisma.nutritionPlan.create({
+    data: {
+      patientId: source.patientId,
+      consultationId: openConsultation?.id || source.consultationId,
+      version: (latest._max.version || source.version || 1) + 1,
+      goal: source.goal, formula: source.formula, activityMethod: source.activityMethod, activityFactor: source.activityFactor, metsPayload: copyJson(source.metsPayload),
+      targetKcal: source.targetKcal, carbsPercent: source.carbsPercent, proteinPercent: source.proteinPercent, fatPercent: source.fatPercent, evaluation: copyJson(source.evaluation),
+      mealTimes: copyJson(source.mealTimes), equivalents: copyJson(source.equivalents), menus: copyJson(source.menus), mealLabels: copyJson(source.mealLabels), mealNotes: copyJson(source.mealNotes),
+      activeMeals: source.activeMeals, recipeAdjustments: copyJson(source.recipeAdjustments), hydrationNote: source.hydrationNote, recommendations: source.recommendations,
+      mealSlots: { create: source.mealSlots.map((slot) => ({ dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: slot.recipeId, servings: slot.servings, notes: slot.notes })) },
+    },
+  })
+  await logAudit(request, { action: 'created', entity: 'NutritionPlan', entityId: plan.id, patientId: plan.patientId, metadata: { duplicatedFrom: source.id } })
+  return reply.code(201).send(plan)
 })
 
 app.patch('/api/v1/plans/:planId', async (request, reply) => {
@@ -1850,7 +2000,9 @@ function drawChips(file, labels) {
 // que el llamador pueda decidir si mostrar un mensaje de "sin datos" quien además depende de otra
 // fuente (p. ej. el recordatorio de 24 h del informe clínico).
 function drawFieldList(file, payload, { skip = [], empty = 'Sin datos registrados.' } = {}) {
-  const entries = Object.entries(payload || {}).filter(([key, value]) => value !== undefined && value !== null && value !== '' && !skip.includes(key))
+  // Las fotos (imágenes codificadas "data:…") no son texto: impresas salían como páginas de caracteres.
+  const isImageData = (value) => (typeof value === 'string' && value.startsWith('data:')) || (Array.isArray(value) && value.some((item) => typeof item === 'string' && item.startsWith('data:')))
+  const entries = Object.entries(payload || {}).filter(([key, value]) => value !== undefined && value !== null && value !== '' && !skip.includes(key) && !isImageData(value))
   const chips = entries.filter(([, value]) => value === true).map(([key]) => key.replace(/__/g, ' · '))
   const rows = entries.filter(([, value]) => value !== true && value !== false)
   if (!chips.length && !rows.length) { if (empty) drawLineText(file, empty, FAINT); return false }
@@ -1957,25 +2109,49 @@ const EXPORT_SECTION_KEYS = [
 ]
 
 function drawConsultationExport(file, document, practice, user, logoBuffer) {
-  drawDocumentBrand(file, 'EXPEDIENTE CLÍNICO COMPLETO', practice, logoBuffer)
-  file.font('Helvetica-Bold').fontSize(18).fillColor(INK).text('Expediente clínico nutricio')
-  file.font('Helvetica').fontSize(10).fillColor(MUTED).text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
-  file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`)
-  file.moveDown()
-
+  const tz = practice?.timeZone
+  const patient = document.patient
   const consultation = document.consultation
+  const professional = consultation?.nutritionist || user
+  drawDocumentBrand(file, 'EXPEDIENTE CLÍNICO NUTRICIO', practice, logoBuffer)
+  // Datos del establecimiento (NOM-004-SSA3-2012, 5.2.1): tipo, nombre y domicilio.
+  file.font('Helvetica').fontSize(8).fillColor(MUTED).text([practice?.establishmentType || 'Consultorio de nutrición', practice?.name, practice?.address || 'Domicilio no registrado'].filter(Boolean).join(' · '), 48, file.y, { width: 516 })
+  file.moveDown(0.6)
+  file.font('Helvetica-Bold').fontSize(18).fillColor(INK).text('Expediente clínico nutricio', 48, file.y)
+  file.moveDown(0.5)
+
+  const at = consultation?.startedAt || consultation?.createdAt
+  const age = ageAt(patient.birthDate, at)
+  // Ficha de identificación (5.2.3 y 5.9): nombre, sexo, edad, domicilio y número de expediente.
+  drawInfoGrid(file, 'Ficha de identificación', [
+    ['Nombre completo', `${patient.firstName} ${patient.lastName}`],
+    ['Número de expediente', formatRecordNumber(patient.recordNumber)],
+    ['Sexo', patient.sex || 'No registrado'],
+    ['Edad', age != null ? `${age} años (nacimiento: ${formatDateOnly(patient.birthDate)})` : 'No registrada'],
+    ['Domicilio', patient.address || 'No registrado'],
+    ['CURP', patient.curp || 'No registrada'],
+    ['Ocupación', patient.occupation || 'No registrada'],
+    ['Consentimiento de datos sensibles', patient.consentDataAt ? `Otorgado el ${formatDateOnly(patient.consentDataAt, tz)}` : 'No registrado'],
+  ])
+  // Datos de la atención (5.10): fecha y hora, y nombre completo y cédula de quien la elabora.
+  const closed = consultation?.status === 'COMPLETED'
+  drawInfoGrid(file, 'Datos de la consulta', [
+    ['Inicio', formatDateTime(at, tz)],
+    ['Cierre', closed ? formatDateTime(consultation.completedAt, tz) : 'Consulta en curso (documento preliminar)'],
+    ['Profesional responsable', [professional?.name, professional?.specialty].filter(Boolean).join(' · ') || '—'],
+    ['Cédula profesional', professional?.licenseNumber || 'No registrada'],
+  ])
+
   const sections = consultation?.sections || []
   const payloadOf = (key) => sections.find((section) => section.sectionKey === key)?.payload || {}
+  const expand = (payload) => Object.fromEntries(Object.entries(payload || {}).map(([key, value]) => [expandLabel(key), value]))
   const measurement = [...(consultation?.measurements || [])].sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0]
   const diagnoses = consultation?.diagnoses || []
 
   const summary = payloadOf('summary')
   const reason = summary?.reason || summary?.['Motivo de consulta']
   const goal = summary?.goal || summary?.Objetivo
-  const summaryLine = reason || goal
-    ? [reason && `Motivo: ${reason}`, goal && `Objetivo: ${goal}`].filter(Boolean).join('   ·   ')
-    : 'Todas las secciones del expediente clínico de esta consulta, tal como quedaron registradas.'
-  drawSummaryBox(file, 'Expediente completo', summaryLine)
+  if (reason || goal) drawSummaryBox(file, 'Motivo de la consulta', [reason && `Motivo: ${reason}`, goal && `Objetivo: ${goal}`].filter(Boolean).join('   ·   '))
 
   let sectionIndex = 0
   for (const [key, label] of EXPORT_SECTION_KEYS) {
@@ -1983,31 +2159,56 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
     drawSectionTitle(file, sectionIndex, label)
     if (key === 'anthropometric') {
       const parts = [
-        measurement?.weightKg != null && `Peso: ${measurement.weightKg} kg`,
-        measurement?.heightCm != null && `Talla: ${measurement.heightCm} cm`,
-        measurement?.waistCm != null && `Cintura: ${measurement.waistCm} cm`,
-        measurement?.hipCm != null && `Cadera: ${measurement.hipCm} cm`,
-        measurement?.abdomenCm != null && `Abdomen: ${measurement.abdomenCm} cm`,
-        measurement?.bodyFatPercent != null && `% grasa corporal: ${measurement.bodyFatPercent}%`,
-        measurement?.muscleMassKg != null && `Masa muscular: ${measurement.muscleMassKg} kg`,
+        measurement?.weightKg != null && `Peso: ${measurement.weightKg} kilogramos`,
+        measurement?.heightCm != null && `Talla: ${measurement.heightCm} centímetros`,
+        measurement?.waistCm != null && `Cintura: ${measurement.waistCm} centímetros`,
+        measurement?.hipCm != null && `Cadera: ${measurement.hipCm} centímetros`,
+        measurement?.abdomenCm != null && `Abdomen: ${measurement.abdomenCm} centímetros`,
+        measurement?.bodyFatPercent != null && `Grasa corporal: ${measurement.bodyFatPercent} %`,
+        measurement?.muscleMassKg != null && `Masa muscular: ${measurement.muscleMassKg} kilogramos`,
         measurement?.method && `Método: ${measurement.method}`,
       ].filter(Boolean)
-      if (parts.length) drawFieldRow(file, 'Medición más reciente', parts.join(' · '))
-      drawFieldList(file, payloadOf('anthropometric'), { skip: ['Peso (kg)', 'Talla (cm)', 'IMC calculado'], empty: parts.length ? null : 'Sin mediciones registradas.' })
+      if (parts.length) drawFieldRow(file, `Medición registrada el ${formatDateTime(measurement.measuredAt, tz)}`, parts.join(' · '))
+      drawFieldList(file, expand(payloadOf('anthropometric')), { skip: ['Peso (kg)', 'Talla (cm)', 'Índice de masa corporal (IMC) calculado', 'Fotos antropométricas'], empty: parts.length ? null : 'Sin mediciones registradas.' })
     } else if (key === 'biochemical') {
       const labs = Array.isArray(payloadOf('biochemical')['Estudios']) ? payloadOf('biochemical')['Estudios'] : []
-      for (const lab of labs) drawLineText(file, `${lab.name}: ${lab.value ?? '—'} ${lab.unit || ''}${lab.range ? ` (ref. ${lab.range})` : ''}${lab.status ? ` · ${lab.status}` : ''}`)
-      drawFieldList(file, payloadOf('biochemical'), { skip: ['Estudios'], empty: labs.length ? null : 'Sin estudios registrados.' })
+      for (const lab of labs) drawLineText(file, `${lab.name}: ${lab.value ?? '—'} ${lab.unit || ''}${lab.range ? ` (referencia ${lab.range})` : ''}${lab.status ? ` · ${lab.status}` : ''}`)
+      drawFieldList(file, expand(payloadOf('biochemical')), { skip: ['Estudios'], empty: labs.length ? null : 'Sin estudios registrados.' })
     } else if (key === 'diagnosis') {
       if (diagnoses.length) for (const d of diagnoses) drawLineText(file, diagnosisLine(d))
       else drawLineText(file, 'Sin diagnóstico registrado.', FAINT)
-      drawFieldList(file, payloadOf(key), { empty: null })
+      drawFieldList(file, expand(payloadOf(key)), { empty: null })
     } else {
-      drawFieldList(file, payloadOf(key), { empty: 'Sin datos registrados.' })
+      // El motivo y el objetivo ya van en el recuadro de arriba: no se repiten en "Resumen".
+      drawFieldList(file, expand(payloadOf(key)), { skip: key === 'summary' && (reason || goal) ? ['Motivo de consulta', 'Objetivo', 'reason', 'goal'] : [], empty: key === 'summary' && (reason || goal) ? 'Motivo y objetivo en el recuadro de arriba.' : 'Sin datos registrados.' })
     }
     file.moveDown(0.4)
   }
-  file.font('Helvetica').fontSize(9).fillColor(FAINT).text(signatureFor(user, practice), 48, file.y, { width: 516, align: 'center' })
+
+  // Notas aclaratorias: el expediente no se enmienda en silencio (5.11). Cada reapertura con su
+  // motivo y cada sección corregida después del cierre, con fecha, hora y quién lo hizo.
+  sectionIndex += 1
+  drawSectionTitle(file, sectionIndex, 'Registro de correcciones')
+  const trail = (document.auditTrail || []).filter((event) => event.action === 'reopened' || event.metadata?.afterClose || ((event.entity === 'Diagnosis' || event.entity === 'Measurement' || event.entity === 'LabAttachment') && consultation?.completedAt && new Date(event.createdAt) > new Date(consultation.completedAt)))
+  const sectionNames = Object.fromEntries(EXPORT_SECTION_KEYS)
+  const describe = (event) => {
+    if (event.action === 'reopened') return `Consulta reabierta para corrección. Motivo: ${event.metadata?.reason || 'no indicado'}`
+    if (event.entity === 'ClinicalSection') return `Se corrigió la sección «${sectionNames[event.metadata?.sectionKey] || event.metadata?.sectionKey}» (la versión anterior se conserva en la bitácora).`
+    if (event.entity === 'Diagnosis') return `Diagnóstico ${event.action === 'deleted' ? 'eliminado' : event.action === 'created' ? 'agregado' : 'modificado'}: ${event.metadata?.problem || ''}`
+    if (event.entity === 'Measurement') return 'Medición antropométrica corregida.'
+    return `PDF de laboratorio ${event.action === 'deleted' ? 'retirado' : 'agregado'}: ${event.metadata?.fileName || ''}`
+  }
+  if (!trail.length) drawLineText(file, closed ? 'Sin correcciones posteriores al cierre de la consulta.' : 'La consulta sigue en curso: aún no hay cierre que corregir.', FAINT)
+  for (const event of trail) drawFieldRow(file, `${formatDateTime(event.createdAt, tz)} · ${event.user?.name || 'Usuario'}`, describe(event))
+
+  // Firma de quien elabora (5.10): nombre completo, cédula y espacio para la firma autógrafa.
+  if (file.y > file.page.height - file.page.margins.bottom - 110) file.addPage()
+  file.moveDown(2.2)
+  const lineY = file.y + 24
+  file.moveTo(182, lineY).lineTo(430, lineY).strokeColor(INK).lineWidth(0.7).stroke()
+  file.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(professional?.name || practice?.name || '', 48, lineY + 6, { width: 516, align: 'center' })
+  file.font('Helvetica').fontSize(8).fillColor(MUTED).text([professional?.specialty, professional?.licenseNumber ? `Cédula profesional ${professional.licenseNumber}` : 'Cédula profesional no registrada'].filter(Boolean).join(' · '), 48, file.y, { width: 516, align: 'center' })
+  file.text('Nombre y firma de quien elabora', 48, file.y, { width: 516, align: 'center' })
   drawConfidentialityNotice(file)
 }
 
@@ -2197,7 +2398,7 @@ async function buildPlanHeader(patient, practice, user) {
 
 // Reúne lo que necesita drawNutritionPlan: lo asíncrono (archivos de fotos, medición más reciente)
 // se resuelve aquí porque el dibujo con pdfkit es síncrono.
-async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) {
+async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer, themeOverride = null) {
   const menu = await loadPlanMenu(plan)
   const imageDirectory = recipeImageDir()
   const images = new Map()
@@ -2223,6 +2424,7 @@ async function loadNutritionPlanData(plan, patient, practice, user, logoBuffer) 
     hydrationNote: plan.hydrationNote,
     logo: logoBuffer,
     images,
+    theme: normalizePdfTheme(themeOverride || practice?.pdfTheme),
   }
 }
 
@@ -2254,23 +2456,117 @@ function renderNutritionPlanPdf(planData) {
 }
 
 // Genera (o regenera) el archivo PDF de un documento y lo deja guardado con una versión nueva.
+// Datos que los documentos clínicos necesitan además de la consulta:
+//  - Los antecedentes permanentes del paciente (heredofamiliares, alergias, cirugías…) viven fuera de
+//    la consulta (PatientSection, ver src/lib/patientFields.js) y ningún PDF los incluía; la
+//    NOM-004-SSA3-2012 (6.1.1) los pide en la historia clínica. Se integran a su sección.
+//  - El número de expediente y la bitácora de reaperturas y correcciones de esa consulta.
+async function prepareClinicalDocument(document, practiceId) {
+  document.patient = await ensureRecordNumber(document.patient)
+  const consultation = document.consultation
+  if (!consultation) return
+  const patientSections = await prisma.patientSection.findMany({ where: { patientId: document.patientId } })
+  const sections = [...(consultation.sections || [])]
+  for (const patientSection of patientSections) {
+    const index = sections.findIndex((section) => section.sectionKey === patientSection.sectionKey)
+    const merged = { ...(index >= 0 ? sections[index].payload : {}), ...(patientSection.payload || {}) }
+    if (index >= 0) sections[index] = { ...sections[index], payload: merged }
+    else sections.push({ sectionKey: patientSection.sectionKey, payload: merged })
+  }
+  consultation.sections = sections
+  document.auditTrail = await prisma.auditEvent.findMany({
+    where: { practiceId, OR: [{ entity: 'Consultation', entityId: consultation.id }, { metadata: { path: ['consultationId'], equals: consultation.id } }] },
+    include: { user: { select: { name: true } } },
+    orderBy: { createdAt: 'asc' },
+  })
+}
+
+// Pie de cada hoja de los documentos clínicos: identifica al paciente (NOM-004-SSA3-2012, 5.9), la
+// hoja ("Página X de Y": un expediente impreso al que le falte una hoja se nota) y el documento
+// (folio y versión, con la fecha y hora de emisión) para poder rastrearlo en una auditoría.
+function drawClinicalFooters(file, document, practice, user) {
+  const range = file.bufferedPageRange()
+  const issued = formatDateTime(new Date(), practice?.timeZone)
+  const folio = `${String(document.id).slice(0, 8).toUpperCase()}-v${(document.version || 0) + 1}`
+  const left = `Expediente ${formatRecordNumber(document.patient?.recordNumber)} · ${document.patient?.firstName || ''} ${document.patient?.lastName || ''}`.trim()
+  for (let i = range.start; i < range.start + range.count; i++) {
+    file.switchToPage(i)
+    const bottom = file.page.margins.bottom
+    file.page.margins.bottom = 0
+    const y = file.page.height - 30
+    file.moveTo(48, y - 6).lineTo(564, y - 6).strokeColor(TINT_LINE).lineWidth(0.5).stroke()
+    file.font('Helvetica').fontSize(7).fillColor(FAINT)
+    file.text(left, 48, y, { width: 200, height: 9, ellipsis: true })
+    file.text(`Página ${i - range.start + 1} de ${range.count}`, 248, y, { width: 82, align: 'center', lineBreak: false })
+    file.text(`Emitido ${issued}${user?.name ? ` por ${user.name}` : ''} · Folio ${folio}`, 330, y, { width: 234, height: 9, align: 'right', ellipsis: true })
+    file.page.margins.bottom = bottom
+  }
+}
+
+const formatRecordNumber = (value) => (value ? `N.º ${String(value).padStart(5, '0')}` : 'sin número')
+// Fecha y hora en la zona del consultorio: son marcas de tiempo reales (no horas "de pared").
+const formatDateTime = (value, timeZone) => (value ? new Date(value).toLocaleString('es-MX', { timeZone: timeZone || 'America/Mexico_City', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—')
+const formatDateOnly = (value, timeZone) => (value ? new Date(value).toLocaleDateString('es-MX', { timeZone: timeZone || 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')
+const ageAt = (birthDate, at) => {
+  if (!birthDate) return null
+  const birth = new Date(birthDate); const when = at ? new Date(at) : new Date()
+  let age = when.getUTCFullYear() - birth.getUTCFullYear()
+  const beforeBirthday = when.getUTCMonth() < birth.getUTCMonth() || (when.getUTCMonth() === birth.getUTCMonth() && when.getUTCDate() < birth.getUTCDate())
+  if (beforeBirthday) age -= 1
+  return age >= 0 ? age : null
+}
+
+// Sin abreviaturas en el expediente (NOM-004-SSA3-2012, 5.11): las siglas de los campos se escriben
+// completas la primera vez, con la sigla entre paréntesis.
+const LABEL_EXPANSIONS = [
+  [/\bIMC\b/g, 'Índice de masa corporal (IMC)'], [/\bICC\b/g, 'Índice cintura-cadera (ICC)'], [/\bICT\b/g, 'Índice cintura-talla (ICT)'],
+  [/\bTMB\b/g, 'Tasa metabólica basal (TMB)'], [/\bGET\b/g, 'Gasto energético total (GET)'], [/\bGEB\b/g, 'Gasto energético basal (GEB)'],
+  [/\bPES\b/g, 'Problema, etiología y signos (PES)'], [/\bR24H?\b/g, 'Recordatorio de 24 horas'], [/\bKg\b/g, 'Kilogramos'],
+]
+const expandLabel = (label) => LABEL_EXPANSIONS.reduce((text, [pattern, full]) => text.replace(pattern, full), String(label))
+
+// Cajas de dos columnas "etiqueta / valor" (ficha de identificación, datos de la consulta).
+function drawInfoGrid(file, title, rows) {
+  if (file.y > file.page.height - file.page.margins.bottom - 120) file.addPage()
+  const top = file.y; const colW = 258; const pad = 10
+  file.font('Helvetica-Bold').fontSize(8).fillColor(PRIMARY).text(title.toUpperCase(), 48, top, { width: 516, characterSpacing: 0.6 })
+  let y = top + 14
+  for (let i = 0; i < rows.length; i += 2) {
+    const pair = rows.slice(i, i + 2)
+    file.font('Helvetica').fontSize(9)
+    const heights = pair.map(([label, value]) => file.heightOfString(String(value ?? '—'), { width: colW - pad * 2 }) + 12)
+    const h = Math.max(...heights, 24)
+    pair.forEach(([label, value], j) => {
+      const x = 48 + j * colW
+      file.rect(x, y, colW - (j === 0 ? 4 : 0), h).fill(j === 0 && i % 4 === 0 ? TINT : '#F4F8F2')
+      file.font('Helvetica').fontSize(7).fillColor(FAINT).text(label, x + pad, y + 4, { width: colW - pad * 2 })
+      file.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(String(value ?? '—'), x + pad, y + 13, { width: colW - pad * 2 })
+    })
+    y += h + 4
+  }
+  file.y = y + 6
+}
+
 async function generateDocumentFile(documentId, practiceId, userId) {
-  const document = await prisma.document.findFirst({ where: { id: documentId, patient: { practiceId } }, include: { patient: true, consultation: { include: { measurements: true, diagnoses: true, sections: true } }, plan: true } })
+  const document = await prisma.document.findFirst({ where: { id: documentId, patient: { practiceId } }, include: { patient: true, consultation: { include: { measurements: true, diagnoses: true, sections: true, nutritionist: { select: { name: true, specialty: true, licenseNumber: true } } } }, plan: true } })
   if (!document) return null
   const { practice, user, logoBuffer } = await loadPracticeBranding(practiceId, userId)
   let pdf
   if (document.type === 'nutrition_plan') {
     pdf = await renderNutritionPlanPdf(await loadNutritionPlanData(document.plan, document.patient, practice, user, logoBuffer))
   } else {
+    await prepareClinicalDocument(document, practiceId)
     pdf = await new Promise((resolve, reject) => {
       const chunks = []
-      const file = new PDFDocument({ size: 'LETTER', margin: 48 })
+      // bufferPages: el pie con "Página X de Y" se escribe al final, cuando ya se sabe cuántas hay.
+      const file = new PDFDocument({ size: 'LETTER', margin: 48, bufferPages: true })
       file.on('data', (chunk) => chunks.push(chunk))
       file.on('end', () => resolve(Buffer.concat(chunks)))
       file.on('error', reject)
       if (document.type === 'consultation_export') drawConsultationExport(file, document, practice, user, logoBuffer)
       else if (document.type === 'consultation_clinical') drawClinicalReport(file, document, practice, user, logoBuffer)
       else drawConsultationReport(file, document, practice, user, logoBuffer)
+      drawClinicalFooters(file, document, practice, user)
       file.end()
     })
   }
@@ -2301,34 +2597,50 @@ app.get('/api/v1/plans/:planId/preview-pdf', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId } }, include: { patient: true } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   const { practice, user, logoBuffer } = await loadPracticeBranding(practiceId, request.userId)
+  // `?theme=` (JSON) dibuja con un diseño que todavía no se guarda: la vista previa del editor.
+  let themeOverride = null
+  if (typeof request.query?.theme === 'string' && request.query.theme.length < 2000) { try { themeOverride = JSON.parse(request.query.theme) } catch { themeOverride = null } }
   let pdf
   try {
-    pdf = await renderNutritionPlanPdf(await loadNutritionPlanData(plan, plan.patient, practice, user, logoBuffer))
+    pdf = await renderNutritionPlanPdf(await loadNutritionPlanData(plan, plan.patient, practice, user, logoBuffer, themeOverride))
   } catch (error) {
     request.log.error(error)
     return reply.code(500).send({ code: 'PDF_GENERATION_FAILED', message: 'No se pudo generar la vista previa del PDF.', fields: {} })
   }
-  return reply.type('application/pdf').header('Content-Disposition', 'inline; filename="plan-de-alimentacion.pdf"').header('Cache-Control', 'no-store').send(pdf)
+  return reply.type('application/pdf').header('Content-Disposition', contentDisposition('inline', planFileName(`${plan.patient.firstName} ${plan.patient.lastName}`, plan.publishedAt || new Date()))).header('Cache-Control', 'no-store').send(pdf)
 })
 
 app.post('/api/v1/documents/:documentId/generate', async (request, reply) => {
   const generated = await generateDocumentFile(request.params.documentId, request.practiceId, request.userId)
   if (!generated) return reply.code(404).send({ code: 'DOCUMENT_NOT_FOUND', message: 'Documento no encontrado.', fields: {} })
+  // Generar el PDF también es acceder a la información (lo arma completo con los datos del expediente).
+  await logAccess(request, { patientId: generated.patientId, scope: 'document', action: 'generated', entity: 'Document', entityId: generated.id, metadata: { type: generated.type, version: generated.version, consultationId: generated.consultationId } })
   return generated
 })
 
 app.get('/api/v1/documents/:documentId/download', async (request, reply) => {
   const practiceId = request.practiceId
-  const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } } })
+  const document = await prisma.document.findFirst({ where: { id: request.params.documentId, patient: { practiceId } }, include: { patient: true, plan: { select: { publishedAt: true } } } })
   if (!document?.storageKey) return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'Genera el documento antes de descargarlo.', fields: {} })
   const filePath = path.resolve(process.env.DOCUMENT_STORAGE_PATH || './storage/documents', document.storageKey)
   try {
     const file = await readFile(filePath)
-    return reply.type('application/pdf').header('Content-Disposition', `attachment; filename="${safeFileName(document.storageKey)}"`).send(file)
+    await logAccess(request, { patientId: document.patientId, scope: 'document', action: 'downloaded', entity: 'Document', entityId: document.id, metadata: { type: document.type, version: document.version, consultationId: document.consultationId } })
+    return reply.type('application/pdf').header('Content-Disposition', contentDisposition('attachment', documentFileName(document))).send(file)
   } catch {
     return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'El archivo del documento no está disponible.', fields: {} })
   }
 })
+
+// Nombre legible del archivo descargado (el guardado en disco sigue siendo <id>-v<n>.pdf).
+const DOCUMENT_FILE_TITLES = { consultation_report: 'Informe de consulta', consultation_export: 'Expediente', consultation_clinical: 'Informe clínico' }
+function documentFileName(document) {
+  const patientName = document.patient ? `${document.patient.firstName} ${document.patient.lastName}` : ''
+  if (document.type === 'nutrition_plan') return planFileName(patientName, document.plan?.publishedAt || document.generatedAt || new Date())
+  return planFileName(patientName, document.generatedAt || new Date()).replace('Plan de alimentación', DOCUMENT_FILE_TITLES[document.type] || 'Documento')
+}
+// filename= lleva un respaldo sin acentos; filename*= el nombre completo en UTF-8 (RFC 6266).
+const contentDisposition = (kind, fileName) => `${kind}; filename="${asciiFileName(fileName)}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
 
 app.post('/api/v1/documents/:documentId/deliver', async (request, reply) => {
   const practiceId = request.practiceId

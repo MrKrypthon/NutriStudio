@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import { documentsApi, patientsApi, plansApi, templatesApi } from '../../lib/api.js'
-import { documentsApi, patientsApi, plansApi } from '../../lib/api.js'
 import { saveBlob } from '../../lib/download.js'
 import { usePatient } from '../../lib/usePatient.js'
+import { planFileName } from '../../../server/domain/pdfTheme.js'
+import PdfDesignEditor from './PdfDesignEditor.jsx'
 
 // `planId` (sólo embebido en el Constructor): el plan que se está editando. Sin él, la pantalla
 // elegía "el primer plan no publicado" de la paciente, que podía ser otro borrador o uno cancelado.
@@ -22,6 +23,9 @@ export default function DocumentPage({ setActive, patientId, planId = null, embe
   const [previewState, setPreviewState] = useState('idle')
   const previewFrame = useRef(null)
   const [templateState, setTemplateState] = useState('idle')
+  // Editor del diseño del PDF (colores, tipografía); al guardarlo se rehace la vista previa.
+  const [designOpen, setDesignOpen] = useState(false)
+  const [designVersion, setDesignVersion] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -71,7 +75,7 @@ export default function DocumentPage({ setActive, patientId, planId = null, embe
       })
       .catch(() => { if (!cancelled) setPreviewState('error') })
     return () => { cancelled = true; if (url) URL.revokeObjectURL(url) }
-  }, [plan?.id, plan?.status, document?.version])
+  }, [plan?.id, plan?.status, document?.version, designVersion])
 
   const publishPlan = async () => {
     if (!plan) return
@@ -108,11 +112,18 @@ export default function DocumentPage({ setActive, patientId, planId = null, embe
     }
   }
 
+  // Un plan ya publicado tiene su PDF guardado: se regenera con el diseño nuevo para que lo que se
+  // descarga coincida con lo que se ve.
+  const onDesignSaved = () => {
+    setDesignVersion((value) => value + 1)
+    if (plan?.status === 'PUBLISHED' && document?.storageKey) generatePdf()
+  }
+
   const downloadPdf = async () => {
     if (!document?.storageKey) return
     try {
       const blob = await documentsApi.downloadBlob(document.id)
-      saveBlob(blob, document.storageKey)
+      saveBlob(blob, planFileName(patientName, plan?.publishedAt || document.generatedAt || new Date()))
     } catch (err) {
       setError(err.message || 'No se pudo descargar el PDF.')
     }
@@ -178,7 +189,8 @@ export default function DocumentPage({ setActive, patientId, planId = null, embe
     {loadState === 'loading' && <div className="result-empty panel"><span className="loading-dot">●</span><h3>Cargando plan…</h3></div>}
     {loadState === 'error' && <div className="form-error">⚠ No se pudo cargar el plan. Intenta de nuevo más tarde.</div>}
     {loadState === 'ready' && !plan && <div className="result-empty panel"><span>◌</span><h3>No hay un plan para guardar</h3><p>Crea el plan y elige sus recetas antes de guardarlo.</p></div>}
-    {loadState === 'ready' && plan && !published && <section className="save-hero">
+    {loadState === 'ready' && plan?.status === 'CANCELLED' && <div className="result-empty panel"><span>⏸</span><h3>Plan cancelado</h3><p>Reactívalo o haz una versión nueva para guardarlo y asignarlo. Mientras tanto puedes previsualizarlo.</p><button type="button" className="link-button" onClick={() => setPreview(!preview)}>{preview ? 'Ocultar vista previa' : 'Previsualizar'}</button></div>}
+    {loadState === 'ready' && plan && !published && plan.status !== 'CANCELLED' && <section className="save-hero">
       <div className="save-hero-art" aria-hidden="true"><span>🥗</span><span>🍳</span><span>🥑</span><span>🍓</span></div>
       <div>
         <h2>Guarda tu plan</h2>
@@ -190,6 +202,7 @@ export default function DocumentPage({ setActive, patientId, planId = null, embe
           <button type="button" className="primary" disabled={publishState === 'publishing' || !mealCount || !plan.targetKcal} onClick={publishPlan}>{publishState === 'publishing' ? 'Guardando…' : 'Guardar y asignar plan'}</button>
           <button type="button" className="link-button" disabled={templateState === 'saving'} onClick={saveTemplate}>{templateState === 'saving' ? 'Guardando plantilla…' : templateState === 'saved' ? 'Plantilla guardada ✓' : 'Guardar plantilla'}</button>
           <button type="button" className="link-button" onClick={() => setPreview(!preview)}>{preview ? 'Ocultar vista previa' : 'Previsualizar'}</button>
+          <button type="button" className="link-button" onClick={() => setDesignOpen(true)}>Diseño del PDF</button>
         </div>
         <small className="muted">Al guardar, el menú queda congelado: si después cambias una receta, este plan no cambia.</small>
       </div>
@@ -210,6 +223,7 @@ export default function DocumentPage({ setActive, patientId, planId = null, embe
           ? <><button type="button" className="primary" onClick={downloadPdf}>⇩ Descargar PDF</button><button type="button" className="link-button" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Regenerando…' : 'Regenerar PDF'}</button></>
           : <button type="button" className="primary" disabled={genState === 'generating'} onClick={generatePdf}>{genState === 'generating' ? 'Generando…' : 'Generar PDF'}</button>}
         <button type="button" className="link-button" onClick={() => setPreview(!preview)}>{preview ? 'Ocultar vista previa' : 'Previsualizar'}</button>
+        <button type="button" className="link-button" onClick={() => setDesignOpen(true)}>Colores y tipografía</button>
       </article>
       <article className="panel save-card">
         <span className="save-card-icon" aria-hidden="true">💬</span>
@@ -222,6 +236,10 @@ export default function DocumentPage({ setActive, patientId, planId = null, embe
       </article>
     </div>}
     {loadState === 'ready' && plan && preview && previewPanel}
+    {designOpen && plan && <div className="modal-backdrop" onClick={() => setDesignOpen(false)}><div className="modal pdfd-modal" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-head"><div><p className="eyebrow">PLAN EN PDF · DISEÑO</p><h2>Colores y tipografía</h2><span className="modal-subtitle">Se guarda para todos tus planes. La vista previa usa este plan.</span></div><button type="button" onClick={() => setDesignOpen(false)} aria-label="Cerrar">×</button></div>
+      <PdfDesignEditor planId={plan.id} onSaved={onDesignSaved} />
+    </div></div>}
   </div>
 
   const body = <div className={embedded ? 'document-content' : 'content document-content'}>

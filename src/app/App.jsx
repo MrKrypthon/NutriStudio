@@ -130,7 +130,7 @@ export default function App() {
   if (active === 'Hoy') return <DashboardPage setActive={setActive} onStartConsultation={startConsultation} onNewAppointment={goToNewAppointment} onOpenAgendaFiltered={goToAgendaFiltered} onOpenPlan={(pid) => go('Constructor de plan', { patientId: pid })} />
   if (active === 'Agenda') return <AgendaPage setActive={setActive} onStartConsultation={startConsultation} autoOpenNew={autoOpenNewAppointment} autoOpenPatientId={newAppointmentPatientId} onConsumeAutoOpen={() => { setAutoOpenNewAppointment(false); setNewAppointmentPatientId('') }} autoFilter={autoAgendaFilter} onConsumeAutoFilter={() => setAutoAgendaFilter(null)} />
   if (active === 'Pacientes') return <PatientsPage setActive={setActive} onSelectPatient={setSelectedPatientId} onOpenPatient={(pid, module) => go(module, { patientId: pid })} onNewAppointment={goToNewAppointment} />
-  if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
+  if (active === 'Nuevo paciente') return <NewPatientPage setActive={setActive} onOpenPatient={(pid, module) => go(module, { patientId: pid })} onNewAppointment={goToNewAppointment} />
   if (active === 'Nueva receta') return <NewRecipePage key="new" setActive={setActive} />
   if (active === 'Editar receta') return <NewRecipePage key={selectedRecipeId || 'new'} setActive={setActive} recipeId={selectedRecipeId} />
   if (active === 'Configuración') return <SettingsPage setActive={setActive} />
@@ -138,11 +138,11 @@ export default function App() {
   if (active === 'Expediente') return <ClinicalRecordPage setActive={setActive} patientId={selectedPatientId} consultationId={selectedConsultationId} onOpenSession={(cid) => go('Expediente', { patientId: selectedPatientId, consultationId: cid || null })} appointmentId={startAppointmentId} onConsumeAppointment={() => setStartAppointmentId(null)} onScheduleAppointment={() => goToNewAppointment(selectedPatientId)} />
   if (active === 'Constructor de plan') return <PlanStudioPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} pendingRecipeName={pendingRecipeName} onConsumeRecipeName={() => setPendingRecipeName(null)} />
   if (active === 'Documento') return <DocumentPage setActive={setActive} patientId={selectedPatientId} />
-  if (active === 'Documentos') return <DocumentsPage setActive={setActive} />
+  if (active === 'Documentos') return <DocumentsPage setActive={setActive} onOpenPatient={(pid, module) => go(module, { patientId: pid })} />
   if (active === 'Seguimientos') return <FollowupsPage setActive={setActive} />
   if (active === 'Finanzas') return <FinancePage setActive={setActive} />
   if (active === 'Consultas') return <ConsultationsPage setActive={setActive} patientId={selectedPatientId} onSelectPatient={setSelectedPatientId} onOpenSession={openSession} onOpenPatient={(pid, module) => go(module, { patientId: pid })} />
-  if (active === 'Plantillas') return <TemplatesPage setActive={setActive} onSelectPatient={setSelectedPatientId} />
+  if (active === 'Plantillas') return <TemplatesPage setActive={setActive} onOpenPatient={(pid, module) => go(module, { patientId: pid })} />
   if (active === 'Recetas') return <RecipesPage setActive={setActive} onSelectRecipe={setSelectedRecipeId} onAssignRecipe={assignRecipe} />
   if (active === 'Ingredientes') return <IngredientsPage setActive={setActive} />
   if (active === 'Equivalencias') return <EquivalencesPage setActive={setActive} />

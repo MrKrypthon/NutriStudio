@@ -65,35 +65,45 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
   const emptyTotals = { incomeCents: 0, expenseCents: 0, balanceCents: 0 }
   const finance = data.finance || { today: emptyTotals, allTime: emptyTotals, last7: [] }
   const pendingPlans = isReal ? (data.pendingPlans || []) : []
-  const updatedLabel = (iso) => { const d = new Date(iso); const days = Math.floor((Date.now() - d.getTime()) / 86400000); if (days <= 0) return `hoy · ${formatUTCTime(iso)}`; if (days === 1) return 'ayer'; return `hace ${days} días` }
+  // `updatedAt` es una marca de tiempo real (no la hora "de pared" de una cita), así que va en la hora
+  // local del equipo y por día de calendario: antes salía en UTC ("hoy · 01:32" a las 19:32).
+  const updatedLabel = (iso) => {
+    const d = new Date(iso)
+    const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000)
+    if (days <= 0) return `hoy · ${d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+    if (days === 1) return 'ayer'
+    return `hace ${days} días`
+  }
 
   // Consistency with Agenda: a pending appointment can be confirmed from Hoy too, with the same
   // "¿Deseas confirmar la cita?" stop before it actually confirms.
   const [confirmTarget, setConfirmTarget] = useState(null)
   const [confirmSaving, setConfirmSaving] = useState(false)
-  const confirmAppointment = async (id) => {
+  const [confirmError, setConfirmError] = useState('')
+  const openConfirm = (item) => { setConfirmError(''); setConfirmTarget(item) }
+  // Si falla, el modal sigue abierto con el motivo: antes se cerraba igual y la cita seguía "por
+  // confirmar" sin ningún aviso.
+  const resolveConfirm = async () => {
+    if (!confirmTarget) return
+    setConfirmSaving(true); setConfirmError('')
     try {
-      const updated = await appointmentsApi.confirm(id)
+      const updated = await appointmentsApi.confirm(confirmTarget.id)
       setData((prev) => ({
         ...prev,
         stats: { ...prev.stats, pendingConfirmations: Math.max(0, (prev.stats?.pendingConfirmations || 0) - 1) },
-        appointments: (prev.appointments || []).map((a) => (a.id === id ? updated : a)),
+        appointments: (prev.appointments || []).map((a) => (a.id === confirmTarget.id ? updated : a)),
       }))
-    } catch { /* keep the list as-is; retry in Agenda */ }
-  }
-  const resolveConfirm = async () => {
-    if (!confirmTarget) return
-    setConfirmSaving(true)
-    await confirmAppointment(confirmTarget.id)
-    setConfirmSaving(false)
-    setConfirmTarget(null)
+      setConfirmTarget(null)
+    } catch (error) {
+      setConfirmError(error.code === 'DEMO_MODE' ? 'Modo demostración: conecta el API para confirmar citas.' : (error.message || 'No se pudo confirmar la cita.'))
+    } finally { setConfirmSaving(false) }
   }
 
   return <AppChrome active="Hoy" setActive={setActive}><div className="content dashboard-content"><section className="welcome"><div><p className="eyebrow">{TODAY_EYEBROW}</p><h1>{greetingFor(now)}, {firstName} <span>✦</span></h1><p className="subtitle">Tu práctica, tus pacientes, un solo lugar.</p></div><div className="module-actions"><span className={'sync-label ' + (isReal ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'loading' ? 'Cargando…' : isReal ? 'Sincronizado' : status === 'error' ? 'Sin conexión' : 'Datos de demostración'}</span><button className="primary" onClick={() => onNewAppointment ? onNewAppointment() : setActive('Agenda')}><span>+</span> Nueva cita</button></div></section>
     <section className="stats-grid">{[['Citas de hoy', data.stats.appointments, '◷', true, 'Agenda', null], ['Por confirmar', data.stats.pendingConfirmations, '◌', false, 'Agenda', () => onOpenAgendaFiltered && onOpenAgendaFiltered('pending')], ['Seguimientos', data.stats.followUps, '◒', false, 'Seguimientos', null], ['Pacientes activos', data.stats.activePatients, '♧', false, 'Pacientes', null]].map(([label, value, icon, featured, target, handler]) => <button type="button" className={featured ? 'stat-card featured' : 'stat-card'} key={label} onClick={() => handler ? handler() : setActive(target)}><div className="stat-head"><span>{label}</span><span className="stat-icon">{icon}</span></div><div className="stat-value">{value}</div><div className="stat-foot"><span>{footLabel}</span></div></button>)}</section>
     <div className="dashboard-grid">
-      <section className="panel appointments"><div className="panel-title"><div><h2>Agenda de hoy</h2><p>Tus citas programadas</p></div><button className="link-button" onClick={() => setActive('Agenda')}>Abrir agenda →</button></div><div className="day-line"><span className="today-pill">HOY</span><span>{TODAY_LONG_LABEL}</span></div><div className="appointment-list">{data.appointments.length === 0 ? <p className="muted" style={{ padding: '22px 0', textAlign: 'center' }}>{isReal ? 'No tienes citas programadas para hoy.' : 'Sin citas de demostración.'}</p> : data.appointments.map((item, index) => { const isPending = item.status === 'PENDING_CONFIRMATION'; const isConfirmedLike = item.status === 'CONFIRMED' || item.status === 'SCHEDULED'; const startable = isConfirmedLike && item.patient?.id; const durationLabel = item.durationMinutes != null ? `${item.durationMinutes} min` : (() => { const ms = item.endAt && item.startAt ? new Date(item.endAt) - new Date(item.startAt) : NaN; return Number.isFinite(ms) && ms > 0 ? `${Math.round(ms / 60000)} min` : (item.duration || '60 min') })(); return <div className="appointment" key={item.id || item.name} onClick={() => { if (isPending) setConfirmTarget(item); else if (startable) onStartConsultation?.(item.patient.id, item.id) }} style={(isPending || startable) ? { cursor: 'pointer' } : undefined} title={isPending ? 'Clic para confirmar la cita' : startable ? 'Clic para iniciar la consulta' : undefined}><div className="time"><b>{item.time || formatUTCTime(item.startAt)}</b><small>{durationLabel}</small></div><div className={'person-avatar ' + (item.color || ['coral', 'blue', 'purple', 'yellow'][index % 4])}>{item.initials || item.patient?.firstName?.[0] || 'P'}</div><div className="appointment-info"><b>{item.name || `${item.patient?.firstName || ''} ${item.patient?.lastName || ''}`}</b><span>{item.type ? (APPOINTMENT_TYPE_LABELS[item.type] || item.type) : 'Consulta'}</span></div><span className={'status ' + (isConfirmedLike || item.status === 'Confirmada' ? 'confirmed' : 'pending')}>{isConfirmedLike ? 'Confirmada' : item.status === 'PENDING_CONFIRMATION' ? 'Por confirmar' : item.status}</span></div> })}</div></section>
-      <section className="panel followups"><div className="panel-title"><div><h2>Próxima acción</h2><p>{nextTask ? 'Un pendiente por resolver' : 'Todo en orden'}</p></div></div>{nextTask && <div className="next-action-card"><span className="stat-icon orange">◌</span><div><b>{TASK_TYPE_LABELS[nextTask.type] || nextTask.type} de {nextTask.patient?.firstName} {nextTask.patient?.lastName}</b><small>{nextTask.dueAt && new Date(nextTask.dueAt) < new Date() ? `Vencido ${formatUTCDay(nextTask.dueAt)}` : `Vence ${formatUTCDay(nextTask.dueAt)}`}</small></div><button className="message" onClick={() => setActive('Seguimientos')}>Ver ↗</button></div>}<div className="empty-note"><span>{moreTasks ? '◷' : '✓'}</span><p>{moreTasks ? `${moreTasks} pendiente(s) más en Seguimientos` : 'El resto de tu agenda está en orden'}</p></div></section>
+      <section className="panel appointments"><div className="panel-title"><div><h2>Agenda de hoy</h2><p>Tus citas programadas</p></div><button className="link-button" onClick={() => setActive('Agenda')}>Abrir agenda →</button></div><div className="day-line"><span className="today-pill">HOY</span><span>{TODAY_LONG_LABEL}</span></div><div className="appointment-list">{data.appointments.length === 0 ? <p className="muted" style={{ padding: '22px 0', textAlign: 'center' }}>{isReal ? 'No tienes citas programadas para hoy.' : 'Sin citas de demostración.'}</p> : data.appointments.map((item, index) => { const isPending = item.status === 'PENDING_CONFIRMATION'; const isConfirmedLike = item.status === 'CONFIRMED' || item.status === 'SCHEDULED'; const startable = isConfirmedLike && item.patient?.id; const durationLabel = item.durationMinutes != null ? `${item.durationMinutes} min` : (() => { const ms = item.endAt && item.startAt ? new Date(item.endAt) - new Date(item.startAt) : NaN; return Number.isFinite(ms) && ms > 0 ? `${Math.round(ms / 60000)} min` : (item.duration || '60 min') })(); const activate = isPending ? () => openConfirm(item) : startable ? () => onStartConsultation?.(item.patient.id, item.id) : null; return <div className="appointment" key={item.id || item.name} onClick={activate || undefined} role={activate ? 'button' : undefined} tabIndex={activate ? 0 : undefined} onKeyDown={activate ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate() } } : undefined} style={activate ? { cursor: 'pointer' } : undefined} title={isPending ? 'Clic para confirmar la cita' : startable ? 'Clic para iniciar la consulta' : undefined}><div className="time"><b>{item.time || formatUTCTime(item.startAt)}</b><small>{durationLabel}</small></div><div className={'person-avatar ' + (item.color || ['coral', 'blue', 'purple', 'yellow'][index % 4])}>{item.initials || item.patient?.firstName?.[0] || 'P'}</div><div className="appointment-info"><b>{item.name || `${item.patient?.firstName || ''} ${item.patient?.lastName || ''}`}</b><span>{item.type ? (APPOINTMENT_TYPE_LABELS[item.type] || item.type) : 'Consulta'}</span></div><span className={'status ' + (isConfirmedLike || item.status === 'Confirmada' ? 'confirmed' : 'pending')}>{isConfirmedLike ? 'Confirmada' : item.status === 'PENDING_CONFIRMATION' ? 'Por confirmar' : item.status}</span></div> })}</div></section>
+      <section className="panel followups"><div className="panel-title"><div><h2>Próxima acción</h2><p>{nextTask ? 'Un pendiente por resolver' : 'Todo en orden'}</p></div></div>{nextTask && <div className="next-action-card"><span className="stat-icon orange">◌</span><div><b>{TASK_TYPE_LABELS[nextTask.type] || nextTask.type} de {nextTask.patient?.firstName} {nextTask.patient?.lastName}</b><small>{!nextTask.dueAt ? 'Sin fecha límite' : new Date(nextTask.dueAt) < new Date() ? `Vencido ${formatUTCDay(nextTask.dueAt)}` : `Vence ${formatUTCDay(nextTask.dueAt)}`}</small></div><button className="message" onClick={() => setActive('Seguimientos')}>Ver ↗</button></div>}<div className="empty-note"><span>{moreTasks ? '◷' : '✓'}</span><p>{moreTasks ? `${moreTasks} pendiente(s) más en Seguimientos` : 'El resto de tu agenda está en orden'}</p></div></section>
       <section className="panel finance-today">
         <div className="panel-title"><div><h2>Finanzas de hoy</h2><p>Ingresos, egresos y saldo disponible</p></div><button className="link-button" onClick={() => setActive('Finanzas')}>Ver finanzas →</button></div>
         <div className="finance-today-stats">
@@ -118,6 +128,7 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
     </section>}
     {confirmTarget && <div className="modal-backdrop" onClick={() => !confirmSaving && setConfirmTarget(null)}><div className="modal confirm-modal" onClick={(e) => e.stopPropagation()}>
       <div className="modal-head"><div><p className="eyebrow">POR CONFIRMAR</p><h2>¿Deseas confirmar la cita?</h2><span className="modal-subtitle">{confirmTarget.name || `${confirmTarget.patient?.firstName || ''} ${confirmTarget.patient?.lastName || ''}`} · {confirmTarget.time || formatUTCTime(confirmTarget.startAt)}</span></div><button onClick={() => !confirmSaving && setConfirmTarget(null)}>×</button></div>
+      {confirmError && <div className="form-error">⚠ {confirmError}</div>}
       <div className="modal-actions"><button type="button" className="secondary" onClick={() => setConfirmTarget(null)} disabled={confirmSaving}>Cancelar</button><button type="button" className="primary" onClick={resolveConfirm} disabled={confirmSaving}>{confirmSaving ? 'Confirmando…' : 'Confirmar cita'} <span>→</span></button></div>
     </div></div>}
   </div></AppChrome>

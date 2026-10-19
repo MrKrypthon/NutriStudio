@@ -64,7 +64,7 @@ export default function RecallBuilder({ value, onChange, age, sex }) {
         ? <div className="recall-picker">
             <input autoFocus placeholder="Buscar alimento del catálogo…" value={picker.query} onChange={(event) => setPicker((prev) => ({ ...prev, query: event.target.value }))} />
             {picker.query.trim().length >= 2 && picker.results.length === 0 && <p className="muted recall-picker-empty">{picker.loading === false ? 'Sin resultados' : 'Buscando…'}</p>}
-            {picker.results.map((ingredient) => <div className="recall-pick" key={ingredient.id} onClick={() => addFood(meal.key, ingredient)}><b>{ingredient.name}</b><small>{ingredient.group}</small></div>)}
+            {picker.results.map((ingredient) => <button type="button" className="recall-pick" key={ingredient.id} onClick={() => addFood(meal.key, ingredient)}><b>{ingredient.name}</b><small>{ingredient.group}</small></button>)}
             <button type="button" className="link-button" onClick={() => setPicker(null)}>Cerrar</button>
           </div>
         : <button type="button" className="secondary recall-add" onClick={() => openPicker(meal.key)}>+ Agregar alimento del catálogo</button>}

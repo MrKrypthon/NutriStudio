@@ -11,9 +11,10 @@ const MONTHS_SHORT = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 's
 // "Today" is the viewer's real local calendar date, repackaged as a UTC midnight so the dueAt
 // math (stored/seeded as UTC wall-clock) stays correct regardless of system timezone. This was
 // previously a fixed demo date (26 ago 2026) which corrupted overdue counts against real data.
-const now = new Date()
-const TODAY = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
-const todayISODate = () => TODAY.toISOString().slice(0, 10)
+// Se calcula en cada uso (no al importar el módulo) para que pasada la medianoche "vence hoy" no
+// siga contando desde el día anterior.
+const todayUTC = () => { const now = new Date(); return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) }
+const todayISODate = () => todayUTC().toISOString().slice(0, 10)
 
 const DEMO_TASKS = [
   { id: 'demo-1', type: 'nutrition_plan', status: 'pending', dueAt: '2026-08-25T18:00:00.000Z', patient: { firstName: 'Mariana', lastName: 'Torres' } },
@@ -22,7 +23,7 @@ const DEMO_TASKS = [
 ]
 
 const formatUTCDate = (iso) => { const d = new Date(iso); return `${String(d.getUTCDate()).padStart(2, '0')} ${MONTHS_SHORT[d.getUTCMonth()]} ${d.getUTCFullYear()}` }
-const daysUntil = (iso) => Math.round((new Date(iso).setUTCHours(0, 0, 0, 0) - TODAY.getTime()) / 86400000)
+const daysUntil = (iso) => Math.round((new Date(iso).setUTCHours(0, 0, 0, 0) - todayUTC().getTime()) / 86400000)
 const emptyForm = () => ({ patientId: '', type: 'nutrition_plan', dueAt: todayISODate() })
 
 export default function FollowupsPage({ setActive }) {
@@ -36,6 +37,7 @@ export default function FollowupsPage({ setActive }) {
   const [submitState, setSubmitState] = useState('idle')
   const [submitError, setSubmitError] = useState('')
   const [actionError, setActionError] = useState('')
+  const [busyId, setBusyId] = useState(null)
 
   const loadTasks = useCallback(async () => {
     setStatus('loading')
@@ -50,7 +52,7 @@ export default function FollowupsPage({ setActive }) {
   }, [])
 
   useEffect(() => { loadTasks() }, [loadTasks])
-  useEffect(() => { patientsApi.list('?status=ACTIVE').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   const pending = tasks.filter((t) => t.status === 'pending')
   const overdue = pending.filter((t) => daysUntil(t.dueAt) < 0)
@@ -59,14 +61,15 @@ export default function FollowupsPage({ setActive }) {
   const visible = tasks.filter((t) => (filter === 'Todos' || (filter === 'Completados' ? t.status === 'completed' : t.status === 'pending')) && (!q || `${t.patient?.firstName || ''} ${t.patient?.lastName || ''}`.toLowerCase().includes(q)))
 
   const markDelivered = async (id) => {
-    setActionError('')
+    if (busyId) return
+    setActionError(''); setBusyId(id)
     try {
       const updated = await tasksApi.complete(id)
       setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)))
     } catch (error) {
       // Antes el fallo se tragaba en silencio (o permitía doble clic → 409).
       setActionError(error.code === 'DEMO_MODE' ? 'Modo demostración: no se guardará.' : 'No se pudo marcar como entregado. Intenta de nuevo.')
-    }
+    } finally { setBusyId(null) }
   }
 
   const openModal = () => { setForm(emptyForm()); setSubmitError(''); setSubmitState('idle'); setOpen(true) }
@@ -123,7 +126,7 @@ export default function FollowupsPage({ setActive }) {
           <b className="appointment-date">{formatUTCDate(task.dueAt)}</b>
           <span className="muted">{dueLabel}</span>
           <span className={'status ' + (task.status === 'completed' ? 'confirmed' : 'pending')}>{task.status === 'completed' ? 'Entregado' : 'Pendiente'}</span>
-          {task.status === 'pending' ? <button className="row-arrow" title="Marcar como entregado" onClick={() => markDelivered(task.id)} disabled={status !== 'online'}>✓</button> : <span className="row-arrow">✓</span>}
+          {task.status === 'pending' ? <button className="row-arrow" title="Marcar como entregado" onClick={() => markDelivered(task.id)} disabled={status !== 'online' || busyId === task.id} aria-label={`Marcar como entregado: ${TYPE_LABELS[task.type] || task.type} de ${name}`}>{busyId === task.id ? '…' : '✓'}</button> : <span className="row-arrow">✓</span>}
         </div>
       })}
     </div>

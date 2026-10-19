@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import Icon from './Icon.jsx'
+import NavButton from './NavButton.jsx'
 import { bodyComposition, bodyFatEstimates, somatotype, theoreticalWeights } from '../lib/anthropometry.js'
 import { isFemaleSex } from '../lib/sex.js'
 
@@ -257,7 +258,7 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
     const gest = peso && talla ? peso / ((talla / 100) ** 2) : null
     const gestZone = gest ? EMBARAZO_GAIN.find((z) => gest < z.to) : null
     return <div className="anthro-layout panel">
-      <aside className="anthro-types"><p className="eyebrow">Tipo</p>{calcTypes.map(([key, label, icon]) => <button type="button" className={'anthro-type' + (activeKey === key ? ' active' : '')} key={key} onClick={() => setCalcType(key)}><Icon>{icon}</Icon>{label}</button>)}</aside>
+      <aside className="anthro-types"><p className="eyebrow">Tipo</p>{calcTypes.map(([key, label, icon]) => <NavButton className={'anthro-type' + (activeKey === key ? ' active' : '')} key={key} onClick={() => setCalcType(key)}><Icon>{icon}</Icon>{label}</NavButton>)}</aside>
       <section className="anthro-main">
         <h2 className="anthro-title"><Icon>{calcTypes.find((t) => t[0] === activeKey)?.[2]}</Icon>{calcTypes.find((t) => t[0] === activeKey)?.[1]}</h2>
 
@@ -358,15 +359,15 @@ export default function Anthropometry({ values = {}, onFieldChange, registerMeas
   const renderPhotos = () => <div className="panel anthro-panel">
     <div className="anthro-panel-head"><h2><Icon>camera</Icon>Fotos de progreso</h2><label className="secondary anthro-upload">+ Agregar fotos<input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={(event) => { addPhotos(event.target.files); event.target.value = '' }} /></label></div>
     {photoError && <p className="form-error">⚠ {photoError}</p>}
-    {photos.length ? <div className="photo-grid">{photos.map((src, i) => <figure key={`${i}-${src.slice(-12)}`}><img src={src} alt={`Foto ${i + 1}`} /><button type="button" onClick={() => onFieldChange?.('Fotos antropométricas', photos.filter((_, index) => index !== i))}>×</button></figure>)}</div>
+    {photos.length ? <div className="photo-grid">{photos.map((src, i) => <figure key={`${i}-${src.slice(-12)}`}><img src={src} alt={`Foto ${i + 1}`} /><button type="button" aria-label={`Quitar foto ${i + 1}`} onClick={() => { if (window.confirm('¿Quitar esta foto del expediente?')) onFieldChange?.('Fotos antropométricas', photos.filter((_, index) => index !== i)) }}>×</button></figure>)}</div>
       : <div className="result-empty anthro-empty"><span>◌</span><h3>Sin fotos todavía</h3><p>Agrega fotos frontales, laterales o de progreso para dar seguimiento visual.</p></div>}
   </div>
 
   return <div className="anthro-module">
-    <div className="anthro-tabs">{TABS.map(([label, icon]) => <button type="button" className={'anthro-tab' + (tab === label ? ' active' : '')} key={label} onClick={() => setTab(label)}><Icon>{icon}</Icon>{label}</button>)}</div>
+    <div className="anthro-tabs">{TABS.map(([label, icon]) => <NavButton className={'anthro-tab' + (tab === label ? ' active' : '')} key={label} onClick={() => setTab(label)}><Icon>{icon}</Icon>{label}</NavButton>)}</div>
 
     {tab === 'Mediciones' ? <div className="anthro-layout panel">
-      <aside className="anthro-types"><p className="eyebrow">Tipo</p>{TYPES.map(([key, label, icon]) => <button type="button" className={'anthro-type' + (type === key ? ' active' : '')} key={key} onClick={() => selectType(key)}><Icon>{icon}</Icon>{label}</button>)}</aside>
+      <aside className="anthro-types"><p className="eyebrow">Tipo</p>{TYPES.map(([key, label, icon]) => <NavButton className={'anthro-type' + (type === key ? ' active' : '')} key={key} onClick={() => selectType(key)}><Icon>{icon}</Icon>{label}</NavButton>)}</aside>
       <section className="anthro-main">
         <h2 className="anthro-title"><Icon>{TYPES.find((t) => t[0] === type)?.[2]}</Icon>{TYPES.find((t) => t[0] === type)?.[1]}</h2>
 

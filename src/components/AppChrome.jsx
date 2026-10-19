@@ -41,6 +41,7 @@ export default function AppChrome({ active, setActive, crumb, children }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
+  const [searchState, setSearchState] = useState('idle')
   const [notifOpen, setNotifOpen] = useState(false)
   const [notifData, setNotifData] = useState(null)
   const [profileOpen, setProfileOpen] = useState(false)
@@ -105,12 +106,13 @@ export default function AppChrome({ active, setActive, crumb, children }) {
   }, [tick, practiceTz])
 
   useEffect(() => {
-    if (!searchQuery.trim()) { setSearchResults([]); return undefined }
+    if (!searchQuery.trim()) { setSearchResults([]); setSearchState('idle'); return undefined }
     let cancelled = false
+    setSearchState('loading')
     const timer = setTimeout(() => {
-      patientsApi.list(`?search=${encodeURIComponent(searchQuery)}&status=ACTIVE`)
-        .then((response) => { if (!cancelled) setSearchResults((response.items || []).slice(0, 6)) })
-        .catch(() => {})
+      patientsApi.list(`?search=${encodeURIComponent(searchQuery.trim())}&status=ACTIVE&pageSize=6`)
+        .then((response) => { if (!cancelled) { setSearchResults((response.items || []).slice(0, 6)); setSearchState('ready') } })
+        .catch(() => { if (!cancelled) { setSearchResults([]); setSearchState('error') } })
     }, 300)
     return () => { cancelled = true; clearTimeout(timer) }
   }, [searchQuery])
@@ -146,6 +148,14 @@ export default function AppChrome({ active, setActive, crumb, children }) {
   useEffect(() => { setDrawerOpen(false) }, [active])
 
   const goToPatients = () => { setActive('Pacientes'); setSearchOpen(false); setSearchQuery('') }
+  // Un resultado abre el expediente de ESE paciente (antes llevaba a la lista general y había que
+  // volver a buscarlo). La dirección lleva al paciente y App reconstruye la pantalla desde ella, igual
+  // que con atrás/adelante del navegador; así funciona desde cualquier módulo sin pasar más props.
+  const openPatient = (patient) => {
+    setSearchOpen(false); setSearchQuery('')
+    window.history.pushState({}, '', `/pacientes/${patient.id}/expediente`)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }
   const pendingConfirmations = notifData?.stats?.pendingConfirmations || 0
   const pendingTasks = notifData?.tasks?.length || 0
   const hasNotifications = pendingConfirmations > 0 || pendingTasks > 0
@@ -154,9 +164,11 @@ export default function AppChrome({ active, setActive, crumb, children }) {
     <div className="header-pop" ref={searchRef}>
       <button className="icon-button" onClick={() => setSearchOpen((v) => !v)} title="Buscar paciente">⌕</button>
       {searchOpen && <div className="dropdown-panel search-dropdown">
-        <input autoFocus placeholder="Buscar paciente…" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
-        {searchQuery.trim() && searchResults.length === 0 && <p className="dropdown-empty">Sin resultados</p>}
-        {searchResults.map((p) => <button key={p.id} className="dropdown-item" onClick={goToPatients}><span className="person-avatar coral">{(p.firstName?.[0] || '') + (p.lastName?.[0] || '')}</span><div><b>{p.firstName} {p.lastName}</b><small>{p.status === 'ARCHIVED' ? 'Archivado' : 'Activo'}</small></div></button>)}
+        <input autoFocus placeholder="Buscar paciente…" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && searchResults[0]) openPatient(searchResults[0]); if (event.key === 'Escape') setSearchOpen(false) }} aria-label="Buscar paciente" />
+        {searchQuery.trim() && searchState === 'loading' && <p className="dropdown-empty">Buscando…</p>}
+        {searchQuery.trim() && searchState === 'error' && <p className="dropdown-empty">No se pudo buscar.</p>}
+        {searchQuery.trim() && searchState === 'ready' && searchResults.length === 0 && <p className="dropdown-empty">Sin resultados</p>}
+        {searchResults.map((p) => <button key={p.id} className="dropdown-item" onClick={() => openPatient(p)} title="Abrir expediente"><span className="person-avatar coral">{(p.firstName?.[0] || '') + (p.lastName?.[0] || '')}</span><div><b>{p.firstName} {p.lastName}</b><small>{p.status === 'ARCHIVED' ? 'Archivado' : 'Activo'}</small></div></button>)}
         {searchResults.length > 0 && <button className="dropdown-footer" onClick={goToPatients}>Ver todos en Pacientes →</button>}
       </div>}
     </div>

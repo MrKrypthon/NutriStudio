@@ -4,6 +4,7 @@ import Anthropometry from '../../components/Anthropometry.jsx'
 import ExamArt from '../../components/ExamArt.jsx'
 import FormCard from '../../components/FormCard.jsx'
 import Icon from '../../components/Icon.jsx'
+import NavButton from '../../components/NavButton.jsx'
 import RecallBuilder from '../../components/RecallBuilder.jsx'
 import SuggestionChips from '../../components/SuggestionChips.jsx'
 import FoodFrequencyBoard from '../../components/FoodFrequencyBoard.jsx'
@@ -14,6 +15,9 @@ import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../.
 import { shouldAutoClose } from '../../lib/consultationSession.js'
 import { SEX_OPTIONS, normalizeSex } from '../../lib/sex.js'
 import { mergeValues, splitUpdates } from '../../lib/patientFields.js'
+import { saveBlob } from '../../lib/download.js'
+import { deviceLabel } from '../../lib/device.js'
+import { planFileName } from '../../../server/domain/pdfTheme.js'
 
 const TABS = ['Resumen', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
 // Los antecedentes familiares viven ahora en Clínico (ver flujo-consulta-nutricional.md), así que
@@ -612,7 +616,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           pendingRef.current[scoped] = { payload }
           scheduleFlush()
         } catch { /* leave the conflict banner visible */ }
-      } else if (error.code === 'DEMO_MODE') {
+      } else if (error.code === 'DEMO_MODE' || error.code === 'CONSULTATION_CLOSED') {
+        // Una consulta cerrada no acepta cambios: no se reintenta (se reabre con motivo para corregir).
         setSaveState('error')
       } else {
         // No perder el cambio ante un error de red/500: se reencola (el `finally` reintenta).
@@ -637,10 +642,23 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const flushPending = () => {
     const batch = pendingRef.current
     pendingRef.current = {}
+    const saves = []
     for (const [scoped, pending] of Object.entries(batch)) {
       if (inFlightRef.current.has(scoped)) { pendingRef.current[scoped] = pending; continue }
-      saveSection(scoped, pending.payload)
+      saves.push(saveSection(scoped, pending.payload))
     }
+    return Promise.all(saves)
+  }
+  // Antes de cerrar la consulta se espera a que lo escrito termine de guardarse: el servidor ya no
+  // acepta cambios en una consulta cerrada, y lo último tecleado se habría perdido.
+  const settlePending = async () => {
+    for (let attempt = 0; attempt < 25; attempt++) {
+      clearTimeout(saveTimer.current)
+      if (!Object.keys(pendingRef.current).length && !inFlightRef.current.size) return true
+      await flushPending()
+      if (inFlightRef.current.size || Object.keys(pendingRef.current).length) await new Promise((resolve) => setTimeout(resolve, 200))
+    }
+    return !Object.keys(pendingRef.current).length && !inFlightRef.current.size
   }
 
   // updateFields merges against the synchronous mirrors instead of the render-time currentValues
@@ -693,16 +711,39 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
 
   // Corregir una consulta ya cerrada tiene que ser deliberado: se reabre a propósito, no por el
   // hecho de estar mirándola.
+  // Registro de accesos: quién abrió el expediente o el historial y quién generó o descargó sus
+  // documentos (lo registra el servidor; aquí sólo se consulta).
+  const [accessLog, setAccessLog] = useState(null)
+  const openAccessLog = async () => {
+    setAccessLog({ state: 'loading', items: [] })
+    try { const response = await patientsApi.accessLog(patientId); setAccessLog({ state: 'ready', items: response.items || [] }) }
+    catch (error) { setAccessLog({ state: 'error', items: [], error: error.message || 'No se pudo cargar el registro de accesos.' }) }
+  }
+  const ACCESS_DOC_TITLES = { consultation_export: 'el expediente completo', consultation_report: 'el informe de consulta', consultation_clinical: 'el informe clínico', nutrition_plan: 'el plan de alimentación' }
+  const describeAccess = (item) => {
+    if (item.action === 'viewed') return item.scope === 'history' ? 'Consultó el historial de consultas' : 'Abrió el expediente de una consulta'
+    if (item.entity === 'LabAttachment') return `Abrió el PDF de laboratorio «${item.fileName || 'adjunto'}»`
+    const what = ACCESS_DOC_TITLES[item.type] || 'un documento'
+    return `${item.action === 'generated' ? 'Generó' : 'Descargó'} ${what}${item.version ? ` (versión ${item.version})` : ''}`
+  }
+  const formatAccessTime = (iso) => new Date(iso).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+
+  // Reabrir pide el motivo de la corrección (NOM-004: el expediente no se enmienda en silencio).
+  const [reopenForm, setReopenForm] = useState(null)
   const reopenConsultation = async () => {
-    if (!consultation || startState === 'saving') return
+    if (!consultation || startState === 'saving' || !reopenForm) return
+    const reason = reopenForm.reason.trim()
+    if (reason.length < 5) { setReopenForm((prev) => ({ ...prev, error: 'Escribe el motivo de la corrección (al menos 5 caracteres).' })); return }
     setStartState('saving')
     try {
-      await clinicalApi.reopen(consultation.id)
+      await clinicalApi.reopen(consultation.id, reason)
       const full = await clinicalApi.get(consultation.id)
       applyConsultation(full)
       setStartState('idle')
-    } catch {
-      setStartState('error')
+      setReopenForm(null)
+    } catch (error) {
+      setStartState('idle')
+      setReopenForm((prev) => (prev ? { ...prev, error: error.message || 'No se pudo reabrir la consulta.' } : prev))
     }
   }
 
@@ -783,12 +824,15 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const closeDiagnosisForm = () => setDiagnosisForm(null)
   const updateDiagnosisForm = (key, value) => setDiagnosisForm((prev) => ({ ...prev, [key]: value }))
 
-  const removeDiagnosis = async (id) => {
+  const [itemError, setItemError] = useState('')
+  const removeDiagnosis = async (diagnosis) => {
     if (!consultation) return
+    if (!window.confirm(`¿Quitar el diagnóstico "${diagnosis.problem}"?`)) return
+    setItemError('')
     try {
-      await clinicalApi.removeDiagnosis(consultation.id, id)
-      setDiagnoses((prev) => prev.filter((d) => d.id !== id))
-    } catch { /* leave it in the list; the professional can retry */ }
+      await clinicalApi.removeDiagnosis(consultation.id, diagnosis.id)
+      setDiagnoses((prev) => prev.filter((d) => d.id !== diagnosis.id))
+    } catch (error) { setItemError(error.message || 'No se pudo quitar el diagnóstico.') }
   }
 
   // Sessions were never closable from the UI (the server route existed but nothing called it), so
@@ -809,6 +853,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     setCompleteError('')
     const payload = { paymentMethod: completeForm.method }
     if (completeForm.amount.trim() !== '') payload.amountCents = pesosToCents(completeForm.amount)
+    if (!(await settlePending())) { setCompletionState('error'); setCompleteError('Hay cambios que no se han podido guardar. Revisa la conexión y vuelve a intentar antes de cerrar la consulta.'); return }
     try {
       await clinicalApi.complete(consultation.id, payload)
       setConsultation((prev) => (prev ? { ...prev, status: 'COMPLETED', completedAt: new Date().toISOString() } : prev))
@@ -837,6 +882,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       setFollowUpError(error.message || 'No se pudo crear la cita.')
     }
   }
+  // Nombre legible del PDF descargado ("Informe clínico - Paciente - 18 oct 2026.pdf") en vez del
+  // nombre interno del archivo (<id>-v<n>.pdf).
+  const documentName = (title, doc) => planFileName(patient ? `${patient.firstName} ${patient.lastName}` : '', doc?.generatedAt || new Date()).replace('Plan de alimentación', title)
   // Genera (si hace falta) y descarga el expediente completo en un solo paso para el cierre.
   const downloadFullRecord = async () => {
     if (!consultation) return
@@ -846,12 +894,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       const generated = await documentsApi.generate(doc.id)
       setExportDoc(generated)
       const blob = await documentsApi.downloadBlob(generated.id)
-      const url = URL.createObjectURL(blob)
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = generated.storageKey
-      link.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, documentName('Expediente', generated))
       setExportState('idle')
     } catch {
       setExportState('error')
@@ -864,25 +907,32 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     sex: normalizeSex(patient?.sex) || '',
     birthDate: patient?.birthDate ? new Date(patient.birthDate).toISOString().slice(0, 10) : '',
     occupation: patient?.occupation || '',
+    // Ficha de identificación del expediente (NOM-004-SSA3-2012, 5.2.3).
+    address: patient?.address || '',
+    curp: patient?.curp || '',
   }
   useEffect(() => {
     setPatientForm({
       sex: normalizeSex(patient?.sex) || '',
       birthDate: patient?.birthDate ? new Date(patient.birthDate).toISOString().slice(0, 10) : '',
       occupation: patient?.occupation || '',
+      address: patient?.address || '',
+      curp: patient?.curp || '',
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patient?.id, patient?.sex, patient?.birthDate, patient?.occupation])
-  const patientDirty = patientForm.sex !== patientSaved.sex || patientForm.birthDate !== patientSaved.birthDate || patientForm.occupation !== patientSaved.occupation
-  const resetPatientForm = () => { setPatientForm(patientSaved); setPatientSaveState('idle') }
+  }, [patient?.id, patient?.sex, patient?.birthDate, patient?.occupation, patient?.address, patient?.curp])
+  const patientDirty = ['sex', 'birthDate', 'occupation', 'address', 'curp'].some((key) => (patientForm[key] || '') !== (patientSaved[key] || ''))
+  const [patientSaveError, setPatientSaveError] = useState('')
+  const resetPatientForm = () => { setPatientForm(patientSaved); setPatientSaveState('idle'); setPatientSaveError('') }
   const savePatientEdit = async () => {
-    setPatientSaveState('saving')
+    setPatientSaveState('saving'); setPatientSaveError('')
     try {
-      await patientsApi.update(patientId, { sex: patientForm.sex || null, birthDate: patientForm.birthDate || null, occupation: patientForm.occupation })
+      await patientsApi.update(patientId, { sex: patientForm.sex || null, birthDate: patientForm.birthDate || null, occupation: patientForm.occupation, address: patientForm.address || '', curp: (patientForm.curp || '').trim().toUpperCase() })
       setPatientSaveState('idle')
       reloadPatient()
-    } catch {
+    } catch (error) {
       setPatientSaveState('error')
+      setPatientSaveError(error.message || 'No se pudieron guardar los datos.')
     }
   }
 
@@ -950,19 +1000,22 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   }
 
   const downloadLabAttachment = async (attachment) => {
+    setUploadError('')
     try {
       const blob = await labAttachmentsApi.downloadBlob(attachment.id)
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
       setTimeout(() => URL.revokeObjectURL(url), 10000)
-    } catch { /* the button stays clickable so the professional can retry */ }
+    } catch (error) { setUploadState('error'); setUploadError(error.message || 'No se pudo abrir el PDF.') }
   }
 
-  const removeLabAttachment = async (id) => {
+  const removeLabAttachment = async (attachment) => {
+    if (!window.confirm(`¿Quitar "${attachment.fileName}" de esta consulta?`)) return
+    setUploadError('')
     try {
-      await labAttachmentsApi.remove(id)
-      setAttachments((prev) => prev.filter((a) => a.id !== id))
-    } catch { /* leave it in the list; the professional can retry */ }
+      await labAttachmentsApi.remove(attachment.id)
+      setAttachments((prev) => prev.filter((a) => a.id !== attachment.id))
+    } catch (error) { setUploadState('error'); setUploadError(error.message || 'No se pudo quitar el PDF.') }
   }
 
   // Generate always re-renders the PDF from CURRENT data (bumping the version) instead of turning
@@ -986,12 +1039,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     setReportState('working')
     try {
       const blob = await documentsApi.downloadBlob(report.id)
-      const url = URL.createObjectURL(blob)
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = report.storageKey
-      link.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, documentName('Informe de consulta', report))
       setReportState('idle')
     } catch {
       setReportState('error')
@@ -1018,12 +1066,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     setExportState('working')
     try {
       const blob = await documentsApi.downloadBlob(exportDoc.id)
-      const url = URL.createObjectURL(blob)
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = exportDoc.storageKey
-      link.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, documentName('Expediente', exportDoc))
       setExportState('idle')
     } catch {
       setExportState('error')
@@ -1049,12 +1092,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     setClinicalReportState('working')
     try {
       const blob = await documentsApi.downloadBlob(clinicalReport.id)
-      const url = URL.createObjectURL(blob)
-      const link = window.document.createElement('a')
-      link.href = url
-      link.download = clinicalReport.storageKey
-      link.click()
-      URL.revokeObjectURL(url)
+      saveBlob(blob, documentName('Informe clínico', clinicalReport))
       setClinicalReportState('idle')
     } catch {
       setClinicalReportState('error')
@@ -1149,6 +1187,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       <div className="clinical-actions">
         {consultation && consultation.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}
         <button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>
+        <button className="secondary" onClick={openAccessLog} title="Quién ha consultado este expediente">◉ Accesos</button>
         <div className="header-pop" ref={reportMenuRef}>
           <button className="primary" onClick={() => setReportMenuOpen((v) => !v)}>Generar expediente {reportMenuOpen ? '▴' : '▾'}</button>
           {reportMenuOpen && <div className="dropdown-panel report-menu">
@@ -1175,10 +1214,12 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           : <>▤ Estás viendo la consulta del {formatDate(consultation.startedAt || consultation.createdAt)} en <b>sólo lectura</b>.</>}</p>
       <div className="record-notice-actions">
         <button type="button" className="primary" disabled={startState === 'saving'} onClick={startConsultation}>{startState === 'saving' ? 'Iniciando…' : '+ Iniciar consulta de hoy'}</button>
-        {consultation?.status === 'COMPLETED' && <button type="button" className="secondary" disabled={startState === 'saving'} onClick={reopenConsultation}>Reabrir para corregir</button>}
+        {consultation?.status === 'COMPLETED' && <button type="button" className="secondary" disabled={startState === 'saving'} onClick={() => setReopenForm({ reason: '', error: '' })}>Reabrir para corregir</button>}
       </div>
     </div>}
     {startState === 'error' && <div className="form-error">⚠ No se pudo iniciar o reabrir la consulta. Revisa si el paciente ya tiene una en curso.</div>}
+        {clinicalReportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe clínico.</div>}
+        {itemError && <div className="form-error">⚠ {itemError}</div>}
     {reportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el informe.</div>}
     {exportState === 'error' && <div className="form-error">⚠ No se pudo generar o descargar el expediente completo.</div>}
     {measurementState === 'error' && <div className="form-error">⚠ No se pudo registrar la medición.</div>}
@@ -1224,7 +1265,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName} y captura sus valores arriba a mano; todavía no hay lectura automática.</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
               {uploadState === 'error' && <div className="form-error">⚠ {uploadError}</div>}
               {!attachments.length && <div className="lab-empty"><span>▤</span><b>Sin PDF adjuntos</b><small>Sube el estudio en PDF que te compartió el paciente.</small></div>}
-              {attachments.length > 0 && <div className="lab-list">{attachments.map((attachment) => <div className="lab-row attachment-row" key={attachment.id}><div><b>{attachment.fileName}</b><small>{(attachment.fileSize / 1024).toFixed(0)} KB · subido por {attachment.uploadedBy?.name || '—'}</small></div><button type="button" className="link-button" onClick={() => downloadLabAttachment(attachment)}>Ver</button><button type="button" className="link-button" onClick={() => removeLabAttachment(attachment.id)}>Quitar</button></div>)}</div>}
+              {attachments.length > 0 && <div className="lab-list">{attachments.map((attachment) => <div className="lab-row attachment-row" key={attachment.id}><div><b>{attachment.fileName}</b><small>{(attachment.fileSize / 1024).toFixed(0)} KB · subido por {attachment.uploadedBy?.name || '—'}</small></div><button type="button" className="link-button" onClick={() => downloadLabAttachment(attachment)}>Ver</button><button type="button" className="link-button" onClick={() => removeLabAttachment(attachment)}>Quitar</button></div>)}</div>}
             </div>],
           ]} />
         </section>
@@ -1292,7 +1333,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               {!diagnoses.length && <p className="muted">Todavía no hay diagnósticos registrados para esta consulta.</p>}
               {diagnoses.map((d) => <div className="diagnosis-entry" key={d.id}>
                 <div><b>{d.domain}{d.code ? ` · ${d.code}` : ''}</b><span>{d.problem}</span>{d.etiology && <small>Relacionado con: {d.etiology}</small>}{d.evidence && <small>Evidenciado por: {d.evidence}</small>}</div>
-                <div className="diagnosis-actions"><button type="button" className="link-button" onClick={() => editDiagnosis(d)}>Editar</button><button type="button" className="link-button" onClick={() => removeDiagnosis(d.id)}>Quitar</button></div>
+                <div className="diagnosis-actions"><button type="button" className="link-button" onClick={() => editDiagnosis(d)}>Editar</button><button type="button" className="link-button" onClick={() => removeDiagnosis(d)}>Quitar</button></div>
               </div>)}
             </div>
           </div>],
@@ -1524,12 +1565,15 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           ['datos', 'Datos del paciente', <div className="sub-stack" key="dp-stack">
             <div className="summary-card form-card"><div className="summary-card-head"><h3>Datos del paciente</h3><div className="summary-card-actions">{patientDirty && <button type="button" className="link-button" onClick={resetPatientForm}>Descartar</button>}<button type="button" className="link-button" disabled={!patientDirty || patientSaveState === 'saving'} onClick={savePatientEdit}>{patientSaveState === 'saving' ? 'Guardando…' : 'Guardar'}</button></div></div><div className="form-grid three">
               <label>Nombre<input value={patient ? `${patient.firstName} ${patient.lastName}` : '—'} readOnly /></label>
+              <label>Número de expediente<input value={patient?.recordNumber ? `N.º ${String(patient.recordNumber).padStart(5, '0')}` : '—'} readOnly /></label>
               <label>Sexo<select value={patientForm.sex} onChange={(e) => setPatientForm((prev) => ({ ...prev, sex: e.target.value }))}><option value="">Selecciona…</option>{SEX_OPTIONS.map((option) => <option value={option} key={option}>{option}</option>)}</select></label>
               <label>Fecha de nacimiento<input type="date" value={patientForm.birthDate} onChange={(e) => setPatientForm((prev) => ({ ...prev, birthDate: e.target.value }))} /></label>
               <label>Edad<input value={computeAge(patientForm.birthDate) != null ? `${computeAge(patientForm.birthDate)} años` : '—'} readOnly /></label>
               <label>Ocupación<input value={patientForm.occupation} onChange={(e) => setPatientForm((prev) => ({ ...prev, occupation: e.target.value }))} placeholder="Ej. Diseñadora" /></label>
               <label>Contacto<input value={[patient?.phone, patient?.email].filter(Boolean).join(' · ') || '—'} readOnly /></label>
-            </div>{patientSaveState === 'error' && <div className="form-error">⚠ No se pudieron guardar los datos.</div>}</div>
+              <label>Domicilio<input value={patientForm.address || ''} maxLength={240} onChange={(e) => setPatientForm((prev) => ({ ...prev, address: e.target.value }))} placeholder="Calle, número, colonia, municipio" /></label>
+              <label>CURP<input value={patientForm.curp || ''} maxLength={18} onChange={(e) => setPatientForm((prev) => ({ ...prev, curp: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '') }))} placeholder="18 caracteres" /></label>
+            </div>{patientSaveState === 'error' && <div className="form-error">⚠ {patientSaveError || 'No se pudieron guardar los datos.'}</div>}</div>
             {summaryTrends.some((t) => t.points.length) && <div className="summary-trends">
               {summaryTrends.map((trend) => <div className="summary-trend-card" key={trend.label}>
                 {/* Sin color de "bien/mal": subir es la meta en masa muscular y lo contrario en
@@ -1627,9 +1671,27 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <FormCard title={tab} fields={['Registro clínico|', 'Notas adicionales|']} values={currentValues} onFieldChange={updateField} />
       </div>}
 
-      <div className="wizard-footer"><button className="secondary" disabled={TABS.indexOf(tab) === 0} onClick={() => setTab(TABS[TABS.indexOf(tab) - 1])}>← Anterior</button><span>{saveLabel}</span><button className="primary" disabled={TABS.indexOf(tab) === TABS.length - 1} onClick={() => setTab(TABS[TABS.indexOf(tab) + 1])}>Siguiente <span>→</span></button></div>
+      <div className="wizard-footer"><NavButton className="secondary nav-btn" disabled={TABS.indexOf(tab) === 0} onClick={() => setTab(TABS[TABS.indexOf(tab) - 1])}>← Anterior</NavButton><span>{saveLabel}</span><NavButton className="primary nav-btn" disabled={TABS.indexOf(tab) === TABS.length - 1} onClick={() => setTab(TABS[TABS.indexOf(tab) + 1])}>Siguiente <span>→</span></NavButton></div>
     </fieldset>}
   </div>
+  {accessLog && <div className="modal-backdrop" onClick={() => setAccessLog(null)}><div className="modal access-log-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-head"><div><p className="eyebrow">REGISTRO DE ACCESOS</p><h2>¿Quién ha consultado este expediente?</h2><span className="modal-subtitle">Cada apertura del expediente o del historial (agrupadas por media hora) y cada PDF generado o descargado, con usuario, fecha, hora y equipo. Las ediciones están en la línea de tiempo del paciente.</span></div><button type="button" aria-label="Cerrar" onClick={() => setAccessLog(null)}>×</button></div>
+    {accessLog.state === 'loading' && <p className="muted">Cargando…</p>}
+    {accessLog.state === 'error' && <div className="form-error">⚠ {accessLog.error}</div>}
+    {accessLog.state === 'ready' && accessLog.items.length === 0 && <p className="muted">Todavía no hay accesos registrados.</p>}
+    {accessLog.items.length > 0 && <div className="access-log-list">{accessLog.items.map((item) => <div className="access-log-row" key={item.id}>
+      <span className="access-log-time">{formatAccessTime(item.at)}</span>
+      <span className="access-log-what"><b>{item.userName}</b>{describeAccess(item)}</span>
+      <span className="access-log-device">{[deviceLabel(item.agent), item.ip].filter(Boolean).join(' · ') || '—'}</span>
+    </div>)}</div>}
+    <div className="modal-actions"><button type="button" className="secondary" onClick={() => setAccessLog(null)}>Cerrar</button></div>
+  </div></div>}
+  {reopenForm && <div className="modal-backdrop" onClick={() => startState !== 'saving' && setReopenForm(null)}><div className="modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-head"><div><p className="eyebrow">CORREGIR CONSULTA CERRADA</p><h2>¿Por qué la reabres?</h2><span className="modal-subtitle">El motivo queda en la bitácora y en el expediente impreso como nota aclaratoria, con tu nombre, la fecha y la hora. Lo que cambies conserva su versión anterior.</span></div><button type="button" aria-label="Cerrar" onClick={() => startState !== 'saving' && setReopenForm(null)}>×</button></div>
+    <label>Motivo de la corrección<textarea autoFocus value={reopenForm.reason} maxLength={500} onChange={(e) => setReopenForm((prev) => ({ ...prev, reason: e.target.value, error: '' }))} placeholder="Ej. Se registró mal el peso; el correcto es 68.4 kg." /></label>
+    {reopenForm.error && <div className="form-error">⚠ {reopenForm.error}</div>}
+    <div className="modal-actions"><button type="button" className="secondary" disabled={startState === 'saving'} onClick={() => setReopenForm(null)}>Cancelar</button><button type="button" className="primary" disabled={startState === 'saving' || reopenForm.reason.trim().length < 5} onClick={reopenConsultation}>{startState === 'saving' ? 'Reabriendo…' : 'Reabrir para corregir'}</button></div>
+  </div></div>}
   {completeOpen && <div className="modal-backdrop" onClick={() => setCompleteOpen(false)}><div className="modal" onClick={(event) => event.stopPropagation()}>
     <div className="modal-head"><div><p className="eyebrow">TERMINAR CONSULTA</p><h2>Registra el pago</h2><span className="modal-subtitle">El ingreso se guarda solo en Finanzas con el método que elijas.</span></div><button onClick={() => setCompleteOpen(false)}>×</button></div>
     <label>Monto de la consulta (MXN)<input type="number" min="0" step="0.01" value={completeForm.amount} onChange={(event) => setCompleteForm((prev) => ({ ...prev, amount: event.target.value }))} placeholder="Monto" autoFocus /></label>

@@ -4,6 +4,7 @@ import { EQUIVALENT_GROUPS, buildMealOptions } from './documents.js'
 import { PLAN_MEALS } from './planMeals.js'
 import { planMenus } from './equivalents.js'
 import { EQUIVALENT_LISTS } from './equivalentLists.js'
+import { PDF_FONTS, mixColor, normalizePdfTheme, textOn } from './pdfTheme.js'
 
 // Plan de alimentación que se entrega a la paciente: hoja carta apaisada con una tabla de tiempos
 // de comida × opciones (foto, nombre e ingredientes de cada receta), las porciones por grupo de
@@ -22,14 +23,10 @@ const CONTENT_BOTTOM = 519
 const DAY_NAMES = { 1: 'lunes', 2: 'martes', 3: 'miércoles', 4: 'jueves', 5: 'viernes', 6: 'sábado', 7: 'domingo' }
 const TEXT = '#1A1A1A'
 const SOFT = '#555555'
-const WAVE_RED = '#F0544F'
-const WAVE_GREEN = '#A4CE39'
-const WAVE_TINT = '#E8EFDD'
-const NAVY = '#2F2A6B'
 const TIME_FILL = '#B8C8EE'
 const TIME_TEXT = '#46507A'
 
-// Un color por columna de opción (encabezado fuerte, celda en su tono claro).
+// Con "un color por opción" (formato original): encabezado fuerte y celda en su tono claro.
 const OPTION_COLORS = [
   { head: '#D81B7A', cell: '#FDE3EC' },
   { head: '#7B68EE', cell: '#D5CEEB' },
@@ -61,27 +58,49 @@ const DEFAULT_INSTRUCTIONS = [
   'Las nueces son las del grupo AG c/p',
 ]
 
-// Tipografías del formato en papel: Montserrat para el plan y Poppins para las listas de
-// equivalentes. Si faltaran los archivos, el documento sale con las fuentes estándar de pdfkit.
-const FONT_FILES = {
-  regular: 'Montserrat-Regular.ttf',
-  medium: 'Montserrat-Medium.ttf',
-  bold: 'Montserrat-Bold.ttf',
-  list: 'Poppins-Regular.ttf',
-  listBold: 'Poppins-Bold.ttf',
-}
+// Tipografía elegida en el diseño del PDF (server/domain/pdfTheme.js); la de por defecto es la del
+// formato en papel: Montserrat para el plan y Poppins para las listas de equivalentes. Si faltara
+// un archivo, esa parte sale con la fuente estándar de pdfkit.
 const FONT_FALLBACK = { regular: 'Helvetica', medium: 'Helvetica', bold: 'Helvetica-Bold', list: 'Helvetica', listBold: 'Helvetica-Bold' }
 
-function registerFonts(file) {
+function registerFonts(file, fontKey) {
+  const choice = PDF_FONTS[fontKey] || PDF_FONTS.montserrat
+  if (choice.standard) return { ...choice.standard }
   const fonts = {}
-  for (const [key, fileName] of Object.entries(FONT_FILES)) {
+  for (const [key, fileName] of Object.entries(choice.files)) {
     const fontPath = fileURLToPath(new URL(`../assets/fonts/${fileName}`, import.meta.url))
     if (existsSync(fontPath)) {
-      try { file.registerFont(`plan-${key}`, fontPath); fonts[key] = `plan-${key}`; continue } catch { /* archivo dañado: se usa la fuente estándar */ }
+      try { file.registerFont(`plan-${fontKey}-${key}`, fontPath); fonts[key] = `plan-${fontKey}-${key}`; continue } catch { /* archivo dañado: se usa la fuente estándar */ }
     }
     fonts[key] = FONT_FALLBACK[key]
   }
   return fonts
+}
+
+// Colores de cada parte del plan según el diseño. Sin interruptores de color todo sale del color
+// principal, el de acento y el de fondo (por defecto, grises).
+function buildPalette(rawTheme) {
+  const theme = normalizePdfTheme(rawTheme)
+  const optionHead = (index) => (theme.colorfulOptions ? OPTION_COLORS[index % OPTION_COLORS.length].head : theme.primary)
+  const mono = { color: theme.primary, tint: theme.fill }
+  return {
+    theme,
+    title: theme.primary,
+    accent: theme.accent,
+    accentText: textOn(theme.accent),
+    waves: [mixColor(theme.accent, 0.82), mixColor(theme.accent, 0.45), theme.accent],
+    head: theme.primary,
+    headText: textOn(theme.primary),
+    optionHead,
+    optionHeadText: (index) => (theme.colorfulOptions ? '#FFFFFF' : textOn(optionHead(index))),
+    optionCell: (index) => (theme.colorfulOptions ? OPTION_COLORS[index % OPTION_COLORS.length].cell : theme.fill),
+    timeFill: theme.colorfulOptions ? TIME_FILL : mixColor(theme.primary, 0.84),
+    timeText: theme.colorfulOptions ? TIME_TEXT : theme.primary,
+    badge: (code) => (theme.colorfulGroups ? { fill: GROUP_BADGES[code]?.color, stroke: null, text: TEXT } : { fill: mixColor(theme.primary, 0.88), stroke: theme.primary, text: theme.primary }),
+    lists: theme.colorfulGroups
+      ? { green: { color: '#7EDB43', tint: '#E3F4D5' }, yellow: { color: '#ECE445', tint: '#F8F6CF' }, orange: { color: '#FFA92E', tint: '#FDE7CF' }, blue: { color: '#35B3FF', tint: '#D2EBFE' }, header: '#EFEAE4', note: '#CFEAE4', bandText: '#FFFFFF' }
+      : { green: mono, yellow: mono, orange: mono, blue: mono, header: theme.fill, note: mixColor(theme.primary, 0.85), bandText: textOn(theme.primary) },
+  }
 }
 
 // Se descarta lo que estas fuentes no traen (emojis, símbolos raros) para que no salga como basura.
@@ -149,33 +168,42 @@ function truncateToWidth(file, text, width) {
   return `${text.slice(0, keep).trimEnd()}…`
 }
 
-function drawWaves(file) {
+function drawWaves(file, [tint, mid, strong]) {
   // Arriba a la izquierda…
-  file.path('M0,0 L600,0 C460,40 250,78 0,88 Z').fill(WAVE_TINT)
-  file.path('M0,0 L572,0 C410,34 220,56 0,59 Z').fill(WAVE_GREEN)
-  file.path('M0,0 L530,0 C380,20 180,30 0,29 Z').fill(WAVE_RED)
+  file.path('M0,0 L600,0 C460,40 250,78 0,88 Z').fill(tint)
+  file.path('M0,0 L572,0 C410,34 220,56 0,59 Z').fill(mid)
+  file.path('M0,0 L530,0 C380,20 180,30 0,29 Z').fill(strong)
   // …y abajo, subiendo hacia la derecha.
-  file.path('M206,612 C380,600 520,548 792,523 L792,612 Z').fill(WAVE_TINT)
-  file.path('M0,578 C60,596 130,608 206,612 L0,612 Z').fill(WAVE_TINT)
-  file.path('M298,612 C470,604 600,566 792,549 L792,612 Z').fill(WAVE_GREEN)
-  file.path('M0,582 C35,598 70,608 100,612 L0,612 Z').fill(WAVE_GREEN)
-  file.path('M365,612 C500,606 600,566 670,568 C720,569 760,574 792,578 L792,612 Z').fill(WAVE_RED)
-  file.path('M0,590 C20,600 40,608 58,612 L0,612 Z').fill(WAVE_RED)
+  file.path('M206,612 C380,600 520,548 792,523 L792,612 Z').fill(tint)
+  file.path('M0,578 C60,596 130,608 206,612 L0,612 Z').fill(tint)
+  file.path('M298,612 C470,604 600,566 792,549 L792,612 Z').fill(mid)
+  file.path('M0,582 C35,598 70,608 100,612 L0,612 Z').fill(mid)
+  file.path('M365,612 C500,606 600,566 670,568 C720,569 760,574 792,578 L792,612 Z').fill(strong)
+  file.path('M0,590 C20,600 40,608 58,612 L0,612 Z').fill(strong)
 }
 
-// Iconos del pie de contacto (teléfono, ubicación, correo): círculo rojo con el dibujo en blanco.
-function drawContactIcon(file, kind, cx, cy) {
-  file.circle(cx, cy, 5.6).fill(WAVE_RED)
+// Sin ondas, una línea fina bajo el encabezado y otra sobre el pie.
+function drawRules(file, color) {
+  file.save().lineWidth(0.6).strokeColor(color)
+  file.moveTo(X0, 84).lineTo(X0 + TABLE_W, 84).stroke()
+  file.moveTo(X0, CONTENT_BOTTOM + 4).lineTo(X0 + TABLE_W, CONTENT_BOTTOM + 4).stroke()
+  file.restore()
+}
+
+// Iconos del pie de contacto (teléfono, ubicación, correo): círculo del color de acento con el
+// dibujo en blanco (u oscuro, si el acento es claro).
+function drawContactIcon(file, kind, cx, cy, color, ink) {
+  file.circle(cx, cy, 5.6).fill(color)
   file.save()
   if (kind === 'phone') {
-    file.lineWidth(2).lineCap('round').strokeColor('#FFFFFF')
+    file.lineWidth(2).lineCap('round').strokeColor(ink)
     file.path(`M${cx - 2.2},${cy - 2.4} Q${cx - 2},${cy + 2} ${cx + 2.4},${cy + 2.2}`).stroke()
   } else if (kind === 'address') {
-    file.path(`M${cx},${cy + 3.6} L${cx - 2.6},${cy - 0.4} A2.8,2.8 0 1 1 ${cx + 2.6},${cy - 0.4} Z`).fill('#FFFFFF')
-    file.circle(cx, cy - 1.1, 1).fill(WAVE_RED)
+    file.path(`M${cx},${cy + 3.6} L${cx - 2.6},${cy - 0.4} A2.8,2.8 0 1 1 ${cx + 2.6},${cy - 0.4} Z`).fill(ink)
+    file.circle(cx, cy - 1.1, 1).fill(color)
   } else {
-    file.roundedRect(cx - 3.2, cy - 2.2, 6.4, 4.4, 0.8).fill('#FFFFFF')
-    file.lineWidth(0.7).strokeColor(WAVE_RED).path(`M${cx - 3},${cy - 1.8} L${cx},${cy + 0.5} L${cx + 3},${cy - 1.8}`).stroke()
+    file.roundedRect(cx - 3.2, cy - 2.2, 6.4, 4.4, 0.8).fill(ink)
+    file.lineWidth(0.7).strokeColor(color).path(`M${cx - 3},${cy - 1.8} L${cx},${cy + 0.5} L${cx + 3},${cy - 1.8}`).stroke()
   }
   file.restore()
 }
@@ -183,24 +211,25 @@ function drawContactIcon(file, kind, cx, cy) {
 // Encabezado y pie que se repiten en cada hoja: olas, título, nombre de la nutrióloga, logo de la
 // práctica y sus datos de contacto.
 function drawPageChrome(file, data) {
-  const { fonts } = data
-  drawWaves(file)
-  file.font(fonts.bold).fontSize(12).fillColor(TEXT).text('Plan de Alimentación', 0, 45, { width: PAGE_W, align: 'center', lineBreak: false })
+  const { fonts, palette } = data
+  if (palette.theme.waves) drawWaves(file, palette.waves)
+  else drawRules(file, mixColor(palette.theme.primary, 0.7))
+  file.font(fonts.bold).fontSize(12).fillColor(palette.title).text('Plan de Alimentación', 0, 45, { width: PAGE_W, align: 'center', lineBreak: false })
   if (data.nutritionistName) {
     // Centrado en la hoja pero sin llegar al logo: un nombre largo baja de tamaño y, si ni así, se corta.
     const name = fitText(file, fonts.regular, cleanText(data.nutritionistName), 12, 8, 500)
     file.fillColor('#333333').text(name, (PAGE_W - 500) / 2, 62, { width: 500, align: 'center', lineBreak: false })
   }
-  if (data.logo) {
+  if (data.logo && palette.theme.showLogo) {
     try { file.image(data.logo, 676, 2, { fit: [86, 92], align: 'center', valign: 'center' }) } catch { /* logo en un formato que pdfkit no lee: la hoja sale sin él */ }
   }
   const contact = (data.contact || []).filter((item) => item?.text)
   contact.forEach((item, index) => {
     // Siempre debajo de la tabla (CONTENT_BOTTOM) y sobre las olas, con uno, dos o tres renglones.
     const y = CONTENT_BOTTOM + 9 + index * 14 + (3 - Math.min(contact.length, 3)) * 7
-    drawContactIcon(file, item.kind, 74, y + 6)
+    drawContactIcon(file, item.kind, 74, y + 6, palette.accent, palette.accentText)
     // Sin truncar, un contacto largo (hasta 160 chars) se salía de la hoja en cada página.
-    file.font(fonts.regular).fontSize(10.5).fillColor(WAVE_RED)
+    file.font(fonts.regular).fontSize(10.5).fillColor(palette.accent)
     file.text(truncateToWidth(file, cleanText(item.text), PAGE_W - 85 - 24), 85, y, { lineBreak: false })
   })
 }
@@ -246,12 +275,15 @@ function drawPatientLine(file, data, y) {
   return y + 16
 }
 
-function drawBadge(file, fonts, code, cx, cy, radius) {
+function drawBadge(file, data, code, cx, cy, radius) {
+  const { fonts, palette } = data
   const badge = GROUP_BADGES[code]
   if (!badge) return
-  file.circle(cx, cy, radius).fill(badge.color)
+  const colors = palette.badge(code)
+  if (colors.stroke) file.save().lineWidth(0.8).fillColor(colors.fill).strokeColor(colors.stroke).circle(cx, cy, radius).fillAndStroke().restore()
+  else file.circle(cx, cy, radius).fill(colors.fill)
   const mainSize = badge.text.length > 1 ? radius * 0.56 : radius * 0.74
-  file.font(fonts.bold).fontSize(mainSize).fillColor(TEXT)
+  file.font(fonts.bold).fontSize(mainSize).fillColor(colors.text)
   const mainH = file.currentLineHeight()
   const subSize = radius * 0.36
   file.text(badge.text, cx - radius, cy - mainH / 2 - (badge.sub ? subSize * 0.55 : 0), { width: radius * 2, align: 'center', lineBreak: false })
@@ -268,14 +300,14 @@ const BADGE_STEP = 27
 const MIN_CARRIED_LINES = 3
 
 function drawTableHeader(file, data, layout, y) {
-  const { fonts } = data
-  file.rect(X0, y, TIME_W - 1, HEADER_H).fill(NAVY)
-  file.rect(X0 + TIME_W, y, PORTION_W - 1, HEADER_H).fill(NAVY)
-  file.font(fonts.bold).fontSize(10).fillColor('#FFFFFF').text('Porción', X0 + TIME_W, y + 0.5, { width: PORTION_W - 1, align: 'center', lineBreak: false })
+  const { fonts, palette } = data
+  file.rect(X0, y, TIME_W - 1, HEADER_H).fill(palette.head)
+  file.rect(X0 + TIME_W, y, PORTION_W - 1, HEADER_H).fill(palette.head)
+  file.font(fonts.bold).fontSize(10).fillColor(palette.headText).text('Porción', X0 + TIME_W, y + 0.5, { width: PORTION_W - 1, align: 'center', lineBreak: false })
   for (let index = 0; index < layout.columns; index++) {
     const x = layout.optionX(index)
-    file.rect(x, y, layout.colW - 1, HEADER_H).fill(OPTION_COLORS[index % OPTION_COLORS.length].head)
-    file.font(fonts.bold).fontSize(10).fillColor('#FFFFFF').text(`Opción ${index + 1}`, x, y + 0.5, { width: layout.colW - 1, align: 'center', lineBreak: false })
+    file.rect(x, y, layout.colW - 1, HEADER_H).fill(palette.optionHead(index))
+    file.font(fonts.bold).fontSize(10).fillColor(palette.optionHeadText(index)).text(`Opción ${index + 1}`, x, y + 0.5, { width: layout.colW - 1, align: 'center', lineBreak: false })
   }
   return y + HEADER_H + 1
 }
@@ -303,8 +335,9 @@ function buildCellLines(file, data, layout, option, width) {
 
 // Nombre del tiempo de comida girado y, si el plan la tiene, su hora en un segundo renglón (a la
 // derecha del nombre, como en el formato en papel).
-function drawTimeLabel(file, fonts, label, time, x, y, height) {
-  file.rect(x, y, TIME_W - 1, height).fill(TIME_FILL)
+function drawTimeLabel(file, data, label, time, x, y, height) {
+  const { fonts, palette } = data
+  file.rect(x, y, TIME_W - 1, height).fill(palette.timeFill)
   let size = 14
   const text = cleanText(label)
   file.font(fonts.regular).fontSize(size)
@@ -315,7 +348,7 @@ function drawTimeLabel(file, fonts, label, time, x, y, height) {
   const hour = cleanText(time)
   file.save()
   file.rotate(-90, { origin: [cx, cy] })
-  file.fillColor(TIME_TEXT)
+  file.fillColor(palette.timeText)
   const lineH = file.currentLineHeight()
   // Girado -90°, "abajo" en el texto es la derecha de la columna.
   file.text(text, cx - file.widthOfString(text) / 2, cy - lineH / 2 - (hour ? 9 : 0), { lineBreak: false })
@@ -400,19 +433,19 @@ function drawMealRow(file, data, layout, row, startY) {
     // La fila crece para que quepan sus porciones; si se parte, esta parte llena la hoja.
     height = Math.max(height, Math.min(pendingBadges * BADGE_STEP + 8, available))
     if (offset + count < maxLines) height = available
-    drawTimeLabel(file, fonts, row.label, row.time, X0, y, height)
+    drawTimeLabel(file, data, row.label, row.time, X0, y, height)
     for (let slot = 0; badgeIndex < row.portions.length; slot++) {
       const cy = y + 8 + BADGE_STEP * slot + BADGE_RADIUS
       if (cy + BADGE_RADIUS > y + height) break
       const portion = row.portions[badgeIndex++]
       file.font(fonts.regular).fontSize(10.5).fillColor(TEXT)
       file.text(formatQuantity(portion.quantity), X0 + TIME_W + 2, cy - file.currentLineHeight() / 2, { width: 22, align: 'center', lineBreak: false })
-      drawBadge(file, fonts, portion.code, X0 + TIME_W + 38, cy, BADGE_RADIUS)
+      drawBadge(file, data, portion.code, X0 + TIME_W + 38, cy, BADGE_RADIUS)
     }
     cells.forEach((cell, index) => {
       const x = layout.optionX(index)
-      file.rect(x, y, layout.colW - 1, height).fill(OPTION_COLORS[index % OPTION_COLORS.length].cell)
-      if (first) drawPhoto(file, cell.image, x + CELL_PAD, y + CELL_PAD, textW, photoH, OPTION_COLORS[index % OPTION_COLORS.length].head)
+      file.rect(x, y, layout.colW - 1, height).fill(data.palette.optionCell(index))
+      if (first) drawPhoto(file, cell.image, x + CELL_PAD, y + CELL_PAD, textW, photoH, data.palette.optionHead(index))
       const textY = y + CELL_PAD + (first ? headH : 0)
       cell.lines.slice(offset, offset + count).forEach((line, lineIndex) => {
         file.font(line.font).fontSize(line.size).fillColor(line.color).text(line.text, x + CELL_PAD, textY + lineIndex * lineH, { lineBreak: false })
@@ -435,7 +468,7 @@ function drawLegend(file, data, startY, rows) {
   const used = new Set(rows.flatMap((row) => row.portions.map((portion) => portion.code)))
   EQUIVALENT_GROUPS.filter((group) => group.code !== 'AZ' || used.has('AZ')).forEach((group, index) => {
     const cx = X0 + 20 + index * step
-    drawBadge(file, fonts, group.code, cx, y + 13, 13)
+    drawBadge(file, data, group.code, cx, y + 13, 13)
     const words = group.label.replace(/^(AOA|Grasa) /, '$1\n').split('\n')
     file.font(fonts.regular).fontSize(5.6).fillColor(TEXT)
     words.forEach((word, wordIndex) => file.text(word, cx - step / 2, y + 33 + wordIndex * 7, { width: step, align: 'center', lineBreak: false }))
@@ -448,7 +481,7 @@ function drawParagraphList(file, data, title, items, startY) {
   let y = startY
   // El título no se queda solo al pie: necesita lugar para él y al menos un renglón.
   if (CONTENT_BOTTOM - y < 27 + 13.5 * 2) y = addPage(file, data) + 16
-  file.font(fonts.bold).fontSize(10.5).fillColor(TEXT).text(title, 72, y, { lineBreak: false })
+  file.font(fonts.bold).fontSize(10.5).fillColor(data.palette.title).text(title, 72, y, { lineBreak: false })
   y += 27
   for (const item of items) {
     file.font(fonts.regular).fontSize(10)
@@ -468,7 +501,8 @@ const splitNotes = (text) => String(text || '').split(/\r?\n/).map((line) => lin
 
 // Caja de una lista de equivalentes: banda de color con el nombre del grupo y los renglones debajo,
 // sobre un fondo que se aclara hacia la izquierda.
-function drawEquivalentBox(file, fonts, { x, y, width, title, color, tint, items, footnote }) {
+function drawEquivalentBox(file, data, { x, y, width, title, color, tint, items, footnote }) {
+  const { fonts, palette } = data
   const bandH = 25
   const lineH = 9
   const size = 7.1
@@ -477,7 +511,7 @@ function drawEquivalentBox(file, fonts, { x, y, width, title, color, tint, items
   const height = bandH + 8 + lines.length * lineH + 8
   file.rect(x, y, width, height).fill(file.linearGradient(x, y, x + width, y).stop(0, '#FFFFFF').stop(1, tint))
   file.rect(x + 6, y, width - 12, bandH).fill(color)
-  file.font(fonts.listBold).fontSize(15).fillColor('#FFFFFF')
+  file.font(fonts.listBold).fontSize(15).fillColor(palette.lists.bandText)
   file.text(title, x, y + (bandH - file.currentLineHeight()) / 2, { width, align: 'center', lineBreak: false, characterSpacing: 0.6 })
   lines.forEach((line, index) => {
     file.font(fonts.list).fontSize(size).fillColor(TEXT).text(line, x + 7, y + bandH + 8 + index * lineH, { lineBreak: false })
@@ -489,7 +523,7 @@ function drawEquivalentBox(file, fonts, { x, y, width, title, color, tint, items
     file.font(fonts.list).fontSize(6.6)
     const noteLines = wrapText(file, text, width - 26)
     const noteH = noteLines.length * 8.6 + 8
-    file.rect(x + 8, bottom + 7, width - 16, noteH).fill(file.linearGradient(x + 8, 0, x + width - 8, 0).stop(0, '#CFEAE4').stop(1, '#FFFFFF'))
+    file.rect(x + 8, bottom + 7, width - 16, noteH).fill(file.linearGradient(x + 8, 0, x + width - 8, 0).stop(0, palette.lists.note).stop(1, '#FFFFFF'))
     noteLines.forEach((line, index) => {
       const lineY = bottom + 11 + index * 8.6
       if (index === 0 && line.startsWith(footnote.label)) {
@@ -503,35 +537,32 @@ function drawEquivalentBox(file, fonts, { x, y, width, title, color, tint, items
 }
 
 function drawEquivalentPages(file, data) {
-  const { fonts } = data
-  const GREEN = { color: '#7EDB43', tint: '#E3F4D5' }
-  const YELLOW = { color: '#ECE445', tint: '#F8F6CF' }
-  const ORANGE = { color: '#FFA92E', tint: '#FDE7CF' }
-  const BLUE = { color: '#35B3FF', tint: '#D2EBFE' }
+  const { fonts, palette } = data
+  const { green: GREEN, yellow: YELLOW, orange: ORANGE, blue: BLUE } = palette.lists
 
   let y = addPage(file, data) + 14
   file.font(fonts.regular).fontSize(12).fillColor(TEXT).text('Alimentos equivalentes:', 72, y, { lineBreak: false })
   y += 20
-  drawEquivalentBox(file, fonts, { x: 140, y, width: 150, title: 'Vegetales', ...GREEN, items: EQUIVALENT_LISTS.VEGETABLES, footnote: { label: 'LIBRES:', text: EQUIVALENT_LISTS.FREE_VEGETABLES } })
-  drawEquivalentBox(file, fonts, { x: 312, y, width: 152, title: 'Frutas', ...GREEN, items: EQUIVALENT_LISTS.FRUITS })
-  drawEquivalentBox(file, fonts, { x: 480, y, width: 176, title: 'Cereales', ...YELLOW, items: EQUIVALENT_LISTS.CEREALS })
+  drawEquivalentBox(file, data, { x: 140, y, width: 150, title: 'Vegetales', ...GREEN, items: EQUIVALENT_LISTS.VEGETABLES, footnote: { label: 'LIBRES:', text: EQUIVALENT_LISTS.FREE_VEGETABLES } })
+  drawEquivalentBox(file, data, { x: 312, y, width: 152, title: 'Frutas', ...GREEN, items: EQUIVALENT_LISTS.FRUITS })
+  drawEquivalentBox(file, data, { x: 480, y, width: 176, title: 'Cereales', ...YELLOW, items: EQUIVALENT_LISTS.CEREALS })
 
   y = addPage(file, data) + 36
   const leftX = 50
   const leftW = 408
-  file.rect(leftX, y, leftW, 34).fill('#EFEAE4')
+  file.rect(leftX, y, leftW, 34).fill(palette.lists.header)
   file.font(fonts.listBold).fontSize(17).fillColor(TEXT)
   file.text('Aceites y Grasas', leftX, y + (34 - file.currentLineHeight()) / 2, { width: leftW, align: 'center', lineBreak: false, characterSpacing: 0.4 })
   const halfW = (leftW - 14) / 2
-  drawEquivalentBox(file, fonts, { x: leftX, y: y + 48, width: halfW, title: 'AG S/p', ...ORANGE, items: EQUIVALENT_LISTS.FATS_WITHOUT_PROTEIN })
-  drawEquivalentBox(file, fonts, { x: leftX + halfW + 14, y: y + 48, width: halfW, title: 'AG c/p', ...ORANGE, items: EQUIVALENT_LISTS.FATS_WITH_PROTEIN })
-  const legumesBottom = drawEquivalentBox(file, fonts, { x: 484, y, width: 252, title: 'Leguminosas', ...YELLOW, items: EQUIVALENT_LISTS.LEGUMES })
-  drawEquivalentBox(file, fonts, { x: 484, y: legumesBottom + 10, width: 252, title: 'Lácteos', ...BLUE, items: EQUIVALENT_LISTS.DAIRY })
+  drawEquivalentBox(file, data, { x: leftX, y: y + 48, width: halfW, title: 'AG S/p', ...ORANGE, items: EQUIVALENT_LISTS.FATS_WITHOUT_PROTEIN })
+  drawEquivalentBox(file, data, { x: leftX + halfW + 14, y: y + 48, width: halfW, title: 'AG c/p', ...ORANGE, items: EQUIVALENT_LISTS.FATS_WITH_PROTEIN })
+  const legumesBottom = drawEquivalentBox(file, data, { x: 484, y, width: 252, title: 'Leguminosas', ...YELLOW, items: EQUIVALENT_LISTS.LEGUMES })
+  drawEquivalentBox(file, data, { x: 484, y: legumesBottom + 10, width: 252, title: 'Lácteos', ...BLUE, items: EQUIVALENT_LISTS.DAIRY })
 }
 
 // `input`: { patientName, nutritionistName, licenseNumber, weightKg, bodyFatPercent, muscleMassKg,
 // menu, mealTimes, equivalents, recommendations, hydrationNote, contact: [{ kind: 'phone'|'address'|'email', text }], logo,
-// images: Map<imageFile, Buffer> }.
+// images: Map<imageFile, Buffer>, theme: diseño del PDF (server/domain/pdfTheme.js) }.
 // `file` debe ser un PDFDocument carta apaisado con margen 0 y su primera hoja ya creada.
 // Topes de lo que se dibuja. El dibujo es síncrono, así que su costo tiene que estar acotado aquí
 // mismo y no depender de que cada ruta que guarda estos textos los haya limitado: nombres y
@@ -566,7 +597,8 @@ function drawNutritionPlan(file, rawInput) {
   // Lo mismo las fotos: una receta que se repite en varios tiempos se incrusta una sola vez.
   const images = new Map()
   for (const [imageFile, buffer] of input.images || []) { try { images.set(imageFile, file.openImage(buffer)) } catch { /* foto ilegible: la celda lleva el plato dibujado */ } }
-  const data = { ...input, logo, images, fonts: registerFonts(file) }
+  const palette = buildPalette(input.theme)
+  const data = { ...input, logo, images, palette, fonts: registerFonts(file, palette.theme.font) }
   drawPageChrome(file, data)
   let y = drawPatientLine(file, data, FIRST_TOP)
   // Un plan con varios menús (tipos de día) lleva una tabla por menú: cada una con las recetas de
