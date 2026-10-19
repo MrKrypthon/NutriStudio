@@ -2673,7 +2673,7 @@ app.get('/api/v1/documents/:documentId/download', async (request, reply) => {
     // ?inline=1: el visor de la app (se abre en pantalla, no se guarda) y queda como "vio" en la bitácora.
     const inline = request.query?.inline === '1'
     await logAccess(request, { patientId: document.patientId, scope: 'document', action: inline ? 'viewed' : 'downloaded', entity: 'Document', entityId: document.id, metadata: { type: document.type, version: document.version, consultationId: document.consultationId } })
-    return reply.type('application/pdf').header('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', documentFileName(document))).header('Cache-Control', 'no-store').send(file)
+    return reply.type('application/pdf').header('Content-Disposition', contentDisposition(inline ? 'inline' : 'attachment', documentFileName(document))).header('Cache-Control', 'no-store').header('X-Content-Type-Options', 'nosniff').send(file)
   } catch {
     return reply.code(404).send({ code: 'DOCUMENT_FILE_NOT_FOUND', message: 'El archivo del documento no está disponible.', fields: {} })
   }

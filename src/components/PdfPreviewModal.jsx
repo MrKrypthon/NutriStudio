@@ -47,7 +47,13 @@ export default function PdfPreviewModal({ title, subtitle, loadBlob, onClose, ac
     setState({ status: 'loading', url: '', error: '' })
     if (pagesRef.current) pagesRef.current.replaceChildren()
     loadBlob()
-      .then(async (blob) => {
+      .then(async (raw) => {
+        if (cancelled) return
+        // Sólo se muestran PDFs: se comprueba la firma «%PDF-» y se fuerza el tipo, para que el
+        // navegador nunca interprete el contenido como HTML dentro del origen de la app.
+        const head = new Uint8Array(await raw.slice(0, 5).arrayBuffer())
+        if (String.fromCharCode(...head) !== '%PDF-') throw new Error('El archivo no es un PDF válido.')
+        const blob = new Blob([raw], { type: 'application/pdf' })
         if (cancelled) return
         blobRef.current = blob
         url = URL.createObjectURL(blob)

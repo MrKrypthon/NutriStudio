@@ -3,7 +3,7 @@ import { Area, AreaChart, Bar, CartesianGrid, Cell, ComposedChart, Legend, Pie, 
 
 // Gráficas de Finanzas con Recharts (animadas y responsivas). Los montos llegan en centavos; aquí
 // se convierten a pesos para los ejes y tooltips.
-export const CHART_COLORS = ['#5FA052', '#1F5A3A', '#d7ad56', '#B4442C', '#5b8fd6', '#9d8abb', '#3fa46a', '#d98b3f']
+export const CHART_COLORS = ['#2E7D4F', '#16181D', '#A15C07', '#B42318', '#2F5F8F', '#9AA0A9', '#5B606B', '#DCDEE2']
 
 const toPesos = (cents) => Math.round((Number(cents) || 0) / 100)
 const compact = (value) => new Intl.NumberFormat('es-MX', { notation: 'compact', maximumFractionDigits: 1 }).format(value)
@@ -17,7 +17,7 @@ function MoneyTooltip({ active, payload, label }) {
   </div>
 }
 
-const axis = { tick: { fontSize: 10, fill: '#8b8d9c' }, axisLine: false, tickLine: false }
+const axis = { tick: { fontSize: 10, fill: '#5B606B' }, axisLine: false, tickLine: false }
 
 export function IncomeExpenseChart({ daily = [], selectedDate = null, onSelectDay }) {
   const [mode, setMode] = useState('area')
@@ -41,26 +41,26 @@ export function IncomeExpenseChart({ daily = [], selectedDate = null, onSelectDa
       <ComposedChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }} onClick={handleClick} style={{ cursor: onSelectDay ? 'pointer' : 'default' }}>
         <defs>
           <linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#5FA052" stopOpacity={0.35} />
-            <stop offset="100%" stopColor="#5FA052" stopOpacity={0} />
+            <stop offset="0%" stopColor="#2E7D4F" stopOpacity={0.35} />
+            <stop offset="100%" stopColor="#2E7D4F" stopOpacity={0} />
           </linearGradient>
           <linearGradient id="expenseFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#B4442C" stopOpacity={0.28} />
-            <stop offset="100%" stopColor="#B4442C" stopOpacity={0} />
+            <stop offset="0%" stopColor="#B42318" stopOpacity={0.28} />
+            <stop offset="100%" stopColor="#B42318" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#eceef2" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#ECEDF0" vertical={false} />
         <XAxis dataKey="label" {...axis} interval="preserveStartEnd" />
         <YAxis {...axis} width={44} tickFormatter={compact} />
         <Tooltip cursor={{ stroke: '#c9ccd3', strokeDasharray: '3 3' }} content={(props) => { if (props.active && props.payload?.[0]?.payload?.date) hoverDateRef.current = props.payload[0].payload.date; return <MoneyTooltip {...props} /> }} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-        {selectedPoint && <ReferenceLine x={selectedPoint.label} stroke="#1F5A3A" strokeDasharray="3 3" />}
+        {selectedPoint && <ReferenceLine x={selectedPoint.label} stroke="#16181D" strokeDasharray="3 3" />}
         {mode === 'area' ? <>
-          <Area type="monotone" dataKey="Egresos" stroke="#B4442C" strokeWidth={2} fill="url(#expenseFill)" animationDuration={700} activeDot={{ r: 4 }} />
-          <Area type="monotone" dataKey="Ingresos" stroke="#5FA052" strokeWidth={2} fill="url(#incomeFill)" animationDuration={700} activeDot={{ r: 4 }} />
+          <Area type="monotone" dataKey="Egresos" stroke="#B42318" strokeWidth={2} fill="url(#expenseFill)" animationDuration={700} activeDot={{ r: 4 }} />
+          <Area type="monotone" dataKey="Ingresos" stroke="#2E7D4F" strokeWidth={2} fill="url(#incomeFill)" animationDuration={700} activeDot={{ r: 4 }} />
         </> : <>
-          <Bar dataKey="Ingresos" fill="#5FA052" radius={[4, 4, 0, 0]} maxBarSize={22} animationDuration={700} />
-          <Bar dataKey="Egresos" fill="#B4442C" radius={[4, 4, 0, 0]} maxBarSize={22} animationDuration={700} />
+          <Bar dataKey="Ingresos" fill="#2E7D4F" radius={[4, 4, 0, 0]} maxBarSize={22} animationDuration={700} />
+          <Bar dataKey="Egresos" fill="#B42318" radius={[4, 4, 0, 0]} maxBarSize={22} animationDuration={700} />
         </>}
       </ComposedChart>
     </ResponsiveContainer>
@@ -76,15 +76,15 @@ export function BalanceTrend({ daily = [] }) {
       <AreaChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
         <defs>
           <linearGradient id="balanceFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#1F5A3A" stopOpacity={0.35} />
-            <stop offset="100%" stopColor="#1F5A3A" stopOpacity={0} />
+            <stop offset="0%" stopColor="#16181D" stopOpacity={0.35} />
+            <stop offset="100%" stopColor="#16181D" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="#eceef2" vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke="#ECEDF0" vertical={false} />
         <XAxis dataKey="label" {...axis} interval="preserveStartEnd" />
         <YAxis {...axis} width={44} tickFormatter={compact} />
         <Tooltip content={<MoneyTooltip />} />
-        <Area type="monotone" dataKey="Saldo" stroke="#1F5A3A" strokeWidth={2} fill="url(#balanceFill)" animationDuration={800} />
+        <Area type="monotone" dataKey="Saldo" stroke="#16181D" strokeWidth={2} fill="url(#balanceFill)" animationDuration={800} />
       </AreaChart>
     </ResponsiveContainer>
   </div>
@@ -121,5 +121,5 @@ export function CategoryDonut({ entries = [], labelFor = (key) => key }) {
     byCategory.set(key, (byCategory.get(key) || 0) + (entry.amountCents || 0))
   }
   const data = [...byCategory.entries()].sort((a, b) => b[1] - a[1]).map(([key, cents]) => ({ name: labelFor(key), value: toPesos(cents) }))
-  return <Donut data={data} unit="egresos" colors={['#B4442C', '#d98b3f', '#d7ad56', '#9d8abb', '#5b8fd6', '#8d8f9b']} />
+  return <Donut data={data} unit="egresos" colors={['#B42318', '#d98b3f', '#d7ad56', '#9d8abb', '#5b8fd6', '#8d8f9b']} />
 }
