@@ -15,7 +15,12 @@ const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const ALERT_LEAD_MS = 5 * 60 * 1000
 const ALERT_VISIBLE_MS = 15000
 const ALERT_TICK_MS = 20000
-const APPOINTMENT_TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia' }
+// Avisos ya mostrados (id de cita → hasta cuándo sigue visible). Vive fuera del componente porque
+// cada pantalla monta su propio AppChrome: con una referencia local, el aviso descartado volvía a
+// salir en cada cambio de módulo durante los 5 min previos a la cita. Al cambiar de pantalla, un
+// aviso que aún no cumplía sus 15 s se vuelve a mostrar sólo por el tiempo que le quedaba.
+const alertedUntil = new Map()
+const APPOINTMENT_TYPE_LABELS ={ INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia' }
 
 // "Ahora" en el reloj de pared de la práctica, con la misma convención que las citas (startAt se
 // guarda como hora local etiquetada con "Z"; ver nota en AgendaPage sobre por qué se usan getters UTC).
@@ -55,7 +60,6 @@ export default function AppChrome({ active, setActive, crumb, children }) {
   const searchRef = useRef(null)
   const notifRef = useRef(null)
   const profileRef = useRef(null)
-  const notifiedRef = useRef(new Set())
   const alertTimersRef = useRef(new Map())
 
   // Refresca en segundo plano (citas y contadores del encabezado) cada pocos segundos.
@@ -65,6 +69,7 @@ export default function AppChrome({ active, setActive, crumb, children }) {
 
   const dismissAlert = (id) => {
     setAlerts((prev) => prev.filter((alert) => alert.id !== id))
+    alertedUntil.set(id, 0)
     const timer = alertTimersRef.current.get(id)
     if (timer) { clearTimeout(timer); alertTimersRef.current.delete(id) }
   }
@@ -83,13 +88,15 @@ export default function AppChrome({ active, setActive, crumb, children }) {
     dashboardApi.today(todayIso()).then((payload) => {
       if (cancelled) return
       setNotifData(payload)
+      const clock = Date.now()
       const upcoming = (payload.appointments || []).filter((appointment) => {
-        if (!appointment?.id || !appointment.startAt || notifiedRef.current.has(appointment.id) || appointment.status === 'COMPLETED') return false
+        if (!appointment?.id || !appointment.startAt || alertTimersRef.current.has(appointment.id) || appointment.status === 'COMPLETED') return false
+        if (alertedUntil.has(appointment.id) && alertedUntil.get(appointment.id) <= clock) return false
         const diff = new Date(appointment.startAt).getTime() - now
         return diff > 0 && diff <= ALERT_LEAD_MS
       })
       if (!upcoming.length) return
-      upcoming.forEach((appointment) => notifiedRef.current.add(appointment.id))
+      upcoming.forEach((appointment) => { if (!alertedUntil.has(appointment.id)) alertedUntil.set(appointment.id, clock + ALERT_VISIBLE_MS) })
       setAlerts((prev) => [...prev, ...upcoming.map((appointment) => ({
         id: appointment.id,
         name: `${appointment.patient?.firstName || ''} ${appointment.patient?.lastName || ''}`.trim() || 'Paciente',
@@ -98,7 +105,7 @@ export default function AppChrome({ active, setActive, crumb, children }) {
         type: APPOINTMENT_TYPE_LABELS[appointment.type] || 'Consulta',
       }))])
       upcoming.forEach((appointment) => {
-        const timer = setTimeout(() => { setAlerts((prev) => prev.filter((alert) => alert.id !== appointment.id)); alertTimersRef.current.delete(appointment.id) }, ALERT_VISIBLE_MS)
+        const timer = setTimeout(() => { setAlerts((prev) => prev.filter((alert) => alert.id !== appointment.id)); alertTimersRef.current.delete(appointment.id) }, Math.max(0, alertedUntil.get(appointment.id) - clock))
         alertTimersRef.current.set(appointment.id, timer)
       })
     }).catch(() => {})
