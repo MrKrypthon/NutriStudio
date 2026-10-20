@@ -244,8 +244,18 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || ''
 const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : null
 
 // Abre una cuenta: práctica + su nutriólogo (dueño) + copia del catálogo, todo o nada.
+// `googleSub` y `loginId` no son únicos en la base, así que dos peticiones a la vez (doble clic en
+// «Continuar con Google», el aviso de Google repetido) abrían dos cuentas para la misma persona. Un
+// candado de la transacción por identidad las forma en fila; la segunda encuentra la cuenta ya creada
+// y la devuelve (`existing`) en lugar de abrir otra.
 async function createAccount({ signupSource, practiceName, name, email, loginId = null, googleSub = null, passwordHash, paidUntil = null }) {
   return prisma.$transaction(async (tx) => {
+    const identity = googleSub ? { googleSub } : loginId ? { loginId } : null
+    if (identity) {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`account:${googleSub ? `google:${googleSub}` : `login:${loginId}`}`}))`
+      const existing = await tx.user.findFirst({ where: identity, include: { practice: true } })
+      if (existing) return Object.assign(existing, { existing: true })
+    }
     const practice = await tx.practice.create({ data: { name: practiceName || defaultPracticeName(name), signupSource, paidUntil } })
     const user = await tx.user.create({ data: { practiceId: practice.id, name, email: email || '', loginId, googleSub, passwordHash, role: 'OWNER' }, include: { practice: true } })
     await copyCatalog(tx, CATALOG_PRACTICE_ID, practice.id)
@@ -290,8 +300,8 @@ app.post('/api/v1/auth/google', async (request, reply) => {
     // Contraseña inutilizable: estas cuentas entran sólo con Google.
     const passwordHash = await bcrypt.hash(generateTempPassword(32), 10)
     user = await createAccount({ signupSource: 'GOOGLE', name: profile.name || email.split('@')[0], email, googleSub: profile.sub, passwordHash })
-    created = true
-    request.log.info({ practiceId: user.practiceId }, 'Cuenta nueva con Google')
+    created = !user.existing
+    if (created) request.log.info({ practiceId: user.practiceId }, 'Cuenta nueva con Google')
   }
   if (user.status !== 'ACTIVE') return reply.code(403).send({ code: 'ACCOUNT_DISABLED', message: 'Este usuario está desactivado. Contacta al administrador.', fields: {} })
   if (user.practice.status === 'SUSPENDED') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
@@ -308,9 +318,14 @@ app.post('/api/v1/auth/logout', async (request, reply) => reply.code(204).send()
 app.post('/api/v1/auth/google/link', async (request, reply) => {
   const profile = await verifyGoogleCredential(request, reply)
   if (!profile) return reply
-  const owner = await prisma.user.findFirst({ where: { googleSub: profile.sub }, select: { id: true } })
-  if (owner && owner.id !== request.userId) return reply.code(409).send({ code: 'GOOGLE_LINKED_ELSEWHERE', message: 'Esa cuenta de Google ya entra a otra consulta de Milpa.', fields: {} })
-  const user = await prisma.user.update({ where: { id: request.userId }, data: { googleSub: profile.sub }, include: { practice: true } })
+  // Mismo candado que createAccount: un registro con ese Google al mismo tiempo no la duplica.
+  const user = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`account:google:${profile.sub}`}))`
+    const owner = await tx.user.findFirst({ where: { googleSub: profile.sub }, select: { id: true } })
+    if (owner && owner.id !== request.userId) return null
+    return tx.user.update({ where: { id: request.userId }, data: { googleSub: profile.sub }, include: { practice: true } })
+  })
+  if (!user) return reply.code(409).send({ code: 'GOOGLE_LINKED_ELSEWHERE', message: 'Esa cuenta de Google ya entra a otra consulta de Milpa.', fields: {} })
   await logAudit(request, { action: 'google_linked', entity: 'User', entityId: user.id, metadata: { googleEmail: profile.email.toLowerCase() } })
   return sessionPayload(user)
 })
@@ -447,6 +462,7 @@ app.post('/api/v1/admin/practices', async (request, reply) => {
   if (mail && await prisma.user.findFirst({ where: { email: { equals: mail, mode: 'insensitive' }, status: 'ACTIVE' }, select: { id: true } })) return reply.code(409).send({ code: 'EMAIL_TAKEN', message: 'Ese correo ya lo usa otra cuenta.', fields: { email: true } })
   const tempPassword = generateTempPassword()
   const user = await createAccount({ signupSource: 'ADMIN', practiceName: String(practiceName || '').trim().slice(0, 120), name: personName, email: mail, loginId: id, passwordHash: await bcrypt.hash(tempPassword, 10), paidUntil: coverage })
+  if (user.existing) return reply.code(409).send({ code: 'LOGIN_ID_TAKEN', message: 'Ese identificador ya lo usa otra cuenta.', fields: { loginId: true } })
   request.log.info({ practiceId: user.practiceId, adminId: request.adminId }, 'Cuenta creada desde el panel')
   return reply.code(201).send({ practiceId: user.practiceId, practiceName: user.practice.name, name: user.name, email: user.email || null, loginId: user.loginId, tempPassword })
 })
