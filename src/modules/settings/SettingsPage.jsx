@@ -60,6 +60,7 @@ export default function SettingsPage({ setActive }) {
   const [activeSection, setActiveSection] = useState(initialSection)
   // Cambios del perfil u horarios sin guardar: el botón sigue a la vista aunque se cambie de sección.
   const [dirty, setDirty] = useState(false)
+  const editsRef = useRef(0)
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [pwState, setPwState] = useState('idle')
   const [pwError, setPwError] = useState('')
@@ -87,7 +88,7 @@ export default function SettingsPage({ setActive }) {
       .catch(() => setLoadState('error'))
   }, [])
 
-  const update = (key, value) => { setForm((prev) => ({ ...prev, [key]: value })); setSaveState('idle'); setDirty(true) }
+  const update = (key, value) => { setForm((prev) => ({ ...prev, [key]: value })); setSaveState('idle'); setDirty(true); editsRef.current += 1 }
   const updateHours = (patch) => update('businessHours', { ...form.businessHours, ...patch })
   const updateRange = (index, patch) => {
     const ranges = form.businessHours.ranges.map((range, i) => (i === index ? { ...range, ...patch } : range))
@@ -117,9 +118,12 @@ export default function SettingsPage({ setActive }) {
     }
     setSaveState('saving')
     setError('')
+    const editsAtStart = editsRef.current
     try {
       await practiceApi.update({ ...form, ...trimmed })
       refreshPractice()
+      // Lo escrito mientras se guardaba no iba en este envío: sigue pendiente (botón y aviso).
+      if (editsRef.current !== editsAtStart) { setSaveState('idle'); return }
       setSaveState('saved')
       setDirty(false)
       setEditingHours(false)
@@ -195,7 +199,7 @@ export default function SettingsPage({ setActive }) {
         {activeSection === 'profile' && <div className="panel settings-card">
           <div className="settings-card-head"><div><h2>Perfil profesional</h2><p>Esta información aparece en tus informes y comunicaciones.</p></div><span className="avatar settings-avatar">{initials}</span></div>
           <div className="form-grid">
-            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => { setPracticeName(e.target.value); setSaveState('idle'); setDirty(true) }} /></label>
+            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => { setPracticeName(e.target.value); setSaveState('idle'); setDirty(true); editsRef.current += 1 }} /></label>
             <label>Especialidad<input value={form.userSpecialty} onChange={(e) => update('userSpecialty', e.target.value)} placeholder="Ej. Nutrióloga clínica" /></label>
             <label>Email de trabajo<input value={form.userEmail} onChange={(e) => update('userEmail', e.target.value)} /></label>
             <label>Teléfono<input value={form.userPhone} onChange={(e) => update('userPhone', e.target.value)} placeholder="Ej. +52 55 1234 5678" /></label>
