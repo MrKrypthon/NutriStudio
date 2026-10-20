@@ -1225,7 +1225,16 @@ app.post('/api/v1/appointments', async (request, reply) => {
   const isBlock = type === 'BLOCK'
   // A BLOCK (availability event) needs no patient; every other appointment type does.
   if ((!isBlock && !patientId) || Number.isNaN(start.getTime()) || Number.isNaN(baseEnd.getTime()) || baseEnd <= start) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: isBlock ? 'Fecha y duración válida son obligatorias.' : 'Paciente, fecha y duración válida son obligatorios.', fields: {} })
+  // Un tipo fuera del enum llegaba a Prisma y respondía 500.
+  if (!isBlock && !APPOINTMENT_TYPES.includes(type)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Tipo de cita inválido.', fields: { type: 'invalid' } })
+  if (!Array.isArray(notifyVia)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Canales de notificación inválidos.', fields: { notifyVia: 'invalid' } })
   const practiceId = request.practiceId
+  // El paciente tiene que ser de esta práctica: antes se aceptaba cualquier id y la respuesta
+  // (include: patient) devolvía los datos de un paciente de otro consultorio.
+  if (!isBlock) {
+    const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId }, select: { id: true } })
+    if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: { patientId: 'not_found' } })
+  }
 
   // Optional recurrence (RF-03: "Permitir repetir una cita"): the whole series is created up
   // front, one appointment per occurrence, each carrying a readable recurrenceRule that
