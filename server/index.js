@@ -1359,6 +1359,8 @@ app.post('/api/v1/tasks', async (request, reply) => {
   const practiceId = request.practiceId
   const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: { patientId: 'not_found' } })
+  // Una fecha límite mal formada llegaba a Prisma como Invalid Date → 500.
+  if (Number.isNaN(new Date(dueAt).getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha límite inválida.', fields: { dueAt: 'invalid' } })
   const task = await prisma.task.create({ data: { practiceId, patientId, type, dueAt: new Date(dueAt), referenceId }, include: { patient: true } })
   return reply.code(201).send(task)
 })
@@ -1814,10 +1816,12 @@ app.get('/api/v1/food/search', async (request, reply) => {
   }
 })
 
-app.get('/api/v1/dashboard/today', async (request) => {
+app.get('/api/v1/dashboard/today', async (request, reply) => {
   const date = request.query.date || new Date().toISOString().slice(0, 10)
   const start = new Date(`${date}T00:00:00.000Z`)
   const end = new Date(`${date}T23:59:59.999Z`)
+  // Una fecha mal formada llegaba a Prisma como Invalid Date → 500.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(start.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha inválida.', fields: { date: 'invalid' } })
   const practiceId = request.practiceId
   const [appointments, pendingConfirmations, followUps, activePatients, tasks] = await prisma.$transaction([
     prisma.appointment.findMany({ where: { practiceId, startAt: { gte: start, lte: end }, status: { notIn: ['CANCELLED', 'NO_SHOW'] }, type: { not: 'BLOCK' } }, include: { patient: true }, orderBy: { startAt: 'asc' } }),
