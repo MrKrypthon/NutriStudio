@@ -849,7 +849,11 @@ app.get('/api/v1/patients', async (request) => {
   const terms = String(search).trim().split(/\s+/).filter(Boolean).slice(0, 6)
   const termsWhere = terms.length ? { AND: terms.map((term) => ({ OR: [{ firstName: { contains: term, mode: 'insensitive' } }, { lastName: { contains: term, mode: 'insensitive' } }, { email: { contains: term, mode: 'insensitive' } }, { phone: { contains: term, mode: 'insensitive' } }] })) } : {}
   // "Sin cita próxima" (RF-04): ACTIVE patients with no upcoming, non-cancelled appointment.
-  const noNextWhere = { appointments: { none: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } } }
+  // startAt es hora de pared con "Z": se compara contra el "ahora" de la práctica (con new Date() en
+  // UTC, en México una cita seguía como "próxima" hasta 6 h después de su hora).
+  const practice = await prisma.practice.findUnique({ where: { id: request.practiceId }, select: { timeZone: true } })
+  const now = practiceWallClockNow(practice?.timeZone)
+  const noNextWhere = { appointments: { none: { startAt: { gte: now }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } } } }
   const where = {
     practiceId: request.practiceId,
     status: status === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE',
@@ -868,7 +872,7 @@ app.get('/api/v1/patients', async (request) => {
       take,
       include: {
         consultations: { orderBy: { startedAt: { sort: 'desc', nulls: 'last' } }, take: 1, select: { startedAt: true } },
-        appointments: { where: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, orderBy: { startAt: 'asc' }, take: 1, select: { startAt: true, type: true } },
+        appointments: { where: { startAt: { gte: now }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, orderBy: { startAt: 'asc' }, take: 1, select: { startAt: true, type: true } },
         ...(summary ? {
           plans: { where: { status: { not: 'CANCELLED' } }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, version: true, targetKcal: true, publishedAt: true } },
           measurements: { where: { weightKg: { not: null } }, orderBy: { measuredAt: 'desc' }, take: 2, select: { weightKg: true, measuredAt: true } },
@@ -920,9 +924,10 @@ app.post('/api/v1/patients', async (request, reply) => {
 })
 
 app.get('/api/v1/patients/:patientId', async (request, reply) => {
+  const practice = await prisma.practice.findUnique({ where: { id: request.practiceId }, select: { timeZone: true } })
   const patient = await prisma.patient.findFirst({
     where: { id: request.params.patientId, practiceId: request.practiceId },
-    include: { appointments: { where: { startAt: { gte: new Date() }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, orderBy: { startAt: 'asc' }, take: 1, select: { startAt: true, type: true } } },
+    include: { appointments: { where: { startAt: { gte: practiceWallClockNow(practice?.timeZone) }, status: { notIn: ['CANCELLED', 'NO_SHOW'] } }, orderBy: { startAt: 'asc' }, take: 1, select: { startAt: true, type: true } } },
   })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   const { appointments, ...rest } = patient
@@ -971,10 +976,12 @@ app.get('/api/v1/patients/:patientId/timeline', async (request, reply) => {
   const patientId = request.params.patientId
   const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
+  const practice = await prisma.practice.findUnique({ where: { id: practiceId }, select: { timeZone: true } })
   const [appointments, consultations, plans, documents, auditEvents] = await prisma.$transaction([
     // The timeline is activity HISTORY — exclude upcoming (not yet started) appointments so a
     // future confirmed visit doesn't render as already-done activity at the top of the drawer.
-    prisma.appointment.findMany({ where: { patientId, startAt: { lte: new Date() } }, orderBy: { startAt: 'desc' }, take: 20 }),
+    // startAt es hora de pared: se compara contra el "ahora" de la práctica, no contra UTC.
+    prisma.appointment.findMany({ where: { patientId, startAt: { lte: practiceWallClockNow(practice?.timeZone) } }, orderBy: { startAt: 'desc' }, take: 20 }),
     prisma.consultation.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.nutritionPlan.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
     prisma.document.findMany({ where: { patientId }, orderBy: { createdAt: 'desc' }, take: 20 }),
