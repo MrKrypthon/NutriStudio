@@ -13,7 +13,15 @@ async function fetchWithTimeout(url, options = {}, ms = REQUEST_TIMEOUT_MS) {
   if (options.signal) return fetch(url, options)
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), ms)
-  try { return await fetch(url, { ...options, signal: controller.signal }) } finally { clearTimeout(timer) }
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (error) {
+    // Las pantallas muestran `error.message`, y el navegador lo da en inglés ("signal is aborted
+    // without reason", "Failed to fetch"): se traduce el corte por tiempo y la falta de conexión.
+    if (controller.signal.aborted) throw Object.assign(new Error('El servidor tardó demasiado en responder. Intenta de nuevo.'), { code: 'TIMEOUT' })
+    if (error instanceof TypeError) throw Object.assign(new Error('No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.'), { code: 'NETWORK_ERROR' })
+    throw error
+  } finally { clearTimeout(timer) }
 }
 
 export async function apiRequest(path, options = {}) {
