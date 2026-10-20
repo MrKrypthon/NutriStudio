@@ -3190,9 +3190,12 @@ function drawInfoGrid(file, title, rows) {
   let y = top + 14
   for (let i = 0; i < rows.length; i += 2) {
     const pair = rows.slice(i, i + 2)
-    file.font('Helvetica').fontSize(9)
-    const heights = pair.map(([label, value]) => file.heightOfString(String(value ?? '—'), { width: colW - pad * 2 }) + 12)
+    // Se mide con la misma fuente con que se dibuja el valor (negritas, más ancha): medido en
+    // regular, un domicilio largo ocupaba más renglones que la caja y se encimaba con la fila siguiente.
+    file.font('Helvetica-Bold').fontSize(9)
+    const heights = pair.map(([label, value]) => file.heightOfString(String(value ?? '—'), { width: colW - pad * 2 }) + 16)
     const h = Math.max(...heights, 24)
+    if (y + h > file.page.height - file.page.margins.bottom) { file.addPage(); y = file.y }
     pair.forEach(([label, value], j) => {
       const x = 48 + j * colW
       file.rect(x, y, colW - (j === 0 ? 4 : 0), h).fill(j === 0 && i % 4 === 0 ? TINT : '#F4F8F2')
