@@ -43,6 +43,9 @@ const NESTED_SLUGS = {
   'Documento': 'documentos',
 }
 
+/** Si la pantalla es una sub-acción que comparte la dirección de su lista. */
+export const isNestedModule = (module) => Object.hasOwn(NESTED_SLUGS, module)
+
 export const DEFAULT_ROUTE = { module: 'Hoy', patientId: '', consultationId: null }
 
 /** Lee la dirección actual y devuelve el módulo y, si lo lleva, el paciente y la consulta. */

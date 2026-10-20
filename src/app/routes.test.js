@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseLocation, pathFor } from './routes.js'
+import { isNestedModule, parseLocation, pathFor } from './routes.js'
 
 describe('parseLocation', () => {
   it('reconoce los módulos simples', () => {
@@ -51,6 +51,14 @@ describe('pathFor', () => {
     expect(pathFor('Nueva receta')).toBe('/recetas')
     expect(pathFor('Editar receta')).toBe('/recetas')
     expect(pathFor('Documento')).toBe('/documentos')
+  })
+
+  it('distingue las sub-pantallas de los módulos con dirección propia', () => {
+    expect(isNestedModule('Nueva receta')).toBe(true)
+    expect(isNestedModule('Documento')).toBe(true)
+    expect(isNestedModule('Recetas')).toBe(false)
+    expect(isNestedModule('Expediente')).toBe(false)
+    expect(isNestedModule('toString')).toBe(false)
   })
 
   it('devuelve null si el módulo no tiene dirección', () => {

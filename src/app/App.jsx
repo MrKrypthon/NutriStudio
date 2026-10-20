@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '../lib/AuthContext.jsx'
-import { parseLocation, pathFor } from './routes.js'
+import { isNestedModule, parseLocation, pathFor } from './routes.js'
 import { growTextareas } from '../lib/autoGrow.js'
 
 import LoginPage from '../modules/auth/LoginPage.jsx'
@@ -78,6 +78,14 @@ export default function App() {
     setActiveState(module)
     const next = pathFor(module, patientId, consultationId)
     if (next && window.location.pathname !== next) window.history[options.replace ? 'replaceState' : 'pushState']({ patientId }, '', next)
+    else if (next && module !== active) {
+      // Las sub-pantallas (formulario de receta, de material, documento) comparten la dirección de
+      // su lista. Sin una entrada propia, atrás desde el formulario salía del módulo entero (de la
+      // receta a medio capturar a Hoy). Se apila una entrada marcada, y al volver a la lista con un
+      // botón de la app se retira esa entrada para que atrás no tenga que pulsarse dos veces.
+      if (isNestedModule(module)) window.history[window.history.state?.nested ? 'replaceState' : 'pushState']({ patientId, nested: true }, '', next)
+      else if (window.history.state?.nested) window.history.back()
+    }
   }
   const setActive = (next) => go(next)
 
