@@ -221,15 +221,18 @@ const signToken = (user) => jwt.sign({ sub: user.id, practiceId: user.practiceId
 const signSession = (user) => ({ token: signToken(user), ...sessionPayload(user) })
 
 // Se entra con el correo o con el identificador que dio el administrador (un identificador nunca
-// lleva «@»). El correo sólo es único por práctica, así que se toma el primer usuario activo.
+// lleva «@»). El correo sólo es único por práctica (y se edita sin verificar en Configuración, o lo
+// trae una cuenta de Google), así que se prueba la contraseña con cada usuario activo que lo tenga:
+// tomar sólo el primero dejaba fuera al dueño real si salía otro antes.
 app.post('/api/v1/auth/login', async (request, reply) => {
   const { email, password } = request.body || {}
   const login = String(email || '').trim()
-  if (!login || !password) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Correo o identificador y contraseña son obligatorios.', fields: { email: !login, password: !password } })
+  if (!login || !password || typeof password !== 'string') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Correo o identificador y contraseña son obligatorios.', fields: { email: !login, password: !password } })
   const where = login.includes('@') ? { email: { equals: login, mode: 'insensitive' } } : { loginId: normalizeLoginId(login) }
-  const user = await prisma.user.findFirst({ where: { ...where, status: 'ACTIVE' }, include: { practice: true } })
-  const valid = user ? await bcrypt.compare(password, user.passwordHash) : false
-  if (!user || !valid) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Correo, identificador o contraseña incorrectos.', fields: {} })
+  const candidates = await prisma.user.findMany({ where: { ...where, status: 'ACTIVE' }, include: { practice: true }, orderBy: { createdAt: 'asc' }, take: 10 })
+  let user = null
+  for (const candidate of candidates) if (await bcrypt.compare(password, candidate.passwordHash)) { user = candidate; break }
+  if (!user) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Correo, identificador o contraseña incorrectos.', fields: {} })
   if (user.practice.status === 'SUSPENDED') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
   return signSession(user)
 })
