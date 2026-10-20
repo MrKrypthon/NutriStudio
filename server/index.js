@@ -23,7 +23,7 @@ import { OAuth2Client } from 'google-auth-library'
 import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId } from './domain/accounts.js'
 import { copyCatalog } from './domain/catalogCopy.js'
 import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
-import { foldText } from './domain/text.js'
+import { foldText, toWinAnsi } from './domain/text.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
 // 10 MB PDF becomes ~13.3 MB as base64 JSON text, see POST /consultations/:id/lab-attachments.
@@ -3226,6 +3226,13 @@ async function generateDocumentFile(documentId, practiceId, userId) {
       const chunks = []
       // bufferPages: el pie con "Página X de Y" se escribe al final, cuando ya se sabe cuántas hay.
       const file = new PDFDocument({ size: 'LETTER', margin: 48, bufferPages: true })
+      // Estos documentos usan Helvetica (sólo WinAnsi): "≥", "→" o un emoji capturados en el
+      // expediente salían como basura. Se convierten al dibujar y al medir, para que las cajas midan
+      // lo mismo que se imprime.
+      for (const method of ['text', 'widthOfString', 'heightOfString']) {
+        const original = file[method].bind(file)
+        file[method] = (text, ...args) => original(typeof text === 'string' ? toWinAnsi(text) : text, ...args)
+      }
       file.on('data', (chunk) => chunks.push(chunk))
       file.on('end', () => resolve(Buffer.concat(chunks)))
       file.on('error', reject)
