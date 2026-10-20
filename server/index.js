@@ -2590,8 +2590,14 @@ function drawBrandMark(file, x, y, size = 24) {
 function drawDocumentBrand(file, subtitle, practice, logoBuffer) {
   const startY = file.y
   let bottom = startY + 44
+  // pdfkit sólo lee PNG y JPG, pero el logo también se acepta en WEBP: sin el try, el informe, el
+  // informe clínico y el expediente respondían 500 para todo el consultorio. Sin logo legible se usa
+  // el encabezado con el nombre (como el PDF del plan, que ya lo omitía).
+  let logoDrawn = false
   if (logoBuffer) {
-    file.image(logoBuffer, 48, startY, { height: 30 })
+    try { file.image(logoBuffer, 48, startY, { height: 30 }); logoDrawn = true } catch { logoDrawn = false }
+  }
+  if (logoDrawn) {
     file.font('Helvetica').fontSize(9).fillColor(FAINT).text(subtitle, 48, startY + 34, { width: 516 })
   } else {
     drawBrandMark(file, 48, startY + 3, 26)
