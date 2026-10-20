@@ -1166,16 +1166,33 @@ app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (req
 // Measurement rows — this is the only way to create one; nothing wrote it before.
 // Registering twice on the same day is a CORRECTION, not a new data point (it would show as two
 // stacked points on the evolution chart), so a second register for the same consultation within
-// the same UTC day updates the existing row instead of inserting a duplicate.
+// the same day (practice calendar) updates the existing row instead of inserting a duplicate.
 app.post('/api/v1/consultations/:consultationId/measurements', async (request, reply) => {
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   if (consultationClosed(consultation, reply)) return
-  const { measuredAt, weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes } = request.body || {}
+  const { measuredAt, method, notes } = request.body || {}
   const at = measuredAt ? new Date(measuredAt) : new Date()
-  const values = { patientId: consultation.patientId, consultationId: consultation.id, measuredAt: at, weightKg, heightCm, waistCm, hipCm, abdomenCm, bodyFatPercent, muscleMassKg, method, notes }
+  if (Number.isNaN(at.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha de medición inválida.', fields: { measuredAt: true } })
+  // Cada medida: vacía = null (así una corrección que borra la cintura la borra de verdad; antes el
+  // undefined dejaba el valor viejo), y si viene debe ser un número positivo dentro de la columna
+  // (Decimal(6,2) / Decimal(5,2) para el %): texto, negativos o desbordes llegaban a Prisma → 500.
+  const MEASURE_LIMITS = { weightKg: 9999, heightCm: 9999, waistCm: 9999, hipCm: 9999, abdomenCm: 9999, bodyFatPercent: 100, muscleMassKg: 9999 }
+  const measures = {}
+  for (const [key, max] of Object.entries(MEASURE_LIMITS)) {
+    const raw = request.body?.[key]
+    if (raw === undefined || raw === null || raw === '') { measures[key] = null; continue }
+    const number = Number(raw)
+    if (!Number.isFinite(number) || number <= 0 || number > max) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Revisa las medidas: deben ser números positivos dentro de un rango posible.', fields: { [key]: true } })
+    measures[key] = number
+  }
+  const values = { patientId: consultation.patientId, consultationId: consultation.id, measuredAt: at, ...measures, method, notes }
   const [latest] = await prisma.measurement.findMany({ where: { consultationId: consultation.id }, orderBy: { measuredAt: 'desc' }, take: 1 })
-  if (latest && new Date(latest.measuredAt).toISOString().slice(0, 10) === at.toISOString().slice(0, 10)) {
+  // "Mismo día" en el calendario del consultorio, no en UTC: en México (UTC-6) una medición de las
+  // 17:45 y su corrección de las 18:15 caían en días UTC distintos y quedaban dos puntos en la gráfica.
+  const practice = await prisma.practice.findUnique({ where: { id: request.practiceId }, select: { timeZone: true } })
+  const practiceDay = (date) => { try { return new Date(date).toLocaleDateString('en-CA', { timeZone: practice?.timeZone || 'America/Mexico_City' }) } catch { return new Date(date).toISOString().slice(0, 10) } }
+  if (latest && practiceDay(latest.measuredAt) === practiceDay(at)) {
     const measurement = await prisma.measurement.update({ where: { id: latest.id }, data: values })
     await logAudit(request, { action: 'updated', entity: 'Measurement', entityId: measurement.id, patientId: consultation.patientId, metadata: { corrected: true } })
     return measurement

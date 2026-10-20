@@ -12,7 +12,7 @@ import { pesCategoriesFor, searchPesTerms } from '../../lib/pesTerms.js'
 import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
-import { shouldAutoClose } from '../../lib/consultationSession.js'
+import { isToday, shouldAutoClose } from '../../lib/consultationSession.js'
 import { SEX_OPTIONS, normalizeSex } from '../../lib/sex.js'
 import { mergeValues, splitUpdates } from '../../lib/patientFields.js'
 import { saveBlob } from '../../lib/download.js'
@@ -770,8 +770,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const numOrUndefined = (value) => value !== undefined && value !== '' ? Number(value) : undefined
   // The server upserts today's measurement, so re-registering corrects it instead of stacking a
   // duplicate point; the button just reflects whether a value was already captured today.
+  // Día local (el de la nutrióloga), igual que el servidor compara en el calendario del consultorio.
   const todayMeasured = consultation
-    ? measurements.some((m) => m.consultationId === consultation.id && new Date(m.measuredAt).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10))
+    ? measurements.some((m) => m.consultationId === consultation.id && isToday(m.measuredAt))
     : false
 
   const registerMeasurement = async () => {
@@ -1257,7 +1258,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <Anthropometry values={currentValues} onFieldChange={updateAnthropometric} registerMeasurement={registerMeasurement} measurementState={measurementState} todayMeasured={todayMeasured} patientSex={patient?.sex} patientAge={computeAge(patient?.birthDate)} />
         {chartPoints.length >= 2 && <div className="panel progress-chart">
           <div className="chart-title"><b>Evolución de métricas</b><select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}><option>Peso</option><option>IMC</option><option>% grasa corporal</option></select></div>
-          <div className="chart-lines"><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points={chartPointLine} fill="none" stroke="var(--green)" strokeWidth="3" />{chartPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" fill="var(--green)" />)}</svg><div className="chart-labels">{chartPoints.map((p, i) => <span key={i}><b>{p.value}</b><br />{`${new Date(p.date).getUTCDate()}/${String(new Date(p.date).getUTCMonth() + 1).padStart(2, '0')}`}</span>)}</div></div>
+          <div className="chart-lines"><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points={chartPointLine} fill="none" stroke="var(--green)" strokeWidth="3" />{chartPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" fill="var(--green)" />)}</svg><div className="chart-labels">{chartPoints.map((p, i) => <span key={i}><b>{p.value}</b><br />{`${new Date(p.date).getDate()}/${String(new Date(p.date).getMonth() + 1).padStart(2, '0')}`}</span>)}</div></div>
         </div>}
       </div>
 
