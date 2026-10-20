@@ -824,8 +824,11 @@ app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
   const storageKey = `u-${recipe.id}-${Date.now().toString(36)}.jpg`
   await mkdir(recipeImageDir(), { recursive: true })
   await writeFile(path.join(recipeImageDir(), storageKey), size.data)
+  // La foto anterior se borra después de apuntar la receta a la nueva (como en ingredientes): antes
+  // se borraba primero y, si el guardado fallaba, la receta quedaba apuntando a un archivo inexistente.
+  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey } })
   await removeUploadedRecipeImage(recipe.imageFile)
-  return prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey } })
+  return updated
 })
 
 app.delete('/api/v1/recipes/:recipeId/image', async (request, reply) => {
@@ -1585,9 +1588,9 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
     plan = await prisma.nutritionPlan.create({ data: { patientId, consultationId: consultation.id, version: (latest._max.version || 0) + 1 } })
   }
   const settings = template.sections?.planSettings
+  const data = {}
   if (settings && typeof settings === 'object') {
     for (const field of PLAN_TEMPLATE_FIELDS) if (settings[field] != null) data[field] = settings[field]
-  const data = {}
   }
   // Normaliza igual que la distribución (valida día/tiempo y deduplica por día+tiempo): una
   // plantilla con slots crudos duplicados violaría @@unique([planId, dayOfWeek, mealType]) → 500.
@@ -1599,15 +1602,15 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
   const recipeIds = [...new Set(slots.map((slot) => slot.recipeId).filter(Boolean))]
   const validRecipes = recipeIds.length ? await prisma.recipe.findMany({ where: { id: { in: recipeIds }, practiceId: request.practiceId }, select: { id: true } }) : []
   const validRecipeIds = new Set(validRecipes.map((item) => item.id))
-  await prisma.$transaction([
-    prisma.mealSlot.deleteMany({ where: { planId: plan.id } }),
-    prisma.mealSlot.createMany({ data: slots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: validRecipeIds.has(slot.recipeId) ? slot.recipeId : null, servings: slot.servings })) }),
   // Ajustes, semana y contador en una sola transacción: antes un fallo al copiar la semana dejaba el
   // plan con los ajustes de la plantilla pero con su semana anterior.
-  ])
+  await prisma.$transaction([
     ...(Object.keys(data).length ? [prisma.nutritionPlan.update({ where: { id: plan.id }, data })] : []),
-  return { type: 'plan', planId: plan.id, patientId }
+    prisma.mealSlot.deleteMany({ where: { planId: plan.id } }),
+    prisma.mealSlot.createMany({ data: slots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: validRecipeIds.has(slot.recipeId) ? slot.recipeId : null, servings: slot.servings })) }),
     countUse(),
+  ])
+  return { type: 'plan', planId: plan.id, patientId }
 })
 
 // Búsqueda por nombre sin distinguir acentos: `mode: 'insensitive'` de Postgres sólo ignora
