@@ -53,7 +53,7 @@ export default function TemplatesPage({ setActive, onOpenPatient }) {
 
   const createTemplate = async (event) => {
     event.preventDefault()
-    if (!form.patientId) { setSaveError('Selecciona un paciente cuyo trabajo más reciente se usará como base.'); return }
+    if (!form.patientId) { setSaveState('error'); setSaveError('Selecciona un paciente cuyo trabajo más reciente se usará como base.'); return }
     setSaveState('saving')
     setSaveError('')
     try {
@@ -87,7 +87,7 @@ export default function TemplatesPage({ setActive, onOpenPatient }) {
   const updateEdit = (key, value) => setEditForm((prev) => ({ ...prev, [key]: value }))
   const saveEdit = async (event) => {
     event.preventDefault()
-    if (!editForm.name.trim()) { setEditError('El nombre no puede quedar vacío.'); return }
+    if (!editForm.name.trim()) { setEditState('error'); setEditError('El nombre no puede quedar vacío.'); return }
     setEditState('saving')
     setEditError('')
     try {
