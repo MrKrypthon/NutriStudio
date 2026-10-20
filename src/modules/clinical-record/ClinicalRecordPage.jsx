@@ -825,6 +825,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     if (!consultation || consultation.status === 'COMPLETED') return
     setCompleteError('')
     const type = consultation.appointment?.type || 'FOLLOW_UP'
+    // Una consulta reabierta ya tiene su cobro: se precarga ese monto/método. Antes se proponían la
+    // tarifa y "Efectivo", y al recerrar para corregir la nota se pisaba el pago real en Finanzas.
+    const existing = consultation.financeEntry
+    if (existing) { setCompleteForm({ method: existing.method || 'CASH', amount: String(centsToPesos(existing.amountCents)) }); setCompleteOpen(true); return }
     let feeCents = 0
     try { feeCents = normalizeFees((await practiceApi.get())?.fees)[type] || 0 } catch { feeCents = 0 }
     setCompleteForm({ method: 'CASH', amount: feeCents ? String(centsToPesos(feeCents)) : '' })

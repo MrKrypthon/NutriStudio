@@ -1025,7 +1025,7 @@ app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => 
 })
 
 app.get('/api/v1/consultations/:consultationId', async (request, reply) => {
-  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } }, include: { patient: true, appointment: true, sections: true, measurements: true, diagnoses: true, plans: true, labAttachments: { orderBy: { createdAt: 'desc' }, include: { uploadedBy: { select: { name: true } } } } } })
+  const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } }, include: { patient: true, appointment: true, sections: true, measurements: true, diagnoses: true, plans: true, financeEntry: { select: { amountCents: true, method: true } }, labAttachments: { orderBy: { createdAt: 'desc' }, include: { uploadedBy: { select: { name: true } } } } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   await logAccess(request, { patientId: consultation.patientId, scope: 'consultation', entity: 'Consultation', entityId: consultation.id, metadata: { consultationId: consultation.id } })
   return consultation
@@ -1862,6 +1862,9 @@ async function recordConsultationIncome(consultation, { paymentMethod, amountCen
   // Un monto explícito pero no numérico no debe anular el cobro: se cae a la tarifa configurada.
   const explicitInvalid = hasExplicit && !Number.isFinite(Number(amountCents))
   const amount = hasExplicit && !explicitInvalid ? normalizeCents(amountCents) : fees[type]
+  // Un 0 explícito al recerrar (consulta reabierta que al final no se cobra) debe quitar el ingreso
+  // anterior; antes se ignoraba y Finanzas seguía mostrando el cobro original.
+  if (amount <= 0 && hasExplicit && !explicitInvalid) await prisma.financeEntry.deleteMany({ where: { consultationId: consultation.id, practiceId: consultation.patient.practiceId } })
   if (amount <= 0) return null
   const method = PAYMENT_METHODS.includes(paymentMethod) ? paymentMethod : 'CASH'
   const occurredAt = practiceWallClockNow(practice?.timeZone)
