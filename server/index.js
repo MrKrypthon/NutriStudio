@@ -14,6 +14,7 @@ import { adjustmentFactor, applyRecipeAdjustments, buildMenuSnapshot, normalizeR
 import { PLAN_MEAL_KEYS, normalizeActiveMeals, normalizeMealLabels, normalizeMealNotes, normalizeMealTimes } from './domain/planMeals.js'
 import { drawNutritionPlan } from './domain/planPdf.js'
 import { asciiFileName, normalizePdfTheme, planFileName } from './domain/pdfTheme.js'
+import { hasSectionContent } from './domain/templates.js'
 import { normalizeEquivalentPlan, normalizeMenus } from './domain/equivalents.js'
 import { emptyNutritionTotals, perServingFromIngredients } from './domain/recipeNutrition.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
@@ -1450,16 +1451,22 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
   const patient = await prisma.patient.findFirst({ where: { id: patientId, practiceId: request.practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
 
-  await prisma.template.update({ where: { id: template.id }, data: { usageCount: { increment: 1 } } })
+  // El contador sube sólo cuando la plantilla se aplicó de verdad (antes se incrementaba antes de
+  // copiar nada, y un fallo a medio camino la dejaba contada como usada).
+  const countUse = () => prisma.template.update({ where: { id: template.id }, data: { usageCount: { increment: 1 } } })
 
   if (template.type === 'clinical') {
-    let consultation = await prisma.consultation.findFirst({ where: { patientId, status: 'IN_PROGRESS' } })
-    if (!consultation) consultation = await prisma.consultation.create({ data: { patientId, nutritionistId: request.userId, templateId: template.id, status: 'IN_PROGRESS', startedAt: new Date() } })
-    const sections = template.sections || {}
-    await prisma.$transaction(Object.entries(sections).map(([sectionKey, payload]) =>
+    let consultation = await prisma.consultation.findFirst({ where: { patientId, status: 'IN_PROGRESS' }, include: { sections: true } })
+    if (!consultation) consultation = await prisma.consultation.create({ data: { patientId, nutritionistId: request.userId, templateId: template.id, status: 'IN_PROGRESS', startedAt: new Date() }, include: { sections: true } })
+    // Sólo se precargan las secciones vacías: antes el upsert pisaba lo ya capturado en la consulta en
+    // curso (también en una consulta cerrada y reabierta, sin dejar la versión anterior en la bitácora).
+    const filled = new Set(consultation.sections.filter((section) => hasSectionContent(section.payload)).map((section) => section.sectionKey))
+    const sections = Object.entries(template.sections || {}).filter(([sectionKey]) => !filled.has(sectionKey))
+    await prisma.$transaction(sections.map(([sectionKey, payload]) =>
       prisma.clinicalSection.upsert({ where: { consultationId_sectionKey: { consultationId: consultation.id, sectionKey } }, create: { consultationId: consultation.id, sectionKey, payload, lastSavedBy: request.userId }, update: { payload, lastSavedBy: request.userId } })
     ))
-    return { type: 'clinical', consultationId: consultation.id, patientId }
+    await countUse()
+    return { type: 'clinical', consultationId: consultation.id, patientId, skippedSections: [...filled].filter((key) => key in (template.sections || {})) }
   }
 
   let consultation = await prisma.consultation.findFirst({ where: { patientId }, orderBy: { createdAt: 'desc' } })
@@ -1487,6 +1494,7 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
     prisma.mealSlot.deleteMany({ where: { planId: plan.id } }),
     prisma.mealSlot.createMany({ data: slots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: validRecipeIds.has(slot.recipeId) ? slot.recipeId : null, servings: slot.servings })) }),
   ])
+  await countUse()
   return { type: 'plan', planId: plan.id, patientId }
 })
 
