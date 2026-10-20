@@ -12,7 +12,7 @@ import { pesCategoriesFor, searchPesTerms } from '../../lib/pesTerms.js'
 import { usePatient } from '../../lib/usePatient.js'
 import { appointmentsApi, clinicalApi, documentsApi, labAttachmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
 import { centsToPesos, normalizeFees, PAYMENT_METHODS, pesosToCents } from '../../lib/finance.js'
-import { shouldAutoClose } from '../../lib/consultationSession.js'
+import { isToday, shouldAutoClose } from '../../lib/consultationSession.js'
 import { SEX_OPTIONS, normalizeSex } from '../../lib/sex.js'
 import { mergeValues, splitUpdates } from '../../lib/patientFields.js'
 import { saveBlob } from '../../lib/download.js'
@@ -37,11 +37,16 @@ function computeAge(birthDate) {
   if (!birthDate) return null
   const dob = new Date(birthDate)
   const now = new Date()
-  let age = now.getUTCFullYear() - dob.getUTCFullYear()
-  if (now.getUTCMonth() < dob.getUTCMonth() || (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate())) age -= 1
+  // La fecha de nacimiento es un día (medianoche UTC) y se lee en UTC; "hoy" es el día local. Con
+  // ambos en UTC, en México la edad subía la tarde-noche anterior al cumpleaños (de 18:00 en adelante).
+  let age = now.getFullYear() - dob.getUTCFullYear()
+  if (now.getMonth() < dob.getUTCMonth() || (now.getMonth() === dob.getUTCMonth() && now.getDate() < dob.getUTCDate())) age -= 1
   return age
 }
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—')
+// Las citas guardan la hora "de pared" con sufijo Z: su fecha también se lee en UTC (con el día local,
+// en Tijuana una cita a las 07:00 salía con la fecha del día anterior).
+const formatAppointmentDate = (iso) => new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
 const formatAppointmentTime = (iso) => { const d = new Date(iso); return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` }
 
 const DIAGNOSIS_DOMAINS = [
@@ -709,7 +714,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     const what = ACCESS_DOC_TITLES[item.type] || 'un documento'
     return `${item.action === 'generated' ? 'Generó' : 'Descargó'} ${what}${item.version ? ` (versión ${item.version})` : ''}`
   }
-  const formatAccessTime = (iso) => new Date(iso).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+  const formatAccessTime = (iso) => new Date(iso).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
   // Reabrir pide el motivo de la corrección (NOM-004: el expediente no se enmienda en silencio).
   const [reopenForm, setReopenForm] = useState(null)
@@ -722,6 +727,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       await clinicalApi.reopen(consultation.id, reason)
       const full = await clinicalApi.get(consultation.id)
       applyConsultation(full)
+      setSessions((prev) => prev.map((item) => (item.id === full.id ? { ...item, status: full.status } : item)))
       setStartState('idle')
       setReopenForm(null)
     } catch (error) {
@@ -770,8 +776,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   const numOrUndefined = (value) => value !== undefined && value !== '' ? Number(value) : undefined
   // The server upserts today's measurement, so re-registering corrects it instead of stacking a
   // duplicate point; the button just reflects whether a value was already captured today.
+  // Día local (el de la nutrióloga), igual que el servidor compara en el calendario del consultorio.
   const todayMeasured = consultation
-    ? measurements.some((m) => m.consultationId === consultation.id && new Date(m.measuredAt).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10))
+    ? measurements.some((m) => m.consultationId === consultation.id && isToday(m.measuredAt))
     : false
 
   const registerMeasurement = async () => {
@@ -825,6 +832,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     if (!consultation || consultation.status === 'COMPLETED') return
     setCompleteError('')
     const type = consultation.appointment?.type || 'FOLLOW_UP'
+    // Una consulta reabierta ya tiene su cobro: se precarga ese monto/método. Antes se proponían la
+    // tarifa y "Efectivo", y al recerrar para corregir la nota se pisaba el pago real en Finanzas.
+    const existing = consultation.financeEntry
+    if (existing) { setCompleteForm({ method: existing.method || 'CASH', amount: String(centsToPesos(existing.amountCents)) }); setCompleteOpen(true); return }
     let feeCents = 0
     try { feeCents = normalizeFees((await practiceApi.get())?.fees)[type] || 0 } catch { feeCents = 0 }
     setCompleteForm({ method: 'CASH', amount: feeCents ? String(centsToPesos(feeCents)) : '' })
@@ -840,6 +851,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     try {
       await clinicalApi.complete(consultation.id, payload)
       setConsultation((prev) => (prev ? { ...prev, status: 'COMPLETED', completedAt: new Date().toISOString() } : prev))
+      // El selector de sesiones de la cabecera seguía diciendo "En curso" hasta recargar.
+      setSessions((prev) => prev.map((item) => (item.id === consultation.id ? { ...item, status: 'COMPLETED' } : item)))
       setCompletionState('idle')
       setCompleteOpen(false)
       // Continúa el flujo: agendar la siguiente cita y descargar el expediente.
@@ -1253,7 +1266,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
         <Anthropometry values={currentValues} onFieldChange={updateAnthropometric} registerMeasurement={registerMeasurement} measurementState={measurementState} todayMeasured={todayMeasured} patientSex={patient?.sex} patientAge={computeAge(patient?.birthDate)} />
         {chartPoints.length >= 2 && <div className="panel progress-chart">
           <div className="chart-title"><b>Evolución de métricas</b><select value={chartMetric} onChange={(e) => setChartMetric(e.target.value)}><option>Peso</option><option>IMC</option><option>% grasa corporal</option></select></div>
-          <div className="chart-lines"><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points={chartPointLine} fill="none" stroke="var(--green)" strokeWidth="3" />{chartPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" fill="var(--green)" />)}</svg><div className="chart-labels">{chartPoints.map((p, i) => <span key={i}><b>{p.value}</b><br />{`${new Date(p.date).getUTCDate()}/${String(new Date(p.date).getUTCMonth() + 1).padStart(2, '0')}`}</span>)}</div></div>
+          <div className="chart-lines"><svg viewBox="0 0 600 130" preserveAspectRatio="none"><polyline points={chartPointLine} fill="none" stroke="var(--green)" strokeWidth="3" />{chartPoints.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="5" fill="var(--green)" />)}</svg><div className="chart-labels">{chartPoints.map((p, i) => <span key={i}><b>{p.value}</b><br />{`${new Date(p.date).getDate()}/${String(new Date(p.date).getMonth() + 1).padStart(2, '0')}`}</span>)}</div></div>
         </div>}
       </div>
 
@@ -1283,7 +1296,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
               <div className="section-heading"><div><p className="eyebrow">PDF DE ANÁLISIS CLÍNICOS</p><h2>Adjuntos del paciente</h2><p className="subtitle">Sube el PDF que trae {patientName}; con «Analizar» se leen sus valores y se proponen para «Estudios».</p></div><label className="secondary" style={{ cursor: uploadState === 'uploading' ? 'default' : 'pointer' }}>{uploadState === 'uploading' ? 'Subiendo…' : '+ Subir PDF'}<input type="file" accept="application/pdf" style={{ display: 'none' }} disabled={uploadState === 'uploading'} onChange={(e) => { uploadLabAttachment(e.target.files[0]); e.target.value = '' }} /></label></div>
               {uploadState === 'error' && <div className="form-error">⚠ {uploadError}</div>}
               {!attachments.length && <div className="lab-empty"><span>▤</span><b>Sin PDF adjuntos</b><small>Sube el estudio en PDF que te compartió el paciente.</small></div>}
-              {attachments.length > 0 && <div className="lab-list">{attachments.map((attachment) => <div className="lab-row attachment-row" key={attachment.id}><div><b>{attachment.fileName}</b><small>{(attachment.fileSize / 1024).toFixed(0)} KB · subido por {attachment.uploadedBy?.name || '—'}</small></div><button type="button" className="link-button" onClick={() => downloadLabAttachment(attachment)}>Ver</button><button type="button" className="link-button" disabled={locked} onClick={() => analyzeAttachment(attachment)} title="Leer los valores del PDF y proponerlos para Estudios">Analizar</button><button type="button" className="link-button" onClick={() => removeLabAttachment(attachment)}>Quitar</button></div>)}</div>}
+              {attachments.length > 0 && <div className="lab-list">{attachments.map((attachment) => <div className="lab-row attachment-row" key={attachment.id}><div><b>{attachment.fileName}</b><small>{(attachment.fileSize / 1024).toFixed(0)} KB · subido por {attachment.uploadedBy?.name || '—'}</small></div><NavButton className="link-button" onClick={() => downloadLabAttachment(attachment)}>Ver</NavButton><button type="button" className="link-button" disabled={locked} onClick={() => analyzeAttachment(attachment)} title="Leer los valores del PDF y proponerlos para Estudios">Analizar</button><button type="button" className="link-button" onClick={() => removeLabAttachment(attachment)}>Quitar</button></div>)}</div>}
             </div>],
           ]} />
         </section>
@@ -1618,7 +1631,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           ['historial', 'Historial y agenda', <div className="summary-card form-card" key="ha"><h3>Historial y agenda</h3><div className="form-grid">
             <label>Consultas registradas<input value={`${historyCount}`} readOnly /></label>
             <label>Consulta actual<input value={consultation ? (consultation.status === 'IN_PROGRESS' ? 'En curso' : consultation.status) : '—'} readOnly /></label>
-            <label>Próxima cita<input value={patient?.nextAppointmentAt ? `${formatDate(patient.nextAppointmentAt)} · ${formatAppointmentTime(patient.nextAppointmentAt)} · ${APPOINTMENT_TYPE_LABELS[patient.nextAppointmentType] || 'Cita'}` : 'Sin cita próxima'} readOnly /></label>
+            <label>Próxima cita<input value={patient?.nextAppointmentAt ? `${formatAppointmentDate(patient.nextAppointmentAt)} · ${formatAppointmentTime(patient.nextAppointmentAt)} · ${APPOINTMENT_TYPE_LABELS[patient.nextAppointmentType] || 'Cita'}` : 'Sin cita próxima'} readOnly /></label>
           </div></div>],
         ]} />
       </div>

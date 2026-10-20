@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { EQUIVALENT_GROUPS, buildMealOptions } from './documents.js'
-import { PLAN_MEALS } from './planMeals.js'
+import { PLAN_MEALS, formatMealTime, normalizeMealTimes } from './planMeals.js'
 import { planMenus } from './equivalents.js'
 import { EQUIVALENT_LISTS } from './equivalentLists.js'
 import { PDF_FONTS, mixColor, normalizePdfTheme, textOn } from './pdfTheme.js'
@@ -636,7 +636,10 @@ function drawNutritionPlan(file, rawInput) {
   // Indicaciones propias de cada tiempo de comida, y los suplementos o bebidas que le tocan.
   const mealLines = []
   for (const meal of PLAN_MEALS) {
-    const label = data.mealLabels?.[meal.key] || meal.printLabel
+    // Las colaciones se distinguen por su hora (como en la tabla): sin ella, las indicaciones de dos
+    // colaciones salían como dos renglones "Colación: …" sin saber a cuál tocaba cada una.
+    const time = formatMealTime(normalizeMealTimes(data.mealTimes)[meal.key])
+    const label = data.mealLabels?.[meal.key] || (time && meal.recipeType === 'snack' ? `${meal.printLabel} (${time})` : meal.printLabel)
     const extras = (data.equivalents?.extras || []).filter((extra) => Number(extra.meals?.[meal.key]) > 0).map((extra) => `${formatQuantity(Number(extra.meals[meal.key]))} ${extra.name}`)
     const note = String(data.mealNotes?.[meal.key] || '').trim()
     if (extras.length) mealLines.push(`${label}: ${extras.join(', ')}`)

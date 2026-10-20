@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { ingredientsApi, recipesApi } from '../../lib/api.js'
+import { useAuth } from '../../lib/AuthContext.jsx'
 import { clearRecipeDraft, getRecipeDraft, recipeDraftKey, saveRecipeDraft } from './recipeDraftStore.js'
 
 const MEAL_TYPE_KEYS = { Desayuno: 'breakfast', Comida: 'lunch', Cena: 'dinner', Colación: 'snack', Postre: 'dessert', Salsa: 'sauce', Básico: 'base' }
@@ -31,7 +32,8 @@ const serverToDraft = (recipe) => ({
 })
 
 export default function NewRecipePage({ setActive, recipeId }) {
-  const draftKey = recipeDraftKey(recipeId)
+  const { user } = useAuth()
+  const draftKey = recipeDraftKey(recipeId, user?.id)
   const [catalog, setCatalog] = useState([])
   const [searchState, setSearchState] = useState('idle')
   const [ingredientSearch, setIngredientSearch] = useState('')
@@ -49,6 +51,9 @@ export default function NewRecipePage({ setActive, recipeId }) {
   const [recalcWarning, setRecalcWarning] = useState('')
   const [restored, setRestored] = useState(false)
   const [recipeSource, setRecipeSource] = useState(null)
+  // Si la receta propia ya tiene ingredientes del catálogo: el API no deja quitarlos todos (su
+  // nutrición sale de ellos), así que el formulario lo avisa en vez de guardar como si nada.
+  const [linkedOnServer, setLinkedOnServer] = useState(false)
 
   // Latest form values for the unmount handler, plus the "clean" snapshot to know whether there's
   // actually something worth keeping as a draft.
@@ -95,6 +100,7 @@ export default function NewRecipePage({ setActive, recipeId }) {
         const draft = getRecipeDraft(draftKey)
         applyDraft(draft ? { ...server, ...draft } : server)
         setRecipeSource(recipe.source || null)
+        setLinkedOnServer((recipe.ingredients || []).length > 0)
         setRestored(Boolean(draft))
         setLoadState('ready')
       })
@@ -135,6 +141,7 @@ export default function NewRecipePage({ setActive, recipeId }) {
         baselineRef.current = serializeDraft(server)
         applyDraft(server)
         setRecipeSource(recipe.source || null)
+        setLinkedOnServer((recipe.ingredients || []).length > 0)
         setRestored(false)
         setLoadState('ready')
       })
@@ -143,7 +150,7 @@ export default function NewRecipePage({ setActive, recipeId }) {
 
   const save = async () => {
     const textLines = ingredientsText.split('\n').map((line) => line.trim()).filter(Boolean)
-    if (!name.trim() || (!chosen.length && !textLines.length) || chosen.some((x) => Number(x.quantity) <= 0)) return
+    if (!name.trim() || (!chosen.length && !textLines.length) || chosen.some((x) => Number(x.quantity) <= 0) || mustKeepLinked) return
     const safePortions = Math.max(1, Math.round(Number(portions) || 1))
     setSaveState('saving')
     setSaveError('')
@@ -183,10 +190,13 @@ export default function NewRecipePage({ setActive, recipeId }) {
     }
   }
 
+  // Antes, al quitar todos los ingredientes del catálogo de una receta propia y dejar sólo texto
+  // libre, no se mandaba el cambio y la receta los conservaba aunque el aviso dijera "guardada".
+  const mustKeepLinked = Boolean(recipeId) && !recipeSource && linkedOnServer && !chosen.length
   const textIngredientCount = ingredientsText.split('\n').filter((line) => line.trim()).length
   const hasAnyIngredient = chosen.length > 0 || textIngredientCount > 0
   // Por qué "Guardar" está deshabilitado: antes el botón se apagaba sin decir qué faltaba.
-  const missing = !name.trim() ? 'Escribe el nombre de la receta.' : !hasAnyIngredient ? 'Agrega al menos un ingrediente (del catálogo o en texto libre).' : chosen.some((x) => Number(x.quantity) <= 0) ? 'Hay ingredientes con 0 g: escribe su cantidad o quítalos.' : ''
+  const missing = !name.trim() ? 'Escribe el nombre de la receta.' : !hasAnyIngredient ? 'Agrega al menos un ingrediente (del catálogo o en texto libre).' : chosen.some((x) => Number(x.quantity) <= 0) ? 'Hay ingredientes con 0 g: escribe su cantidad o quítalos.' : mustKeepLinked ? 'Deja al menos un ingrediente del catálogo: la nutrición de la receta se calcula con ellos.' : ''
 
   return <AppChrome active={recipeId ? 'Editar receta' : 'Nueva receta'} setActive={setActive}><div className="content new-recipe">
     <button className="back-button" onClick={() => setActive('Recetas')}>← Recetas</button>

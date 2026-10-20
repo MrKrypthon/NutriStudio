@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { invoiceConcept, subscriptionPeriodPaid, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, practiceIdFromMetadata, practicePatchFromSubscription, subscriptionInterval, subscriptionPeriodEnd } from './billing.js'
+import { invoiceConcept, subscriptionPeriodPaid, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription, subscriptionInterval, subscriptionPeriodEnd } from './billing.js'
 
 const sub = (overrides = {}) => ({
   id: 'sub_1',
@@ -81,6 +81,15 @@ describe('facturas y eventos', () => {
     expect(isStaleEvent(1000, new Date(2000 * 1000))).toBe(true)
     expect(isStaleEvent(3000, new Date(2000 * 1000))).toBe(false)
     expect(isStaleEvent(1000, null)).toBe(false)
+  })
+
+  it('una suscripción terminada distinta no pisa la vigente', () => {
+    const practice = { stripeSubscriptionId: 'sub_new', subscriptionStatus: 'active' }
+    expect(isSupersededSubscription(sub({ id: 'sub_old', status: 'canceled' }), practice)).toBe(true)
+    expect(isSupersededSubscription(sub({ id: 'sub_new', status: 'canceled' }), practice)).toBe(false)
+    expect(isSupersededSubscription(sub({ id: 'sub_old', status: 'active' }), practice)).toBe(false)
+    expect(isSupersededSubscription(sub({ id: 'sub_old', status: 'canceled' }), { stripeSubscriptionId: 'sub_new', subscriptionStatus: 'canceled' })).toBe(false)
+    expect(isSupersededSubscription(sub({ status: 'canceled' }), { stripeSubscriptionId: null })).toBe(false)
   })
 
   it('describe el concepto del pago según el intervalo', () => {

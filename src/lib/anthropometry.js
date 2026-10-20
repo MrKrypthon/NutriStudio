@@ -46,8 +46,9 @@ export function bodyFatEstimates(values, { sex } = {}) {
   push('Siri', density ? 495 / density - 450 : null, 'Durnin-Womersley')
   push('Brozek', density ? 457 / density - 414 : null, 'Durnin-Womersley')
 
-  // Faulkner (4 pliegues)
-  const faulkner = sumFolds(values, [FOLDS.triceps, FOLDS.subscap, FOLDS.supra, FOLDS.iliac])
+  // Faulkner (4 pliegues): tríceps, subescapular, supraespinal (suprailíaco) y abdominal. Antes
+  // sumaba la cresta ilíaca en lugar del abdominal, distinto de lo que dice la propia etiqueta.
+  const faulkner = sumFolds(values, [FOLDS.triceps, FOLDS.subscap, FOLDS.supra, FOLDS.abdomen])
   push('Faulkner', faulkner ? 0.153 * faulkner + 5.783 : null, 'Tríceps + subescapular + suprailíaco + abdominal')
 
   // Yuhasz (6 pliegues)
@@ -127,11 +128,16 @@ export function somatotype(values) {
   const arm = pick(values, 'Brazo contraído (cm)')
   const calf = pick(values, 'Pantorrilla (cm)')
 
-  const sum3 = triceps != null && subscap != null && supra != null ? triceps + subscap + supra : null
+  // Endomorfia corregida por estatura (Heath-Carter): la suma de 3 pliegues se escala × 170.18/talla.
+  const sum3Raw = triceps != null && subscap != null && supra != null ? triceps + subscap + supra : null
+  const sum3 = sum3Raw != null && height != null ? sum3Raw * (170.18 / height) : sum3Raw
   const endo = sum3 != null ? -0.7182 + 0.1451 * sum3 - 0.00068 * sum3 ** 2 + 0.0000014 * sum3 ** 3 : null
 
+  // Perímetros corregidos: se resta el pliegue del mismo segmento en cm (tríceps para el brazo y
+  // pantorrilla medial para la pantorrilla). Antes la pantorrilla entraba sin corregir.
+  const calfFold = pick(values, FOLDS.calf)
   const armCorr = arm != null && triceps != null ? arm - triceps / 10 : null
-  const calfCorr = calf != null ? calf : null
+  const calfCorr = calf != null && calfFold != null ? calf - calfFold / 10 : null
   const meso = humerus != null && femur != null && armCorr != null && calfCorr != null && height != null
     ? 0.858 * humerus + 0.601 * femur + 0.188 * armCorr + 0.161 * calfCorr - 0.131 * height + 4.5
     : null

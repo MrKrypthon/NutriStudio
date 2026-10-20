@@ -129,7 +129,7 @@ export default function AdminApp() {
     } catch (error) { setNewState('error'); setNewError(error.message || 'No se pudo crear la cuenta.') }
   }
   const resetPassword = async (practice) => {
-    if (!window.confirm(`¿Generar una contraseña nueva para "${practice.name}"? La actual dejará de funcionar.`)) return
+    if (!window.confirm(`¿Generar una contraseña nueva para "${practice.name}"? La actual dejará de funcionar, se cerrarán sus sesiones abiertas y se desvinculará su Google.`)) return
     setActionState(practice.id); setActionError('')
     try {
       const result = await adminApi.resetPassword(practice.id)
@@ -180,7 +180,7 @@ export default function AdminApp() {
           <div className="admin-practice-actions">
             <button className="primary" onClick={() => openPay(practice)}>Registrar pago</button>
             <button className="secondary" onClick={() => openSub(practice)}>Suscripción</button>
-            {practice.owner && (practice.owner.loginId || !practice.owner.google) && <button className="secondary" disabled={actionState === practice.id} onClick={() => resetPassword(practice)}>Nueva contraseña</button>}
+            {practice.owner && (practice.owner.loginId || practice.signupSource !== 'GOOGLE') && <button className="secondary" disabled={actionState === practice.id} onClick={() => resetPassword(practice)}>Nueva contraseña</button>}
             <button className={practice.status === 'ACTIVE' ? 'secondary admin-danger' : 'secondary'} disabled={actionState === practice.id} onClick={() => toggleStatus(practice)}>{practice.status === 'ACTIVE' ? 'Suspender' : 'Habilitar'}</button>
           </div>
         </article> })}</div>
@@ -210,7 +210,7 @@ export default function AdminApp() {
       <div className="modal-head"><div><p className="eyebrow">NUEVA CUENTA · {quota.used + 1} DE {quota.limit}</p><h2>Cuenta para un nutriólogo</h2><span className="modal-subtitle">Entra con su identificador y una contraseña temporal. Recibe su propio catálogo de alimentos y recetas.</span></div><button onClick={() => setNewOpen(false)}>×</button></div>
       <form onSubmit={submitNew}>
         <div className="form-row"><label>Nombre del nutriólogo *<input value={newForm.name} onChange={(e) => setNewForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ej. Ana López" autoFocus required /></label><label>Nombre de la consulta<input value={newForm.practiceName} onChange={(e) => setNewForm((p) => ({ ...p, practiceName: e.target.value }))} placeholder={newForm.name ? `Consulta de ${newForm.name}` : 'Opcional'} /></label></div>
-        <div className="form-row"><label>Identificador *<input value={newForm.loginId} onChange={(e) => setNewForm((p) => ({ ...p, loginId: e.target.value.toLowerCase().replace(/\s/g, '') }))} autoCapitalize="none" spellCheck={false} required /><small className="muted">Minúsculas, números, punto o guion.</small></label><label>Correo<input type="email" value={newForm.email} onChange={(e) => setNewForm((p) => ({ ...p, email: e.target.value }))} placeholder="Opcional" /><small className="muted">Si es de Google, también podrá entrar con Google.</small></label></div>
+        <div className="form-row"><label>Identificador *<input value={newForm.loginId} onChange={(e) => setNewForm((p) => ({ ...p, loginId: e.target.value.toLowerCase().replace(/\s/g, '') }))} autoCapitalize="none" spellCheck={false} required /><small className="muted">Minúsculas, números, punto o guion.</small></label><label>Correo<input type="email" value={newForm.email} onChange={(e) => setNewForm((p) => ({ ...p, email: e.target.value }))} placeholder="Opcional" /><small className="muted">Para contacto. Si quiere entrar con Google, lo vincula desde su Configuración.</small></label></div>
         <label>Cubierto hasta<input type="date" value={newForm.paidUntil} onChange={(e) => setNewForm((p) => ({ ...p, paidUntil: e.target.value }))} /><small className="muted">Hasta esta fecha (más 7 días de gracia) puede usar Milpa sin pagar en línea. Vacío: tiene que suscribirse al entrar.</small></label>
         {newState === 'error' && <div className="form-error">⚠ {newError}</div>}
         <div className="modal-actions"><button type="button" className="secondary" onClick={() => setNewOpen(false)}>Cancelar</button><button className="primary" disabled={newState === 'saving'}>{newState === 'saving' ? 'Creando cuenta…' : 'Crear cuenta'} <span>→</span></button></div>

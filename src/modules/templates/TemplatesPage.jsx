@@ -43,7 +43,7 @@ export default function TemplatesPage({ setActive, onOpenPatient }) {
   }
 
   useEffect(loadTemplates, [])
-  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=5000').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   const visible = templates.filter((t) => !TAB_TYPES[tab] || t.type === TAB_TYPES[tab])
 
@@ -53,7 +53,7 @@ export default function TemplatesPage({ setActive, onOpenPatient }) {
 
   const createTemplate = async (event) => {
     event.preventDefault()
-    if (!form.patientId) { setSaveError('Selecciona un paciente cuyo trabajo más reciente se usará como base.'); return }
+    if (!form.patientId) { setSaveState('error'); setSaveError('Selecciona un paciente cuyo trabajo más reciente se usará como base.'); return }
     setSaveState('saving')
     setSaveError('')
     try {
@@ -87,7 +87,7 @@ export default function TemplatesPage({ setActive, onOpenPatient }) {
   const updateEdit = (key, value) => setEditForm((prev) => ({ ...prev, [key]: value }))
   const saveEdit = async (event) => {
     event.preventDefault()
-    if (!editForm.name.trim()) { setEditError('El nombre no puede quedar vacío.'); return }
+    if (!editForm.name.trim()) { setEditState('error'); setEditError('El nombre no puede quedar vacío.'); return }
     setEditState('saving')
     setEditError('')
     try {
@@ -174,7 +174,7 @@ export default function TemplatesPage({ setActive, onOpenPatient }) {
     <div className="modal-head"><h2>Usar "{applyTarget.name}"</h2><button onClick={closeApply}>×</button></div>
     {applyTarget.description && <p className="muted" style={{ marginTop: -10, marginBottom: 16 }}>{applyTarget.description}</p>}
     <label>Paciente<select value={applyPatientId} onChange={(e) => setApplyPatientId(e.target.value)}><option value="">Selecciona…</option>{patients.map((p) => <option value={p.id} key={p.id}>{p.firstName} {p.lastName}</option>)}</select></label>
-    <p className="muted">{applyTarget.type === 'clinical' ? 'Se precargará la consulta en curso de este paciente (o se creará una) con estas secciones.' : 'Se reemplazará la distribución del plan en borrador de este paciente (o se creará uno) con estos tiempos de comida.'}</p>
+    <p className="muted">{applyTarget.type === 'clinical' ? 'Se precargará la consulta en curso de este paciente (o se creará una) con estas secciones. Las secciones que ya tengan datos capturados no se tocan.' : 'Se reemplazará la distribución del plan en borrador de este paciente (o se creará uno) con estos tiempos de comida.'}</p>
     {applyState === 'error' && <div className="form-error">⚠ {applyError}</div>}
     <div className="modal-actions"><button type="button" className="secondary" onClick={closeApply}>Cancelar</button><button className="primary" disabled={!applyPatientId || applyState === 'applying'} onClick={applyTemplate}>{applyState === 'applying' ? 'Aplicando…' : 'Usar plantilla'}</button></div>
   </div></div>}

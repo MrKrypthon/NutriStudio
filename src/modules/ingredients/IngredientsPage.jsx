@@ -27,7 +27,7 @@ const FALLBACK = [
 const NUTRIENT_ROWS = [
   ['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['carbs', 'Carbohidratos', 'g'], ['fat', 'Grasas', 'g'],
   ['fiber', 'Fibra', 'g'], ['sugar', 'Azúcar', 'g'], ['sodium', 'Sodio', 'mg'], ['cholesterol', 'Colesterol', 'mg'],
-  ['vitaminA', 'Vitamina A', 'mg RE'], ['vitaminC', 'Vitamina C', 'mg'], ['vitaminD', 'Vitamina D', 'µg'], ['vitaminE', 'Vitamina E', 'mg'],
+  ['vitaminA', 'Vitamina A', 'µg RE'], ['vitaminC', 'Vitamina C', 'mg'], ['vitaminD', 'Vitamina D', 'µg'], ['vitaminE', 'Vitamina E', 'mg'],
   ['vitaminK', 'Vitamina K', 'µg'], ['vitaminB1', 'Vitamina B1', 'mg'], ['vitaminB2', 'Vitamina B2', 'mg'], ['vitaminB3', 'Vitamina B3', 'mg'],
   ['vitaminB6', 'Vitamina B6', 'mg'], ['vitaminB12', 'Vitamina B12', 'µg'], ['folicAcid', 'Ácido fólico', 'µg'],
   ['calcium', 'Calcio', 'mg'], ['iron', 'Hierro', 'mg'], ['magnesium', 'Magnesio', 'mg'], ['potassium', 'Potasio', 'mg'],
@@ -38,6 +38,7 @@ export default function IngredientsPage({ setActive }) {
   const [items, setItems] = useState(FALLBACK)
   const [selected, setSelected] = useState(FALLBACK[0])
   const [status, setStatus] = useState('loading')
+  const [hasMore, setHasMore] = useState(false)
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState('Todos')
   const [reloadKey, setReloadKey] = useState(0)
@@ -59,6 +60,7 @@ export default function IngredientsPage({ setActive }) {
         .then((response) => {
           const list = response.items || []
           setItems(list)
+          setHasMore(Boolean(response.hasMore))
           setSelected((prev) => list.find((item) => item.id === prev?.id) || list[0] || null)
           setStatus('online')
         })
@@ -73,15 +75,18 @@ export default function IngredientsPage({ setActive }) {
     if (!form.name.trim() || !form.group) return
     setCreateState('saving')
     setCreateError('')
+    // Un "-5" escrito pasa el min="0" del campo y se guardaba tal cual: las recetas con ese
+    // ingrediente restaban kcal. Los negativos cuentan como 0, igual que un campo vacío.
+    const amount = (value) => Math.max(0, Number(value) || 0)
     const nutrition = {
-      kcal: Number(form.kcal) || 0,
-      protein: Number(form.protein) || 0,
-      carbs: Number(form.carbs) || 0,
-      fat: Number(form.fat) || 0,
-      fiber: Number(form.fiber) || 0,
+      kcal: amount(form.kcal),
+      protein: amount(form.protein),
+      carbs: amount(form.carbs),
+      fat: amount(form.fat),
+      fiber: amount(form.fiber),
     }
     const payload = { name: form.name.trim(), group: form.group, unit: form.unit, nutrition }
-    if (form.serving.trim() || form.grams) payload.equivalence = { serving: form.serving.trim() || 'Por definir', grams: Number(form.grams) || null }
+    if (form.serving.trim() || form.grams) payload.equivalence = { serving: form.serving.trim() || 'Por definir', grams: amount(form.grams) || null }
     try {
       const created = await ingredientsApi.create(payload)
       setForm(EMPTY_FORM)
@@ -177,6 +182,7 @@ export default function IngredientsPage({ setActive }) {
         <div className="ingredient-list panel">
           {status === 'error' && <div className="form-error">⚠ No se pudieron cargar los ingredientes.</div>}
           {status !== 'loading' && status !== 'error' && items.length === 0 && <div className="result-empty"><span>◌</span><h3>No hay ingredientes con esos filtros</h3><p>Ajusta la búsqueda o el grupo.</p></div>}
+          {status === 'online' && hasMore && <p className="muted docs-note">Se muestran los primeros {items.length}. Busca por nombre para encontrar los demás.</p>}
           {items.map((item) => <button className={'ingredient-row ' + (selected?.id === item.id ? 'ingredient-selected' : '')} onClick={() => setSelected(item)} key={item.id}>
             <span className="ingredient-icon">{item.imageFile ? <img src={ingredientsApi.imageUrl(item.imageFile)} alt="" /> : groupIcon(item)}</span>
             <div><b>{item.name}</b><small>{item.group} · Porción {item.equivalence?.serving || 'por definir'}</small></div>

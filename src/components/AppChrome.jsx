@@ -15,7 +15,12 @@ const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 const ALERT_LEAD_MS = 5 * 60 * 1000
 const ALERT_VISIBLE_MS = 15000
 const ALERT_TICK_MS = 20000
-const APPOINTMENT_TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia' }
+// Avisos ya mostrados (id de cita → hasta cuándo sigue visible). Vive fuera del componente porque
+// cada pantalla monta su propio AppChrome: con una referencia local, el aviso descartado volvía a
+// salir en cada cambio de módulo durante los 5 min previos a la cita. Al cambiar de pantalla, un
+// aviso que aún no cumplía sus 15 s se vuelve a mostrar sólo por el tiempo que le quedaba.
+const alertedUntil = new Map()
+const APPOINTMENT_TYPE_LABELS ={ INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia' }
 
 // "Ahora" en el reloj de pared de la práctica, con la misma convención que las citas (startAt se
 // guarda como hora local etiquetada con "Z"; ver nota en AgendaPage sobre por qué se usan getters UTC).
@@ -23,7 +28,7 @@ const practiceNowMs = (timeZone) => {
   if (timeZone) {
     try {
       const date = new Date().toLocaleDateString('en-CA', { timeZone })
-      const time = new Date().toLocaleTimeString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false })
+      const time = new Date().toLocaleTimeString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
       return new Date(`${date}T${time}:00.000Z`).getTime()
     } catch { /* cae al reloj del sistema */ }
   }
@@ -55,7 +60,6 @@ export default function AppChrome({ active, setActive, crumb, children }) {
   const searchRef = useRef(null)
   const notifRef = useRef(null)
   const profileRef = useRef(null)
-  const notifiedRef = useRef(new Set())
   const alertTimersRef = useRef(new Map())
 
   // Refresca en segundo plano (citas y contadores del encabezado) cada pocos segundos.
@@ -65,6 +69,7 @@ export default function AppChrome({ active, setActive, crumb, children }) {
 
   const dismissAlert = (id) => {
     setAlerts((prev) => prev.filter((alert) => alert.id !== id))
+    alertedUntil.set(id, 0)
     const timer = alertTimersRef.current.get(id)
     if (timer) { clearTimeout(timer); alertTimersRef.current.delete(id) }
   }
@@ -80,16 +85,20 @@ export default function AppChrome({ active, setActive, crumb, children }) {
   useEffect(() => {
     let cancelled = false
     const now = practiceNowMs(practiceTz)
-    dashboardApi.today(todayIso()).then((payload) => {
+    // El día que se consulta es el mismo "ahora" de la práctica con el que se comparan las citas;
+    // con el día del equipo, en otra zona las citas cercanas a medianoche quedaban fuera del aviso.
+    dashboardApi.today(practiceTz ? new Date(now).toISOString().slice(0, 10) : todayIso()).then((payload) => {
       if (cancelled) return
       setNotifData(payload)
+      const clock = Date.now()
       const upcoming = (payload.appointments || []).filter((appointment) => {
-        if (!appointment?.id || !appointment.startAt || notifiedRef.current.has(appointment.id) || appointment.status === 'COMPLETED') return false
+        if (!appointment?.id || !appointment.startAt || alertTimersRef.current.has(appointment.id) || appointment.status === 'COMPLETED') return false
+        if (alertedUntil.has(appointment.id) && alertedUntil.get(appointment.id) <= clock) return false
         const diff = new Date(appointment.startAt).getTime() - now
         return diff > 0 && diff <= ALERT_LEAD_MS
       })
       if (!upcoming.length) return
-      upcoming.forEach((appointment) => notifiedRef.current.add(appointment.id))
+      upcoming.forEach((appointment) => { if (!alertedUntil.has(appointment.id)) alertedUntil.set(appointment.id, clock + ALERT_VISIBLE_MS) })
       setAlerts((prev) => [...prev, ...upcoming.map((appointment) => ({
         id: appointment.id,
         name: `${appointment.patient?.firstName || ''} ${appointment.patient?.lastName || ''}`.trim() || 'Paciente',
@@ -98,7 +107,7 @@ export default function AppChrome({ active, setActive, crumb, children }) {
         type: APPOINTMENT_TYPE_LABELS[appointment.type] || 'Consulta',
       }))])
       upcoming.forEach((appointment) => {
-        const timer = setTimeout(() => { setAlerts((prev) => prev.filter((alert) => alert.id !== appointment.id)); alertTimersRef.current.delete(appointment.id) }, ALERT_VISIBLE_MS)
+        const timer = setTimeout(() => { setAlerts((prev) => prev.filter((alert) => alert.id !== appointment.id)); alertTimersRef.current.delete(appointment.id) }, Math.max(0, alertedUntil.get(appointment.id) - clock))
         alertTimersRef.current.set(appointment.id, timer)
       })
     }).catch(() => {})
@@ -146,6 +155,9 @@ export default function AppChrome({ active, setActive, crumb, children }) {
 
   // Close the drawer whenever navigation happens (tapping a link on mobile).
   useEffect(() => { setDrawerOpen(false) }, [active])
+  // Los enlaces del menú cierran el cajón ellos mismos: tocar el módulo en el que ya estás no cambia
+  // `active`, y el cajón se quedaba abierto tapando la pantalla en el celular.
+  const navigate = (label) => { setDrawerOpen(false); setActive(label) }
 
   const goToPatients = () => { setActive('Pacientes'); setSearchOpen(false); setSearchQuery('') }
   // Un resultado abre el expediente de ESE paciente (antes llevaba a la lista general y había que
@@ -157,14 +169,16 @@ export default function AppChrome({ active, setActive, crumb, children }) {
     window.dispatchEvent(new PopStateEvent('popstate'))
   }
   const pendingConfirmations = notifData?.stats?.pendingConfirmations || 0
-  const pendingTasks = notifData?.tasks?.length || 0
+  // `tasks` del dashboard trae sólo los 3 más próximos; el total de pendientes está en stats.followUps
+  // (antes el aviso decía "3 seguimientos pendientes" aunque hubiera más).
+  const pendingTasks = notifData?.stats?.followUps ?? notifData?.tasks?.length ?? 0
   const hasNotifications = pendingConfirmations > 0 || pendingTasks > 0
 
-  return <div className={'app-shell' + (isMobile && drawerOpen ? ' sidebar-open' : '') + (!isMobile && !sidebarOpen ? ' sidebar-collapsed' : '')}><aside className="pc-sidebar" id="app-sidebar"><div className="pc-sidebar-head"><button type="button" className="pc-brand" onClick={() => setActive('Hoy')} title="Ir a Hoy"><BrandMark surface="light" size={34} /><div><strong>milpa</strong><small>Atención Integral</small></div></button><button type="button" className="sidebar-toggle" aria-label={(isMobile ? drawerOpen : sidebarOpen) ? 'Ocultar menú' : 'Mostrar menú'} aria-expanded={isMobile ? drawerOpen : sidebarOpen} aria-controls="app-sidebar" onClick={toggleSidebar}><Icon>menu</Icon></button></div><div className="pc-navbar">{navGroups.map((group) => <div className="pc-nav-group" key={group.label}><div className="pc-caption">{group.label}</div><nav>{group.items.map(([icon, label]) => <button key={label} aria-label={label} className={active === label ? 'pc-link active' : 'pc-link'} onClick={() => setActive(label)} onMouseEnter={(event) => showTip(label, event.currentTarget)} onMouseLeave={hideTip}><span className="pc-micon"><Icon>{icon}</Icon></span><span className="pc-mtext">{label}</span>{label === 'Pacientes' && notifData?.stats?.activePatients != null && <span className="pc-badge">{notifData.stats.activePatients}</span>}</button>)}</nav></div>)}<button aria-label="Configuración" className={active === 'Configuración' ? 'pc-link pc-settings-link active' : 'pc-link pc-settings-link'} onClick={() => setActive('Configuración')} onMouseEnter={(event) => showTip('Configuración', event.currentTarget)} onMouseLeave={hideTip}><span className="pc-micon"><Icon>settings</Icon></span><span className="pc-mtext">Configuración</span></button></div><div className="pc-sidebar-footer"><button type="button" className="plan-tag" onClick={() => setActive('Configuración')} title="Ir a Configuración"><span className="spark">✦</span><div><b>{practice?.name || 'Consulta privada'}</b><small>Configuración de tu práctica →</small></div></button></div></aside>{drawerOpen && <button type="button" className="sidebar-backdrop" aria-label="Cerrar menú" onClick={() => setDrawerOpen(false)} />}{tip && <span className="pc-tooltip" role="tooltip" style={{ top: `${tip.top}px` }}>{tip.label}</span>}<main className="main"><header className="pc-header"><div className="header-left"><button type="button" className="hamburger" aria-label={(isMobile ? drawerOpen : sidebarOpen) ? 'Ocultar menú' : 'Mostrar menú'} aria-expanded={isMobile ? drawerOpen : sidebarOpen} aria-controls="app-sidebar" onClick={toggleSidebar}>☰</button><div className="crumb"><span>Tu espacio</span><b>/</b><strong>{crumb || active}</strong></div></div><div className="top-actions">
+  return <div className={'app-shell' + (isMobile && drawerOpen ? ' sidebar-open' : '') + (!isMobile && !sidebarOpen ? ' sidebar-collapsed' : '')}><aside className="pc-sidebar" id="app-sidebar"><div className="pc-sidebar-head"><button type="button" className="pc-brand" onClick={() => navigate('Hoy')} title="Ir a Hoy"><BrandMark surface="light" size={34} /><div><strong>milpa</strong><small>Atención Integral</small></div></button><button type="button" className="sidebar-toggle" aria-label={(isMobile ? drawerOpen : sidebarOpen) ? 'Ocultar menú' : 'Mostrar menú'} aria-expanded={isMobile ? drawerOpen : sidebarOpen} aria-controls="app-sidebar" onClick={toggleSidebar}><Icon>menu</Icon></button></div><div className="pc-navbar">{navGroups.map((group) => <div className="pc-nav-group" key={group.label}><div className="pc-caption">{group.label}</div><nav>{group.items.map(([icon, label]) => <button key={label} aria-label={label} className={active === label ? 'pc-link active' : 'pc-link'} onClick={() => navigate(label)} onMouseEnter={(event) => showTip(label, event.currentTarget)} onMouseLeave={hideTip}><span className="pc-micon"><Icon>{icon}</Icon></span><span className="pc-mtext">{label}</span>{label === 'Pacientes' && notifData?.stats?.activePatients != null && <span className="pc-badge">{notifData.stats.activePatients}</span>}</button>)}</nav></div>)}<button aria-label="Configuración" className={active === 'Configuración' ? 'pc-link pc-settings-link active' : 'pc-link pc-settings-link'} onClick={() => navigate('Configuración')} onMouseEnter={(event) => showTip('Configuración', event.currentTarget)} onMouseLeave={hideTip}><span className="pc-micon"><Icon>settings</Icon></span><span className="pc-mtext">Configuración</span></button></div><div className="pc-sidebar-footer"><button type="button" className="plan-tag" onClick={() => navigate('Configuración')} title="Ir a Configuración"><span className="spark">✦</span><div><b>{practice?.name || 'Consulta privada'}</b><small>Configuración de tu práctica →</small></div></button></div></aside>{drawerOpen && <button type="button" className="sidebar-backdrop" aria-label="Cerrar menú" onClick={() => setDrawerOpen(false)} />}{tip && <span className="pc-tooltip" role="tooltip" style={{ top: `${tip.top}px` }}>{tip.label}</span>}<main className="main"><header className="pc-header"><div className="header-left"><button type="button" className="hamburger" aria-label={(isMobile ? drawerOpen : sidebarOpen) ? 'Ocultar menú' : 'Mostrar menú'} aria-expanded={isMobile ? drawerOpen : sidebarOpen} aria-controls="app-sidebar" onClick={toggleSidebar}>☰</button><div className="crumb"><span>Tu espacio</span><b>/</b><strong>{crumb || active}</strong></div></div><div className="top-actions">
     <div className="header-pop" ref={searchRef}>
       <button className="icon-button" onClick={() => setSearchOpen((v) => !v)} title="Buscar paciente">⌕</button>
       {searchOpen && <div className="dropdown-panel search-dropdown">
-        <input autoFocus placeholder="Buscar paciente…" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && searchResults[0]) openPatient(searchResults[0]); if (event.key === 'Escape') setSearchOpen(false) }} aria-label="Buscar paciente" />
+        <input autoFocus placeholder="Buscar paciente…" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { /* Enter sólo cuando ya respondió la búsqueda del texto actual (la lista vieja abría a otro paciente). */ if (event.key === 'Enter' && searchState === 'ready' && searchResults[0]) openPatient(searchResults[0]); if (event.key === 'Escape') setSearchOpen(false) }} aria-label="Buscar paciente" />
         {searchQuery.trim() && searchState === 'loading' && <p className="dropdown-empty">Buscando…</p>}
         {searchQuery.trim() && searchState === 'error' && <p className="dropdown-empty">No se pudo buscar.</p>}
         {searchQuery.trim() && searchState === 'ready' && searchResults.length === 0 && <p className="dropdown-empty">Sin resultados</p>}

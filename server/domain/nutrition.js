@@ -123,7 +123,9 @@ class NutritionEngineError extends Error {
 }
 
 function resolveFormula(formula) {
-  const entry = BMR_FORMULAS[formula]
+  // Sólo claves propias: "toString" o "__proto__" encontraban algo en el prototipo y el cálculo
+  // reventaba con 500 en vez de responder "fórmula no disponible".
+  const entry = typeof formula === 'string' && Object.hasOwn(BMR_FORMULAS, formula) ? BMR_FORMULAS[formula] : null
   if (!entry) throw new NutritionEngineError('UNKNOWN_FORMULA', 'La fórmula solicitada no está disponible.', { formula: 'invalid' })
   return entry
 }
@@ -163,8 +165,11 @@ function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent
   const formulaEntry = resolveFormula(formula)
   const bmr = formulaEntry.compute({ age: ageValue, weightKg: weight, heightCm: height, bodyFatPercent, male })
 
-  const metsKcal = mets?.met && mets?.minutes && mets?.sessionsPerWeek
-    ? (Number(mets.met) * 3.5 * weight / 200 * Number(mets.minutes) * Number(mets.sessionsPerWeek)) / 7
+  // Sólo cuentan METs, minutos y sesiones numéricos y positivos: antes bastaba con que fueran
+  // "verdaderos", así que un texto daba GET NaN (y un 500 al guardar) y un negativo restaba al BMR.
+  const metsValues = [mets?.met, mets?.minutes, mets?.sessionsPerWeek].map(Number)
+  const metsKcal = metsValues.every((value) => Number.isFinite(value) && value > 0)
+    ? (metsValues[0] * 3.5 * weight / 200 * metsValues[1] * metsValues[2]) / 7
     : null
   // El gasto total = metabolismo basal + energía de la actividad. Con METS, la actividad es la
   // energía del ejercicio (que se SUMA al BMR); con factor de actividad, el factor ya multiplica al

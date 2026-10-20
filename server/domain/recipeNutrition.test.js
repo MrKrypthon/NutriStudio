@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RECIPE_NUTRITION_KEYS, perServingFromIngredients } from './recipeNutrition.js'
+import { RECIPE_NUTRITION_KEYS, normalizeRecipeIngredientRows, perServingFromIngredients } from './recipeNutrition.js'
 import { computeMicronutrientAdequacy } from './micronutrients.js'
 
 const ingredients = [
@@ -39,5 +39,26 @@ describe('adequacy of an imported recipe', () => {
     const iron = adequacy.nutrients.find((nutrient) => nutrient.key === 'iron')
     expect(iron.value).toBeGreaterThan(0)
     expect(iron.percent).toBeGreaterThan(0)
+  })
+})
+
+describe('normalizeRecipeIngredientRows', () => {
+  it('keeps valid rows, defaulting the unit to grams', () => {
+    expect(normalizeRecipeIngredientRows([{ ingredientId: 'a', quantity: '120', equivalence: 1 }, { ingredientId: 'b', quantity: 30, unit: 'ml' }])).toEqual([
+      { ingredientId: 'a', quantity: 120, unit: 'g', equivalence: 1 },
+      { ingredientId: 'b', quantity: 30, unit: 'ml', equivalence: null },
+    ])
+  })
+
+  it('rejects non-positive, non-numeric or oversized quantities', () => {
+    expect(normalizeRecipeIngredientRows([{ ingredientId: 'a', quantity: -50 }])).toBeNull()
+    expect(normalizeRecipeIngredientRows([{ ingredientId: 'a', quantity: 'mucho' }])).toBeNull()
+    expect(normalizeRecipeIngredientRows([{ ingredientId: 'a', quantity: 100000 }])).toBeNull()
+  })
+
+  it('rejects a repeated ingredient and anything that is not a list', () => {
+    expect(normalizeRecipeIngredientRows([{ ingredientId: 'a', quantity: 10 }, { ingredientId: 'a', quantity: 20 }])).toBeNull()
+    expect(normalizeRecipeIngredientRows('a')).toBeNull()
+    expect(normalizeRecipeIngredientRows([])).toEqual([])
   })
 })

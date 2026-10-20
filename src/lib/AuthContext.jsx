@@ -36,7 +36,9 @@ export function AuthProvider({ children }) {
     if (!getToken()) { setStatus('anonymous'); return }
     authApi.me()
       .then((response) => { applySession(response); setStatus('authenticated') })
-      .catch(() => { clearToken(); setStatus('anonymous') })
+      // Sólo una sesión rechazada borra el token; una red caída o un error del servidor al abrir la
+      // app no deben cerrar la sesión (al recargar se recupera).
+      .catch((err) => { if (err.code === 'UNAUTHORIZED' || err.code === 'ACCOUNT_SUSPENDED') clearToken(); setStatus('anonymous') })
   }, [applySession])
 
   const login = useCallback(async (email, password) => {

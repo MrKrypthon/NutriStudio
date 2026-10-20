@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { patientsApi } from '../../lib/api.js'
@@ -86,8 +86,9 @@ function ageOf(birthDate) {
   const birth = new Date(birthDate)
   if (Number.isNaN(birth.getTime())) return null
   const now = new Date()
-  let age = now.getUTCFullYear() - birth.getUTCFullYear()
-  if (now.getUTCMonth() < birth.getUTCMonth() || (now.getUTCMonth() === birth.getUTCMonth() && now.getUTCDate() < birth.getUTCDate())) age -= 1
+  // Nacimiento = día en UTC; hoy = día local (en UTC la edad subía la tarde anterior al cumpleaños).
+  let age = now.getFullYear() - birth.getUTCFullYear()
+  if (now.getMonth() < birth.getUTCMonth() || (now.getMonth() === birth.getUTCMonth() && now.getDate() < birth.getUTCDate())) age -= 1
   return age >= 0 && age < 130 ? age : null
 }
 const fullName = (p) => `${p.firstName} ${p.lastName}`.trim()
@@ -126,7 +127,9 @@ function describeEvent(event) {
   return { icon: '▧', label: `${DOCUMENT_TYPE_LABELS[event.subtype] || 'Documento'} · ${DOCUMENT_STATUS_LABELS[event.status] || event.status}` }
 }
 
-const emptyEditForm = (patient) => ({ firstName: patient?.firstName || '', lastName: patient?.lastName || '', email: patient?.email || '', phone: patient?.phone || '', birthDate: patient?.birthDate ? patient.birthDate.slice(0, 10) : '', sex: normalizeSex(patient?.sex) || 'Mujer', occupation: patient?.occupation || '', address: patient?.address || '', curp: patient?.curp || '' })
+// Sin sexo registrado (p. ej. pacientes dados de alta desde la Agenda) el formulario queda vacío:
+// antes caía en 'Mujer' y guardar cualquier otro dato le asignaba ese sexo sin que nadie lo eligiera.
+const emptyEditForm = (patient) => ({ firstName: patient?.firstName || '', lastName: patient?.lastName || '', email: patient?.email || '', phone: patient?.phone || '', birthDate: patient?.birthDate ? patient.birthDate.slice(0, 10) : '', sex: normalizeSex(patient?.sex) || '', occupation: patient?.occupation || '', address: patient?.address || '', curp: patient?.curp || '' })
 const readStored = (key, fallback) => { try { return localStorage.getItem(key) || fallback } catch { return fallback } }
 const store = (key, value) => { try { localStorage.setItem(key, value) } catch { /* sin almacenamiento */ } }
 
@@ -207,13 +210,17 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
   const changeTab = (key) => { setStatusFilter(key); setPage(1); store('nutri.patients.tab', key) }
   const changeSort = (key) => { setSortBy(key); setPage(1); store('nutri.patients.sort', key) }
   const openPatient = (row) => { setSelectedId(row.id || fullName(row)); setEditing(false); setEditState('idle'); setEditError(''); setArchiveState('idle') }
-  const closeDrawer = () => { setSelectedId(null); setEditing(false) }
+  // Cerrar con Escape, el fondo o × a media edición tiraba lo escrito sin avisar (Escape también
+  // se pulsa para cerrar el calendario de la fecha o el autocompletado). Con cambios, se pregunta.
+  const editDirty = editing && selected && JSON.stringify(editForm) !== JSON.stringify(emptyEditForm(selected))
+  const closeDrawer = () => { if (editDirty && !window.confirm('Tienes cambios sin guardar en este paciente. ¿Descartarlos?')) return; setSelectedId(null); setEditing(false) }
+  const closeDrawerRef = useRef(closeDrawer); closeDrawerRef.current = closeDrawer
   const startEdit = () => { setEditForm(emptyEditForm(selected)); setEditState('idle'); setEditError(''); setEditing(true) }
   const updateField = (key, value) => setEditForm((prev) => ({ ...prev, [key]: value }))
 
   useEffect(() => {
     if (!selectedId) return undefined
-    const onKey = (event) => { if (event.key === 'Escape') closeDrawer() }
+    const onKey = (event) => { if (event.key === 'Escape') closeDrawerRef.current() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedId])
@@ -359,7 +366,7 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
         <label>Nombre(s)<input value={editForm.firstName} onChange={(e) => updateField('firstName', e.target.value)} required /></label>
         <label>Apellidos<input value={editForm.lastName} onChange={(e) => updateField('lastName', e.target.value)} required /></label>
         <label>Fecha de nacimiento<input type="date" value={editForm.birthDate} onChange={(e) => updateField('birthDate', e.target.value)} /></label>
-        <label>Sexo<select value={editForm.sex} onChange={(e) => updateField('sex', e.target.value)}><option>Hombre</option><option>Mujer</option></select></label>
+        <label>Sexo<select value={editForm.sex} onChange={(e) => updateField('sex', e.target.value)}><option value="">Selecciona…</option><option>Hombre</option><option>Mujer</option></select></label>
         <label>Email<input type="email" value={editForm.email} onChange={(e) => updateField('email', e.target.value)} /></label>
         <label>Teléfono<input value={editForm.phone} onChange={(e) => updateField('phone', e.target.value)} /></label>
         <label>Ocupación<input value={editForm.occupation} onChange={(e) => updateField('occupation', e.target.value)} /></label>

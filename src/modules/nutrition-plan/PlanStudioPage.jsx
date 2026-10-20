@@ -21,8 +21,10 @@ const computeAge = (birthDate) => {
   if (!birthDate) return ''
   const dob = new Date(birthDate)
   const now = new Date()
-  let age = now.getUTCFullYear() - dob.getUTCFullYear()
-  if (now.getUTCMonth() < dob.getUTCMonth() || (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate())) age -= 1
+  // Nacimiento en UTC (medianoche UTC) y "hoy" en el día local, como en el Expediente: con ambos en
+  // UTC, en México la edad subía desde las 18:00 de la víspera del cumpleaños.
+  let age = now.getFullYear() - dob.getUTCFullYear()
+  if (now.getMonth() < dob.getUTCMonth() || (now.getMonth() === dob.getUTCMonth() && now.getDate() < dob.getUTCDate())) age -= 1
   return String(age)
 }
 const formatUTCDate = (iso) => { if (!iso) return null; const d = new Date(iso); return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}` }
@@ -233,6 +235,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [calcResult, setCalcResult] = useState(null)
   // El resultado mostrado se calculó con datos que ya cambiaron: hay que volver a calcular.
   const [calcStale, setCalcStale] = useState(false)
+  // Cuenta los cambios a datos de energía, para saber si cambiaron mientras el cálculo estaba en vuelo.
+  const energyEditsRef = useRef(0)
+  // Cualquier cambio del formulario (también macros), para no dar por guardado lo que cambió durante el guardado.
+  const formEditsRef = useRef(0)
   const [calcState, setCalcState] = useState('idle')
   const [calcError, setCalcError] = useState('')
   const [evalSaveState, setEvalSaveState] = useState('idle')
@@ -287,7 +293,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const slotsDirtyRef = useRef(null)
   const flushPromiseRef = useRef(null)
 
-  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=5000').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   // El hub lista todos los planes de la práctica (sin elegir paciente antes).
   const loadHub = useCallback(() => {
@@ -414,7 +420,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   // RF-07 macro distribution: percentages the professional can adjust; they must sum to 100 and
   // map to grams against the calculated requirement.
-  const macroSum = Number(form.carbsPercent || 0) + Number(form.proteinPercent || 0) + Number(form.fatPercent || 0)
+  // Redondeada a centésimas: con decimales (52.3 + 22.4 + 25.3) la suma en coma flotante daba
+  // 99.99999999999999, "Guardar en el plan" quedaba deshabilitado y se mostraba ese número, aunque el
+  // servidor acepta la distribución.
+  const macroSum = Math.round((Number(form.carbsPercent || 0) + Number(form.proteinPercent || 0) + Number(form.fatPercent || 0)) * 100) / 100
   const calcTarget = calcResult ? calcResult.targetKcal ?? calcResult.get : null
   const macroGrams = (pct, factor) => (calcTarget ? Math.round((calcTarget * (Number(pct) || 0)) / 100 / factor) : null)
   // Cunningham / Katch-McArdle compute BMR from lean mass (needs body fat); without an input they
@@ -424,6 +433,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const updateForm = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
+    formEditsRef.current += 1
+    if (ENERGY_FIELDS.includes(key)) energyEditsRef.current += 1
     // El resultado en pantalla ya no corresponde a estos datos (y "Guardar" recalcula con ellos).
     // También mientras el cálculo está en vuelo: si no, la respuesta tardía lo daba por vigente.
     if (ENERGY_FIELDS.includes(key) && (calcResult || calcState === 'loading')) { setCalcStale(true); setEvalSaveState('idle') }
@@ -436,10 +447,13 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     setCalcState('loading')
     setCalcError('')
     setEvalSaveState('idle')
+    const editsAtStart = energyEditsRef.current
     try {
       const response = await nutritionApi.calculate(energyPayload(form))
       setCalcResult(response)
-      setCalcStale(false)
+      // Si se cambiaron los datos mientras calculaba, el resultado ya nació viejo: el aviso se
+      // queda (antes esta línea lo borraba y "Guardar" se habilitaba con un resultado ajeno).
+      setCalcStale(energyEditsRef.current !== editsAtStart)
       setCalcState('success')
     } catch (error) {
       setCalcState('error')
@@ -451,10 +465,12 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     if (!plan || planLocked || calcStale) return
     setEvalSaveState('saving')
     setEvalSaveError('')
+    const editsAtStart = formEditsRef.current
     try {
       const updated = await plansApi.evaluate(plan.id, { ...energyPayload(form), energyAdjustKcal: Number(form.energyAdjustKcal) || 0, carbsPercent: percentValue(form.carbsPercent, 50), proteinPercent: percentValue(form.proteinPercent, 25), fatPercent: percentValue(form.fatPercent, 25) })
       mergePlan(updated)
-      setEvalSaveState('saved')
+      // Lo cambiado mientras se guardaba no va en este guardado: no se marca como guardado.
+      setEvalSaveState(formEditsRef.current === editsAtStart ? 'saved' : 'idle')
     } catch (error) {
       setEvalSaveState('error')
       setEvalSaveError(error.message || 'No se pudo guardar el plan.')
@@ -706,11 +722,28 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     const mealTimes = { ...notesForm.mealTimes }
     delete mealTimes[meal.key]
     const patch = { activeMeals: visibleMealKeys.filter((key) => key !== meal.key), mealTimes }
-    // Los equivalentes repartidos a ese tiempo se van con él: quedan otra vez "por repartir".
-    if (notesForm.equivalents?.distribution?.[meal.key]) {
-      const distribution = { ...notesForm.equivalents.distribution }
+    // Los equivalentes repartidos a ese tiempo se van con él (en el menú base y en los demás menús):
+    // quedan otra vez "por repartir". También las porciones de suplementos/bebidas de ese tiempo y
+    // su indicación propia: si no, seguían saliendo en "Indicaciones por tiempo de comida" del PDF
+    // con un tiempo que el plan ya no tiene.
+    const withoutMeal = (equivalents) => {
+      if (!equivalents) return equivalents
+      const hasShare = Boolean(equivalents.distribution?.[meal.key])
+      const hasExtra = (equivalents.extras || []).some((extra) => extra.meals?.[meal.key] != null)
+      if (!hasShare && !hasExtra) return equivalents
+      const distribution = { ...(equivalents.distribution || {}) }
       delete distribution[meal.key]
-      patch.equivalents = { ...notesForm.equivalents, distribution }
+      const extras = equivalents.extras ? equivalents.extras.map((extra) => { const meals = { ...(extra.meals || {}) }; delete meals[meal.key]; return { ...extra, meals } }) : undefined
+      return { ...equivalents, distribution, ...(extras ? { extras } : {}) }
+    }
+    const baseEquivalents = withoutMeal(notesForm.equivalents)
+    if (baseEquivalents !== notesForm.equivalents) patch.equivalents = baseEquivalents
+    const menus = (notesForm.menus || []).map((item) => { const equivalents = withoutMeal(item.equivalents); return equivalents === item.equivalents ? item : { ...item, equivalents } })
+    if (menus.some((item, index) => item !== notesForm.menus[index])) patch.menus = menus
+    if (notesForm.mealNotes?.[meal.key] != null) {
+      const mealNotes = { ...notesForm.mealNotes }
+      delete mealNotes[meal.key]
+      patch.mealNotes = mealNotes
     }
     if (!hadRecipes) { patchNotes(patch); return }
     const nextSlots = { ...slots }

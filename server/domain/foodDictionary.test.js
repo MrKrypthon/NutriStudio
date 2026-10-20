@@ -10,6 +10,11 @@ describe('translateFoodQuery', () => {
     expect(translateFoodQuery('  CALABAZA ITALIANA CRUDA  ')).toBe('Zucchini, raw')
   })
 
+  it('ignores accents in either direction', () => {
+    expect(translateFoodQuery('platano crudo')).toBe('Bananas, raw')
+    expect(translateFoodQuery('Atun en agua')).toBe('Tuna, canned in water')
+  })
+
   it('matches a shorter query against a longer known phrase', () => {
     expect(translateFoodQuery('chayote')).toBe('Chayote, fruit, raw')
   })

@@ -81,11 +81,23 @@ describe('computeEnergyRequirement formulas', () => {
 
   it('rejects an unknown formula', () => {
     expect(() => computeEnergyRequirement({ ...base, formula: 'invented' })).toThrow(NutritionEngineError)
+    expect(() => computeEnergyRequirement({ ...base, formula: 'toString' })).toThrow(NutritionEngineError)
+    expect(() => computeEnergyRequirement({ ...base, formula: '__proto__' })).toThrow(NutritionEngineError)
   })
 
   it('uses METS instead of the activity factor when a full METS payload is provided', () => {
     const result = computeEnergyRequirement({ ...base, formula: 'mifflin', mets: { met: 6, minutes: 45, sessionsPerWeek: 3 } })
     expect(result.activityMethod).toBe('mets')
+  })
+
+  it('ignores non-numeric or negative METS and falls back to the activity factor', () => {
+    const plain = computeEnergyRequirement({ ...base, formula: 'mifflin', activityFactor: 1.2 })
+    for (const mets of [{ met: 'abc', minutes: 45, sessionsPerWeek: 3 }, { met: -6, minutes: 45, sessionsPerWeek: 3 }]) {
+      const result = computeEnergyRequirement({ ...base, formula: 'mifflin', activityFactor: 1.2, mets })
+      expect(result.activityMethod).toBe('factor')
+      expect(result.get).toBe(plain.get)
+      expect(Number.isFinite(result.targetKcal)).toBe(true)
+    }
   })
 
   it('flags implausible energy estimates for professional review instead of silently accepting them', () => {

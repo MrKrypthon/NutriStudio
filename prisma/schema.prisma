@@ -137,6 +137,9 @@ model User {
   // la que entra (`sub` del token de Google). Únicos en todo el sistema; se valida al guardarlos.
   loginId        String?
   googleSub      String?
+  // Versión de sesión: va dentro del token y sube al cambiar o restablecer la contraseña, lo que
+  // cierra todas las sesiones abiertas (los tokens no se guardan en el servidor).
+  sessionVersion Int             @default(0)
   consultations  Consultation[]
   auditEvents    AuditEvent[]
   labAttachments LabAttachment[]
@@ -436,6 +439,7 @@ model Recipe {
   mealSlots            MealSlot[]
 
   @@index([practiceId, source])
+  @@index([practiceId, status, name])
 }
 
 model EducationMaterial {
@@ -474,6 +478,10 @@ model Ingredient {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   recipes     RecipeIngredient[]
+
+  // Cada cuenta tiene su copia del catálogo (~3,000 ingredientes): sin este índice cada búsqueda
+  // recorría los ingredientes de todas las cuentas.
+  @@index([practiceId, status, name])
 }
 
 model RecipeIngredient {
@@ -507,6 +515,10 @@ model Document {
   generatedAt    DateTime?
   deliveredAt    DateTime?
   createdAt      DateTime       @default(now())
+
+  // Documentos de un paciente (expediente, carpetas) y el de una consulta (se reutiliza por tipo).
+  @@index([patientId, createdAt])
+  @@index([consultationId])
 }
 
 model Task {
@@ -558,6 +570,9 @@ model AuditEvent {
   createdAt  DateTime @default(now())
 
   @@index([practiceId, entity, entityId])
+  // Línea de tiempo y registro de accesos: los eventos más recientes de la cuenta. El filtro por
+  // `metadata.patientId` necesitaría un índice de expresión, que Prisma no puede declarar.
+  @@index([practiceId, createdAt])
 }
 
 // Pago recibido de una cuenta (práctica) del SaaS. Se registra desde el panel /admin.

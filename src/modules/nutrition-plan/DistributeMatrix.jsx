@@ -1,11 +1,18 @@
+import { useState } from 'react'
 import { EQUIVALENT_MEALS, EQUIVALENT_TABLE, addTotals, equivalentTotals, extrasTotals, remainingEquivalents, toHalf } from '../../../server/domain/equivalents.js'
 
 const formatCount = (value) => { const number = Number(value) || 0; return Number.isInteger(number) ? String(number) : String(Math.round(number * 100) / 100) }
 const MAX_THUMBS = 3
 
+// Igual que el campo del paso Porciones: mientras se teclea se conserva el texto y sólo se normaliza
+// a medios al salir. Antes cada tecla pasaba por `toHalf`: al escribir "0" el campo se vaciaba y
+// "1.5" no se podía capturar (el punto se perdía).
 function Cell({ value, onChange, disabled, label }) {
   const count = Number(value) || 0
-  return <input className={'dm-cell' + (count > 0 ? ' filled' : '')} type="number" min="0" max="40" step="0.5" inputMode="decimal" disabled={disabled} value={count || ''} placeholder="0" aria-label={label} onChange={(event) => onChange(toHalf(event.target.value))} />
+  const [text, setText] = useState(null)
+  // Salir sin haber tecleado no vuelve a guardar el mismo valor.
+  const commit = (raw) => { if (text == null) return; setText(null); if (toHalf(raw) !== count) onChange(toHalf(raw)) }
+  return <input className={'dm-cell' + (count > 0 ? ' filled' : '')} type="number" min="0" max="40" step="0.5" inputMode="decimal" disabled={disabled} value={text != null ? text : (count || '')} placeholder="0" aria-label={label} onChange={(event) => setText(event.target.value)} onBlur={(event) => commit(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} />
 }
 
 // "Distribuye porciones por día y selecciona recetas", como en Avena: un renglón por grupo de

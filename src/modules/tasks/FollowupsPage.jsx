@@ -52,7 +52,7 @@ export default function FollowupsPage({ setActive }) {
   }, [])
 
   useEffect(() => { loadTasks() }, [loadTasks])
-  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=5000').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   const pending = tasks.filter((t) => t.status === 'pending')
   const overdue = pending.filter((t) => daysUntil(t.dueAt) < 0)

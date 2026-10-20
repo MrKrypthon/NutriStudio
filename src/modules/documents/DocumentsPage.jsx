@@ -25,7 +25,7 @@ const FALLBACK = [
 ]
 
 const dateLabel = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
-const dateTimeLabel = (iso) => (iso ? new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '')
+const dateTimeLabel = (iso) => (iso ? new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) : '')
 const patientName = (doc) => `${doc.patient?.firstName || ''} ${doc.patient?.lastName || ''}`.trim() || 'Paciente'
 const recordNumber = (patient) => (patient?.recordNumber ? `Exp. N.º ${String(patient.recordNumber).padStart(5, '0')}` : null)
 // El expediente completo es para el archivo del consultorio: no se "entrega", queda archivado.
@@ -118,7 +118,28 @@ export default function DocumentsPage({ setActive, patientId = '', onOpenPatient
   }, [visible])
   const patientTerm = patientQuery.trim().toLowerCase()
   const patientGroups = groups.filter((group) => !patientTerm || `${group.name} ${recordNumber(group.patient) || ''}`.toLowerCase().includes(patientTerm))
-  const selectedGroup = patientGroups.find((group) => group.patientId === selectedPatientId) || patientGroups[0] || null
+  // Si se llegó con un paciente (o se eligió uno) y no tiene documentos visibles, no se cae a la
+  // carpeta de otro: antes se abría la del primero de la lista como si fuera la suya.
+  const selectedGroup = selectedPatientId ? patientGroups.find((group) => group.patientId === selectedPatientId) || null : patientGroups[0] || null
+  // La lista general trae sólo los 500 documentos más recientes: la carpeta de un paciente con
+  // documentos más viejos salía incompleta, o vacía al llegar desde Pacientes. Si la lista vino
+  // recortada, se piden los de ese paciente y se suman a los ya cargados.
+  const folderPatientId = grouped && state === 'online' && total > items.length ? (selectedPatientId || selectedGroup?.patientId || null) : null
+  useEffect(() => {
+    if (!folderPatientId) return undefined
+    let cancelled = false
+    documentsApi.list(`?patientId=${encodeURIComponent(folderPatientId)}`)
+      .then((response) => {
+        if (cancelled) return
+        setItems((prev) => {
+          const known = new Set(prev.map((doc) => doc.id))
+          const missing = (response.items || []).filter((doc) => !known.has(doc.id))
+          return missing.length ? [...prev, ...missing] : prev
+        })
+      })
+      .catch(() => { /* la carpeta se queda con lo que ya estaba cargado */ })
+    return () => { cancelled = true }
+  }, [folderPatientId])
   // Documentos del paciente elegido, reunidos por su origen: cada consulta con sus informes y su
   // expediente, y cada plan con su PDF. Es lo que liga Documentos con el resto de la app.
   const originGroups = useMemo(() => {
@@ -177,7 +198,7 @@ export default function DocumentsPage({ setActive, patientId = '', onOpenPatient
   // sólo se elige paciente y tipo, y se lleva a donde se generan.
   const openGenerate = () => {
     setGenForm({ patientId: '', kind: 'plan' }); setGenOpen(true)
-    if (!genPatients) patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setGenPatients(payload.items || [])).catch(() => setGenPatients([]))
+    if (!genPatients) patientsApi.list('?status=ACTIVE&pageSize=5000').then((payload) => setGenPatients(payload.items || [])).catch(() => setGenPatients([]))
   }
   const goGenerate = () => { if (genForm.patientId) onOpenPatient?.(genForm.patientId, genForm.kind === 'plan' ? 'Constructor de plan' : 'Expediente') }
 
@@ -270,7 +291,7 @@ export default function DocumentsPage({ setActive, patientId = '', onOpenPatient
             </aside>
 
             <section className="docs-patient-detail panel" aria-label="Documentos del paciente">
-              {!selectedGroup ? <div className="result-empty"><span>◌</span><h3>Elige un paciente</h3><p>Sus documentos aparecen aquí, ordenados por consulta y por plan.</p></div> : <>
+              {!selectedGroup ? <div className="result-empty"><span>◌</span><h3>{selectedPatientId ? 'Este paciente no tiene documentos con estos filtros' : 'Elige un paciente'}</h3><p>{selectedPatientId ? 'Elige otro paciente de la lista o quita los filtros.' : 'Sus documentos aparecen aquí, ordenados por consulta y por plan.'}</p></div> : <>
                 <header className="docs-detail-head">
                   <button type="button" className="link-button docs-back" onClick={() => setMobileDetail(false)}>← Pacientes</button>
                   <span className="person-avatar coral large-avatar">{(selectedGroup.patient?.firstName?.[0] || '') + (selectedGroup.patient?.lastName?.[0] || '')}</span>

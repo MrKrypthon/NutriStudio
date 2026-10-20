@@ -50,11 +50,14 @@ export function IncomeExpenseChart({ daily = [], selectedDate = null, onSelectDa
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="#ECEDF0" vertical={false} />
-        <XAxis dataKey="label" {...axis} interval="preserveStartEnd" />
+        {/* El eje va por fecha (única) y se rotula con el día: con el número de día como clave, en
+            "Últimos 30 días" a inicios de marzo el 1 y el 2 se repetían y la línea del día
+            seleccionado se dibujaba en febrero. */}
+        <XAxis dataKey="date" {...axis} interval="preserveStartEnd" tickFormatter={(date) => `${new Date(date).getUTCDate()}`} />
         <YAxis {...axis} width={44} tickFormatter={compact} />
-        <Tooltip cursor={{ stroke: '#c9ccd3', strokeDasharray: '3 3' }} content={(props) => { if (props.active && props.payload?.[0]?.payload?.date) hoverDateRef.current = props.payload[0].payload.date; return <MoneyTooltip {...props} /> }} />
+        <Tooltip cursor={{ stroke: '#c9ccd3', strokeDasharray: '3 3' }} content={(props) => { if (props.active && props.payload?.[0]?.payload?.date) hoverDateRef.current = props.payload[0].payload.date; return <MoneyTooltip {...props} label={props.payload?.[0]?.payload?.label} /> }} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-        {selectedPoint && <ReferenceLine x={selectedPoint.label} stroke="#16181D" strokeDasharray="3 3" />}
+        {selectedPoint && <ReferenceLine x={selectedPoint.date} stroke="#16181D" strokeDasharray="3 3" />}
         {mode === 'area' ? <>
           <Area type="monotone" dataKey="Egresos" stroke="#B42318" strokeWidth={2} fill="url(#expenseFill)" animationDuration={700} activeDot={{ r: 4 }} />
           <Area type="monotone" dataKey="Ingresos" stroke="#2E7D4F" strokeWidth={2} fill="url(#incomeFill)" animationDuration={700} activeDot={{ r: 4 }} />
@@ -68,8 +71,10 @@ export function IncomeExpenseChart({ daily = [], selectedDate = null, onSelectDa
 }
 
 export function BalanceTrend({ daily = [] }) {
+  // Se acumula en centavos y se redondea al final: redondear cada día a pesos antes de sumar
+  // arrastraba el error (30 días con $0.50 de ingreso daban un saldo de $30 en vez de $15).
   let acc = 0
-  const data = daily.map((day) => ({ label: `${new Date(day.date).getUTCDate()}`, Saldo: (acc += toPesos(day.incomeCents) - toPesos(day.expenseCents)) }))
+  const data = daily.map((day) => ({ label: `${new Date(day.date).getUTCDate()}`, Saldo: toPesos(acc += (Number(day.incomeCents) || 0) - (Number(day.expenseCents) || 0)) }))
   if (!data.length) return <p className="muted chart-empty">Sin movimientos en el periodo.</p>
   return <div className="chart-frame">
     <ResponsiveContainer width="100%" height={200}>

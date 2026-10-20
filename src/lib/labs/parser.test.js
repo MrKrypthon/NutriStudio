@@ -209,4 +209,11 @@ describe('interpretLab', () => {
     expect(interpretLab('5,6', '4 a 6')).toBe('Normal')
     expect(interpretLab('', '70-100')).toBeNull()
   })
+
+  it('lee la coma de miles en el valor y en el rango', () => {
+    expect(interpretLab('250,000', '150000-450000')).toBe('Normal')
+    expect(interpretLab('250000', '150,000 - 450,000')).toBe('Normal')
+    expect(interpretLab('120,000', '150,000-450,000')).toBe('Bajo')
+    expect(interpretLab('4,5', '4.0-5.5')).toBe('Normal')
+  })
 })

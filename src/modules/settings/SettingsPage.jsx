@@ -4,8 +4,10 @@ import ModuleHeader from '../../components/ModuleHeader.jsx'
 import BrandMark from '../../components/BrandMark.jsx'
 import PdfDesignEditor from '../documents/PdfDesignEditor.jsx'
 import SubscriptionCard from './SubscriptionCard.jsx'
+import GoogleLinkRow from './GoogleLinkRow.jsx'
 import { authApi, practiceApi } from '../../lib/api.js'
 import { useAuth } from '../../lib/AuthContext.jsx'
+import { setToken } from '../../lib/auth.js'
 
 const TIME_ZONE_OPTIONS = [
   ['America/Mexico_City', 'Ciudad de México (GMT-6)'],
@@ -58,6 +60,7 @@ export default function SettingsPage({ setActive }) {
   const [activeSection, setActiveSection] = useState(initialSection)
   // Cambios del perfil u horarios sin guardar: el botón sigue a la vista aunque se cambie de sección.
   const [dirty, setDirty] = useState(false)
+  const editsRef = useRef(0)
   const [pwForm, setPwForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [pwState, setPwState] = useState('idle')
   const [pwError, setPwError] = useState('')
@@ -85,7 +88,7 @@ export default function SettingsPage({ setActive }) {
       .catch(() => setLoadState('error'))
   }, [])
 
-  const update = (key, value) => { setForm((prev) => ({ ...prev, [key]: value })); setSaveState('idle'); setDirty(true) }
+  const update = (key, value) => { setForm((prev) => ({ ...prev, [key]: value })); setSaveState('idle'); setDirty(true); editsRef.current += 1 }
   const updateHours = (patch) => update('businessHours', { ...form.businessHours, ...patch })
   const updateRange = (index, patch) => {
     const ranges = form.businessHours.ranges.map((range, i) => (i === index ? { ...range, ...patch } : range))
@@ -96,9 +99,12 @@ export default function SettingsPage({ setActive }) {
     // Trim before sending: otherwise "  " counts as a value on screen while the server (name ||
     // oldValue) silently keeps the previous value — a persisted-state desync with no feedback.
     const trimmed = { name: practiceName.trim(), userName: form.userName.trim(), userEmail: form.userEmail.trim() }
-    if (!trimmed.name || !trimmed.userName || !trimmed.userEmail) {
+    // Una cuenta creada desde /admin entra con su identificador y puede no tener correo: exigirlo le
+    // impedía guardar cualquier otro cambio (nombre, horarios…).
+    const emailRequired = !sessionUser?.loginId
+    if (!trimmed.name || !trimmed.userName || (emailRequired && !trimmed.userEmail)) {
       setSaveState('error')
-      setError('El nombre de la práctica, el nombre profesional y el email son obligatorios.')
+      setError(emailRequired ? 'El nombre de la práctica, el nombre profesional y el email son obligatorios.' : 'El nombre de la práctica y el nombre profesional son obligatorios.')
       setActiveSection('profile')
       return
     }
@@ -112,9 +118,12 @@ export default function SettingsPage({ setActive }) {
     }
     setSaveState('saving')
     setError('')
+    const editsAtStart = editsRef.current
     try {
       await practiceApi.update({ ...form, ...trimmed })
       refreshPractice()
+      // Lo escrito mientras se guardaba no iba en este envío: sigue pendiente (botón y aviso).
+      if (editsRef.current !== editsAtStart) { setSaveState('idle'); return }
       setSaveState('saved')
       setDirty(false)
       setEditingHours(false)
@@ -166,7 +175,9 @@ export default function SettingsPage({ setActive }) {
     setPwState('saving')
     setPwError('')
     try {
-      await authApi.changePassword(pwForm.currentPassword, pwForm.newPassword)
+      // Cambiar la contraseña cierra las demás sesiones; esta sigue con el token nuevo.
+      const { token } = await authApi.changePassword(pwForm.currentPassword, pwForm.newPassword)
+      if (token) setToken(token)
       setPwState('saved')
       setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
     } catch (err) {
@@ -188,7 +199,7 @@ export default function SettingsPage({ setActive }) {
         {activeSection === 'profile' && <div className="panel settings-card">
           <div className="settings-card-head"><div><h2>Perfil profesional</h2><p>Esta información aparece en tus informes y comunicaciones.</p></div><span className="avatar settings-avatar">{initials}</span></div>
           <div className="form-grid">
-            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => { setPracticeName(e.target.value); setSaveState('idle'); setDirty(true) }} /></label>
+            <label>Nombre profesional<input value={form.userName} onChange={(e) => update('userName', e.target.value)} /></label><label>Nombre de la práctica<input value={practiceName} onChange={(e) => { setPracticeName(e.target.value); setSaveState('idle'); setDirty(true); editsRef.current += 1 }} /></label>
             <label>Especialidad<input value={form.userSpecialty} onChange={(e) => update('userSpecialty', e.target.value)} placeholder="Ej. Nutrióloga clínica" /></label>
             <label>Email de trabajo<input value={form.userEmail} onChange={(e) => update('userEmail', e.target.value)} /></label>
             <label>Teléfono<input value={form.userPhone} onChange={(e) => update('userPhone', e.target.value)} placeholder="Ej. +52 55 1234 5678" /></label>
@@ -231,7 +242,7 @@ export default function SettingsPage({ setActive }) {
         {activeSection === 'security' && <div className="panel settings-card">
           <h2>Privacidad y seguridad</h2>
           {/* Quien se registró con Google no tiene contraseña en Milpa: entra siempre con Google. */}
-          {sessionUser?.google && !sessionUser?.loginId ? <p>Entras con tu cuenta de Google{sessionUser.email ? <> (<b>{sessionUser.email}</b>)</> : null}. No necesitas contraseña: la seguridad de tu acceso la maneja Google.</p> : <>
+          {sessionUser?.googleOnly ? <p>Entras con tu cuenta de Google{sessionUser.email ? <> (<b>{sessionUser.email}</b>)</> : null}. No necesitas contraseña: la seguridad de tu acceso la maneja Google.</p> : <>
             <p>Cambia tu contraseña de acceso.{sessionUser?.loginId && <> Tu identificador para entrar es <b>{sessionUser.loginId}</b>.</>}</p>
             {pwState === 'error' && <div className="form-error">⚠ {pwError}</div>}
             {pwState === 'saved' && <span className="saved">● Contraseña actualizada</span>}
@@ -241,6 +252,7 @@ export default function SettingsPage({ setActive }) {
               <label>Confirmar nueva contraseña<input type="password" value={pwForm.confirmPassword} onChange={(e) => updatePw('confirmPassword', e.target.value)} /></label>
             </div>
             <button className="secondary" disabled={pwState === 'saving'} onClick={changePassword} style={{ marginTop: 16 }}>{pwState === 'saving' ? 'Guardando…' : 'Cambiar contraseña'}</button>
+            <GoogleLinkRow />
           </>}
         </div>}
       </section>
