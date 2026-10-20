@@ -486,6 +486,7 @@ app.patch('/api/v1/admin/practices/:practiceId', async (request, reply) => {
   const { status, paymentMethod, paidUntil } = request.body || {}
   const practice = await prisma.practice.findUnique({ where: { id: request.params.practiceId } })
   if (!practice) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Cuenta no encontrada.', fields: {} })
+  if (paidUntil && Number.isNaN(new Date(paidUntil).getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha de cobertura inválida.', fields: { paidUntil: true } })
   const updated = await prisma.practice.update({
     where: { id: practice.id },
     data: {
@@ -510,7 +511,7 @@ app.post('/api/v1/admin/transactions', async (request, reply) => {
   const { practiceId, amountCents, method, concept, occurredAt, extendMonths } = request.body || {}
   const amount = normalizeCents(amountCents)
   if (amount <= 0) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto debe ser mayor a cero.', fields: { amountCents: true } })
-  const practice = await prisma.practice.findUnique({ where: { id: practiceId } })
+  const practice = typeof practiceId === 'string' && await prisma.practice.findUnique({ where: { id: practiceId } })
   if (!practice) return reply.code(404).send({ code: 'PRACTICE_NOT_FOUND', message: 'Cuenta no encontrada.', fields: {} })
   const when = occurredAt ? new Date(occurredAt) : new Date()
   if (Number.isNaN(when.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha inválida.', fields: { occurredAt: true } })
@@ -729,7 +730,7 @@ await app.register(async (scope) => {
 
 app.post('/api/v1/auth/change-password', async (request, reply) => {
   const { currentPassword, newPassword } = request.body || {}
-  if (!currentPassword || !newPassword) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Contraseña actual y nueva son obligatorias.', fields: { currentPassword: !currentPassword, newPassword: !newPassword } })
+  if (!currentPassword || !newPassword || typeof currentPassword !== 'string' || typeof newPassword !== 'string') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Contraseña actual y nueva son obligatorias.', fields: { currentPassword: !currentPassword, newPassword: !newPassword } })
   if (newPassword.length < 8) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La nueva contraseña debe tener al menos 8 caracteres.', fields: { newPassword: true } })
   const user = await prisma.user.findUnique({ where: { id: request.userId } })
   if (!user) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Sesión inválida.', fields: {} })
