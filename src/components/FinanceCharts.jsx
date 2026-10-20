@@ -68,8 +68,10 @@ export function IncomeExpenseChart({ daily = [], selectedDate = null, onSelectDa
 }
 
 export function BalanceTrend({ daily = [] }) {
+  // Se acumula en centavos y se redondea al final: redondear cada día a pesos antes de sumar
+  // arrastraba el error (30 días con $0.50 de ingreso daban un saldo de $30 en vez de $15).
   let acc = 0
-  const data = daily.map((day) => ({ label: `${new Date(day.date).getUTCDate()}`, Saldo: (acc += toPesos(day.incomeCents) - toPesos(day.expenseCents)) }))
+  const data = daily.map((day) => ({ label: `${new Date(day.date).getUTCDate()}`, Saldo: toPesos(acc += (Number(day.incomeCents) || 0) - (Number(day.expenseCents) || 0)) }))
   if (!data.length) return <p className="muted chart-empty">Sin movimientos en el periodo.</p>
   return <div className="chart-frame">
     <ResponsiveContainer width="100%" height={200}>
