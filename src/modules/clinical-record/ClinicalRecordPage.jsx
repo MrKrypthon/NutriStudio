@@ -724,6 +724,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       await clinicalApi.reopen(consultation.id, reason)
       const full = await clinicalApi.get(consultation.id)
       applyConsultation(full)
+      setSessions((prev) => prev.map((item) => (item.id === full.id ? { ...item, status: full.status } : item)))
       setStartState('idle')
       setReopenForm(null)
     } catch (error) {
@@ -847,6 +848,8 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     try {
       await clinicalApi.complete(consultation.id, payload)
       setConsultation((prev) => (prev ? { ...prev, status: 'COMPLETED', completedAt: new Date().toISOString() } : prev))
+      // El selector de sesiones de la cabecera seguía diciendo "En curso" hasta recargar.
+      setSessions((prev) => prev.map((item) => (item.id === consultation.id ? { ...item, status: 'COMPLETED' } : item)))
       setCompletionState('idle')
       setCompleteOpen(false)
       // Continúa el flujo: agendar la siguiente cita y descargar el expediente.
