@@ -2734,8 +2734,10 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   drawFieldList(file, { ...payloadOf('general'), ...payloadOf('clinical') }, { skip: ['Notas clínicas', 'Notas de antecedentes'], empty: 'Sin antecedentes registrados.' })
 
   title('Antropometría')
-  if (measurement) drawFieldRow(file, 'Medición más reciente', `Peso ${measurement.weightKg ?? '—'} kg · Talla ${measurement.heightCm ?? '—'} cm · Cintura ${measurement.waistCm ?? '—'} cm · Cadera ${measurement.hipCm ?? '—'} cm · % grasa ${measurement.bodyFatPercent ?? '—'}%`)
-  drawFieldList(file, payloadOf('anthropometric'), { skip: ['Peso (kg)', 'Talla (cm)', 'IMC calculado'], empty: measurement ? null : 'Sin mediciones registradas.' })
+  // Sólo las medidas capturadas: las vacías salían como "Talla — cm · % grasa —%".
+  const measured = measurement ? [measurement.weightKg != null && `Peso ${measurement.weightKg} kg`, measurement.heightCm != null && `Talla ${measurement.heightCm} cm`, measurement.waistCm != null && `Cintura ${measurement.waistCm} cm`, measurement.hipCm != null && `Cadera ${measurement.hipCm} cm`, measurement.bodyFatPercent != null && `% grasa ${measurement.bodyFatPercent}%`].filter(Boolean) : []
+  if (measured.length) drawFieldRow(file, 'Medición más reciente', measured.join(' · '))
+  drawFieldList(file, payloadOf('anthropometric'), { skip: ['Peso (kg)', 'Talla (cm)', 'IMC calculado'], empty: measured.length ? null : 'Sin mediciones registradas.' })
 
   title('Diagnóstico nutricio')
   if (diagnoses.length) for (const d of diagnoses) drawLineText(file, diagnosisLine(d))
@@ -2936,7 +2938,9 @@ function drawClinicalReport(file, document, practice, user, logoBuffer) {
   title('Antropometría')
   if (measurement) {
     const bmi = measurement.weightKg && measurement.heightCm ? measurement.weightKg / ((measurement.heightCm / 100) ** 2) : null
-    line(`Peso: ${measurement.weightKg ?? '—'} kg · Talla: ${measurement.heightCm ?? '—'} cm${bmi ? ` · IMC: ${bmi.toFixed(1)}` : ''}`)
+    // Sólo las medidas capturadas: las vacías salían como "Talla: — cm".
+    const basic = [measurement.weightKg != null && `Peso: ${measurement.weightKg} kg`, measurement.heightCm != null && `Talla: ${measurement.heightCm} cm`, bmi && `IMC: ${bmi.toFixed(1)}`].filter(Boolean)
+    if (basic.length) line(basic.join(' · '))
     const extra = [measurement.waistCm != null && `Cintura: ${measurement.waistCm} cm`, measurement.hipCm != null && `Cadera: ${measurement.hipCm} cm`, measurement.abdomenCm != null && `Abdomen: ${measurement.abdomenCm} cm`, measurement.bodyFatPercent != null && `% grasa: ${measurement.bodyFatPercent}%`, measurement.muscleMassKg != null && `Masa muscular: ${measurement.muscleMassKg} kg`].filter(Boolean)
     if (extra.length) line(extra.join(' · '))
   } else line('Sin mediciones registradas.')
