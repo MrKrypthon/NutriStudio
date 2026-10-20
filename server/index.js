@@ -2027,16 +2027,17 @@ const normalizeCents = (value) => {
 
 // "Ahora" en el reloj de pared de la práctica, etiquetado con "Z" (misma convención que las citas):
 // así el movimiento cae en el día correcto al filtrar por fecha local, sin importar la zona del viewer.
-const practiceWallClockNow = (timeZone) => {
+const practiceWallClockAt = (instant, timeZone) => {
   if (timeZone) {
     try {
-      const date = new Date().toLocaleDateString('en-CA', { timeZone })
-      const time = new Date().toLocaleTimeString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
+      const date = instant.toLocaleDateString('en-CA', { timeZone })
+      const time = instant.toLocaleTimeString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' })
       return new Date(`${date}T${time}.000Z`)
     } catch { /* cae al reloj del sistema */ }
   }
-  return new Date()
+  return instant
 }
+const practiceWallClockNow = (timeZone) => practiceWallClockAt(new Date(), timeZone)
 
 // Registra el ingreso de una consulta recién cerrada. Toma el monto enviado (editable en el modal de
 // cierre) o, si no viene, la tarifa configurada para el tipo de cita. Si ya existe el ingreso de esa
@@ -2687,7 +2688,7 @@ function drawConsultationReport(file, document, practice, user, logoBuffer) {
   drawDocumentBrand(file, 'RESUMEN DE CONSULTA NUTRICIONAL', practice, logoBuffer)
   file.font('Helvetica-Bold').fontSize(18).fillColor(INK).text('Informe de consulta')
   file.font('Helvetica').fontSize(10).fillColor(MUTED).text(`Paciente: ${document.patient.firstName} ${document.patient.lastName}`)
-  file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`)
+  file.text(`Generado: ${formatDateOnly(new Date(), practice?.timeZone || 'America/Mexico_City')}`)
   file.moveDown()
 
   const consultation = document.consultation
@@ -2758,7 +2759,7 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
   file.moveDown(0.5)
 
   const at = consultation?.startedAt || consultation?.createdAt
-  const age = ageAt(patient.birthDate, at)
+  const age = ageAt(patient.birthDate, at, tz)
   // Ficha de identificación (5.2.3 y 5.9): nombre, sexo, edad, domicilio y número de expediente.
   drawInfoGrid(file, 'Ficha de identificación', [
     ['Nombre completo', `${patient.firstName} ${patient.lastName}`],
@@ -2853,13 +2854,6 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
 // Presenta los datos del expediente con formato interpretable por otros profesionales: tablas de
 // laboratorio (resultado/unidad/referencia/interpretación), recordatorio 24 h con totales y las
 // secciones clínicas. No sustituye al informe del paciente; es el documento de derivación.
-const computeAgeFromBirthDate = (birthDate) => {
-  if (!birthDate) return null
-  const dob = new Date(birthDate); const now = new Date()
-  let age = now.getUTCFullYear() - dob.getUTCFullYear()
-  if (now.getUTCMonth() < dob.getUTCMonth() || (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate())) age -= 1
-  return age
-}
 const SEX_TEXT = { Hombre: 'Hombre', Mujer: 'Mujer', female: 'Mujer', male: 'Hombre', F: 'Mujer', M: 'Hombre' }
 const truthyEntry = ([, value]) => value !== undefined && value !== null && value !== '' && value !== false
 
@@ -2892,9 +2886,9 @@ function drawClinicalReport(file, document, practice, user, logoBuffer) {
   const diagnoses = consultation?.diagnoses || []
 
   file.font('Helvetica-Bold').fontSize(18).fillColor(INK).text('Informe clínico nutricio', 48, file.y, { width: 516 })
-  const age = computeAgeFromBirthDate(patient.birthDate)
+  const age = ageAt(patient.birthDate, null, practice?.timeZone)
   file.font('Helvetica').fontSize(9).fillColor(MUTED).text(`Paciente: ${patient.firstName} ${patient.lastName}${age != null ? ` · ${age} años` : ''}${patient.sex ? ` · ${SEX_TEXT[patient.sex] || patient.sex}` : ''}`, 48, file.y, { width: 516 })
-  file.text(`Generado: ${new Date().toLocaleDateString('es-MX')}`, 48, file.y, { width: 516 })
+  file.text(`Generado: ${formatDateOnly(new Date(), practice?.timeZone || 'America/Mexico_City')}`, 48, file.y, { width: 516 })
 
   let index = 0
   const title = (text) => { index += 1; drawSectionTitle(file, index, text) }
@@ -3145,9 +3139,12 @@ const formatRecordNumber = (value) => (value ? `N.º ${String(value).padStart(5,
 // Fecha y hora en la zona del consultorio: son marcas de tiempo reales (no horas "de pared").
 const formatDateTime = (value, timeZone) => (value ? new Date(value).toLocaleString('es-MX', { timeZone: timeZone || 'America/Mexico_City', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—')
 const formatDateOnly = (value, timeZone) => (value ? new Date(value).toLocaleDateString('es-MX', { timeZone: timeZone || 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')
-const ageAt = (birthDate, at) => {
+// `at` es una marca de tiempo real: se toma su día en la zona del consultorio (en UTC, una consulta
+// por la tarde en México ya caía en el día siguiente y la edad subía un año antes del cumpleaños).
+// La fecha de nacimiento es DATE (medianoche UTC), por eso se lee con getters UTC.
+const ageAt = (birthDate, at, timeZone) => {
   if (!birthDate) return null
-  const birth = new Date(birthDate); const when = at ? new Date(at) : new Date()
+  const birth = new Date(birthDate); const when = practiceWallClockAt(at ? new Date(at) : new Date(), timeZone)
   let age = when.getUTCFullYear() - birth.getUTCFullYear()
   const beforeBirthday = when.getUTCMonth() < birth.getUTCMonth() || (when.getUTCMonth() === birth.getUTCMonth() && when.getUTCDate() < birth.getUTCDate())
   if (beforeBirthday) age -= 1
