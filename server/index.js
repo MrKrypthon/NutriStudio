@@ -2426,8 +2426,10 @@ app.post('/api/v1/plans/:planId/publish', async (request, reply) => {
   // A plan can be half-created (recipes assigned) without ever saving the requirement — the
   // Entrega preview and the PDF would then lack the kcal/macro box. Require the calculation.
   if (plan.targetKcal == null || plan.carbsPercent == null) return reply.code(400).send({ code: 'PLAN_WITHOUT_CALCULATION', message: 'Guarda el cálculo de requerimientos en el paso "Plan alimentario" antes de publicar.', fields: {} })
-  // El snapshot congela también las cantidades ajustadas para esta paciente.
-  const menuSnapshot = applyRecipeAdjustments(buildMenuSnapshot(plan.mealSlots), plan.recipeAdjustments)
+  // El snapshot congela también las cantidades ajustadas para esta paciente. Las recetas archivadas
+  // no entran: el Constructor ya las quita de la semana, pero el espacio seguía en la base y el PDF
+  // publicado las imprimía.
+  const menuSnapshot = applyRecipeAdjustments(buildMenuSnapshot(plan.mealSlots.filter((slot) => slot.recipe?.status !== 'ARCHIVED')), plan.recipeAdjustments)
   // Espacios sin receta no cuentan: un plan sin ninguna receta no se publica.
   if (!menuSnapshot.length) return reply.code(400).send({ code: 'EMPTY_PLAN', message: 'Asigna al menos una receta antes de publicar.', fields: {} })
   const { practice, user } = await loadPracticeBranding(practiceId, request.userId)
@@ -2980,13 +2982,14 @@ async function loadPlanMenu(plan) {
     return applyRecipeAdjustments(live.map((entry) => { const frozen = snapshot.find((item) => item.dayOfWeek === entry.dayOfWeek && item.mealType === entry.mealType); return { ...entry, recipeName: frozen?.recipeName || entry.recipeName, kcal: frozen?.kcal ?? entry.kcal } }), plan.recipeAdjustments)
   }
   const mealSlots = await prisma.mealSlot.findMany({ where: { planId: plan.id }, include: { recipe: { include: recipeInclude } } })
-  return applyRecipeAdjustments(buildMenuSnapshot(mealSlots), plan.recipeAdjustments)
+  return applyRecipeAdjustments(buildMenuSnapshot(mealSlots.filter((slot) => slot.recipe?.status !== 'ARCHIVED')), plan.recipeAdjustments)
 }
 
 // Encabezado y pie del plan: quién es la paciente, su medición más reciente y los datos de la
 // nutrióloga que lo firma.
 async function buildPlanHeader(patient, practice, user) {
   const measurement = await prisma.measurement.findFirst({ where: { patientId: patient.id, weightKg: { not: null } }, orderBy: { measuredAt: 'desc' } })
+  // Borrador: igual que al publicar, sin las recetas archivadas (el Constructor no las muestra).
   return {
     patientName: `${patient.firstName} ${patient.lastName}`.trim(),
     nutritionistName: user?.name || practice?.name || '',
