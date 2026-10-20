@@ -68,6 +68,14 @@ export function practicePatchFromSubscription(subscription, currentPaidUntil = n
   return patch
 }
 
+// Un aviso de OTRA suscripción ya terminada (una anterior, o un reintento atrasado de Stripe) no
+// debe pisar la suscripción vigente de la práctica: la dejaría como «cancelada» y permitiría abrir
+// otro checkout (doble cobro).
+export function isSupersededSubscription(subscription, practice) {
+  return Boolean(practice?.stripeSubscriptionId && subscription?.id !== practice.stripeSubscriptionId
+    && LIVE_SUBSCRIPTION_STATUSES.includes(practice.subscriptionStatus) && !LIVE_SUBSCRIPTION_STATUSES.includes(subscription?.status))
+}
+
 // Un aviso de suscripción más viejo que el último aplicado no debe deshacer el estado actual.
 export function isStaleEvent(eventCreatedSeconds, lastSyncedAt) {
   if (!lastSyncedAt || !Number.isFinite(eventCreatedSeconds)) return false

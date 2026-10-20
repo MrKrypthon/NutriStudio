@@ -22,7 +22,7 @@ import Stripe from 'stripe'
 import { OAuth2Client } from 'google-auth-library'
 import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId } from './domain/accounts.js'
 import { copyCatalog } from './domain/catalogCopy.js'
-import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
+import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
 import { foldText } from './domain/text.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
@@ -588,9 +588,12 @@ async function applySubscription(subscription, eventCreated = null) {
     || (customerId && await prisma.practice.findFirst({ where: { stripeCustomerId: customerId } }))
   if (!practice) { app.log.warn({ subscription: subscription.id }, 'Suscripción de Stripe sin práctica conocida'); return null }
   if (eventCreated && isStaleEvent(eventCreated, practice.stripeSyncedAt)) return practice
+  if (isSupersededSubscription(subscription, practice)) return practice
   const syncedAt = eventCreated ? new Date(eventCreated * 1000) : new Date()
+  const updated = await prisma.practice.update({ where: { id: practice.id }, data: { ...practicePatchFromSubscription(subscription, practice.paidUntil), stripeSyncedAt: syncedAt } })
+  // Después de guardar: borrarla antes dejaba que una petición en medio volviera a cachear el acceso viejo.
   practiceStatusCache.delete(practice.id)
-  return prisma.practice.update({ where: { id: practice.id }, data: { ...practicePatchFromSubscription(subscription, practice.paidUntil), stripeSyncedAt: syncedAt } })
+  return updated
 }
 
 // Una factura pagada extiende la cobertura hasta el fin del periodo que paga (también si salió en
@@ -707,7 +710,10 @@ await app.register(async (scope) => {
         const subscriptionId = typeof object.subscription === 'string' ? object.subscription : object.subscription?.id
         if (subscriptionId) await applySubscription(await stripe.subscriptions.retrieve(subscriptionId, { expand: ['latest_invoice'] }))
       } else if (['customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted', 'customer.subscription.paused', 'customer.subscription.resumed'].includes(event.type)) {
-        await applySubscription(object, event.created)
+        // Se lee el estado actual en Stripe en vez del que trae el aviso: Stripe no garantiza el orden
+        // y «created» (incomplete) y «updated» (active) suelen salir en el mismo segundo, así que el
+        // filtro por fecha no los distingue y el que llegaba al último dejaba el estado viejo.
+        await applySubscription(await stripe.subscriptions.retrieve(object.id, { expand: ['latest_invoice'] }))
       } else if (event.type === 'invoice.paid') {
         await recordInvoicePayment(object)
       }
