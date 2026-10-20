@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { patientsApi } from '../../lib/api.js'
@@ -210,13 +210,17 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
   const changeTab = (key) => { setStatusFilter(key); setPage(1); store('nutri.patients.tab', key) }
   const changeSort = (key) => { setSortBy(key); setPage(1); store('nutri.patients.sort', key) }
   const openPatient = (row) => { setSelectedId(row.id || fullName(row)); setEditing(false); setEditState('idle'); setEditError(''); setArchiveState('idle') }
-  const closeDrawer = () => { setSelectedId(null); setEditing(false) }
+  // Cerrar con Escape, el fondo o × a media edición tiraba lo escrito sin avisar (Escape también
+  // se pulsa para cerrar el calendario de la fecha o el autocompletado). Con cambios, se pregunta.
+  const editDirty = editing && selected && JSON.stringify(editForm) !== JSON.stringify(emptyEditForm(selected))
+  const closeDrawer = () => { if (editDirty && !window.confirm('Tienes cambios sin guardar en este paciente. ¿Descartarlos?')) return; setSelectedId(null); setEditing(false) }
+  const closeDrawerRef = useRef(closeDrawer); closeDrawerRef.current = closeDrawer
   const startEdit = () => { setEditForm(emptyEditForm(selected)); setEditState('idle'); setEditError(''); setEditing(true) }
   const updateField = (key, value) => setEditForm((prev) => ({ ...prev, [key]: value }))
 
   useEffect(() => {
     if (!selectedId) return undefined
-    const onKey = (event) => { if (event.key === 'Escape') closeDrawer() }
+    const onKey = (event) => { if (event.key === 'Escape') closeDrawerRef.current() }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [selectedId])
