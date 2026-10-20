@@ -1086,6 +1086,11 @@ app.post('/api/v1/consultations/:consultationId/complete', async (request, reply
     include: { patient: true, appointment: true },
   })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  // Se valida antes de cerrar: el registro del ingreso es best-effort y un monto fuera de rango
+  // se perdía en silencio dejando la consulta cerrada sin cobro.
+  if (!autoClosed && amountCents != null && amountCents !== '' && normalizeCents(amountCents) > MAX_AMOUNT_CENTS) {
+    return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto de la consulta es demasiado grande.', fields: { amountCents: true } })
+  }
   const updated = await prisma.consultation.update({ where: { id: consultation.id }, data: { status: 'COMPLETED', completedAt: consultation.completedAt || new Date() } })
   // `autoClosed` es el cierre que hace el sistema al encontrar una sesión abierta de un día
   // anterior. No genera ingreso: nadie cobró esa consulta, y apuntarla en Finanzas inventaría
@@ -1820,9 +1825,12 @@ app.get('/api/v1/dashboard/today', async (request) => {
 // el JSON guardado en Practice.fees siempre tenga la misma forma.
 const APPOINTMENT_TYPES = ['INITIAL', 'FOLLOW_UP', 'QUICK_CONTROL', 'EMERGENCY']
 const PAYMENT_METHODS = ['CASH', 'CARD', 'TRANSFER']
+// Tope de un monto en centavos: FinanceEntry.amountCents es Int (32 bits) en Postgres. Un valor
+// mayor reventaba el insert con un 500 genérico (o, en el cierre de consulta, perdía el ingreso).
+const MAX_AMOUNT_CENTS = 2147483647
 const normalizeFees = (fees) => {
   const source = fees && typeof fees === 'object' ? fees : {}
-  return Object.fromEntries(APPOINTMENT_TYPES.map((type) => [type, Math.max(0, Math.round(Number(source[type]) || 0))]))
+  return Object.fromEntries(APPOINTMENT_TYPES.map((type) => [type, Math.min(MAX_AMOUNT_CENTS, Math.max(0, Math.round(Number(source[type]) || 0)))]))
 }
 // Normaliza un monto en centavos: entero positivo o 0. La UI ya convierte pesos → centavos.
 const normalizeCents = (value) => {
@@ -1960,6 +1968,7 @@ app.post('/api/v1/finance/expenses', async (request, reply) => {
   const { amountCents, method, category, description, occurredAt } = request.body || {}
   const amount = normalizeCents(amountCents)
   if (amount <= 0) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto del egreso debe ser mayor a cero.', fields: { amountCents: true } })
+  if (amount > MAX_AMOUNT_CENTS) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto es demasiado grande.', fields: { amountCents: true } })
   const when = occurredAt ? new Date(occurredAt) : new Date()
   if (Number.isNaN(when.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha inválida.', fields: { occurredAt: true } })
   const entry = await prisma.financeEntry.create({
@@ -1984,6 +1993,7 @@ app.patch('/api/v1/finance/entries/:entryId', async (request, reply) => {
   if (amountCents !== undefined) {
     const amount = normalizeCents(amountCents)
     if (amount <= 0) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto debe ser mayor a cero.', fields: { amountCents: true } })
+    if (amount > MAX_AMOUNT_CENTS) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto es demasiado grande.', fields: { amountCents: true } })
     data.amountCents = amount
   }
   if (method !== undefined) data.method = PAYMENT_METHODS.includes(method) ? method : null
