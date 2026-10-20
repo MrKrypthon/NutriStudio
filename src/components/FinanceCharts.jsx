@@ -50,11 +50,14 @@ export function IncomeExpenseChart({ daily = [], selectedDate = null, onSelectDa
           </linearGradient>
         </defs>
         <CartesianGrid strokeDasharray="3 3" stroke="#ECEDF0" vertical={false} />
-        <XAxis dataKey="label" {...axis} interval="preserveStartEnd" />
+        {/* El eje va por fecha (única) y se rotula con el día: con el número de día como clave, en
+            "Últimos 30 días" a inicios de marzo el 1 y el 2 se repetían y la línea del día
+            seleccionado se dibujaba en febrero. */}
+        <XAxis dataKey="date" {...axis} interval="preserveStartEnd" tickFormatter={(date) => `${new Date(date).getUTCDate()}`} />
         <YAxis {...axis} width={44} tickFormatter={compact} />
-        <Tooltip cursor={{ stroke: '#c9ccd3', strokeDasharray: '3 3' }} content={(props) => { if (props.active && props.payload?.[0]?.payload?.date) hoverDateRef.current = props.payload[0].payload.date; return <MoneyTooltip {...props} /> }} />
+        <Tooltip cursor={{ stroke: '#c9ccd3', strokeDasharray: '3 3' }} content={(props) => { if (props.active && props.payload?.[0]?.payload?.date) hoverDateRef.current = props.payload[0].payload.date; return <MoneyTooltip {...props} label={props.payload?.[0]?.payload?.label} /> }} />
         <Legend iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-        {selectedPoint && <ReferenceLine x={selectedPoint.label} stroke="#16181D" strokeDasharray="3 3" />}
+        {selectedPoint && <ReferenceLine x={selectedPoint.date} stroke="#16181D" strokeDasharray="3 3" />}
         {mode === 'area' ? <>
           <Area type="monotone" dataKey="Egresos" stroke="#B42318" strokeWidth={2} fill="url(#expenseFill)" animationDuration={700} activeDot={{ r: 4 }} />
           <Area type="monotone" dataKey="Ingresos" stroke="#2E7D4F" strokeWidth={2} fill="url(#incomeFill)" animationDuration={700} activeDot={{ r: 4 }} />
