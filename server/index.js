@@ -23,6 +23,7 @@ import { OAuth2Client } from 'google-auth-library'
 import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId } from './domain/accounts.js'
 import { copyCatalog } from './domain/catalogCopy.js'
 import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
+import { foldText } from './domain/text.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
 // 10 MB PDF becomes ~13.3 MB as base64 JSON text, see POST /consultations/:id/lab-attachments.
@@ -1530,15 +1531,24 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
   return { type: 'plan', planId: plan.id, patientId }
 })
 
+// Búsqueda por nombre sin distinguir acentos: `mode: 'insensitive'` de Postgres sólo ignora
+// mayúsculas, así que "platano" no encontraba "Plátano". Sin la extensión unaccent, se pliegan los
+// nombres aquí (catálogos de unos pocos miles de filas) y se filtra por los ids que coinciden.
+async function nameSearchWhere(delegate, where, search) {
+  const term = foldText(String(search).slice(0, 80)).trim()
+  if (!term) return where
+  const rows = await delegate.findMany({ where, select: { id: true, name: true } })
+  return { ...where, id: { in: rows.filter((row) => foldText(row.name).includes(term)).map((row) => row.id) } }
+}
+
 app.get('/api/v1/recipes', async (request) => {
   const { search = '', mealType, restriction, status = 'ACTIVE', page, pageSize } = request.query
-  const where = {
+  const where = await nameSearchWhere(prisma.recipe, {
     practiceId: request.practiceId,
     status,
-    ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}),
     ...(mealType ? { mealTypes: { has: mealType } } : {}),
     ...(restriction ? { restrictions: { has: restriction } } : {}),
-  }
+  }, search)
   // Pagination is opt-in: the plan builder fetches the whole catalog (no params), while the
   // recipes library passes page/pageSize and gets a `total` back for the pager.
   if (page !== undefined || pageSize !== undefined) {
@@ -1791,7 +1801,8 @@ app.delete('/api/v1/ingredients/:ingredientId/image', async (request, reply) => 
 
 app.get('/api/v1/ingredients', async (request) => {
   const { search = '', group } = request.query
-  const ingredients = await prisma.ingredient.findMany({ where: { practiceId: request.practiceId, status: 'ACTIVE', ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}), ...(group ? { group } : {}) }, orderBy: { name: 'asc' }, take: 200 })
+  const where = await nameSearchWhere(prisma.ingredient, { practiceId: request.practiceId, status: 'ACTIVE', ...(group ? { group: String(group) } : {}) }, search)
+  const ingredients = await prisma.ingredient.findMany({ where, orderBy: { name: 'asc' }, take: 200 })
   return { items: ingredients }
 })
 
@@ -3172,12 +3183,11 @@ app.get('/api/v1/smae-foods/groups', async (request) => {
 
 app.get('/api/v1/smae-foods', async (request) => {
   const { search = '', group, review, page, pageSize } = request.query
-  const where = {
+  const where = await nameSearchWhere(prisma.smaeFood, {
     practiceId: request.practiceId,
     ...(group ? { group: String(group) } : {}),
-    ...(search ? { name: { contains: String(search).slice(0, 80), mode: 'insensitive' } } : {}),
     ...(review === '1' ? { review: { not: Prisma.AnyNull } } : {}),
-  }
+  }, search)
   const currentPage = Math.max(Number(page) || 1, 1)
   const take = Math.min(Math.max(Number(pageSize) || 50, 1), 200)
   const [items, total] = await prisma.$transaction([
