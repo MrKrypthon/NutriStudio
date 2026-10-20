@@ -331,6 +331,11 @@ app.get('/api/v1/practice', async (request, reply) => {
 app.put('/api/v1/practice', async (request, reply) => {
   const { name, timeZone, address, establishmentType, userName, userEmail, userSpecialty, userPhone, userLicenseNumber, businessHours, fees } = request.body || {}
   if (!name || !timeZone) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre de la práctica y zona horaria son obligatorios.', fields: { name: !name, timeZone: !timeZone } })
+  // La zona y el horario de atención alimentan toda la lógica de la agenda ("ahora", huecos libres):
+  // una zona que Intl no reconoce o rangos mal formados (sin start/end) rompían la Agenda.
+  try { new Intl.DateTimeFormat('en-US', { timeZone }) } catch { return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Zona horaria inválida.', fields: { timeZone: 'invalid' } }) }
+  const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+  if (businessHours !== undefined && businessHours !== null && !(Array.isArray(businessHours.ranges) && businessHours.ranges.every((range) => range && HHMM.test(range.start) && HHMM.test(range.end) && range.start < range.end))) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Horario de atención inválido.', fields: { businessHours: 'invalid' } })
   const practice = await prisma.practice.update({ where: { id: request.practiceId }, data: { name, timeZone, ...(establishmentType !== undefined ? { establishmentType: String(establishmentType || '').trim().slice(0, 80) || null } : {}), ...(address !== undefined ? { address: String(address).trim().slice(0, 200) || null } : {}), ...(businessHours !== undefined ? { businessHours } : {}), ...(fees !== undefined ? { fees: normalizeFees(fees) } : {}) } })
   let user = await prisma.user.findUnique({ where: { id: request.userId }, select: USER_PUBLIC_SELECT })
   if (user) {
