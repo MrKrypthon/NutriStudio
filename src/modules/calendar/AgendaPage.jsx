@@ -10,8 +10,9 @@ import { EMAIL_MAX_LENGTH, isValidEmail, normalizeEmail } from '../../lib/email.
 // UTC getters is what keeps "09:00" meaning 09:00 regardless of the viewer's system timezone.
 // "Today" follows that same convention: the viewer's local calendar date, repackaged as a UTC
 // midnight — a fixed demo date used to highlight and jump to "today" for a stale one instead.
-const now = new Date()
-const TODAY = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+// Se calcula al usarse (no al importar el módulo): con la app abierta de un día para otro, la Agenda
+// abría y el botón "Hoy" saltaba al día en que se cargó la página.
+const todayUTC = () => { const now = new Date(); return new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) }
 const DEFAULT_HOURS = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00']
 const DAY_SHORT = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -75,13 +76,13 @@ const patientOption = (p, duplicated) => {
 
 export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew, autoOpenPatientId, onConsumeAutoOpen, autoFilter, onConsumeAutoFilter }) {
   const [view, setView] = useState('Semana')
-  const [anchor, setAnchor] = useState(TODAY)
+  const [anchor, setAnchor] = useState(todayUTC)
   const [appointments, setAppointments] = useState([])
   const [status, setStatus] = useState('loading')
   const [patients, setPatients] = useState([])
   const [open, setOpen] = useState(false)
   const [isBlock, setIsBlock] = useState(false)
-  const [form, setForm] = useState(() => emptyForm(TODAY))
+  const [form, setForm] = useState(() => emptyForm(todayUTC()))
   const [submitState, setSubmitState] = useState('idle')
   const [submitError, setSubmitError] = useState('')
   const [newPatient, setNewPatient] = useState(EMPTY_NEW_PATIENT)
@@ -203,7 +204,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
 
   // "Today" for the grid (highlight + quick booking) follows the practice's timezone, matching
   // the now-line, instead of the viewer's system date.
-  const todayISO = practiceNow?.date || toISODate(TODAY)
+  const todayISO = practiceNow?.date || toISODate(todayUTC())
 
   // La cita completa debe caber en el horario: el inicio dentro del rango Y el fin antes del cierre.
   const fitsBusinessHours = (time, durationMinutes) => businessHours.ranges.some((range) => toMinutes(time) >= toMinutes(range.start) && toMinutes(time) + durationMinutes <= toMinutes(range.end))
@@ -264,7 +265,8 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   }
 
   const step = view === 'Semana' ? 7 : 1
-  const goToday = () => setAnchor(TODAY)
+  // "Hoy" lleva al mismo día que se resalta (el de la práctica).
+  const goToday = () => setAnchor(new Date(`${todayISO}T00:00:00.000Z`))
   const goPrev = () => setAnchor((prev) => addDays(prev, -step))
   const goNext = () => setAnchor((prev) => addDays(prev, step))
 
