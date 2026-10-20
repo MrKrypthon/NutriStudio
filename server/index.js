@@ -1874,8 +1874,9 @@ async function recordConsultationIncome(consultation, { paymentMethod, amountCen
 }
 
 // Totales de ingreso/egreso en un rango (fechas UTC), a partir de los movimientos del consultorio.
+// Sin rango (from/to nulos) es el histórico completo, sin filtrar por fecha.
 async function financeTotals(practiceId, from, to) {
-  const entries = await prisma.financeEntry.findMany({ where: { practiceId, occurredAt: { gte: from, lte: to } }, select: { type: true, amountCents: true } })
+  const entries = await prisma.financeEntry.findMany({ where: { practiceId, ...(from && to ? { occurredAt: { gte: from, lte: to } } : {}) }, select: { type: true, amountCents: true } })
   let incomeCents = 0
   let expenseCents = 0
   for (const entry of entries) { if (entry.type === 'INCOME') incomeCents += entry.amountCents; else expenseCents += entry.amountCents }
@@ -1932,7 +1933,9 @@ app.get('/api/v1/finance', async (request, reply) => {
   }
   const [entries, allTime, rangeTotals, practiceFees] = await Promise.all([
     prisma.financeEntry.findMany({ where: { practiceId, occurredAt: { gte: fromDate, lte: toDate } }, include: { consultation: { include: { patient: true, appointment: true } } }, orderBy: { occurredAt: 'desc' } }),
-    financeTotals(practiceId, new Date(0), new Date('9999-12-31T23:59:59.999Z')),
+    // Histórico sin límite de fechas: con new Date(0) quedaban fuera los movimientos con un año mal
+    // capturado (p. ej. 0202) y el "Disponible" no cuadraba con el del dashboard de Hoy.
+    financeTotals(practiceId, null, null),
     financeTotals(practiceId, fromDate, toDate),
     prisma.practice.findUnique({ where: { id: practiceId }, select: { fees: true, businessHours: true } }),
   ])
