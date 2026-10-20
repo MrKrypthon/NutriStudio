@@ -709,11 +709,28 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     const mealTimes = { ...notesForm.mealTimes }
     delete mealTimes[meal.key]
     const patch = { activeMeals: visibleMealKeys.filter((key) => key !== meal.key), mealTimes }
-    // Los equivalentes repartidos a ese tiempo se van con él: quedan otra vez "por repartir".
-    if (notesForm.equivalents?.distribution?.[meal.key]) {
-      const distribution = { ...notesForm.equivalents.distribution }
+    // Los equivalentes repartidos a ese tiempo se van con él (en el menú base y en los demás menús):
+    // quedan otra vez "por repartir". También las porciones de suplementos/bebidas de ese tiempo y
+    // su indicación propia: si no, seguían saliendo en "Indicaciones por tiempo de comida" del PDF
+    // con un tiempo que el plan ya no tiene.
+    const withoutMeal = (equivalents) => {
+      if (!equivalents) return equivalents
+      const hasShare = Boolean(equivalents.distribution?.[meal.key])
+      const hasExtra = (equivalents.extras || []).some((extra) => extra.meals?.[meal.key] != null)
+      if (!hasShare && !hasExtra) return equivalents
+      const distribution = { ...(equivalents.distribution || {}) }
       delete distribution[meal.key]
-      patch.equivalents = { ...notesForm.equivalents, distribution }
+      const extras = equivalents.extras ? equivalents.extras.map((extra) => { const meals = { ...(extra.meals || {}) }; delete meals[meal.key]; return { ...extra, meals } }) : undefined
+      return { ...equivalents, distribution, ...(extras ? { extras } : {}) }
+    }
+    const baseEquivalents = withoutMeal(notesForm.equivalents)
+    if (baseEquivalents !== notesForm.equivalents) patch.equivalents = baseEquivalents
+    const menus = (notesForm.menus || []).map((item) => { const equivalents = withoutMeal(item.equivalents); return equivalents === item.equivalents ? item : { ...item, equivalents } })
+    if (menus.some((item, index) => item !== notesForm.menus[index])) patch.menus = menus
+    if (notesForm.mealNotes?.[meal.key] != null) {
+      const mealNotes = { ...notesForm.mealNotes }
+      delete mealNotes[meal.key]
+      patch.mealNotes = mealNotes
     }
     if (!hadRecipes) { patchNotes(patch); return }
     const nextSlots = { ...slots }
