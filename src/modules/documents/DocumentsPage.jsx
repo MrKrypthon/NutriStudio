@@ -121,6 +121,25 @@ export default function DocumentsPage({ setActive, patientId = '', onOpenPatient
   // Si se llegó con un paciente (o se eligió uno) y no tiene documentos visibles, no se cae a la
   // carpeta de otro: antes se abría la del primero de la lista como si fuera la suya.
   const selectedGroup = selectedPatientId ? patientGroups.find((group) => group.patientId === selectedPatientId) || null : patientGroups[0] || null
+  // La lista general trae sólo los 500 documentos más recientes: la carpeta de un paciente con
+  // documentos más viejos salía incompleta, o vacía al llegar desde Pacientes. Si la lista vino
+  // recortada, se piden los de ese paciente y se suman a los ya cargados.
+  const folderPatientId = grouped && state === 'online' && total > items.length ? (selectedPatientId || selectedGroup?.patientId || null) : null
+  useEffect(() => {
+    if (!folderPatientId) return undefined
+    let cancelled = false
+    documentsApi.list(`?patientId=${encodeURIComponent(folderPatientId)}`)
+      .then((response) => {
+        if (cancelled) return
+        setItems((prev) => {
+          const known = new Set(prev.map((doc) => doc.id))
+          const missing = (response.items || []).filter((doc) => !known.has(doc.id))
+          return missing.length ? [...prev, ...missing] : prev
+        })
+      })
+      .catch(() => { /* la carpeta se queda con lo que ya estaba cargado */ })
+    return () => { cancelled = true }
+  }, [folderPatientId])
   // Documentos del paciente elegido, reunidos por su origen: cada consulta con sus informes y su
   // expediente, y cada plan con su PDF. Es lo que liga Documentos con el resto de la app.
   const originGroups = useMemo(() => {
