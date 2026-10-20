@@ -235,6 +235,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [calcResult, setCalcResult] = useState(null)
   // El resultado mostrado se calculó con datos que ya cambiaron: hay que volver a calcular.
   const [calcStale, setCalcStale] = useState(false)
+  // Cuenta los cambios a datos de energía, para saber si cambiaron mientras el cálculo estaba en vuelo.
+  const energyEditsRef = useRef(0)
   const [calcState, setCalcState] = useState('idle')
   const [calcError, setCalcError] = useState('')
   const [evalSaveState, setEvalSaveState] = useState('idle')
@@ -429,6 +431,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const updateForm = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
+    if (ENERGY_FIELDS.includes(key)) energyEditsRef.current += 1
     // El resultado en pantalla ya no corresponde a estos datos (y "Guardar" recalcula con ellos).
     // También mientras el cálculo está en vuelo: si no, la respuesta tardía lo daba por vigente.
     if (ENERGY_FIELDS.includes(key) && (calcResult || calcState === 'loading')) { setCalcStale(true); setEvalSaveState('idle') }
@@ -441,10 +444,13 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     setCalcState('loading')
     setCalcError('')
     setEvalSaveState('idle')
+    const editsAtStart = energyEditsRef.current
     try {
       const response = await nutritionApi.calculate(energyPayload(form))
       setCalcResult(response)
-      setCalcStale(false)
+      // Si se cambiaron los datos mientras calculaba, el resultado ya nació viejo: el aviso se
+      // queda (antes esta línea lo borraba y "Guardar" se habilitaba con un resultado ajeno).
+      setCalcStale(energyEditsRef.current !== editsAtStart)
       setCalcState('success')
     } catch (error) {
       setCalcState('error')
