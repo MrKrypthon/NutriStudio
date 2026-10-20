@@ -2071,12 +2071,17 @@ async function recordConsultationIncome(consultation, { paymentMethod, amountCen
 
 // Totales de ingreso/egreso en un rango (fechas UTC), a partir de los movimientos del consultorio.
 // Sin rango (from/to nulos) es el histórico completo, sin filtrar por fecha.
-async function financeTotals(practiceId, from, to) {
-  const entries = await prisma.financeEntry.findMany({ where: { practiceId, ...(from && to ? { occurredAt: { gte: from, lte: to } } : {}) }, select: { type: true, amountCents: true } })
+// La suma la hace Postgres (groupBy por tipo): antes se traían todos los movimientos del histórico a
+// memoria en cada carga de Finanzas y de Hoy, y el tiempo crecía con los años de uso.
+const financeSumQuery = (where) => prisma.financeEntry.groupBy({ by: ['type'], where, _sum: { amountCents: true } })
+function totalsFromGroups(groups) {
   let incomeCents = 0
   let expenseCents = 0
-  for (const entry of entries) { if (entry.type === 'INCOME') incomeCents += entry.amountCents; else expenseCents += entry.amountCents }
+  for (const group of groups) { const cents = group._sum.amountCents || 0; if (group.type === 'INCOME') incomeCents += cents; else expenseCents += cents }
   return { incomeCents, expenseCents, balanceCents: incomeCents - expenseCents }
+}
+async function financeTotals(practiceId, from, to) {
+  return totalsFromGroups(await financeSumQuery({ practiceId, ...(from && to ? { occurredAt: { gte: from, lte: to } } : {}) }))
 }
 
 // Serie diaria (para la gráfica) recortada a 92 días como máximo para no devolver rangos absurdos.
@@ -2106,13 +2111,13 @@ async function buildFinanceSnapshot(practiceId, date) {
   const dayStart = new Date(`${date}T00:00:00.000Z`)
   const dayEnd = new Date(`${date}T23:59:59.999Z`)
   const weekStart = new Date(dayStart.getTime() - 6 * 86400000)
-  const [today, allTimeEntries, weekEntries] = await prisma.$transaction([
+  const [today, allTimeGroups, weekEntries] = await prisma.$transaction([
     prisma.financeEntry.findMany({ where: { practiceId, occurredAt: { gte: dayStart, lte: dayEnd } }, select: { type: true, amountCents: true } }),
-    prisma.financeEntry.findMany({ where: { practiceId }, select: { type: true, amountCents: true } }),
+    financeSumQuery({ practiceId }),
     prisma.financeEntry.findMany({ where: { practiceId, occurredAt: { gte: weekStart, lte: dayEnd } }, select: { type: true, amountCents: true, occurredAt: true } }),
   ])
   const sum = (entries) => entries.reduce((acc, entry) => { if (entry.type === 'INCOME') acc.incomeCents += entry.amountCents; else acc.expenseCents += entry.amountCents; return { ...acc, balanceCents: acc.incomeCents - acc.expenseCents } }, { incomeCents: 0, expenseCents: 0, balanceCents: 0 })
-  return { today: sum(today), allTime: sum(allTimeEntries), last7: dailyFinanceSeries(weekEntries, weekStart, dayEnd) }
+  return { today: sum(today), allTime: totalsFromGroups(allTimeGroups), last7: dailyFinanceSeries(weekEntries, weekStart, dayEnd) }
 }
 
 app.get('/api/v1/finance', async (request, reply) => {
