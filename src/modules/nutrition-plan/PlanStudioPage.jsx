@@ -414,7 +414,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   // RF-07 macro distribution: percentages the professional can adjust; they must sum to 100 and
   // map to grams against the calculated requirement.
-  const macroSum = Number(form.carbsPercent || 0) + Number(form.proteinPercent || 0) + Number(form.fatPercent || 0)
+  // Redondeada a centésimas: con decimales (52.3 + 22.4 + 25.3) la suma en coma flotante daba
+  // 99.99999999999999, "Guardar en el plan" quedaba deshabilitado y se mostraba ese número, aunque el
+  // servidor acepta la distribución.
+  const macroSum = Math.round((Number(form.carbsPercent || 0) + Number(form.proteinPercent || 0) + Number(form.fatPercent || 0)) * 100) / 100
   const calcTarget = calcResult ? calcResult.targetKcal ?? calcResult.get : null
   const macroGrams = (pct, factor) => (calcTarget ? Math.round((calcTarget * (Number(pct) || 0)) / 100 / factor) : null)
   // Cunningham / Katch-McArdle compute BMR from lean mass (needs body fat); without an input they
