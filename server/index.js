@@ -1665,7 +1665,10 @@ app.get('/api/v1/recipes', async (request) => {
     ])
     return { items, total, page: currentPage, pageSize: take }
   }
-  const recipes = await prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' }, take: 1000 })
+  // Sin tope: el Constructor descarta de la semana las recetas que no vienen aquí (las toma por
+  // archivadas), así que el `take: 1000` de antes borraba al guardar las asignaciones de las recetas
+  // que quedaban después de la 1000 en orden alfabético (el catálogo base ya trae ~760).
+  const recipes = await prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' } })
   return { items: recipes }
 })
 
