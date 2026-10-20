@@ -75,15 +75,18 @@ export default function IngredientsPage({ setActive }) {
     if (!form.name.trim() || !form.group) return
     setCreateState('saving')
     setCreateError('')
+    // Un "-5" escrito pasa el min="0" del campo y se guardaba tal cual: las recetas con ese
+    // ingrediente restaban kcal. Los negativos cuentan como 0, igual que un campo vacío.
+    const amount = (value) => Math.max(0, Number(value) || 0)
     const nutrition = {
-      kcal: Number(form.kcal) || 0,
-      protein: Number(form.protein) || 0,
-      carbs: Number(form.carbs) || 0,
-      fat: Number(form.fat) || 0,
-      fiber: Number(form.fiber) || 0,
+      kcal: amount(form.kcal),
+      protein: amount(form.protein),
+      carbs: amount(form.carbs),
+      fat: amount(form.fat),
+      fiber: amount(form.fiber),
     }
     const payload = { name: form.name.trim(), group: form.group, unit: form.unit, nutrition }
-    if (form.serving.trim() || form.grams) payload.equivalence = { serving: form.serving.trim() || 'Por definir', grams: Number(form.grams) || null }
+    if (form.serving.trim() || form.grams) payload.equivalence = { serving: form.serving.trim() || 'Por definir', grams: amount(form.grams) || null }
     try {
       const created = await ingredientsApi.create(payload)
       setForm(EMPTY_FORM)
