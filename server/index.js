@@ -1647,6 +1647,12 @@ app.patch('/api/v1/education-materials/:materialId', async (request, reply) => {
 })
 
 const EDUCATION_MIME_EXT = { 'application/pdf': 'pdf', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }
+const EDUCATION_MAGIC = {
+  pdf: (buffer) => buffer.subarray(0, 5).toString('latin1') === '%PDF-',
+  png: (buffer) => buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])),
+  jpg: (buffer) => buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff,
+  webp: (buffer) => buffer.subarray(0, 4).toString('latin1') === 'RIFF' && buffer.subarray(8, 12).toString('latin1') === 'WEBP',
+}
 const educationAttachmentDir = () => path.resolve(process.env.EDUCATION_ATTACHMENT_STORAGE_PATH || './storage/education-materials')
 
 // A shareable file (PDF guide, infographic image...) attached to an education material. Same
@@ -1660,6 +1666,9 @@ app.post('/api/v1/education-materials/:materialId/attachment', async (request, r
   if (!match || !ext || !fileName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube un archivo PDF o imagen (PNG/JPG/WebP).', fields: { dataUrl: true } })
   const buffer = Buffer.from(match[2], 'base64')
   if (buffer.byteLength > 10 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El archivo no puede pesar más de 10 MB.', fields: { dataUrl: true } })
+  // El tipo del data URL lo declara el cliente: se comprueba la firma del contenido para no guardar
+  // (y luego servir con ese tipo) un archivo que no es lo que dice ser.
+  if (!EDUCATION_MAGIC[ext](buffer)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El archivo no es un PDF o imagen válido.', fields: { dataUrl: true } })
   const storageKey = `${material.id}.${ext}`
   await mkdir(educationAttachmentDir(), { recursive: true })
   await writeFile(path.join(educationAttachmentDir(), storageKey), buffer)
@@ -1678,7 +1687,7 @@ app.get('/api/v1/education-materials/:materialId/attachment', async (request, re
   try {
     const file = await readFile(path.join(educationAttachmentDir(), material.attachmentStorageKey))
     const disposition = material.attachmentMime?.startsWith('image/') ? 'inline' : 'attachment'
-    return reply.type(material.attachmentMime || 'application/octet-stream').header('Content-Disposition', contentDisposition(disposition, safeFileName(material.attachmentFileName || material.attachmentStorageKey))).send(file)
+    return reply.type(material.attachmentMime || 'application/octet-stream').header('Content-Disposition', contentDisposition(disposition, safeFileName(material.attachmentFileName || material.attachmentStorageKey))).header('X-Content-Type-Options', 'nosniff').send(file)
   } catch {
     return reply.code(404).send({ code: 'MATERIAL_ATTACHMENT_NOT_FOUND', message: 'El archivo adjunto no está disponible.', fields: {} })
   }
