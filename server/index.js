@@ -90,9 +90,12 @@ const safeFileName = (name) => String(name || 'archivo').replace(/[\r\n"]/g, '')
 await app.register(cors, { origin: true, methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] })
 
 app.addHook('onRequest', async (request, reply) => {
-  const pathname = request.url.split('?')[0]
+  // La ruta que Fastify ya resolvió, no la dirección cruda: el enrutador decodifica el
+  // percent-encoding, así que `/%61pi/v1/patients` llegaba a /api/v1/patients sin sesión y
+  // `/api/v1/%61dmin/…` a las rutas /admin con un token de práctica.
+  const pathname = request.routeOptions?.url || request.url.split('?')[0]
   if (request.method === 'OPTIONS' || PUBLIC_ROUTES.has(pathname) || PUBLIC_ROUTE_PATTERNS.some((pattern) => pattern.test(pathname))) return
-  if (!request.url.startsWith('/api/v1/')) return
+  if (!pathname.startsWith('/api/v1/')) return
   const header = request.headers.authorization
   // Panel de administración del SaaS: usa su propio token (payload.admin) y solo sirve rutas /admin.
   if (pathname.startsWith('/api/v1/admin/')) {
