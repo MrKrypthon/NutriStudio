@@ -1076,8 +1076,12 @@ app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => 
   // elegiría una distinta y la visita quedaría partida en dos expedientes paralelos.
   const alreadyOpen = await prisma.consultation.findFirst({ where: { patientId: request.params.patientId, status: 'IN_PROGRESS' } })
   if (alreadyOpen) return reply.code(409).send({ code: 'CONSULTATION_ALREADY_OPEN', message: 'Este paciente ya tiene una consulta en curso.', fields: {}, consultationId: alreadyOpen.id })
-  const consultation = await prisma.consultation.create({ data: { patientId: request.params.patientId, appointmentId, nutritionistId: userId, templateId, status: 'IN_PROGRESS', startedAt: new Date() } })
-  if (appointment) await prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'COMPLETED' } })
+  // Consulta y cita atendida van juntas: si la cita no se podía marcar, quedaba la consulta abierta
+  // con su cita todavía vigente en la agenda.
+  const [consultation] = await prisma.$transaction([
+    prisma.consultation.create({ data: { patientId: request.params.patientId, appointmentId, nutritionistId: userId, templateId, status: 'IN_PROGRESS', startedAt: new Date() } }),
+    ...(appointment ? [prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'COMPLETED' } })] : []),
+  ])
   return reply.code(201).send(consultation)
 })
 
@@ -1563,10 +1567,12 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
     // curso (también en una consulta cerrada y reabierta, sin dejar la versión anterior en la bitácora).
     const filled = new Set(consultation.sections.filter((section) => hasSectionContent(section.payload)).map((section) => section.sectionKey))
     const sections = Object.entries(template.sections || {}).filter(([sectionKey]) => !filled.has(sectionKey))
-    await prisma.$transaction(sections.map(([sectionKey, payload]) =>
-      prisma.clinicalSection.upsert({ where: { consultationId_sectionKey: { consultationId: consultation.id, sectionKey } }, create: { consultationId: consultation.id, sectionKey, payload, lastSavedBy: request.userId }, update: { payload, lastSavedBy: request.userId } })
-    ))
-    await countUse()
+    await prisma.$transaction([
+      ...sections.map(([sectionKey, payload]) =>
+        prisma.clinicalSection.upsert({ where: { consultationId_sectionKey: { consultationId: consultation.id, sectionKey } }, create: { consultationId: consultation.id, sectionKey, payload, lastSavedBy: request.userId }, update: { payload, lastSavedBy: request.userId } })
+      ),
+      countUse(),
+    ])
     return { type: 'clinical', consultationId: consultation.id, patientId, skippedSections: [...filled].filter((key) => key in (template.sections || {})) }
   }
 
@@ -1580,9 +1586,8 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
   }
   const settings = template.sections?.planSettings
   if (settings && typeof settings === 'object') {
-    const data = {}
     for (const field of PLAN_TEMPLATE_FIELDS) if (settings[field] != null) data[field] = settings[field]
-    if (Object.keys(data).length) await prisma.nutritionPlan.update({ where: { id: plan.id }, data })
+  const data = {}
   }
   // Normaliza igual que la distribución (valida día/tiempo y deduplica por día+tiempo): una
   // plantilla con slots crudos duplicados violaría @@unique([planId, dayOfWeek, mealType]) → 500.
@@ -1597,9 +1602,12 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
   await prisma.$transaction([
     prisma.mealSlot.deleteMany({ where: { planId: plan.id } }),
     prisma.mealSlot.createMany({ data: slots.map((slot) => ({ planId: plan.id, dayOfWeek: slot.dayOfWeek, mealType: slot.mealType, recipeId: validRecipeIds.has(slot.recipeId) ? slot.recipeId : null, servings: slot.servings })) }),
+  // Ajustes, semana y contador en una sola transacción: antes un fallo al copiar la semana dejaba el
+  // plan con los ajustes de la plantilla pero con su semana anterior.
   ])
-  await countUse()
+    ...(Object.keys(data).length ? [prisma.nutritionPlan.update({ where: { id: plan.id }, data })] : []),
   return { type: 'plan', planId: plan.id, patientId }
+    countUse(),
 })
 
 // Búsqueda por nombre sin distinguir acentos: `mode: 'insensitive'` de Postgres sólo ignora
@@ -1708,18 +1716,20 @@ app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
   // An imported recipe may legitimately have no SMAE linkage (that just clears the calculated
   // side); a handmade recipe still needs at least one ingredient or its nutrition would be 0.
   if (!filteredIngredients.length && !recipe.source) return reply.code(400).send({ code: 'EMPTY_RECIPE', message: 'La receta debe conservar al menos un ingrediente.', fields: {} })
-  const updated = await prisma.$transaction(async (transaction) => {
+  // El recálculo va dentro de la misma transacción: si fallaba después de cambiar los ingredientes,
+  // la receta quedaba con los nuevos ingredientes y los nutrimentos de los anteriores.
+  return prisma.$transaction(async (transaction) => {
     await transaction.recipeIngredient.deleteMany({ where: { recipeId: recipe.id } })
     if (filteredIngredients.length) await transaction.recipeIngredient.createMany({ data: filteredIngredients.map((item) => ({ recipeId: recipe.id, ...item })) })
-    return transaction.recipe.findUnique({ where: { id: recipe.id }, include: { ingredients: { include: { ingredient: true } } } })
+    const updated = await transaction.recipe.findUnique({ where: { id: recipe.id }, include: { ingredients: { include: { ingredient: true } } } })
+    const computed = perServingFromIngredients(updated.ingredients, updated.portions)
+    // Imported recipes keep their original per-serving values in `nutrition` and store the SMAE
+    // result in `calculatedNutrition`; handmade recipes keep the old behavior (nutrition = computed).
+    const data = updated.source
+      ? { calculatedNutrition: filteredIngredients.length ? computed : null, calculationUpdatedAt: new Date(), version: { increment: 1 } }
+      : { nutrition: computed, version: { increment: 1 } }
+    return transaction.recipe.update({ where: { id: updated.id }, data, include: { ingredients: { include: { ingredient: true } } } })
   })
-  const computed = perServingFromIngredients(updated.ingredients, updated.portions)
-  // Imported recipes keep their original per-serving values in `nutrition` and store the SMAE
-  // result in `calculatedNutrition`; handmade recipes keep the old behavior (nutrition = computed).
-  const data = updated.source
-    ? { calculatedNutrition: filteredIngredients.length ? computed : null, calculationUpdatedAt: new Date(), version: { increment: 1 } }
-    : { nutrition: computed, version: { increment: 1 } }
-  return prisma.recipe.update({ where: { id: updated.id }, data, include: { ingredients: { include: { ingredient: true } } } })
 })
 
 app.get('/api/v1/recipes/:recipeId/nutrition', async (request, reply) => {
