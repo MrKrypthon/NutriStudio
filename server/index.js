@@ -988,6 +988,8 @@ app.get('/api/v1/patients/:patientId/sections', async (request, reply) => {
 
 app.put('/api/v1/patients/:patientId/sections/:sectionKey', async (request, reply) => {
   const { payload = {}, updatedAt } = request.body || {}
+  // El payload es un objeto de campos; null o una lista llegaban a Prisma (Json requerido) → 500.
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Los datos de la sección no son válidos.', fields: { payload: true } })
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   const where = { patientId_sectionKey: { patientId: patient.id, sectionKey: request.params.sectionKey } }
@@ -1152,6 +1154,7 @@ app.post('/api/v1/consultations/:consultationId/reopen', async (request, reply) 
 
 app.put('/api/v1/consultations/:consultationId/sections/:sectionKey', async (request, reply) => {
   const { payload = {}, completionState = 'in_progress', updatedAt } = request.body || {}
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Los datos de la sección no son válidos.', fields: { payload: true } })
   const consultation = await prisma.consultation.findFirst({ where: { id: request.params.consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
   if (consultationClosed(consultation, reply)) return
