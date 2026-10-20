@@ -1393,7 +1393,9 @@ app.get('/api/v1/templates', async (request) => {
 const PLAN_TEMPLATE_FIELDS = ['equivalents', 'menus', 'activeMeals', 'mealTimes', 'mealLabels', 'mealNotes', 'recipeAdjustments', 'hydrationNote', 'recommendations']
 
 app.post('/api/v1/templates', async (request, reply) => {
-  const { name, type, description, sourceConsultationId, sourcePlanId } = request.body || {}
+  const { type, description, sourceConsultationId, sourcePlanId } = request.body || {}
+  // Mismo criterio que al editar (PATCH): un nombre sólo de espacios no es un nombre.
+  const name = String(request.body?.name ?? '').trim()
   if (!name || !type) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y tipo son obligatorios.', fields: { name: !name, type: !type } })
   if (!['clinical', 'plan'].includes(type)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Tipo de plantilla no soportado.', fields: { type: 'invalid' } })
 
@@ -1414,7 +1416,7 @@ app.post('/api/v1/templates', async (request, reply) => {
     sections = { planSettings: Object.fromEntries(PLAN_TEMPLATE_FIELDS.map((field) => [field, plan[field] ?? null])) }
   }
 
-  const template = await prisma.template.create({ data: { practiceId: request.practiceId, type, name, description, sections, mealSlots } })
+  const template = await prisma.template.create({ data: { practiceId: request.practiceId, type, name, description: description ? String(description).trim() || null : null, sections, mealSlots } })
   return reply.code(201).send(template)
 })
 
