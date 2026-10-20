@@ -59,7 +59,8 @@ const sessionVersionCache = new Map()
 async function currentSessionVersion(userId) {
   const cached = sessionVersionCache.get(userId)
   if (cached && cached.expires > Date.now()) return cached.version
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { sessionVersion: true, status: true } }).catch(() => null)
+  // Un error de la base no se cachea ni cuenta como «sesión cerrada»: sube y responde 500.
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { sessionVersion: true, status: true } })
   const version = user && user.status === 'ACTIVE' ? user.sessionVersion : null
   sessionVersionCache.set(userId, { version, expires: Date.now() + 30000 })
   return version
@@ -67,7 +68,7 @@ async function currentSessionVersion(userId) {
 async function practiceAccessFor(practiceId) {
   const cached = practiceStatusCache.get(practiceId)
   if (cached && cached.expires > Date.now()) return cached.access
-  const practice = await prisma.practice.findUnique({ where: { id: practiceId }, select: { status: true, signupSource: true, paidUntil: true } }).catch(() => null)
+  const practice = await prisma.practice.findUnique({ where: { id: practiceId }, select: { status: true, signupSource: true, paidUntil: true } })
   const access = practiceAccess(practice)
   practiceStatusCache.set(practiceId, { access, expires: Date.now() + 30000 })
   return access
@@ -111,24 +112,27 @@ app.addHook('onRequest', async (request, reply) => {
     return
   }
   if (!header?.startsWith('Bearer ')) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Inicia sesión para continuar.', fields: {} })
+  const invalidSession = () => reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Tu sesión expiró o no es válida. Inicia sesión de nuevo.', fields: {} })
+  let payload
   try {
-    const payload = jwt.verify(header.slice(7), JWT_SECRET)
-    // Un token de admin no lleva practiceId; si llegara por aquí, Prisma ignoraría el `practiceId:
-    // undefined` y las consultas devolverían datos de TODAS las prácticas. Solo usuarios de práctica.
-    if (payload.admin || !payload.practiceId) throw new Error('not a practice user')
-    request.userId = payload.sub
-    request.practiceId = payload.practiceId
-    request.userRole = payload.role
-    // Contraseña cambiada o restablecida (o usuario desactivado): las sesiones anteriores se cierran.
-    if ((await currentSessionVersion(payload.sub)) !== (payload.sv || 0)) throw new Error('stale session')
-    // Una cuenta suspendida no puede operar (se cachea para no consultar en cada petición).
-    const access = await practiceAccessFor(request.practiceId)
-    if (access.reason === 'SUSPENDED' || access.reason === 'NOT_FOUND') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
-    // Sin suscripción pagada: sólo la sesión y la pantalla de pago (402 = pago requerido).
-    if (!access.allowed && !SUBSCRIPTION_FREE_ROUTES.has(pathname)) return reply.code(402).send({ code: 'SUBSCRIPTION_REQUIRED', message: 'Tu suscripción no está activa. Suscríbete para seguir usando Milpa.', fields: {} })
+    payload = jwt.verify(header.slice(7), JWT_SECRET)
   } catch {
-    return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Tu sesión expiró o no es válida. Inicia sesión de nuevo.', fields: {} })
+    return invalidSession()
   }
+  // Un token de admin no lleva practiceId; si llegara por aquí, Prisma ignoraría el `practiceId:
+  // undefined` y las consultas devolverían datos de TODAS las prácticas. Solo usuarios de práctica.
+  if (payload.admin || !payload.practiceId) return invalidSession()
+  request.userId = payload.sub
+  request.practiceId = payload.practiceId
+  request.userRole = payload.role
+  // Contraseña cambiada o restablecida (o usuario desactivado): las sesiones anteriores se cierran.
+  // Fuera del try: una falla de la base es un 500, no un 401 que cierre la sesión en la app.
+  if ((await currentSessionVersion(payload.sub)) !== (payload.sv || 0)) return invalidSession()
+  // Una cuenta suspendida no puede operar (se cachea para no consultar en cada petición).
+  const access = await practiceAccessFor(request.practiceId)
+  if (access.reason === 'SUSPENDED' || access.reason === 'NOT_FOUND') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
+  // Sin suscripción pagada: sólo la sesión y la pantalla de pago (402 = pago requerido).
+  if (!access.allowed && !SUBSCRIPTION_FREE_ROUTES.has(pathname)) return reply.code(402).send({ code: 'SUBSCRIPTION_REQUIRED', message: 'Tu suscripción no está activa. Suscríbete para seguir usando Milpa.', fields: {} })
 })
 
 // Best-effort audit trail: never let a logging failure break the write it's describing.
