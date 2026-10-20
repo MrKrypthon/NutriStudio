@@ -2835,6 +2835,13 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
       if (diagnoses.length) for (const d of diagnoses) drawLineText(file, diagnosisLine(d))
       else drawLineText(file, 'Sin diagnóstico registrado.', FAINT)
       drawFieldList(file, expand(payloadOf(key)), { empty: null })
+    } else if (key === 'dietary') {
+      // El recordatorio de 24 h es un objeto anidado: como campo suelto se imprimía crudo
+      // ("meals: key: breakfast · time: 08:00 · items: uid: … nutrition: kcal: 160…"). Va como tabla.
+      const recall = payloadOf(key)['Recordatorio 24 h']
+      const hasRecall = recallHasData(recall)
+      drawFieldList(file, expand(payloadOf(key)), { skip: ['Recordatorio 24 h'], empty: hasRecall ? null : 'Sin datos registrados.' })
+      if (hasRecall) { file.moveDown(0.3); file.font('Helvetica-Bold').fontSize(10).fillColor(INK).text('Recordatorio de 24 horas', 48, file.y, { width: 516 }); drawRecallTable(file, recall) }
     } else {
       // El motivo y el objetivo ya van en el recuadro de arriba: no se repiten en "Resumen".
       drawFieldList(file, expand(payloadOf(key)), { skip: key === 'summary' && (reason || goal) ? ['Motivo de consulta', 'Objetivo', 'reason', 'goal'] : [], empty: key === 'summary' && (reason || goal) ? 'Motivo y objetivo en el recuadro de arriba.' : 'Sin datos registrados.' })
@@ -2948,7 +2955,7 @@ function drawClinicalReport(file, document, practice, user, logoBuffer) {
   title('Dietético')
   const hadDietaryNotes = drawFieldList(file, payloadOf('dietary'), { skip: ['Recordatorio 24 h'], empty: null })
   const recall = payloadOf('dietary')['Recordatorio 24 h']
-  if (recall?.meals?.length) { file.moveDown(0.3); file.font('Helvetica-Bold').fontSize(10).fillColor(INK).text('Recordatorio de 24 horas', 48, file.y, { width: 516 }); drawRecallTable(file, recall) }
+  if (recallHasData(recall)) { file.moveDown(0.3); file.font('Helvetica-Bold').fontSize(10).fillColor(INK).text('Recordatorio de 24 horas', 48, file.y, { width: 516 }); drawRecallTable(file, recall) }
   else if (!hadDietaryNotes) line('Sin datos dietéticos registrados.')
 
   title('Estilo de vida')
@@ -3005,9 +3012,14 @@ function drawLabTable(file, labs) {
   }
 }
 
+// El recordatorio se guarda con sus cinco tiempos de comida aunque estén vacíos: sólo cuenta si
+// alguno tiene alimentos o descripción (si no, el PDF listaba "Desayuno", "Comida"… sin nada).
+const recallHasData = (recall) => (recall?.meals || []).some((meal) => meal.items?.length || meal.note)
+
 function drawRecallTable(file, recall) {
   const { meals, totals } = collectRecall(recall)
   for (const meal of meals) {
+    if (!meal.items.length && !meal.note) continue
     file.font('Helvetica-Bold').fontSize(9).fillColor(INK).text(`${meal.label}${meal.items.length ? ` · ${meal.kcal} kcal` : ''}`, 48, file.y, { width: 516 })
     if (meal.note) file.font('Helvetica').fontSize(8).fillColor(FAINT).text(meal.note, 56, file.y, { width: 508 })
     for (const item of meal.items) file.font('Helvetica').fontSize(8).fillColor(MUTED).text(`• ${item.name}: ${item.grams} g`, 56, file.y, { width: 508 })
