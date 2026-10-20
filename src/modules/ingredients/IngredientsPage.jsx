@@ -38,6 +38,7 @@ export default function IngredientsPage({ setActive }) {
   const [items, setItems] = useState(FALLBACK)
   const [selected, setSelected] = useState(FALLBACK[0])
   const [status, setStatus] = useState('loading')
+  const [hasMore, setHasMore] = useState(false)
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState('Todos')
   const [reloadKey, setReloadKey] = useState(0)
@@ -59,6 +60,7 @@ export default function IngredientsPage({ setActive }) {
         .then((response) => {
           const list = response.items || []
           setItems(list)
+          setHasMore(Boolean(response.hasMore))
           setSelected((prev) => list.find((item) => item.id === prev?.id) || list[0] || null)
           setStatus('online')
         })
@@ -177,6 +179,7 @@ export default function IngredientsPage({ setActive }) {
         <div className="ingredient-list panel">
           {status === 'error' && <div className="form-error">⚠ No se pudieron cargar los ingredientes.</div>}
           {status !== 'loading' && status !== 'error' && items.length === 0 && <div className="result-empty"><span>◌</span><h3>No hay ingredientes con esos filtros</h3><p>Ajusta la búsqueda o el grupo.</p></div>}
+          {status === 'online' && hasMore && <p className="muted docs-note">Se muestran los primeros {items.length}. Busca por nombre para encontrar los demás.</p>}
           {items.map((item) => <button className={'ingredient-row ' + (selected?.id === item.id ? 'ingredient-selected' : '')} onClick={() => setSelected(item)} key={item.id}>
             <span className="ingredient-icon">{item.imageFile ? <img src={ingredientsApi.imageUrl(item.imageFile)} alt="" /> : groupIcon(item)}</span>
             <div><b>{item.name}</b><small>{item.group} · Porción {item.equivalence?.serving || 'por definir'}</small></div>

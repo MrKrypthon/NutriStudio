@@ -1921,8 +1921,11 @@ app.delete('/api/v1/ingredients/:ingredientId/image', async (request, reply) => 
 app.get('/api/v1/ingredients', async (request) => {
   const { search = '', group } = request.query
   const where = await nameSearchWhere(prisma.ingredient, { practiceId: request.practiceId, status: 'ACTIVE', ...(group ? { group: String(group) } : {}) }, search)
-  const ingredients = await prisma.ingredient.findMany({ where, orderBy: { name: 'asc' }, take: 200 })
-  return { items: ingredients }
+  // Tope de 200 (el catálogo base trae ~3,000 y varios grupos pasan de 200): se pide uno de más
+  // para saber si hubo recorte (`hasMore`) y que las pantallas pidan buscar, en vez de cortar en
+  // silencio. Un count aparte costaba otro recorrido de la tabla en cada tecla.
+  const ingredients = await prisma.ingredient.findMany({ where, orderBy: { name: 'asc' }, take: 201 })
+  return { items: ingredients.slice(0, 200), hasMore: ingredients.length > 200 }
 })
 
 app.post('/api/v1/ingredients/import', async (request, reply) => {

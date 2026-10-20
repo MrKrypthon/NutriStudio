@@ -51,7 +51,7 @@ export default function EquivalentsStep({ plan, value, onChange, locked, expedie
     setCatalog((prev) => ({ ...prev, state: 'loading' }))
     const timer = setTimeout(() => {
       ingredientsApi.list(`?group=${encodeURIComponent(CATALOG_GROUP[catalogCode])}${catalogSearch.trim() ? `&search=${encodeURIComponent(catalogSearch.trim())}` : ''}`)
-        .then((response) => { if (!cancelled) setCatalog({ state: 'ready', items: (response.items || []).filter((item) => item.equivalence?.serving) }) })
+        .then((response) => { if (!cancelled) setCatalog({ state: 'ready', items: (response.items || []).filter((item) => item.equivalence?.serving), truncated: Boolean(response.hasMore) }) })
         .catch(() => { if (!cancelled) setCatalog({ state: 'error', items: [] }) })
     }, 250)
     return () => { cancelled = true; clearTimeout(timer) }
@@ -140,6 +140,7 @@ export default function EquivalentsStep({ plan, value, onChange, locked, expedie
           {catalog.state === 'loading' && <p className="muted">Cargando alimentos…</p>}
           {catalog.state === 'error' && <p className="form-error">⚠ No se pudo consultar el catálogo.</p>}
           {catalog.state === 'ready' && catalog.items.length === 0 && <p className="muted">No hay alimentos de este grupo{catalogSearch.trim() ? ' con ese nombre' : ''} en Ingredientes.</p>}
+          {catalog.state === 'ready' && catalog.truncated && <p className="muted">Se muestran los primeros alimentos del grupo; busca por nombre para encontrar los demás.</p>}
           {catalog.state === 'ready' && catalog.items.length > 0 && <ul className="eq-catalog-list">{catalog.items.map((item) => <li key={item.id}><b>{item.name}</b><span>{item.equivalence.serving}{item.equivalence.grams ? ` · ${formatCount(item.equivalence.grams)} g` : ''}</span></li>)}</ul>}
           <small className="muted">Porción que vale 1 equivalente, según el catálogo de Ingredientes.</small>
         </section>}
