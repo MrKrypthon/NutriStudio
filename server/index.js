@@ -1790,11 +1790,14 @@ app.post('/api/v1/ingredients/:ingredientId/image', async (request, reply) => {
   if (!match || !ext) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen PNG, JPG o WebP.', fields: { dataUrl: true } })
   const buffer = Buffer.from(match[2], 'base64')
   if (buffer.byteLength > 3 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La imagen no puede pesar más de 3 MB.', fields: { dataUrl: true } })
-  const storageKey = `${ingredient.id}.${ext}`
+  // Con marca de tiempo, como las fotos de receta: con el nombre fijo `<id>.<ext>`, al cambiar la
+  // imagen por otra del mismo tipo la URL no cambiaba y el navegador seguía mostrando la anterior
+  // (se sirve con caché de un día).
+  const storageKey = `${ingredient.id}-${Date.now().toString(36)}.${ext}`
   await mkdir(ingredientImageDir(), { recursive: true })
   await writeFile(path.join(ingredientImageDir(), storageKey), buffer)
   const updated = await prisma.ingredient.update({ where: { id: ingredient.id }, data: { imageFile: storageKey } })
-  // Reemplazar con otra extensión dejaba la imagen anterior huérfana.
+  // La imagen anterior se borra del disco para no dejarla huérfana.
   if (ingredient.imageFile && ingredient.imageFile !== storageKey) await unlink(path.join(ingredientImageDir(), ingredient.imageFile)).catch(() => {})
   return updated
 })
@@ -1806,7 +1809,7 @@ app.get('/api/v1/ingredients/images/:fileName', async (request, reply) => {
   const mime = Object.entries(LOGO_MIME_EXT).find(([, value]) => value === ext)?.[0] || 'application/octet-stream'
   try {
     const file = await readFile(path.join(ingredientImageDir(), fileName))
-    return reply.type(mime).header('Cache-Control', 'public, max-age=86400').send(file)
+    return reply.type(mime).header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'public, max-age=86400').send(file)
   } catch {
     return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
   }
