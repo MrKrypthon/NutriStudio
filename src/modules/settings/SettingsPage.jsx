@@ -98,9 +98,12 @@ export default function SettingsPage({ setActive }) {
     // Trim before sending: otherwise "  " counts as a value on screen while the server (name ||
     // oldValue) silently keeps the previous value — a persisted-state desync with no feedback.
     const trimmed = { name: practiceName.trim(), userName: form.userName.trim(), userEmail: form.userEmail.trim() }
-    if (!trimmed.name || !trimmed.userName || !trimmed.userEmail) {
+    // Una cuenta creada desde /admin entra con su identificador y puede no tener correo: exigirlo le
+    // impedía guardar cualquier otro cambio (nombre, horarios…).
+    const emailRequired = !sessionUser?.loginId
+    if (!trimmed.name || !trimmed.userName || (emailRequired && !trimmed.userEmail)) {
       setSaveState('error')
-      setError('El nombre de la práctica, el nombre profesional y el email son obligatorios.')
+      setError(emailRequired ? 'El nombre de la práctica, el nombre profesional y el email son obligatorios.' : 'El nombre de la práctica y el nombre profesional son obligatorios.')
       setActiveSection('profile')
       return
     }
