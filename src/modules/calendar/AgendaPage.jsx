@@ -181,7 +181,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     }
     try {
       const date = new Date().toLocaleDateString('en-CA', { timeZone: practiceTz })
-      const time = new Date().toLocaleTimeString('en-US', { timeZone: practiceTz, hour: '2-digit', minute: '2-digit', hour12: false })
+      const time = new Date().toLocaleTimeString('en-US', { timeZone: practiceTz, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
       const [hour, minute] = time.split(':').map(Number)
       return { date, hour, minute }
     } catch { return null }

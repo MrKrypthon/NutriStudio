@@ -3137,7 +3137,7 @@ function drawClinicalFooters(file, document, practice, user) {
 
 const formatRecordNumber = (value) => (value ? `N.º ${String(value).padStart(5, '0')}` : 'sin número')
 // Fecha y hora en la zona del consultorio: son marcas de tiempo reales (no horas "de pared").
-const formatDateTime = (value, timeZone) => (value ? new Date(value).toLocaleString('es-MX', { timeZone: timeZone || 'America/Mexico_City', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—')
+const formatDateTime = (value, timeZone) => (value ? new Date(value).toLocaleString('es-MX', { timeZone: timeZone || 'America/Mexico_City', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) : '—')
 const formatDateOnly = (value, timeZone) => (value ? new Date(value).toLocaleDateString('es-MX', { timeZone: timeZone || 'UTC', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—')
 // `at` es una marca de tiempo real: se toma su día en la zona del consultorio (en UTC, una consulta
 // por la tarde en México ya caía en el día siguiente y la edad subía un año antes del cumpleaños).

@@ -72,7 +72,7 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
   const updatedLabel = (iso) => {
     const d = new Date(iso)
     const days = Math.round((new Date(now.getFullYear(), now.getMonth(), now.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 86400000)
-    if (days <= 0) return `hoy · ${d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+    if (days <= 0) return `hoy · ${d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })}`
     if (days === 1) return 'ayer'
     return `hace ${days} días`
   }

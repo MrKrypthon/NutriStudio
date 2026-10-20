@@ -28,7 +28,7 @@ const practiceNowMs = (timeZone) => {
   if (timeZone) {
     try {
       const date = new Date().toLocaleDateString('en-CA', { timeZone })
-      const time = new Date().toLocaleTimeString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false })
+      const time = new Date().toLocaleTimeString('en-US', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
       return new Date(`${date}T${time}:00.000Z`).getTime()
     } catch { /* cae al reloj del sistema */ }
   }

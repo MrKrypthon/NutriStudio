@@ -25,7 +25,7 @@ const FALLBACK = [
 ]
 
 const dateLabel = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' }) : '')
-const dateTimeLabel = (iso) => (iso ? new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '')
+const dateTimeLabel = (iso) => (iso ? new Date(iso).toLocaleString('es-MX', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }) : '')
 const patientName = (doc) => `${doc.patient?.firstName || ''} ${doc.patient?.lastName || ''}`.trim() || 'Paciente'
 const recordNumber = (patient) => (patient?.recordNumber ? `Exp. N.º ${String(patient.recordNumber).padStart(5, '0')}` : null)
 // El expediente completo es para el archivo del consultorio: no se "entrega", queda archivado.

@@ -711,7 +711,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     const what = ACCESS_DOC_TITLES[item.type] || 'un documento'
     return `${item.action === 'generated' ? 'Generó' : 'Descargó'} ${what}${item.version ? ` (versión ${item.version})` : ''}`
   }
-  const formatAccessTime = (iso) => new Date(iso).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+  const formatAccessTime = (iso) => new Date(iso).toLocaleString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 
   // Reabrir pide el motivo de la corrección (NOM-004: el expediente no se enmienda en silencio).
   const [reopenForm, setReopenForm] = useState(null)
