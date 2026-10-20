@@ -139,7 +139,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   }, [days])
 
   useEffect(() => { loadAppointments() }, [loadAppointments])
-  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=5000').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   // The grid header used to say a hardcoded "GMT-6" — the practice's real time zone is what the
   // appointments are stored against, so show its actual UTC offset instead.

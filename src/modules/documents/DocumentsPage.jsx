@@ -198,7 +198,7 @@ export default function DocumentsPage({ setActive, patientId = '', onOpenPatient
   // sólo se elige paciente y tipo, y se lleva a donde se generan.
   const openGenerate = () => {
     setGenForm({ patientId: '', kind: 'plan' }); setGenOpen(true)
-    if (!genPatients) patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setGenPatients(payload.items || [])).catch(() => setGenPatients([]))
+    if (!genPatients) patientsApi.list('?status=ACTIVE&pageSize=5000').then((payload) => setGenPatients(payload.items || [])).catch(() => setGenPatients([]))
   }
   const goGenerate = () => { if (genForm.patientId) onOpenPatient?.(genForm.patientId, genForm.kind === 'plan' ? 'Constructor de plan' : 'Expediente') }
 

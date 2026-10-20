@@ -842,8 +842,10 @@ app.get('/api/v1/patients', async (request) => {
   const { search = '', status = 'ACTIVE', page = 1, pageSize = 25, noNext, sort } = request.query
   const currentPage = Math.max(Number(page) || 1, 1)
   // Los selectores de paciente (Agenda, Consultas, Seguimientos, Plantillas, Constructor) piden la
-  // lista completa de activos; con el tope anterior de 25/100 los demás no se podían elegir.
-  const take = Math.min(Math.max(Number(pageSize) || 25, 1), 500)
+  // lista completa de activos; con el tope anterior de 25/100 los demás no se podían elegir. El de
+  // 500 repetía el problema en consultorios con más pacientes activos (los que quedaban después
+  // del 500 por apellido no aparecían en los selectores).
+  const take = Math.min(Math.max(Number(pageSize) || 25, 1), 5000)
   // Cada palabra debe aparecer en algún campo: así "Laura Méndez" encuentra a la paciente aunque
   // nombre y apellidos vivan en columnas distintas (antes se buscaba la frase entera en cada una).
   const terms = String(search).trim().split(/\s+/).filter(Boolean).slice(0, 6)

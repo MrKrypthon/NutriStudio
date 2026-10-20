@@ -289,7 +289,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const slotsDirtyRef = useRef(null)
   const flushPromiseRef = useRef(null)
 
-  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=5000').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   // El hub lista todos los planes de la práctica (sin elegir paciente antes).
   const loadHub = useCallback(() => {

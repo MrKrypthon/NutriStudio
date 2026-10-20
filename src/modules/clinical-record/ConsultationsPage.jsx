@@ -23,7 +23,7 @@ export default function ConsultationsPage({ setActive, patientId, onSelectPatien
   const [patientsState, setPatientsState] = useState('loading')
   const historyRef = useRef(null)
 
-  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=500').then((payload) => { setPatients(payload.items || []); setPatientsState('ready') }).catch(() => setPatientsState('error')) }, [])
+  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=5000').then((payload) => { setPatients(payload.items || []); setPatientsState('ready') }).catch(() => setPatientsState('error')) }, [])
 
   const selectedIsReal = patients.some((p) => p.id === patientId)
   const patient = selectedIsReal ? (patientRecord ? `${patientRecord.firstName} ${patientRecord.lastName}` : 'Cargando…') : 'Sin paciente seleccionado'
