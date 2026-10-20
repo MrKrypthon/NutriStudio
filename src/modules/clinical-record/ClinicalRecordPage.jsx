@@ -44,6 +44,9 @@ function computeAge(birthDate) {
   return age
 }
 const formatDate = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : '—')
+// Las citas guardan la hora "de pared" con sufijo Z: su fecha también se lee en UTC (con el día local,
+// en Tijuana una cita a las 07:00 salía con la fecha del día anterior).
+const formatAppointmentDate = (iso) => new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
 const formatAppointmentTime = (iso) => { const d = new Date(iso); return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}` }
 
 const DIAGNOSIS_DOMAINS = [
@@ -1628,7 +1631,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
           ['historial', 'Historial y agenda', <div className="summary-card form-card" key="ha"><h3>Historial y agenda</h3><div className="form-grid">
             <label>Consultas registradas<input value={`${historyCount}`} readOnly /></label>
             <label>Consulta actual<input value={consultation ? (consultation.status === 'IN_PROGRESS' ? 'En curso' : consultation.status) : '—'} readOnly /></label>
-            <label>Próxima cita<input value={patient?.nextAppointmentAt ? `${formatDate(patient.nextAppointmentAt)} · ${formatAppointmentTime(patient.nextAppointmentAt)} · ${APPOINTMENT_TYPE_LABELS[patient.nextAppointmentType] || 'Cita'}` : 'Sin cita próxima'} readOnly /></label>
+            <label>Próxima cita<input value={patient?.nextAppointmentAt ? `${formatAppointmentDate(patient.nextAppointmentAt)} · ${formatAppointmentTime(patient.nextAppointmentAt)} · ${APPOINTMENT_TYPE_LABELS[patient.nextAppointmentType] || 'Cita'}` : 'Sin cita próxima'} readOnly /></label>
           </div></div>],
         ]} />
       </div>
