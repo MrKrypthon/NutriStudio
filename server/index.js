@@ -1502,7 +1502,10 @@ app.post('/api/v1/templates/:templateId/apply', async (request, reply) => {
   if (!consultation) consultation = await prisma.consultation.create({ data: { patientId, nutritionistId: request.userId, status: 'IN_PROGRESS', startedAt: new Date() } })
   // Sólo un plan que se puede seguir editando: antes "no publicado" incluía cancelados y reemplazados.
   let plan = await prisma.nutritionPlan.findFirst({ where: { patientId, status: { in: ['DRAFT', 'READY'] } }, orderBy: { createdAt: 'desc' } })
-  if (!plan) plan = await prisma.nutritionPlan.create({ data: { patientId, consultationId: consultation.id } })
+  if (!plan) {
+    const latest = await prisma.nutritionPlan.aggregate({ where: { patientId }, _max: { version: true } })
+    plan = await prisma.nutritionPlan.create({ data: { patientId, consultationId: consultation.id, version: (latest._max.version || 0) + 1 } })
+  }
   const settings = template.sections?.planSettings
   if (settings && typeof settings === 'object') {
     const data = {}
@@ -2129,7 +2132,10 @@ app.post('/api/v1/patients/:patientId/plans', async (request, reply) => {
   // La consulta debe ser de esta misma paciente: el plan después expone sus secciones y diagnósticos.
   const consultation = await prisma.consultation.findFirst({ where: { id: String(consultationId), patientId: patient.id }, select: { id: true } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
-  const plan = await prisma.nutritionPlan.create({ data: { patientId: patient.id, consultationId: consultation.id, goal: cleanPlanText(goal, 1000) ?? undefined } })
+  // Versión siguiente a la más alta de la paciente (como al duplicar): sin esto todo plan nuevo
+  // nacía como v1 y la lista mostraba varios "Plan v1" de la misma paciente.
+  const latest = await prisma.nutritionPlan.aggregate({ where: { patientId: patient.id }, _max: { version: true } })
+  const plan = await prisma.nutritionPlan.create({ data: { patientId: patient.id, consultationId: consultation.id, version: (latest._max.version || 0) + 1, goal: cleanPlanText(goal, 1000) ?? undefined } })
   return reply.code(201).send(plan)
 })
 
