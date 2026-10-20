@@ -22,4 +22,24 @@ function perServingFromIngredients(ingredients, portions) {
   return Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, round1(value / servings)]))
 }
 
-export { RECIPE_NUTRITION_KEYS, emptyNutritionTotals, perServingFromIngredients }
+// Renglones de ingredientes de una receta tal como llegan del cliente. Gramos positivos que quepan
+// en la columna (Decimal 8,3) y sin repetir ingrediente (@@unique recipeId+ingredientId): antes un
+// renglón con cantidad negativa se guardaba (y restaba nutrientes) y uno con texto, repetido o
+// enorme reventaba en la base con 500. Devuelve null si algún renglón no sirve.
+function normalizeRecipeIngredientRows(value) {
+  if (!Array.isArray(value)) return null
+  const seen = new Set()
+  const rows = []
+  for (const item of value) {
+    const quantity = Number(item?.quantity)
+    const equivalence = item?.equivalence === undefined || item?.equivalence === null || item?.equivalence === '' ? null : Number(item.equivalence)
+    if (typeof item?.ingredientId !== 'string' || seen.has(item.ingredientId)) return null
+    if (!Number.isFinite(quantity) || quantity <= 0 || quantity >= 100000) return null
+    if (equivalence !== null && (!Number.isFinite(equivalence) || equivalence < 0 || equivalence >= 100000)) return null
+    seen.add(item.ingredientId)
+    rows.push({ ingredientId: item.ingredientId, quantity, unit: typeof item.unit === 'string' && item.unit.trim() ? item.unit.trim().slice(0, 20) : 'g', equivalence })
+  }
+  return rows
+}
+
+export { RECIPE_NUTRITION_KEYS, emptyNutritionTotals, normalizeRecipeIngredientRows, perServingFromIngredients }

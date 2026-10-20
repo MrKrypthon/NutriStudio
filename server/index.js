@@ -16,7 +16,7 @@ import { drawNutritionPlan } from './domain/planPdf.js'
 import { asciiFileName, normalizePdfTheme, planFileName } from './domain/pdfTheme.js'
 import { hasSectionContent } from './domain/templates.js'
 import { normalizeEquivalentPlan, normalizeMenus } from './domain/equivalents.js'
-import { emptyNutritionTotals, perServingFromIngredients } from './domain/recipeNutrition.js'
+import { normalizeRecipeIngredientRows, perServingFromIngredients } from './domain/recipeNutrition.js'
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 import Stripe from 'stripe'
 import { OAuth2Client } from 'google-auth-library'
@@ -1541,13 +1541,29 @@ async function nameSearchWhere(delegate, where, search) {
   return { ...where, id: { in: rows.filter((row) => foldText(row.name).includes(term)).map((row) => row.id) } }
 }
 
+// Campos de receta que llegan del cliente y que, con un tipo equivocado, reventaban en Prisma con
+// 500 (porciones "abc", minutos con decimales, un estado inexistente) o guardaban basura (porciones
+// en 0 o negativas). Devuelve los campos inválidos; vacío si todo sirve.
+const RECIPE_STATUSES = ['ACTIVE', 'ARCHIVED']
+const isStringList = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string')
+function invalidRecipeFields({ name, mealTypes, portions, restrictions, timeMinutes, status }) {
+  const fields = {}
+  if (name !== undefined && (typeof name !== 'string' || !name.trim())) fields.name = true
+  if (mealTypes !== undefined && (!isStringList(mealTypes) || !mealTypes.length)) fields.mealTypes = true
+  if (restrictions !== undefined && !isStringList(restrictions)) fields.restrictions = true
+  if (portions !== undefined && portions !== null && !(Number(portions) > 0 && Number(portions) < 1000)) fields.portions = true
+  if (timeMinutes !== undefined && timeMinutes !== null && !(Number.isInteger(Number(timeMinutes)) && Number(timeMinutes) >= 0 && Number(timeMinutes) <= 10000)) fields.timeMinutes = true
+  if (status !== undefined && !RECIPE_STATUSES.includes(status)) fields.status = true
+  return fields
+}
+
 app.get('/api/v1/recipes', async (request) => {
   const { search = '', mealType, restriction, status = 'ACTIVE', page, pageSize } = request.query
   const where = await nameSearchWhere(prisma.recipe, {
     practiceId: request.practiceId,
-    status,
-    ...(mealType ? { mealTypes: { has: mealType } } : {}),
-    ...(restriction ? { restrictions: { has: restriction } } : {}),
+    status: status === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE',
+    ...(mealType ? { mealTypes: { has: String(mealType) } } : {}),
+    ...(restriction ? { restrictions: { has: String(restriction) } } : {}),
   }, search)
   // Pagination is opt-in: the plan builder fetches the whole catalog (no params), while the
   // recipes library passes page/pageSize and gets a `total` back for the pager.
@@ -1566,10 +1582,14 @@ app.get('/api/v1/recipes', async (request) => {
 
 app.post('/api/v1/recipes', async (request, reply) => {
   const { name, mealTypes = [], portions, instructions, nutrition = {}, restrictions = [], imageUrl, ingredientsText, timeMinutes, ingredients = [] } = request.body || {}
-  if (!name || !mealTypes.length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y al menos un tiempo de comida son obligatorios.', fields: { name: !name, mealTypes: !mealTypes.length } })
-  const validIngredients = ingredients.length ? await prisma.ingredient.findMany({ where: { id: { in: ingredients.map((item) => item.ingredientId).filter(Boolean) }, practiceId: request.practiceId }, select: { id: true } }) : []
+  if (!name || !isStringList(mealTypes) || !mealTypes.length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y al menos un tiempo de comida son obligatorios.', fields: { name: !name, mealTypes: true } })
+  const invalid = invalidRecipeFields({ name, portions, restrictions, timeMinutes })
+  if (Object.keys(invalid).length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Revisa los datos de la receta.', fields: invalid })
+  const rows = normalizeRecipeIngredientRows(ingredients)
+  if (!rows) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Cada ingrediente necesita una cantidad mayor a 0 y no puede repetirse.', fields: { ingredients: true } })
+  const validIngredients = rows.length ? await prisma.ingredient.findMany({ where: { id: { in: rows.map((item) => item.ingredientId) }, practiceId: request.practiceId }, select: { id: true } }) : []
   const validIds = new Set(validIngredients.map((item) => item.id))
-  const recipe = await prisma.recipe.create({ data: { practiceId: request.practiceId, name, mealTypes, portions, instructions, nutrition, restrictions, imageUrl, ...(ingredientsText !== undefined ? { ingredientsText } : {}), ...(timeMinutes !== undefined ? { timeMinutes } : {}), ingredients: { create: ingredients.filter((item) => validIds.has(item.ingredientId)).map((item) => ({ ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) } }, include: { ingredients: { include: { ingredient: true } } } })
+  const recipe = await prisma.recipe.create({ data: { practiceId: request.practiceId, name, mealTypes, portions, instructions, nutrition, restrictions, imageUrl, ...(ingredientsText !== undefined ? { ingredientsText } : {}), ...(timeMinutes !== undefined ? { timeMinutes } : {}), ingredients: { create: rows.filter((item) => validIds.has(item.ingredientId)) } }, include: { ingredients: { include: { ingredient: true } } } })
   return reply.code(201).send(recipe)
 })
 
@@ -1584,7 +1604,9 @@ app.patch('/api/v1/recipes/:recipeId', async (request, reply) => {
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   const { name, mealTypes, portions, instructions, restrictions, imageUrl, ingredientsText, timeMinutes, status } = request.body || {}
   if (name !== undefined && !name) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El nombre no puede quedar vacío.', fields: { name: true } })
-  if (mealTypes !== undefined && !mealTypes.length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Selecciona al menos un tiempo de comida.', fields: { mealTypes: true } })
+  if (mealTypes !== undefined && (!isStringList(mealTypes) || !mealTypes.length)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Selecciona al menos un tiempo de comida.', fields: { mealTypes: true } })
+  const invalid = invalidRecipeFields({ name, portions, restrictions, timeMinutes, status })
+  if (Object.keys(invalid).length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Revisa los datos de la receta.', fields: invalid })
   const updated = await prisma.recipe.update({
     where: { id: recipe.id },
     data: {
@@ -1607,15 +1629,17 @@ app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
   const { ingredients = [] } = request.body || {}
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
-  const validIngredients = ingredients.length ? await prisma.ingredient.findMany({ where: { id: { in: ingredients.map((item) => item.ingredientId).filter(Boolean) }, practiceId: request.practiceId }, select: { id: true } }) : []
+  const rows = normalizeRecipeIngredientRows(ingredients)
+  if (!rows) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Cada ingrediente necesita una cantidad mayor a 0 y no puede repetirse.', fields: { ingredients: true } })
+  const validIngredients = rows.length ? await prisma.ingredient.findMany({ where: { id: { in: rows.map((item) => item.ingredientId) }, practiceId: request.practiceId }, select: { id: true } }) : []
   const validIds = new Set(validIngredients.map((item) => item.id))
-  const filteredIngredients = ingredients.filter((item) => validIds.has(item.ingredientId))
+  const filteredIngredients = rows.filter((item) => validIds.has(item.ingredientId))
   // An imported recipe may legitimately have no SMAE linkage (that just clears the calculated
   // side); a handmade recipe still needs at least one ingredient or its nutrition would be 0.
   if (!filteredIngredients.length && !recipe.source) return reply.code(400).send({ code: 'EMPTY_RECIPE', message: 'La receta debe conservar al menos un ingrediente.', fields: {} })
   const updated = await prisma.$transaction(async (transaction) => {
     await transaction.recipeIngredient.deleteMany({ where: { recipeId: recipe.id } })
-    if (filteredIngredients.length) await transaction.recipeIngredient.createMany({ data: filteredIngredients.map((item) => ({ recipeId: recipe.id, ingredientId: item.ingredientId, quantity: item.quantity, unit: item.unit || 'g', equivalence: item.equivalence })) })
+    if (filteredIngredients.length) await transaction.recipeIngredient.createMany({ data: filteredIngredients.map((item) => ({ recipeId: recipe.id, ...item })) })
     return transaction.recipe.findUnique({ where: { id: recipe.id }, include: { ingredients: { include: { ingredient: true } } } })
   })
   const computed = perServingFromIngredients(updated.ingredients, updated.portions)
@@ -1630,13 +1654,9 @@ app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
 app.get('/api/v1/recipes/:recipeId/nutrition', async (request, reply) => {
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId }, include: { ingredients: { include: { ingredient: true } } } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
-  const totals = emptyNutritionTotals()
-  for (const item of recipe.ingredients) {
-    const nutrition = item.ingredient.nutrition || {}
-    const factor = Number(item.quantity) / 100
-    for (const key of Object.keys(totals)) totals[key] += Number(nutrition[key] || 0) * factor
-  }
-  return { recipeId: recipe.id, servings: Number(recipe.portions || 1), perServing: Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, Math.round((value / Number(recipe.portions || 1)) * 10) / 10])), ingredients: recipe.ingredients.map((item) => ({ name: item.ingredient.name, quantity: Number(item.quantity), unit: item.unit, equivalence: item.equivalence ? Number(item.equivalence) : null })) }
+  // Mismo cálculo que al guardar (perServingFromIngredients): la copia que vivía aquí dividía entre
+  // `portions` sin protegerse de 0 (un Decimal 0 es "truthy") y devolvía Infinity/NaN.
+  return { recipeId: recipe.id, servings: Math.max(1, Number(recipe.portions) || 1), perServing: perServingFromIngredients(recipe.ingredients, recipe.portions), ingredients: recipe.ingredients.map((item) => ({ name: item.ingredient.name, quantity: Number(item.quantity), unit: item.unit, equivalence: item.equivalence ? Number(item.equivalence) : null })) }
 })
 
 app.post('/api/v1/recipes/:recipeId/recalculate', async (request, reply) => {
