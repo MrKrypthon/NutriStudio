@@ -1833,6 +1833,9 @@ app.post('/api/v1/ingredients/import', async (request, reply) => {
   const { externalId, source, name, group, unit = 'g', nutrition = {}, equivalence = {}, imageUrl } = request.body || {}
   if (!externalId || !source || !name || !group) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fuente, identificador, nombre y grupo son obligatorios.', fields: {} })
   const practiceId = request.practiceId
+  // Misma regla que el alta manual: volver a elegir el resultado ya importado creaba un duplicado.
+  const duplicate = await prisma.ingredient.findFirst({ where: { practiceId, name: { equals: String(name), mode: 'insensitive' } } })
+  if (duplicate) return reply.code(409).send({ code: 'INGREDIENT_EXISTS', message: 'Ya existe un ingrediente con ese nombre en tu catálogo.', fields: { name: true } })
   const ingredient = await prisma.ingredient.create({ data: { practiceId, name, group, unit, nutrition, equivalence: { ...equivalence, source: { provider: source, externalId, importedAt: new Date().toISOString() } } } })
   return reply.code(201).send({ ...ingredient, imageUrl: imageUrl || null })
 })
