@@ -2969,24 +2969,33 @@ function drawClinicalReport(file, document, practice, user, logoBuffer) {
 
 function drawLabTable(file, labs) {
   const x = { name: 48, value: 220, unit: 305, range: 370, status: 460 }
-  file.font('Helvetica-Bold').fontSize(8).fillColor(FAINT)
-  file.text('Estudio', x.name, file.y, { width: 165 })
-  file.text('Resultado', x.value, file.y, { width: 80 })
-  file.text('Unidad', x.unit, file.y, { width: 60 })
-  file.text('Referencia', x.range, file.y, { width: 85 })
-  file.text('Interpretación', x.status, file.y, { width: 100 })
-  file.moveDown(0.5)
+  // Todas las columnas en la misma `y` fija: con `file.y` cada encabezado bajaba un renglón tras el
+  // anterior (escalera) y, en las filas, un nombre de 3 renglones se encimaba con la fila siguiente.
+  // La fila salta de hoja completa: antes cada columna caía en una página distinta.
+  const limit = () => file.page.height - file.page.margins.bottom
+  const header = () => {
+    const y = file.y
+    file.font('Helvetica-Bold').fontSize(8).fillColor(FAINT)
+    file.text('Estudio', x.name, y, { width: 165 })
+    file.text('Resultado', x.value, y, { width: 80 })
+    file.text('Unidad', x.unit, y, { width: 60 })
+    file.text('Referencia', x.range, y, { width: 85 })
+    file.text('Interpretación', x.status, y, { width: 100 })
+    file.y = y + 14
+  }
+  header()
   for (const lab of labs) {
+    const cells = [[String(lab.name || '—'), x.name, 165], [String(lab.value ?? '—'), x.value, 80], [String(lab.unit || ''), x.unit, 60], [String(lab.range || '—'), x.range, 85]]
+    file.font('Helvetica').fontSize(9)
+    const rowH = Math.max(...cells.map(([text, , width]) => file.heightOfString(text, { width })), file.font('Helvetica-Bold').heightOfString(String(lab.status || '—'), { width: 100 }))
+    if (file.y + rowH > limit()) { file.addPage(); header() }
     const y = file.y
     const tone = lab.status === 'Normal' ? SUCCESS : lab.status === 'Elevado' || lab.status === 'Bajo' ? DANGER : FAINT
     file.font('Helvetica').fontSize(9).fillColor(MUTED)
-    file.text(String(lab.name || '—'), x.name, y, { width: 165 })
-    file.text(String(lab.value ?? '—'), x.value, y, { width: 80 })
-    file.text(String(lab.unit || ''), x.unit, y, { width: 60 })
-    file.text(String(lab.range || '—'), x.range, y, { width: 85 })
+    for (const [text, left, width] of cells) file.text(text, left, y, { width })
     file.font('Helvetica-Bold').fillColor(tone).text(String(lab.status || '—'), x.status, y, { width: 100 })
-    file.moveDown(1)
-    file.moveTo(48, file.y - 4).lineTo(564, file.y - 4).strokeColor('#eeeeee').stroke()
+    file.y = y + rowH + 6
+    file.moveTo(48, file.y - 3).lineTo(564, file.y - 3).strokeColor('#eeeeee').stroke()
   }
 }
 
