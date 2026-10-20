@@ -2682,12 +2682,18 @@ function drawSectionTitle(file, index, titleText) {
 function drawSummaryBox(file, title, text) {
   file.font('Helvetica').fontSize(9)
   const textHeight = file.heightOfString(text, { width: 480 })
-  const boxTop = file.y
   const boxHeight = Math.max(58, textHeight + 43)
-  file.roundedRect(48, boxTop, 516, boxHeight, 6).fill(TINT)
+  // La caja no cabe en lo que queda de la hoja: si cabe en una hoja nueva, empieza ahí; si ni así
+  // cabe (motivo larguísimo), la caja llega al fondo y el texto sigue en la hoja siguiente. Antes el
+  // fondo se dibujaba fuera de la hoja y `file.y` quedaba más allá del pie, dejando media hoja en blanco.
+  const bottom = file.page.height - file.page.margins.bottom
+  if (file.y + boxHeight > bottom && boxHeight <= bottom - file.page.margins.top) file.addPage()
+  const boxTop = file.y
+  const fits = boxTop + boxHeight <= bottom
+  file.roundedRect(48, boxTop, 516, fits ? boxHeight : bottom - boxTop, 6).fill(TINT)
   file.font('Helvetica-Bold').fontSize(11).fillColor(PRIMARY).text(title, 62, boxTop + 12)
   file.font('Helvetica').fontSize(9).fillColor(MUTED).text(text, 62, boxTop + 31, { width: 480 })
-  file.y = boxTop + boxHeight + 14
+  file.y = fits ? boxTop + boxHeight + 14 : file.y + 14
 }
 
 // Aviso de confidencialidad al pie del informe, el informe clínico y el expediente completo: son
