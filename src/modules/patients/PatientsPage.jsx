@@ -86,8 +86,9 @@ function ageOf(birthDate) {
   const birth = new Date(birthDate)
   if (Number.isNaN(birth.getTime())) return null
   const now = new Date()
-  let age = now.getUTCFullYear() - birth.getUTCFullYear()
-  if (now.getUTCMonth() < birth.getUTCMonth() || (now.getUTCMonth() === birth.getUTCMonth() && now.getUTCDate() < birth.getUTCDate())) age -= 1
+  // Nacimiento = día en UTC; hoy = día local (en UTC la edad subía la tarde anterior al cumpleaños).
+  let age = now.getFullYear() - birth.getUTCFullYear()
+  if (now.getMonth() < birth.getUTCMonth() || (now.getMonth() === birth.getUTCMonth() && now.getDate() < birth.getUTCDate())) age -= 1
   return age >= 0 && age < 130 ? age : null
 }
 const fullName = (p) => `${p.firstName} ${p.lastName}`.trim()
