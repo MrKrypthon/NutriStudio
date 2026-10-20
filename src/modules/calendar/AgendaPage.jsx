@@ -395,6 +395,10 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
       try {
         const created = await persistNewPatient()
         patientId = created.id
+        // Queda seleccionado: si la cita falla (p. ej. horario ocupado), reintentar no debe pedir
+        // otra vez el paciente y llevar a crearlo de nuevo, duplicado.
+        setForm((prev) => ({ ...prev, patientId: created.id }))
+        setPatientQuery(optionFor(created))
       } catch (error) {
         setSubmitState('error')
         setSubmitError(error.code === 'DEMO_MODE' ? 'Modo demostración: no se guardará.' : (error.message || 'No se pudo crear el paciente.'))
