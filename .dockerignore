@@ -1,0 +1,49 @@
+# Contexto de build de Docker (fase 110). Lo que no está aquí entra a la imagen: código, prisma/
+# (esquema, datos de importación y herramientas), public/, server/assets/ y las 501 fotos base del
+# recetario. En .dockerignore los patrones sin «**» sólo valen para la raíz del proyecto.
+
+# Secretos: sólo la plantilla sin valores.
+.env
+.env.*
+!.env.example
+*.local
+
+# Dependencias y artefactos: se instalan y compilan dentro de la imagen (npm ci, prisma generate,
+# vite build). Los binarios nativos de esta máquina no sirven en el contenedor.
+node_modules
+**/node_modules
+dist
+public/ocr
+*.traineddata
+**/__pycache__
+
+# Archivos de las cuentas (documentos generados, estudios de laboratorio, logos, fotos subidas):
+# viven en un volumen, nunca en la imagen. Se conservan sólo las fotos base del recetario
+# (versionadas en git); las que suben los usuarios empiezan con «u-».
+storage/*
+!storage/recipes
+storage/recipes/u-*
+
+# Documentos y material de trabajo: pueden traer datos clínicos o tener derechos de autor.
+**/*.pdf
+**/*.docx
+**/*.xlsx
+*.zip
+*.png
+*.jpg
+*.jpeg
+MEDICIONES
+nuevasRecetas
+datta-able-free-react-admin-template
+prisma/data/link-smae-unmatched.json
+# Historial de la práctica de demostración (fase 91): sólo para desarrollo, nunca en una imagen.
+prisma/data/demo-practice.json
+
+# Repositorio, editores y herramientas locales.
+.git
+.gitignore
+.dockerignore
+.claude
+.directory
+.DS_Store
+npm-debug.log*

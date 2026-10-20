@@ -1,77 +1,126 @@
-# Stack tecnológico — Nutri (milpa clinical)
+# Stack tecnológico — Nutri Studio / milpa
 
-Inventario del stack **real** del proyecto (no el propuesto en `ARQUITECTURA.md`, que es el documento de planeación original y ya no coincide del todo con el código). Pensado como insumo para armar un diagrama de arquitectura tipo el de referencia.
+Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) y 110 (preparación para Docker). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
 
-## 1. Usuarios / roles
+SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo**, que paga una suscripción y tiene acceso a todo. Lleva pacientes, consultas, expediente clínico, mediciones, diagnósticos PES, planes de alimentación con equivalentes SMAE, recetas, agenda, finanzas, tareas, plantillas y documentos PDF.
 
-- **Nutrióloga / práctica** (`User`: roles `OWNER`, `NUTRITIONIST`, `ASSISTANT`) — la app clínica día a día.
-- **Paciente** — no tiene acceso directo a la app; recibe documentos (PDF) generados y entregados fuera de la app (WhatsApp/email manual, sin integración todavía).
-- **SuperAdmin** (`AdminUser`, modelo separado de `User`) — panel de administración del SaaS (`src/modules/admin/AdminApp.jsx`): practices, suscripciones/pagos, estado de cuentas.
+## 1. Usuarios y roles
+
+- **Nutriólogo (cuenta o práctica).** Usa la app clínica día a día. Es una `Practice` con sus `User` (roles `OWNER`, `NUTRITIONIST`, `ASSISTANT`); en la práctica, un nutriólogo por cuenta.
+- **Paciente.** No entra a la app. Recibe los PDF generados, que se le mandan por fuera (WhatsApp o correo, a mano).
+- **Superadministrador.** Tiene su propio modelo, `AdminUser`, separado de `User`. Usa el panel del SaaS (`src/modules/admin/AdminApp.jsx`): crea cuentas, restablece contraseñas, suspende cuentas y ve suscripciones y pagos.
 
 ## 2. Frontend
 
 | Pieza | Detalle |
 |---|---|
-| Framework | **React** (JSX, sin TypeScript — a pesar de lo que dice `ARQUITECTURA.md`) |
-| Build tool | **Vite** |
-| Routing | Sin router de terceros: navegación por estado (`active`/`setActive`) dentro de `src/app/App.jsx` |
-| Gráficas | **Recharts** (`src/components/FinanceCharts.jsx`) |
-| Estilos | CSS plano a mano, sin framework (`src/styles/globals.css`, ~1250 líneas, tokens vía custom properties) |
-| Tests | **Vitest** (unit tests de lógica, `src/**/*.test.js`) |
+| Framework | **React 19.2.8**: JSX, JavaScript sin TypeScript |
+| Build | **Vite 8.2.2** con `@vitejs/plugin-react` 6.1.0 |
+| Rutas | Sin librería de rutas. La navegación vive en el estado de `src/app/App.jsx`, más algunos query params (por ejemplo, `?seccion=` en Configuración) |
+| Gráficas | **Recharts** (finanzas y progreso) |
+| PDF | **pdfjs-dist** para la vista previa (`src/components/PdfPreviewModal.jsx`) |
+| OCR | **tesseract.js** (español e inglés), en el navegador, para leer estudios de laboratorio (`src/lib/labs/readLabFile.js`) |
+| Login con Google | **Google Identity Services**, el script de Google que se carga solo si el servidor tiene `GOOGLE_CLIENT_ID` (`src/lib/googleIdentity.js`) |
+| Estilos | CSS a mano sin framework (`src/styles/globals.css`), con tokens en custom properties |
+| Módulos | `src/modules/`: admin, auth, calendar, clinical-record, dashboard, documents, education, equivalences, finance, ingredients, nutrition-plan, patients, recipes, settings, tasks, templates |
+| Pruebas | **Vitest 3.2**, para la lógica pura (`src/**/*.test.js`, `server/domain/*.test.js` y `prisma/tools/*.test.js`) |
 
-## 3. Backend / API
+## 3. Backend y API
 
 | Pieza | Detalle |
 |---|---|
-| Framework | **Fastify** (`server/index.js`, monolito — no hay microservicios) |
-| Lenguaje | Node.js (ESM, `"type": "module"`), JavaScript plano |
-| CORS | `@fastify/cors` |
-| Auth | JWT propio (`jsonwebtoken`), sesiones stateless; contraseñas con **bcryptjs** |
-| Multi-tenant | El JWT lleva `practiceId`; cada consulta a la base se filtra por ese tenant. Hay un segundo tipo de token/sesión para `AdminUser` (panel SaaS, fuera del tenant) |
-| Generación de PDF | **pdfkit** — dibuja los documentos a mano (sin HTML→PDF): informe de consulta, informe clínico, expediente completo, menú semanal |
-| Dominio / lógica pura | Carpeta `server/domain/` (cálculo energético, macros, micronutrientes, diccionario de alimentos) — testeada aparte con Vitest |
+| Framework | **Fastify 5.12.1** con `@fastify/cors` 11.3.0. Es un monolito: `server/index.js`, de unas 3,400 líneas y 119 rutas (REST bajo `/api/v1` más `/health`) |
+| Lenguaje | **Node.js** con ESM (`"type": "module"`), en JavaScript plano. Versión objetivo: **24 LTS** (`.nvmrc`); mínimo 22.13, porque `pdfjs-dist` 6.4 y npm 12 ya no aceptan Node 20. La compatibilidad con 24 todavía se tiene que probar |
+| Autenticación | JWT propio (`jsonwebtoken`) y contraseñas con **bcryptjs**. El token lleva `practiceId` y `sv`, la versión de sesión: cambiar la contraseña, que el administrador la restablezca o desvincular Google cierra las sesiones abiertas. El superadministrador usa otro tipo de token |
+| Multi-tenant | Cada consulta a la base se filtra por el `practiceId` de la sesión |
+| Cuentas | Las primeras 100 las crea el administrador, con identificador (`loginId`) y contraseña temporal. Las demás se registran con Google (`signupSource` `ADMIN` o `GOOGLE`; las prácticas anteriores tienen `null` y nunca se bloquean). Se entra con correo o identificador |
+| Acceso por suscripción | Sin una suscripción vigente, y pasados 7 días de gracia, la API responde **402** `SUBSCRIPTION_REQUIRED`, salvo en las rutas de cobro y de sesión. Una cuenta suspendida recibe **403**. El estado se guarda en caché 30 s |
+| PDF | **pdfkit** dibuja a mano el plan de alimentación, los informes y el expediente, sin pasar por HTML |
+| Dominio | `server/domain/` contiene lógica pura con pruebas en Vitest: cálculo energético y de macros, micronutrientes, equivalentes SMAE, nutrición y sugerencias de recetas, armado del PDF del plan, plantillas, cuentas (`accounts.js`), cobro (`billing.js`) y copia del catálogo (`catalogCopy.js`) |
 
 ## 4. Base de datos
 
 | Pieza | Detalle |
 |---|---|
-| Motor | **PostgreSQL 16** (`postgres:16-alpine` vía Docker Compose, solo para desarrollo local) |
-| ORM | **Prisma** (`@prisma/client` + `prisma`) |
-| Modelos | 23 modelos — `Practice`, `User`, `AdminUser`, `Patient`, `Appointment`, `Consultation`, `ClinicalSection`, `PatientSection`, `Measurement`, `Diagnosis`, `NutritionPlan`, `MealSlot`, `Recipe`, `RecipeIngredient`, `Ingredient`, `EducationMaterial`, `Document`, `Template`, `Task`, `FinanceEntry`, `Transaction`, `LabAttachment`, `AuditEvent` |
-| Versionado de datos clínicos | Mediciones/diagnósticos/planes son inmutables por consulta (se versiona, no se sobreescribe) |
+| Motor | **PostgreSQL 16**. En desarrollo corre en Docker Compose (`postgres:16-alpine`) |
+| Modelos | **26 modelos** y 9 enums en `prisma/schema.prisma` |
+| ORM | **Prisma 6.19**. Los cambios de esquema se aplican con `prisma db push`, sin migraciones; solo se hacen cambios aditivos (`@@index` no únicos, columnas opcionales) |
+| Cuenta y acceso | `Practice` (la cuenta), `User`, `AdminUser` |
+| Pacientes y consulta | `Patient`, `Appointment`, `Consultation`, `ClinicalSection`, `PatientSection`, `Measurement`, `Diagnosis`, `LabAttachment` |
+| Plan y catálogo | `NutritionPlan`, `MealSlot`, `Recipe`, `RecipeIngredient`, `Ingredient`, `SmaeFood` (libro SMAE), `EducationMaterial`, `SuggestionChip` |
+| Documentos y trabajo diario | `Document`, `Template`, `Task` |
+| Dinero | `FinanceEntry`, `Transaction`, `StripeEvent` (eventos de webhook procesados, para la idempotencia) |
+| Auditoría | `AuditEvent` |
+| Versionado clínico | Las mediciones, los diagnósticos y los planes se guardan por consulta: se crea una versión nueva en lugar de sobrescribir |
+| Catálogo por cuenta | Cada cuenta nueva recibe una copia del catálogo base (alimentos, SMAE y recetas importadas) desde `CATALOG_PRACTICE_ID` |
 
 ## 5. Almacenamiento de archivos
 
-- **Disco local**, no S3/blob storage (a pesar de que `ARQUITECTURA.md` proponía S3-compatible). Carpetas: `storage/documents` (PDFs generados), `storage/logos` (logo de cada práctica), `storage/recipes` (imágenes de recetas). Rutas configurables por `.env` (`DOCUMENT_STORAGE_PATH`, `LOGO_STORAGE_PATH`).
+**Disco local**, sin S3. Las carpetas están en `storage/`:
+
+| Carpeta | Contenido | Variable para cambiarla |
+|---|---|---|
+| `documents/` | PDF generados (datos clínicos) | `DOCUMENT_STORAGE_PATH` |
+| `lab-attachments/` | Estudios de laboratorio subidos (datos clínicos) | `LAB_ATTACHMENT_STORAGE_PATH` |
+| `education-materials/` | Adjuntos de materiales educativos; se crea al subir el primero | `EDUCATION_ATTACHMENT_STORAGE_PATH` |
+| `logos/` | Logo de cada práctica | `LOGO_STORAGE_PATH` |
+| `ingredients/` | Fotos de ingredientes | `INGREDIENT_IMAGE_STORAGE_PATH` |
+| `recipes/` | Las **501 fotos base del recetario, versionadas en git**, mezcladas con las fotos que suben los usuarios (`u-*.jpg`) | `RECIPE_IMAGE_STORAGE_PATH` |
+
+Por esa mezcla, un volumen de Docker montado sobre `storage/recipes` oculta las fotos base: hay que sembrarlo la primera vez o separar las dos carpetas. `.dockerignore` deja fuera de la imagen todo `storage/` salvo esas fotos base.
 
 ## 6. Integraciones externas
 
 | Servicio | Uso |
 |---|---|
-| **USDA FoodData Central API** | Búsqueda de alimentos/valores nutrimentales (`server/providers/food.js`) |
-| **Open Food Facts API** | Búsqueda de alimentos (fallback/complemento de USDA) |
+| **Stripe** (SDK `stripe` v18) | Suscripción mensual o anual en MXN con Checkout, Customer Portal y un webhook firmado e idempotente. `paidUntil` solo avanza con facturas pagadas. Por ahora está en **modo de prueba** |
+| **Google** (`google-auth-library` v10 en el backend, Identity Services en el frontend) | Entrar y registrarse con Google. La cuenta se identifica por `googleSub`, nunca por el correo; vincular o desvincular Google se hace desde la sesión. La v11 de la librería pide Node 22 |
+| **USDA FoodData Central** | Búsqueda de alimentos y valores nutrimentales (`server/providers/food.js`) |
+| **Open Food Facts** | Búsqueda de alimentos, como complemento de USDA |
 
-No hay integración de WhatsApp/email todavía — el envío del plan/informe al paciente se marca manualmente como "entregado" (`Document.deliveredAt`) después de enviarse por fuera de la app.
+Pendientes:
 
-## 7. Configuración / entorno
+- No hay IA integrada: los estudios de laboratorio se suben y se transcriben a mano.
+- No hay integración de WhatsApp ni de correo: la entrega de un documento se marca a mano (`Document.deliveredAt`).
 
-Variables de entorno (`.env`): `DATABASE_URL`, `VITE_API_URL`, `DEFAULT_PRACTICE_ID`, `PORT`, `JWT_SECRET`, `DOCUMENT_STORAGE_PATH`, `LOGO_STORAGE_PATH`.
+## 7. Almacenamiento en el navegador
 
-## 8. Desarrollo / tooling
+- `localStorage` guarda el token de sesión del nutriólogo y, aparte, el del superadministrador.
+- También guarda preferencias de la interfaz: `nutri.sidebar`, `nutri.documents.view` y `nutri.documents.guide`.
+- Los datos clínicos no se guardan en el navegador: todo vive en la API y en PostgreSQL.
 
-- **Concurrently** — corre API (Fastify) + frontend (Vite) juntos en dev (`npm run dev:all`).
-- **dotenv** — carga de variables de entorno.
-- Scripts de importación de datos semilla en `prisma/*.js` (catálogo SMAE, recetario, alimentos base, práctica demo).
+## 8. Configuración (.env)
 
-## 9. Infraestructura / despliegue — **pendiente de definir**
+`.env.example` documenta las variables de los primeros tres grupos; las rutas de almacenamiento y `SKIP_DB_SYNC` sólo están en el código.
 
-A diferencia del proyecto de referencia (barberías y salones), **Nutri todavía no tiene infraestructura de producción**: no hay `Dockerfile` para la app, no hay `docker-compose` más allá de Postgres local, no hay reverse proxy ni TLS configurados. Esto es lo que falta decidir para el diagrama:
+- **Base:** `DATABASE_URL`, `PORT`, `JWT_SECRET`, `VITE_API_URL`, `DEFAULT_PRACTICE_ID`, `USDA_API_KEY`.
+- **Stripe:** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_YEARLY`, `APP_URL`.
+- **Cuentas:** `GOOGLE_CLIENT_ID` (sin él no aparece el botón de Google) y `CATALOG_PRACTICE_ID`.
+- **Almacenamiento, opcionales:** `DOCUMENT_STORAGE_PATH`, `LOGO_STORAGE_PATH`, `LAB_ATTACHMENT_STORAGE_PATH`, `RECIPE_IMAGE_STORAGE_PATH`, `INGREDIENT_IMAGE_STORAGE_PATH`, `EDUCATION_ATTACHMENT_STORAGE_PATH`.
+- **Solo desarrollo:** `SKIP_DB_SYNC=1` salta `prisma/sync-dev.js`.
+- **Scripts, no la API:** `ADMIN_EMAIL`, `ADMIN_PASSWORD` y `ADMIN_NAME`, para `npm run admin:create`. `NODE_ENV=production` bloquea el seed y la práctica de demostración.
 
-- Contenerización de frontend (build estático de Vite) y backend (Fastify) — hoy sólo Postgres corre en Docker.
-- Reverse proxy + TLS (p. ej. Nginx + Let's Encrypt/certbot, igual que en el proyecto de barberías).
-- Host/VPS (mismo patrón ya usado en otro proyecto tuyo: Hetzner + Docker Compose es una opción conocida y barata).
-- Si el PostgreSQL de producción vive en el mismo VPS (como en la referencia, "no expuesto a internet") o en un servicio administrado aparte.
+## 9. Desarrollo y herramientas
 
-## 10. Resumen para el diagrama (stack tecnológico)
+- `npm run dev:all` levanta la API (puerto 3001) y Vite (puerto 5173) con **concurrently**. Antes sincroniza la base con `prisma/sync-dev.js`.
+- `npm test` corre las pruebas con **Vitest**.
+- `npm run db:setup` crea el esquema, siembra la base e importa el SMAE, los alimentos base, los recetarios y la práctica de demostración (scripts en `prisma/`). **Solo para desarrollo:** el seed crea cuentas con contraseña conocida y, con `NODE_ENV=production`, tanto el seed como `import-demo-practice.js` se detienen antes de conectarse (`prisma/tools/devOnly.js`).
+- `npm run admin:create` crea el primer administrador del panel con `ADMIN_EMAIL` y `ADMIN_PASSWORD` del entorno, sin imprimir la contraseña (`prisma/create-admin.js`).
+- Las dependencias directas tienen versiones fijas: nada queda en `latest`. Para instalar exactamente las del lockfile, usar `npm ci`.
+- **dotenv** carga las variables de entorno.
+- Git y GitHub (`MrKrypthon/NutriStudio`): se trabaja en una rama por fase del roadmap y se integra con un PR a `main`.
 
-Next.js → **Vite + React** · NestJS → **Fastify** · (TypeScript → JavaScript, sin TS) · Prisma · PostgreSQL · pdfkit · JWT · Docker _(solo Postgres hoy)_ · Nginx _(por definir)_ · Let's Encrypt _(por definir)_ · Hetzner u otro VPS _(por definir)_
+## 10. Infraestructura y despliegue: **pendiente de definir**
+
+Todavía no hay infraestructura de producción. Solo PostgreSQL corre en Docker, y para desarrollo. Desde la fase 110 existe `.dockerignore`: deja fuera de la imagen los secretos, los documentos, los archivos de `storage/` (salvo las fotos base del recetario) y `prisma/data/demo-practice.json`, el historial de la práctica de demostración, que no debe viajar a producción. Falta decidir:
+
+- Contenerizar el frontend (build estático de Vite) y el backend (Fastify).
+- Reverse proxy y TLS (por ejemplo, Nginx con Let's Encrypt), que el webhook de Stripe y el login con Google necesitan en producción.
+- El host o VPS (por ejemplo, Hetzner con Docker Compose).
+- Si PostgreSQL vive en el mismo VPS, sin exponerse a internet, o en un servicio administrado.
+- Dónde guardar los archivos de `storage/` (volumen persistente o almacenamiento de objetos) y cómo respaldarlos junto con la base.
+- CI: correr pruebas y build en cada PR.
+
+## 11. Resumen en una línea
+
+**Vite 8 + React 19** · **Fastify 5** (Node 24 LTS como objetivo, JavaScript sin TS) · **Prisma 6** · **PostgreSQL 16** · pdfkit · pdfjs-dist · tesseract.js · JWT + bcrypt · **Stripe** · **Google Identity** · USDA / Open Food Facts · Vitest · Docker _(solo Postgres hoy)_ · Nginx, TLS y VPS _(por definir)_
