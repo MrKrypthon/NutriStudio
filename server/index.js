@@ -1953,7 +1953,10 @@ app.get('/api/v1/food/search', async (request, reply) => {
 })
 
 app.get('/api/v1/dashboard/today', async (request, reply) => {
-  const date = request.query.date || new Date().toISOString().slice(0, 10)
+  // Sin `date`, "hoy" es el día de la práctica (con el día UTC, en México después de las 18:00 ya
+  // devolvía la agenda de mañana).
+  const practiceTz = request.query.date ? null : (await prisma.practice.findUnique({ where: { id: request.practiceId }, select: { timeZone: true } }))?.timeZone
+  const date = request.query.date || practiceWallClockNow(practiceTz).toISOString().slice(0, 10)
   const start = new Date(`${date}T00:00:00.000Z`)
   const end = new Date(`${date}T23:59:59.999Z`)
   // Una fecha mal formada llegaba a Prisma como Invalid Date → 500.
@@ -2108,7 +2111,9 @@ async function buildFinanceSnapshot(practiceId, date) {
 
 app.get('/api/v1/finance', async (request, reply) => {
   const practiceId = request.practiceId
-  const now = new Date()
+  // El mes por omisión es el de la práctica (los movimientos se guardan en su hora de pared).
+  const practice = request.query.from && request.query.to ? null : await prisma.practice.findUnique({ where: { id: practiceId }, select: { timeZone: true } })
+  const now = practiceWallClockNow(practice?.timeZone)
   const defaultFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString().slice(0, 10)
   const defaultTo = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString().slice(0, 10)
   const from = request.query.from || defaultFrom
