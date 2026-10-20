@@ -1282,6 +1282,9 @@ app.post('/api/v1/appointments', async (request, reply) => {
 app.post('/api/v1/appointments/:appointmentId/confirm', async (request, reply) => {
   const appointment = await prisma.appointment.findFirst({ where: { id: request.params.appointmentId, practiceId: request.practiceId } })
   if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
+  // Sólo se confirma una cita vigente: confirmar una cancelada o con inasistencia (p. ej. desde otra
+  // pestaña con la agenda vieja) la revivía sin revisar empalmes, y una atendida perdía su estado.
+  if (appointment.type === 'BLOCK' || !['PENDING_CONFIRMATION', 'SCHEDULED', 'CONFIRMED'].includes(appointment.status)) return reply.code(409).send({ code: 'APPOINTMENT_NOT_CONFIRMABLE', message: 'Esta cita ya no se puede confirmar.', fields: {} })
   return prisma.appointment.update({ where: { id: appointment.id }, data: { status: 'CONFIRMED' }, include: { patient: true } })
 })
 
@@ -1304,7 +1307,10 @@ for (const [route, status, action] of [['cancel', 'CANCELLED', 'cancelled'], ['n
     const appointment = await prisma.appointment.findFirst({ where: { id: request.params.appointmentId, practiceId: request.practiceId } })
     if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
     if (appointment.status === 'COMPLETED') return reply.code(409).send({ code: 'APPOINTMENT_COMPLETED', message: 'La cita ya se atendió; no se puede cambiar.', fields: {} })
-    if (status === 'NO_SHOW' && (appointment.type === 'BLOCK' || appointment.startAt > new Date())) return reply.code(409).send({ code: 'APPOINTMENT_NOT_STARTED', message: 'Sólo se marca inasistencia en una cita cuya hora ya pasó.', fields: {} })
+    // startAt es la hora de pared de la práctica etiquetada con "Z": se compara contra "ahora" en esa
+    // misma convención (con new Date() en UTC, en México se podía marcar la inasistencia horas antes).
+    const practice = status === 'NO_SHOW' ? await prisma.practice.findUnique({ where: { id: request.practiceId }, select: { timeZone: true } }) : null
+    if (status === 'NO_SHOW' && (appointment.type === 'BLOCK' || appointment.startAt > practiceWallClockNow(practice?.timeZone))) return reply.code(409).send({ code: 'APPOINTMENT_NOT_STARTED', message: 'Sólo se marca inasistencia en una cita cuya hora ya pasó.', fields: {} })
     const updated = await prisma.appointment.update({ where: { id: appointment.id }, data: { status }, include: { patient: true } })
     await logAudit(request, { action, entity: 'Appointment', entityId: appointment.id, patientId: appointment.patientId })
     return updated
@@ -1319,6 +1325,9 @@ app.patch('/api/v1/appointments/:appointmentId', async (request, reply) => {
   const practiceId = request.practiceId
   const appointment = await prisma.appointment.findFirst({ where: { id: request.params.appointmentId, practiceId } })
   if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
+  // Una cita atendida, cancelada o con inasistencia ya es historia: moverla cambiaba la fecha de una
+  // consulta que ya ocurrió (o reubicaba una cita que ya no ocupa la agenda).
+  if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(appointment.status)) return reply.code(409).send({ code: 'APPOINTMENT_NOT_MOVABLE', message: appointment.status === 'COMPLETED' ? 'La cita ya se atendió; no se puede mover.' : 'Esta cita ya no está vigente; no se puede mover.', fields: {} })
   const start = new Date(startAt)
   const duration = durationMinutes != null ? Number(durationMinutes) : Math.max(15, Math.round((appointment.endAt - appointment.startAt) / 60000))
   const end = endAt ? new Date(endAt) : new Date(start.getTime() + duration * 60000)
