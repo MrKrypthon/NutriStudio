@@ -4,10 +4,12 @@
 // SPA session (but not a full page reload, by design: nothing is written to the database until
 // the user actually saves).
 //
-// Keyed by recipe id, or NEW_KEY for the "Nueva receta" form.
+// Keyed by recipe id, or NEW_KEY for the "Nueva receta" form, and by the signed-in user: cerrar
+// sesión no recarga la página, así que sin el usuario en la llave quien entraba después en el mismo
+// navegador (otra cuenta) encontraba en "Nueva receta" el borrador de la cuenta anterior.
 
 export const NEW_RECIPE_KEY = '__new__'
-export const recipeDraftKey = (recipeId) => recipeId || NEW_RECIPE_KEY
+export const recipeDraftKey = (recipeId, userId) => `${userId || ''}:${recipeId || NEW_RECIPE_KEY}`
 
 const drafts = new Map()
 

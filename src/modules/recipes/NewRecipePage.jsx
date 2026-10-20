@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { ingredientsApi, recipesApi } from '../../lib/api.js'
+import { useAuth } from '../../lib/AuthContext.jsx'
 import { clearRecipeDraft, getRecipeDraft, recipeDraftKey, saveRecipeDraft } from './recipeDraftStore.js'
 
 const MEAL_TYPE_KEYS = { Desayuno: 'breakfast', Comida: 'lunch', Cena: 'dinner', Colación: 'snack', Postre: 'dessert', Salsa: 'sauce', Básico: 'base' }
@@ -31,7 +32,8 @@ const serverToDraft = (recipe) => ({
 })
 
 export default function NewRecipePage({ setActive, recipeId }) {
-  const draftKey = recipeDraftKey(recipeId)
+  const { user } = useAuth()
+  const draftKey = recipeDraftKey(recipeId, user?.id)
   const [catalog, setCatalog] = useState([])
   const [searchState, setSearchState] = useState('idle')
   const [ingredientSearch, setIngredientSearch] = useState('')
