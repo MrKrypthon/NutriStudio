@@ -77,6 +77,8 @@ const USER_PUBLIC_SELECT = { id: true, name: true, email: true, role: true, spec
 
 // Nombre de archivo para Content-Disposition: sin comillas ni saltos de línea (inyección de
 // cabecera) y con tope de longitud.
+// Va siempre dentro de contentDisposition(): un nombre con caracteres fuera de Latin-1 ("Guía – plato.pdf")
+// puesto tal cual en el encabezado hace que Node rechace la respuesta (ERR_INVALID_CHAR → 500).
 const safeFileName = (name) => String(name || 'archivo').replace(/[\r\n"]/g, '').slice(0, 180)
 
 // @fastify/cors defaults `methods` to 'GET,HEAD,POST' only (the CORS-spec "simple methods"),
@@ -1063,7 +1065,7 @@ app.get('/api/v1/lab-attachments/:attachmentId/download', async (request, reply)
   try {
     const file = await readFile(path.join(labAttachmentDir(), attachment.storageKey))
     await logAccess(request, { patientId: attachment.consultation.patientId, scope: 'lab', action: 'downloaded', entity: 'LabAttachment', entityId: attachment.id, metadata: { fileName: attachment.fileName, consultationId: attachment.consultationId } })
-    return reply.type('application/pdf').header('Content-Disposition', `inline; filename="${safeFileName(attachment.fileName)}"`).send(file)
+    return reply.type('application/pdf').header('Content-Disposition', contentDisposition('inline', safeFileName(attachment.fileName))).send(file)
   } catch {
     return reply.code(404).send({ code: 'ATTACHMENT_NOT_FOUND', message: 'El archivo del adjunto no está disponible.', fields: {} })
   }
@@ -1676,7 +1678,7 @@ app.get('/api/v1/education-materials/:materialId/attachment', async (request, re
   try {
     const file = await readFile(path.join(educationAttachmentDir(), material.attachmentStorageKey))
     const disposition = material.attachmentMime?.startsWith('image/') ? 'inline' : 'attachment'
-    return reply.type(material.attachmentMime || 'application/octet-stream').header('Content-Disposition', `${disposition}; filename="${safeFileName(material.attachmentFileName || material.attachmentStorageKey)}"`).send(file)
+    return reply.type(material.attachmentMime || 'application/octet-stream').header('Content-Disposition', contentDisposition(disposition, safeFileName(material.attachmentFileName || material.attachmentStorageKey))).send(file)
   } catch {
     return reply.code(404).send({ code: 'MATERIAL_ATTACHMENT_NOT_FOUND', message: 'El archivo adjunto no está disponible.', fields: {} })
   }
