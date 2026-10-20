@@ -1023,6 +1023,14 @@ app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => 
     // otra persona (o un bloqueo) quedaba ligada a esta consulta y marcada como atendida.
     appointment = await prisma.appointment.findFirst({ where: { id: appointmentId, practiceId, patientId: patient.id } })
     if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
+    // appointmentId es único en Consultation: una cita que ya abrió consulta respondía con un 500.
+    const linked = await prisma.consultation.findFirst({ where: { appointmentId: appointment.id }, select: { id: true } })
+    if (linked) return reply.code(409).send({ code: 'APPOINTMENT_ALREADY_USED', message: 'Esta cita ya tiene una consulta registrada.', fields: {}, consultationId: linked.id })
+  }
+  // El profesional responsable debe ser del mismo consultorio (sin esto se podía firmar una consulta
+  // a nombre de un usuario de otra práctica).
+  if (nutritionistId && !(await prisma.user.findFirst({ where: { id: nutritionistId, practiceId }, select: { id: true } }))) {
+    return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El profesional responsable no pertenece a este consultorio.', fields: { nutritionistId: 'invalid' } })
   }
   // nutritionistId lets one professional open a consultation on another's behalf; otherwise
   // it defaults to whoever is logged in, falling back to the oldest user in the practice.
