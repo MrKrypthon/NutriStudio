@@ -2470,6 +2470,10 @@ app.post('/api/v1/documents/consultation-report', async (request, reply) => {
   if (!consultationId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'consultationId es obligatorio.', fields: { consultationId: 'required' } })
   const consultation = await prisma.consultation.findFirst({ where: { id: consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  // Un documento de cada tipo por consulta (como el del plan): la pantalla lo regenera en vez de
+  // crear otro, pero si la generación fallaba, cada reintento dejaba un documento vacío "pendiente".
+  const existing = await prisma.document.findFirst({ where: { consultationId: consultation.id, type: 'consultation_report' }, orderBy: { createdAt: 'desc' } })
+  if (existing) return existing
   const document = await prisma.document.create({ data: { patientId: consultation.patientId, consultationId: consultation.id, type: 'consultation_report', sections: { summary: true, anthropometric: true, diagnosis: true, treatment: true }, version: 0 } })
   return reply.code(201).send(document)
 })
@@ -2482,6 +2486,8 @@ app.post('/api/v1/documents/consultation-export', async (request, reply) => {
   if (!consultationId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'consultationId es obligatorio.', fields: { consultationId: 'required' } })
   const consultation = await prisma.consultation.findFirst({ where: { id: consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const existing = await prisma.document.findFirst({ where: { consultationId: consultation.id, type: 'consultation_export' }, orderBy: { createdAt: 'desc' } })
+  if (existing) return existing
   const document = await prisma.document.create({ data: { patientId: consultation.patientId, consultationId: consultation.id, type: 'consultation_export', sections: { full: true }, version: 0 } })
   return reply.code(201).send(document)
 })
@@ -2493,6 +2499,8 @@ app.post('/api/v1/documents/consultation-clinical', async (request, reply) => {
   if (!consultationId) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'consultationId es obligatorio.', fields: { consultationId: 'required' } })
   const consultation = await prisma.consultation.findFirst({ where: { id: consultationId, patient: { practiceId: request.practiceId } } })
   if (!consultation) return reply.code(404).send({ code: 'CONSULTATION_NOT_FOUND', message: 'Consulta no encontrada.', fields: {} })
+  const existing = await prisma.document.findFirst({ where: { consultationId: consultation.id, type: 'consultation_clinical' }, orderBy: { createdAt: 'desc' } })
+  if (existing) return existing
   const document = await prisma.document.create({ data: { patientId: consultation.patientId, consultationId: consultation.id, type: 'consultation_clinical', sections: { clinicalReport: true }, version: 0 } })
   return reply.code(201).send(document)
 })
@@ -2981,6 +2989,7 @@ async function loadPlanMenu(plan) {
     // El nombre y las kcal congelados mandan sobre los de la receta viva.
     return applyRecipeAdjustments(live.map((entry) => { const frozen = snapshot.find((item) => item.dayOfWeek === entry.dayOfWeek && item.mealType === entry.mealType); return { ...entry, recipeName: frozen?.recipeName || entry.recipeName, kcal: frozen?.kcal ?? entry.kcal } }), plan.recipeAdjustments)
   }
+  // Borrador: igual que al publicar, sin las recetas archivadas (el Constructor no las muestra).
   const mealSlots = await prisma.mealSlot.findMany({ where: { planId: plan.id }, include: { recipe: { include: recipeInclude } } })
   return applyRecipeAdjustments(buildMenuSnapshot(mealSlots.filter((slot) => slot.recipe?.status !== 'ARCHIVED')), plan.recipeAdjustments)
 }
@@ -2989,7 +2998,6 @@ async function loadPlanMenu(plan) {
 // nutrióloga que lo firma.
 async function buildPlanHeader(patient, practice, user) {
   const measurement = await prisma.measurement.findFirst({ where: { patientId: patient.id, weightKg: { not: null } }, orderBy: { measuredAt: 'desc' } })
-  // Borrador: igual que al publicar, sin las recetas archivadas (el Constructor no las muestra).
   return {
     patientName: `${patient.firstName} ${patient.lastName}`.trim(),
     nutritionistName: user?.name || practice?.name || '',
