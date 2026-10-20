@@ -2589,15 +2589,19 @@ function drawBrandMark(file, x, y, size = 24) {
 
 function drawDocumentBrand(file, subtitle, practice, logoBuffer) {
   const startY = file.y
+  let bottom = startY + 44
   if (logoBuffer) {
     file.image(logoBuffer, 48, startY, { height: 30 })
     file.font('Helvetica').fontSize(9).fillColor(FAINT).text(subtitle, 48, startY + 34, { width: 516 })
   } else {
     drawBrandMark(file, 48, startY + 3, 26)
     file.font('Helvetica-Bold').fontSize(15).fillColor(INK).text(practice?.name || 'Milpa', 84, startY, { width: 480 })
-    file.font('Helvetica').fontSize(9).fillColor(FAINT).text(subtitle, 84, startY + 19, { width: 480 })
+    // Un nombre de consultorio largo ocupa dos renglones: el subtítulo va debajo de donde terminó
+    // (con la posición fija se encimaba sobre el segundo renglón).
+    file.font('Helvetica').fontSize(9).fillColor(FAINT).text(subtitle, 84, Math.max(startY + 19, file.y), { width: 480 })
+    bottom = Math.max(bottom, file.y + 14)
   }
-  file.y = startY + 44
+  file.y = bottom
   file.moveDown(0.8)
 }
 
