@@ -159,8 +159,9 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
     // Include the configured business hours so late slots (e.g. 18:00) are visible and bookable.
     for (const range of businessHours.ranges) {
       const start = Number(range.start.slice(0, 2))
-      const end = Number(range.end.slice(0, 2))
-      for (let h = start; h < end; h += 1) set.add(`${String(h).padStart(2, '0')}:00`)
+      // Con un cierre que no cae en punto (p. ej. 19:30) también hace falta la fila de las 19:00;
+      // antes sólo se contaba la hora y el último tramo no aparecía en la cuadrícula.
+      for (let h = start; h * 60 < toMinutes(range.end); h += 1) set.add(`${String(h).padStart(2, '0')}:00`)
     }
     for (const appointment of appointments) set.add(`${String(new Date(appointment.startAt).getUTCHours()).padStart(2, '0')}:00`)
     return Array.from(set).sort()
