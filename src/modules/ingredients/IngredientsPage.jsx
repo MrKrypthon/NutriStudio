@@ -27,7 +27,7 @@ const FALLBACK = [
 const NUTRIENT_ROWS = [
   ['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['carbs', 'Carbohidratos', 'g'], ['fat', 'Grasas', 'g'],
   ['fiber', 'Fibra', 'g'], ['sugar', 'Azúcar', 'g'], ['sodium', 'Sodio', 'mg'], ['cholesterol', 'Colesterol', 'mg'],
-  ['vitaminA', 'Vitamina A', 'mg RE'], ['vitaminC', 'Vitamina C', 'mg'], ['vitaminD', 'Vitamina D', 'µg'], ['vitaminE', 'Vitamina E', 'mg'],
+  ['vitaminA', 'Vitamina A', 'µg RE'], ['vitaminC', 'Vitamina C', 'mg'], ['vitaminD', 'Vitamina D', 'µg'], ['vitaminE', 'Vitamina E', 'mg'],
   ['vitaminK', 'Vitamina K', 'µg'], ['vitaminB1', 'Vitamina B1', 'mg'], ['vitaminB2', 'Vitamina B2', 'mg'], ['vitaminB3', 'Vitamina B3', 'mg'],
   ['vitaminB6', 'Vitamina B6', 'mg'], ['vitaminB12', 'Vitamina B12', 'µg'], ['folicAcid', 'Ácido fólico', 'µg'],
   ['calcium', 'Calcio', 'mg'], ['iron', 'Hierro', 'mg'], ['magnesium', 'Magnesio', 'mg'], ['potassium', 'Potasio', 'mg'],
