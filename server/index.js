@@ -902,6 +902,8 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
   if (curp && !CURP_PATTERN.test(normalizeCurp(curp))) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La CURP no tiene un formato válido (18 caracteres).', fields: { curp: true } })
   if ((firstName !== undefined && !firstName) || (lastName !== undefined && !lastName)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido no pueden quedar vacíos.', fields: { firstName: firstName !== undefined && !firstName, lastName: lastName !== undefined && !lastName } })
   if (status !== undefined && !['ACTIVE', 'ARCHIVED'].includes(status)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Estado inválido.', fields: { status: true } })
+  // Igual que al crear: una fecha ilegible llegaba a Prisma como Invalid Date y respondía 500.
+  if (birthDate && Number.isNaN(new Date(birthDate).getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha de nacimiento inválida.', fields: { birthDate: true } })
   const updated = await prisma.patient.update({
     where: { id: patient.id },
     data: {
@@ -910,7 +912,8 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
       ...(email !== undefined ? { email: emptyToNull(email) } : {}),
       ...(phone !== undefined ? { phone: emptyToNull(phone) } : {}),
       ...(birthDate !== undefined ? { birthDate: birthDate ? new Date(birthDate) : null } : {}),
-      ...(sex !== undefined ? { sex } : {}),
+      // Vacío = sin especificar (null), como al crear; antes se guardaba la cadena vacía.
+      ...(sex !== undefined ? { sex: sex === null || sex === '' ? null : String(sex) } : {}),
       ...(occupation !== undefined ? { occupation: emptyToNull(occupation) } : {}),
       ...(address !== undefined ? { address: emptyToNull(address ? String(address).trim().slice(0, 240) : null) } : {}),
       ...(curp !== undefined ? { curp: curp ? normalizeCurp(curp) : null } : {}),

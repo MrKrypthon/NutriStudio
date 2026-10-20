@@ -126,7 +126,9 @@ function describeEvent(event) {
   return { icon: '▧', label: `${DOCUMENT_TYPE_LABELS[event.subtype] || 'Documento'} · ${DOCUMENT_STATUS_LABELS[event.status] || event.status}` }
 }
 
-const emptyEditForm = (patient) => ({ firstName: patient?.firstName || '', lastName: patient?.lastName || '', email: patient?.email || '', phone: patient?.phone || '', birthDate: patient?.birthDate ? patient.birthDate.slice(0, 10) : '', sex: normalizeSex(patient?.sex) || 'Mujer', occupation: patient?.occupation || '', address: patient?.address || '', curp: patient?.curp || '' })
+// Sin sexo registrado (p. ej. pacientes dados de alta desde la Agenda) el formulario queda vacío:
+// antes caía en 'Mujer' y guardar cualquier otro dato le asignaba ese sexo sin que nadie lo eligiera.
+const emptyEditForm = (patient) => ({ firstName: patient?.firstName || '', lastName: patient?.lastName || '', email: patient?.email || '', phone: patient?.phone || '', birthDate: patient?.birthDate ? patient.birthDate.slice(0, 10) : '', sex: normalizeSex(patient?.sex) || '', occupation: patient?.occupation || '', address: patient?.address || '', curp: patient?.curp || '' })
 const readStored = (key, fallback) => { try { return localStorage.getItem(key) || fallback } catch { return fallback } }
 const store = (key, value) => { try { localStorage.setItem(key, value) } catch { /* sin almacenamiento */ } }
 
@@ -359,7 +361,7 @@ export default function PatientsPage({ setActive, onSelectPatient, onOpenPatient
         <label>Nombre(s)<input value={editForm.firstName} onChange={(e) => updateField('firstName', e.target.value)} required /></label>
         <label>Apellidos<input value={editForm.lastName} onChange={(e) => updateField('lastName', e.target.value)} required /></label>
         <label>Fecha de nacimiento<input type="date" value={editForm.birthDate} onChange={(e) => updateField('birthDate', e.target.value)} /></label>
-        <label>Sexo<select value={editForm.sex} onChange={(e) => updateField('sex', e.target.value)}><option>Hombre</option><option>Mujer</option></select></label>
+        <label>Sexo<select value={editForm.sex} onChange={(e) => updateField('sex', e.target.value)}><option value="">Selecciona…</option><option>Hombre</option><option>Mujer</option></select></label>
         <label>Email<input type="email" value={editForm.email} onChange={(e) => updateField('email', e.target.value)} /></label>
         <label>Teléfono<input value={editForm.phone} onChange={(e) => updateField('phone', e.target.value)} /></label>
         <label>Ocupación<input value={editForm.occupation} onChange={(e) => updateField('occupation', e.target.value)} /></label>
