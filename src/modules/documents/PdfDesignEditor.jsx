@@ -73,10 +73,13 @@ export default function PdfDesignEditor({ planId = null, onSaved }) {
   const dirty = !sameTheme(theme, saved)
   const save = async () => {
     setSaveState('saving')
+    const sent = theme
     try {
-      const response = await practiceApi.updatePdfTheme(theme)
+      const response = await practiceApi.updatePdfTheme(sent)
       const next = normalizePdfTheme(response.pdfTheme)
-      setSaved(next); setTheme(next); setSaveState('saved')
+      // Lo que se cambió mientras se guardaba (p. ej. seguir moviendo un color) no se pisa con la
+      // respuesta: se queda en pantalla como cambio pendiente.
+      setSaved(next); setTheme((prev) => (sameTheme(prev, sent) ? next : prev)); setSaveState('saved')
       onSaved?.(next)
     } catch { setSaveState('error') }
   }
