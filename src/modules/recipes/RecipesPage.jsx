@@ -166,6 +166,11 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   const linkedIngredients = selected?.ingredients || []
   const textIngredients = Array.isArray(selected?.ingredientsText) ? selected.ingredientsText : []
   const yieldPortions = Number(selected?.portions) || null
+  // Las cantidades de los ingredientes son las de toda la receta ("rinde N porciones") y la
+  // nutrición es por porción: se escalan a las porciones a servir igual que en el plan
+  // (scaledRecipeLines/recipeItems). Antes se multiplicaban sólo por `servings` y una receta de 4
+  // porciones mostraba, para 1 porción, los ingredientes de las 4.
+  const ingredientScale = servings / (yieldPortions || 1)
 
   // "Contraste": the original book values (`nutrition`) against the manual SMAE calculation
   // (`calculatedNutrition`), both scaled to the servings currently selected.
@@ -228,9 +233,9 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
 
           <div className={selected.instructions ? 'detail-columns' : undefined}>
           <div className="detail-section">
-            <div className="detail-section-head"><h3>Ingredientes{servings !== 1 ? ' (ajustados)' : ''}</h3></div>
-            {textIngredients.length > 0 && textIngredients.map((line, index) => <div className="recipe-ingredient" key={index}><span className="ingredient-icon">◉</span><div><b>{scaleIngredientLine(line, servings)}</b></div></div>)}
-            {!textIngredients.length && linkedIngredients.map((item) => <div className="recipe-ingredient" key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.ingredient.name}</b><small>{round1(Number(item.quantity) * servings)} {item.unit} · {item.equivalence || 0} eq.</small></div></div>)}
+            <div className="detail-section-head"><h3>Ingredientes{ingredientScale !== 1 ? ' (ajustados)' : ''}</h3></div>
+            {textIngredients.length > 0 && textIngredients.map((line, index) => <div className="recipe-ingredient" key={index}><span className="ingredient-icon">◉</span><div><b>{scaleIngredientLine(line, ingredientScale)}</b></div></div>)}
+            {!textIngredients.length && linkedIngredients.map((item) => <div className="recipe-ingredient" key={item.id}><span className="ingredient-icon">◉</span><div><b>{item.ingredient.name}</b><small>{round1(Number(item.quantity) * ingredientScale)} {item.unit} · {item.equivalence || 0} eq.</small></div></div>)}
             {!textIngredients.length && !linkedIngredients.length && <p className="muted">Sin ingredientes registrados.</p>}
           </div>
 
