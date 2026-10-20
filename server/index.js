@@ -1600,8 +1600,10 @@ app.post('/api/v1/recipes/:recipeId/recalculate', async (request, reply) => {
   return { recipe: updated, nutrition: recipe.source ? recipe.nutrition : computed, calculatedNutrition: recipe.source ? updated.calculatedNutrition : null, version: updated.version }
 })
 
-app.get('/api/v1/education-materials', async (request) => {
+app.get('/api/v1/education-materials', async (request, reply) => {
   const { search = '', category, status = 'ACTIVE' } = request.query
+  // Un status arbitrario iba directo al enum de Prisma → error de validación → 500.
+  if (!['ACTIVE', 'ARCHIVED'].includes(status)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Estado inválido.', fields: { status: true } })
   const where = {
     practiceId: request.practiceId,
     status,
@@ -1631,6 +1633,7 @@ app.patch('/api/v1/education-materials/:materialId', async (request, reply) => {
   const { title, category, description, body, color, readMinutes, status } = request.body || {}
   if (title !== undefined && !title) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El título no puede quedar vacío.', fields: { title: true } })
   if (category !== undefined && !category) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La categoría no puede quedar vacía.', fields: { category: true } })
+  if (status !== undefined && !['ACTIVE', 'ARCHIVED'].includes(status)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Estado inválido.', fields: { status: true } })
   const updated = await prisma.educationMaterial.update({
     where: { id: material.id },
     data: {
