@@ -1069,11 +1069,18 @@ app.post('/api/v1/consultations/:consultationId/lab-attachments', async (request
   if (!match || !fileName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube un archivo PDF.', fields: { dataUrl: true } })
   const buffer = Buffer.from(match[2], 'base64')
   if (buffer.byteLength > 10 * 1024 * 1024) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El PDF no puede pesar más de 10 MB.', fields: { dataUrl: true } })
-  const attachment = await prisma.labAttachment.create({ data: { consultationId: consultation.id, fileName, storageKey: '', fileSize: buffer.byteLength, uploadedById: request.userId } })
+  const attachment = await prisma.labAttachment.create({ data: { consultationId: consultation.id, fileName: String(fileName).slice(0, 240), storageKey: '', fileSize: buffer.byteLength, uploadedById: request.userId } })
   const ext = LAB_ATTACHMENT_MIME_EXT[match[1]]
   const storageKey = `${attachment.id}.${ext}`
-  await mkdir(labAttachmentDir(), { recursive: true })
-  await writeFile(path.join(labAttachmentDir(), storageKey), buffer)
+  try {
+    await mkdir(labAttachmentDir(), { recursive: true })
+    await writeFile(path.join(labAttachmentDir(), storageKey), buffer)
+  } catch (error) {
+    // Si el archivo no se pudo escribir, el registro (sin storageKey) quedaba en la lista de adjuntos
+    // como un PDF que nunca se puede abrir. Se borra y se avisa del error.
+    await prisma.labAttachment.delete({ where: { id: attachment.id } }).catch(() => {})
+    throw error
+  }
   const updated = await prisma.labAttachment.update({ where: { id: attachment.id }, data: { storageKey }, include: { uploadedBy: { select: { name: true } } } })
   await logAudit(request, { action: 'uploaded', entity: 'LabAttachment', entityId: attachment.id, patientId: consultation.patientId, metadata: { fileName } })
   return reply.code(201).send(updated)
