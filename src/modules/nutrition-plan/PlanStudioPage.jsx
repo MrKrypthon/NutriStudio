@@ -21,8 +21,10 @@ const computeAge = (birthDate) => {
   if (!birthDate) return ''
   const dob = new Date(birthDate)
   const now = new Date()
-  let age = now.getUTCFullYear() - dob.getUTCFullYear()
-  if (now.getUTCMonth() < dob.getUTCMonth() || (now.getUTCMonth() === dob.getUTCMonth() && now.getUTCDate() < dob.getUTCDate())) age -= 1
+  // Nacimiento en UTC (medianoche UTC) y "hoy" en el día local, como en el Expediente: con ambos en
+  // UTC, en México la edad subía desde las 18:00 de la víspera del cumpleaños.
+  let age = now.getFullYear() - dob.getUTCFullYear()
+  if (now.getMonth() < dob.getUTCMonth() || (now.getMonth() === dob.getUTCMonth() && now.getDate() < dob.getUTCDate())) age -= 1
   return String(age)
 }
 const formatUTCDate = (iso) => { if (!iso) return null; const d = new Date(iso); return `${String(d.getUTCDate()).padStart(2, '0')}/${String(d.getUTCMonth() + 1).padStart(2, '0')}/${d.getUTCFullYear()}` }
