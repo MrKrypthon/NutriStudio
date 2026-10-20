@@ -1010,7 +1010,9 @@ app.post('/api/v1/patients/:patientId/consultations', async (request, reply) => 
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
   let appointment = null
   if (appointmentId) {
-    appointment = await prisma.appointment.findFirst({ where: { id: appointmentId, practiceId } })
+    // La cita tiene que ser de ESTE paciente: antes bastaba con que fuera de la práctica, y la cita de
+    // otra persona (o un bloqueo) quedaba ligada a esta consulta y marcada como atendida.
+    appointment = await prisma.appointment.findFirst({ where: { id: appointmentId, practiceId, patientId: patient.id } })
     if (!appointment) return reply.code(404).send({ code: 'APPOINTMENT_NOT_FOUND', message: 'Cita no encontrada.', fields: {} })
   }
   // nutritionistId lets one professional open a consultation on another's behalf; otherwise
