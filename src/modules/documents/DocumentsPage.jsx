@@ -118,7 +118,9 @@ export default function DocumentsPage({ setActive, patientId = '', onOpenPatient
   }, [visible])
   const patientTerm = patientQuery.trim().toLowerCase()
   const patientGroups = groups.filter((group) => !patientTerm || `${group.name} ${recordNumber(group.patient) || ''}`.toLowerCase().includes(patientTerm))
-  const selectedGroup = patientGroups.find((group) => group.patientId === selectedPatientId) || patientGroups[0] || null
+  // Si se llegó con un paciente (o se eligió uno) y no tiene documentos visibles, no se cae a la
+  // carpeta de otro: antes se abría la del primero de la lista como si fuera la suya.
+  const selectedGroup = selectedPatientId ? patientGroups.find((group) => group.patientId === selectedPatientId) || null : patientGroups[0] || null
   // Documentos del paciente elegido, reunidos por su origen: cada consulta con sus informes y su
   // expediente, y cada plan con su PDF. Es lo que liga Documentos con el resto de la app.
   const originGroups = useMemo(() => {
@@ -270,7 +272,7 @@ export default function DocumentsPage({ setActive, patientId = '', onOpenPatient
             </aside>
 
             <section className="docs-patient-detail panel" aria-label="Documentos del paciente">
-              {!selectedGroup ? <div className="result-empty"><span>◌</span><h3>Elige un paciente</h3><p>Sus documentos aparecen aquí, ordenados por consulta y por plan.</p></div> : <>
+              {!selectedGroup ? <div className="result-empty"><span>◌</span><h3>{selectedPatientId ? 'Este paciente no tiene documentos con estos filtros' : 'Elige un paciente'}</h3><p>{selectedPatientId ? 'Elige otro paciente de la lista o quita los filtros.' : 'Sus documentos aparecen aquí, ordenados por consulta y por plan.'}</p></div> : <>
                 <header className="docs-detail-head">
                   <button type="button" className="link-button docs-back" onClick={() => setMobileDetail(false)}>← Pacientes</button>
                   <span className="person-avatar coral large-avatar">{(selectedGroup.patient?.firstName?.[0] || '') + (selectedGroup.patient?.lastName?.[0] || '')}</span>
