@@ -176,7 +176,7 @@ export default function AppChrome({ active, setActive, crumb, children }) {
     <div className="header-pop" ref={searchRef}>
       <button className="icon-button" onClick={() => setSearchOpen((v) => !v)} title="Buscar paciente">⌕</button>
       {searchOpen && <div className="dropdown-panel search-dropdown">
-        <input autoFocus placeholder="Buscar paciente…" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && searchResults[0]) openPatient(searchResults[0]); if (event.key === 'Escape') setSearchOpen(false) }} aria-label="Buscar paciente" />
+        <input autoFocus placeholder="Buscar paciente…" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} onKeyDown={(event) => { /* Enter sólo cuando ya respondió la búsqueda del texto actual (la lista vieja abría a otro paciente). */ if (event.key === 'Enter' && searchState === 'ready' && searchResults[0]) openPatient(searchResults[0]); if (event.key === 'Escape') setSearchOpen(false) }} aria-label="Buscar paciente" />
         {searchQuery.trim() && searchState === 'loading' && <p className="dropdown-empty">Buscando…</p>}
         {searchQuery.trim() && searchState === 'error' && <p className="dropdown-empty">No se pudo buscar.</p>}
         {searchQuery.trim() && searchState === 'ready' && searchResults.length === 0 && <p className="dropdown-empty">Sin resultados</p>}
