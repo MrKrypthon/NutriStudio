@@ -13,7 +13,10 @@ Este comando ejecuta la interfaz en modo demo y no intenta conectarse al API. Po
 
 ## Poner todo en marcha en otro dispositivo
 
-Requisitos: Node 20+, Git, Docker (para PostgreSQL).
+Requisitos: Node 24 LTS (`.nvmrc`; mínimo 22.13), Git, Docker (para PostgreSQL).
+Node 20 todavía arranca la app, pero ya no está soportado: `pdfjs-dist` 6.4 pide Node 22.13 o más
+y npm 12 pide 22.22 o 24.15. Las dependencias están fijadas en `package.json` y `package-lock.json`;
+para instalar exactamente esas versiones usa `npm ci`.
 
 ```bash
 git clone https://github.com/MrKrypthon/NutriStudio.git

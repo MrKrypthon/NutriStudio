@@ -1,5 +1,9 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
+import { assertDemoDataAllowed } from './tools/devOnly.js'
+
+// Cuentas con contraseña conocida: nunca en producción (se detiene antes de conectarse).
+assertDemoDataAllowed('seed')
 
 const prisma = new PrismaClient()
 const practiceId = '00000000-0000-0000-0000-000000000001'
