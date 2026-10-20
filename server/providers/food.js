@@ -29,7 +29,9 @@ function nutrientMap(nutrients = []) {
     if (key.includes('carbohydrate')) map.carbs = nutrient.value || nutrient.amount || 0
     if (key.includes('total lipid') || key === 'fat') map.fat = nutrient.value || nutrient.amount || 0
     if (key.includes('fiber')) map.fiber = nutrient.value || nutrient.amount || 0
-    if (key.includes('sugars')) map.sugar = nutrient.value || nutrient.amount || 0
+    // Los alimentos de marca traen "Total Sugars" y después "Sugars, added": sin excluir la segunda,
+    // el azúcar guardado era sólo el añadido.
+    if (key.includes('sugars') && !key.includes('added')) map.sugar = nutrient.value || nutrient.amount || 0
     if (key.includes('sodium')) map.sodium = nutrient.value || nutrient.amount || 0
   }
   return map
@@ -42,10 +44,12 @@ export async function searchUsda(query, pageSize = 20) {
   return { source: 'usda', total: data.totalHits || 0, items: (data.foods || []).map((food) => ({ externalId: String(food.fdcId), source: 'usda', name: food.description, brand: food.brandName || null, serving: { quantity: 100, unit: 'g' }, nutrition: nutrientMap(food.foodNutrients), allergens: [], imageUrl: null, attribution: 'USDA ARS FoodData Central', confidence: food.dataType === 'Foundation' ? 'high' : 'medium' })) }
 }
 
+// Muchos productos sólo traen la energía en kJ (`energy_100g`); sin convertirla se importaban con
+// 0 kcal, igual que se hace arriba con la de USDA.
 export async function searchOpenFoodFacts(query, pageSize = 20) {
   const params = new URLSearchParams({ search_terms: query, search_simple: '1', action: 'process', json: '1', page_size: String(Math.min(pageSize, 30)), fields: 'code,product_name,brands,nutriments,image_front_url,allergens_tags,categories_tags' })
   const data = await requestJson(`${OFF_URL}/cgi/search.pl?${params}`)
-  return { source: 'openfoodfacts', total: data.count || 0, items: (data.products || []).filter((product) => product.product_name).map((product) => ({ externalId: product.code, source: 'openfoodfacts', name: product.product_name, brand: product.brands || null, serving: { quantity: 100, unit: 'g' }, nutrition: { kcal: product.nutriments?.['energy-kcal_100g'] || 0, protein: product.nutriments?.proteins_100g || 0, carbs: product.nutriments?.carbohydrates_100g || 0, fat: product.nutriments?.fat_100g || 0, fiber: product.nutriments?.fiber_100g || 0, sugar: product.nutriments?.sugars_100g || 0, sodium: Number(product.nutriments?.sodium_100g || 0) * 1000 }, allergens: product.allergens_tags || [], imageUrl: product.image_front_url || null, attribution: 'Open Food Facts (ODbL / CC BY-SA para imágenes)', confidence: 'medium' })) }
+  return { source: 'openfoodfacts', total: data.count || 0, items: (data.products || []).filter((product) => product.product_name).map((product) => ({ externalId: product.code, source: 'openfoodfacts', name: product.product_name, brand: product.brands || null, serving: { quantity: 100, unit: 'g' }, nutrition: { kcal: product.nutriments?.['energy-kcal_100g'] || Number(product.nutriments?.energy_100g || 0) / 4.184, protein: product.nutriments?.proteins_100g || 0, carbs: product.nutriments?.carbohydrates_100g || 0, fat: product.nutriments?.fat_100g || 0, fiber: product.nutriments?.fiber_100g || 0, sugar: product.nutriments?.sugars_100g || 0, sodium: Number(product.nutriments?.sodium_100g || 0) * 1000 }, allergens: product.allergens_tags || [], imageUrl: product.image_front_url || null, attribution: 'Open Food Facts (ODbL / CC BY-SA para imágenes)', confidence: 'medium' })) }
 }
 
 export async function searchFoods(source, rawQuery, pageSize = 20) {
@@ -66,6 +70,8 @@ export async function searchFoods(source, rawQuery, pageSize = 20) {
   if (source === 'openfoodfacts') return { ...(await searchOpenFoodFacts(query, pageSize)), ...meta }
   if (source === 'all') {
     const results = await Promise.allSettled([searchUsda(query, pageSize), searchOpenFoodFacts(query, pageSize)])
+    // Si ninguna fuente respondió, es un error y no "0 resultados" (la pantalla los distingue).
+    if (results.every((result) => result.status === 'rejected')) throw results[0].reason
     return { source: 'all', total: results.reduce((sum, result) => result.status === 'fulfilled' ? sum + result.value.total : sum, 0), items: results.flatMap((result) => result.status === 'fulfilled' ? result.value.items : []), ...meta }
   }
   throw Object.assign(new Error('Proveedor de alimentos no soportado.'), { statusCode: 400, code: 'UNKNOWN_SOURCE' })

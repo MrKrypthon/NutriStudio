@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { foldText } from './text.js'
 
 // Spanish -> English food name pairs, extracted from the DICCIONARIO sheet of the
 // nutritionist's Excel (fase 20). It's a 1:1 translation of the BASE_ALIMENTOS sheet (fase 17),
@@ -13,13 +14,14 @@ import { fileURLToPath } from 'node:url'
 // there's no match, so this can only improve results, never break an existing search.
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pairs = JSON.parse(readFileSync(path.join(__dirname, '../../prisma/data/diccionario.json'), 'utf-8'))
-const EXACT = new Map(pairs.map(([es, en]) => [es.toLowerCase(), en]))
+// Sin acentos: "platano" o "atun", como se suelen teclear, también tienen traducción.
+const EXACT = new Map(pairs.map(([es, en]) => [foldText(es), en]))
 // Sorted longest-first so a more specific phrase wins over a shorter one it happens to contain
 // (e.g. "espinaca cocida" over "espinaca" if both existed).
 const PREFIXES = [...EXACT.entries()].sort((a, b) => b[0].length - a[0].length)
 
 function translateFoodQuery(query) {
-  const normalized = query.trim().toLowerCase()
+  const normalized = foldText(query).trim()
   if (EXACT.has(normalized)) return EXACT.get(normalized)
   const match = PREFIXES.find(([es]) => es.startsWith(normalized) || normalized.startsWith(es))
   return match ? match[1] : null
