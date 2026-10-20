@@ -237,6 +237,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [calcStale, setCalcStale] = useState(false)
   // Cuenta los cambios a datos de energía, para saber si cambiaron mientras el cálculo estaba en vuelo.
   const energyEditsRef = useRef(0)
+  // Cualquier cambio del formulario (también macros), para no dar por guardado lo que cambió durante el guardado.
+  const formEditsRef = useRef(0)
   const [calcState, setCalcState] = useState('idle')
   const [calcError, setCalcError] = useState('')
   const [evalSaveState, setEvalSaveState] = useState('idle')
@@ -431,6 +433,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   const updateForm = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
+    formEditsRef.current += 1
     if (ENERGY_FIELDS.includes(key)) energyEditsRef.current += 1
     // El resultado en pantalla ya no corresponde a estos datos (y "Guardar" recalcula con ellos).
     // También mientras el cálculo está en vuelo: si no, la respuesta tardía lo daba por vigente.
@@ -462,10 +465,12 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     if (!plan || planLocked || calcStale) return
     setEvalSaveState('saving')
     setEvalSaveError('')
+    const editsAtStart = formEditsRef.current
     try {
       const updated = await plansApi.evaluate(plan.id, { ...energyPayload(form), energyAdjustKcal: Number(form.energyAdjustKcal) || 0, carbsPercent: percentValue(form.carbsPercent, 50), proteinPercent: percentValue(form.proteinPercent, 25), fatPercent: percentValue(form.fatPercent, 25) })
       mergePlan(updated)
-      setEvalSaveState('saved')
+      // Lo cambiado mientras se guardaba no va en este guardado: no se marca como guardado.
+      setEvalSaveState(formEditsRef.current === editsAtStart ? 'saved' : 'idle')
     } catch (error) {
       setEvalSaveState('error')
       setEvalSaveError(error.message || 'No se pudo guardar el plan.')
