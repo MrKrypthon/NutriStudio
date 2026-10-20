@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { appointmentsApi, patientsApi, practiceApi } from '../../lib/api.js'
@@ -111,15 +111,21 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
 
   const days = useMemo(() => { const start = startOfWeek(anchor); return view === 'Día' ? [anchor] : Array.from({ length: 7 }, (_, i) => addDays(start, i)) }, [anchor, view])
 
+  // Al cambiar de semana rápido, una respuesta lenta de la semana anterior podía llegar después y
+  // pintar sus citas sobre la semana visible: sólo se aplica la respuesta de la última petición.
+  const loadSeq = useRef(0)
   const loadAppointments = useCallback(async () => {
+    const seq = ++loadSeq.current
     setStatus('loading')
     try {
       const from = days[0].toISOString()
       const lastDay = new Date(days[days.length - 1]); lastDay.setUTCHours(23, 59, 59, 999)
       const response = await appointmentsApi.list(from, lastDay.toISOString())
+      if (seq !== loadSeq.current) return
       setAppointments(response.items || [])
       setStatus('online')
     } catch (error) {
+      if (seq !== loadSeq.current) return
       if (error.code === 'DEMO_MODE') {
         const from = days[0].getTime(); const to = addDays(days[days.length - 1], 1).getTime()
         setAppointments(DEMO_APPOINTMENTS.filter((a) => { const t = new Date(a.startAt).getTime(); return t >= from && t < to }))
