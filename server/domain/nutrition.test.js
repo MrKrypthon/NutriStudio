@@ -81,6 +81,8 @@ describe('computeEnergyRequirement formulas', () => {
 
   it('rejects an unknown formula', () => {
     expect(() => computeEnergyRequirement({ ...base, formula: 'invented' })).toThrow(NutritionEngineError)
+    expect(() => computeEnergyRequirement({ ...base, formula: 'toString' })).toThrow(NutritionEngineError)
+    expect(() => computeEnergyRequirement({ ...base, formula: '__proto__' })).toThrow(NutritionEngineError)
   })
 
   it('uses METS instead of the activity factor when a full METS payload is provided', () => {

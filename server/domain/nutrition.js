@@ -123,7 +123,9 @@ class NutritionEngineError extends Error {
 }
 
 function resolveFormula(formula) {
-  const entry = BMR_FORMULAS[formula]
+  // Sólo claves propias: "toString" o "__proto__" encontraban algo en el prototipo y el cálculo
+  // reventaba con 500 en vez de responder "fórmula no disponible".
+  const entry = typeof formula === 'string' && Object.hasOwn(BMR_FORMULAS, formula) ? BMR_FORMULAS[formula] : null
   if (!entry) throw new NutritionEngineError('UNKNOWN_FORMULA', 'La fórmula solicitada no está disponible.', { formula: 'invalid' })
   return entry
 }
