@@ -1969,7 +1969,10 @@ app.post('/api/v1/finance/expenses', async (request, reply) => {
   const amount = normalizeCents(amountCents)
   if (amount <= 0) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto del egreso debe ser mayor a cero.', fields: { amountCents: true } })
   if (amount > MAX_AMOUNT_CENTS) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El monto es demasiado grande.', fields: { amountCents: true } })
-  const when = occurredAt ? new Date(occurredAt) : new Date()
+  // Sin fecha se usa "ahora" en el reloj de pared de la práctica (misma convención que el ingreso de
+  // consulta); con new Date() un egreso capturado en la noche caía en el día UTC siguiente.
+  const practice = occurredAt ? null : await prisma.practice.findUnique({ where: { id: request.practiceId }, select: { timeZone: true } })
+  const when = occurredAt ? new Date(occurredAt) : practiceWallClockNow(practice?.timeZone)
   if (Number.isNaN(when.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha inválida.', fields: { occurredAt: true } })
   const entry = await prisma.financeEntry.create({
     data: {
@@ -1978,7 +1981,7 @@ app.post('/api/v1/finance/expenses', async (request, reply) => {
       amountCents: amount,
       method: PAYMENT_METHODS.includes(method) ? method : null,
       category: category == null ? null : String(category).trim() || null,
-      description: description?.trim() || null,
+      description: description == null ? null : String(description).trim() || null,
       occurredAt: when,
     },
   })
@@ -1998,10 +2001,11 @@ app.patch('/api/v1/finance/entries/:entryId', async (request, reply) => {
   }
   if (method !== undefined) data.method = PAYMENT_METHODS.includes(method) ? method : null
   if (category !== undefined) data.category = category == null ? null : String(category).trim() || null
-  if (description !== undefined) data.description = description?.trim() || null
+  if (description !== undefined) data.description = description == null ? null : String(description).trim() || null
   if (occurredAt !== undefined) {
+    // `null` no es "sin fecha": new Date(null) es 1970-01-01 y el movimiento desaparecía del periodo.
     const when = new Date(occurredAt)
-    if (Number.isNaN(when.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha inválida.', fields: { occurredAt: true } })
+    if (occurredAt === null || Number.isNaN(when.getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha inválida.', fields: { occurredAt: true } })
     data.occurredAt = when
   }
   return prisma.financeEntry.update({ where: { id: entry.id }, data })
