@@ -1,6 +1,6 @@
 # Stack tecnológico — Nutri Studio / milpa
 
-Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) y 110 (preparación para Docker). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
+Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker) y 111 (autenticación). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
 
 SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo**, que paga una suscripción y tiene acceso a todo. Lleva pacientes, consultas, expediente clínico, mediciones, diagnósticos PES, planes de alimentación con equivalentes SMAE, recetas, agenda, finanzas, tareas, plantillas y documentos PDF.
 
@@ -31,7 +31,9 @@ SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo
 |---|---|
 | Framework | **Fastify 5.12.1** con `@fastify/cors` 11.3.0. Es un monolito: `server/index.js`, de unas 3,400 líneas y 119 rutas (REST bajo `/api/v1` más `/health`) |
 | Lenguaje | **Node.js** con ESM (`"type": "module"`), en JavaScript plano. Versión objetivo: **24 LTS** (`.nvmrc`); mínimo 22.13, porque `pdfjs-dist` 6.4 y npm 12 ya no aceptan Node 20. La compatibilidad con 24 todavía se tiene que probar |
-| Autenticación | JWT propio (`jsonwebtoken`) y contraseñas con **bcryptjs**. El token lleva `practiceId` y `sv`, la versión de sesión: cambiar la contraseña, que el administrador la restablezca o desvincular Google cierra las sesiones abiertas. El superadministrador usa otro tipo de token |
+| Autenticación | JWT propio (`jsonwebtoken`) y contraseñas con **bcryptjs**. El token lleva `practiceId` y `sv`, la versión de sesión: cambiar la contraseña, que el administrador la restablezca o desvincular Google cierra las sesiones abiertas. El superadministrador usa otro token, firmado con su propio secreto (`ADMIN_JWT_SECRET`). La verificación sólo acepta HS256 |
+| Protección del acceso | Límite de intentos fallidos en memoria (`server/domain/security.js`): 5 por IP y cuenta, 20 por IP y 30 por cuenta cada 15 min en el login; topes parecidos en el panel, Google y cambio de contraseña; responde **429** con `Retry-After`. Con un usuario inexistente se compara igual contra un hash de relleno, para no delatar qué cuentas existen. Con `NODE_ENV=production` la API no arranca si los secretos faltan, miden menos de 32 caracteres, son iguales o son los de ejemplo |
+| Encabezados | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` y `Cache-Control: no-store` en todo lo que no fija su propio caché. CORS: cualquier origen en desarrollo; en producción sólo `CORS_ORIGINS` o `APP_URL`. `TRUST_PROXY` hace que la IP de la bitácora y del límite sea la del usuario detrás de Nginx |
 | Multi-tenant | Cada consulta a la base se filtra por el `practiceId` de la sesión |
 | Cuentas | Las primeras 100 las crea el administrador, con identificador (`loginId`) y contraseña temporal. Las demás se registran con Google (`signupSource` `ADMIN` o `GOOGLE`; las prácticas anteriores tienen `null` y nunca se bloquean). Se entra con correo o identificador |
 | Acceso por suscripción | Sin una suscripción vigente, y pasados 7 días de gracia, la API responde **402** `SUBSCRIPTION_REQUIRED`, salvo en las rutas de cobro y de sesión. Una cuenta suspendida recibe **403**. El estado se guarda en caché 30 s |
@@ -97,6 +99,7 @@ Pendientes:
 - **Stripe:** `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_MONTHLY`, `STRIPE_PRICE_YEARLY`, `APP_URL`.
 - **Cuentas:** `GOOGLE_CLIENT_ID` (sin él no aparece el botón de Google) y `CATALOG_PRACTICE_ID`.
 - **Almacenamiento, opcionales:** `DOCUMENT_STORAGE_PATH`, `LOGO_STORAGE_PATH`, `LAB_ATTACHMENT_STORAGE_PATH`, `RECIPE_IMAGE_STORAGE_PATH`, `INGREDIENT_IMAGE_STORAGE_PATH`, `EDUCATION_ATTACHMENT_STORAGE_PATH`.
+- **Seguridad (fase 111):** `ADMIN_JWT_SECRET` (obligatoria en producción), `CORS_ORIGINS` y `TRUST_PROXY`. `NODE_ENV` va en el entorno del servidor, no en `.env`.
 - **Solo desarrollo:** `SKIP_DB_SYNC=1` salta `prisma/sync-dev.js`.
 - **Scripts, no la API:** `ADMIN_EMAIL`, `ADMIN_PASSWORD` y `ADMIN_NAME`, para `npm run admin:create`. `NODE_ENV=production` bloquea el seed y la práctica de demostración.
 
