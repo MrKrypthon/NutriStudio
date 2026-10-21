@@ -25,7 +25,7 @@ git checkout main          # o la rama de la fase mientras el PR no esté fusion
 npm install
 cp .env.example .env
 docker compose up -d postgres
-npm run db:setup           # push + seed + SMAE + base + recetas propias + recetario + cálculo SMAE
+npm run db:setup           # migraciones + seed + SMAE + base + recetas propias + recetario + cálculo SMAE
 npm run dev:all            # API en :3001 y web en :5173
 ```
 
@@ -43,7 +43,7 @@ npm run dev:all
 ```
 
 Antes de arrancar, `predev:all` ejecuta `prisma/sync-dev.js`, que de forma **idempotente**
-sincroniza el esquema (`prisma db push`) e importa únicamente lo que falte (seed, catálogos,
+aplica las migraciones pendientes (`npm run db:migrate`) e importa únicamente lo que falte (seed, catálogos,
 recetario y cálculo SMAE). No sobrescribe ediciones manuales. Para omitirlo (por ejemplo con una
 base remota ya lista): `SKIP_DB_SYNC=1 npm run dev:all`. Requiere PostgreSQL corriendo
 (`docker compose up -d postgres`) y el `.env` configurado.
@@ -72,10 +72,25 @@ Requiere Docker para PostgreSQL:
 ```bash
 cp .env.example .env
 docker compose up -d postgres
-npm run db:push
+npm run db:migrate
 npm run db:seed
 npm run api
 ```
+
+### Cambios de esquema (migraciones)
+
+Desde la fase 112 el esquema se versiona con migraciones de Prisma en `prisma/migrations/`; ya no
+se usa `prisma db push`.
+
+- **Aplicar lo pendiente:** `npm run db:migrate`. `dev:all` lo hace solo. Una base creada antes con
+  `db push` se adopta una sola vez: si coincide con la línea base (`prisma/baseline/0_init.prisma`),
+  se marca `0_init` como aplicada; si no coincide, se detiene, muestra la diferencia y no toca nada.
+- **Crear un cambio:** edita `prisma/schema.prisma` y corre `npm run db:migrate:new nombre_del_cambio`.
+  Eso escribe el SQL en `prisma/migrations/<fecha>_nombre_del_cambio/` sin aplicarlo. Revísalo,
+  sobre todo si borra o renombra columnas, y aplícalo con `npm run db:migrate`.
+- **Producción:** la base se crea desde cero con `npx prisma migrate deploy` (`npm run db:migrate:deploy`),
+  que sólo aplica migraciones ya versionadas y nunca las genera. No uses `db push` ni el seed.
+- **No edites** una migración que ya esté en `main`: crea otra que corrija.
 
 La API queda disponible en `http://localhost:3001`. El frontend utiliza `/api/v1` por defecto y puede cambiarse con `VITE_API_URL`.
 

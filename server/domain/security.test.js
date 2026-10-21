@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ATTEMPT_RULES, corsOriginOption, createAttemptLimiter, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './security.js'
+import { ATTEMPT_RULES, clientKey, corsOriginOption, createAttemptLimiter, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './security.js'
 
 const LONG = 'a'.repeat(40)
 const OTHER = 'b'.repeat(40)
@@ -51,66 +51,131 @@ describe('secretos de los tokens', () => {
 })
 
 describe('límite de intentos', () => {
-  const setup = () => {
+  const setup = (rules = ATTEMPT_RULES.login, maxKeys) => {
     let clock = 0
-    const limiter = createAttemptLimiter({ rules: ATTEMPT_RULES.login, now: () => clock })
+    const limiter = createAttemptLimiter({ rules, now: () => clock, ...(maxKeys ? { maxKeys } : {}) })
     return { limiter, advance: (ms) => { clock += ms } }
   }
+  // Un intento fallido: se consume y no se devuelve.
+  const failN = (limiter, subject, times) => { for (let i = 0; i < times; i += 1) limiter.consume(subject) }
 
-  it('bloquea a la sexta contraseña equivocada para la misma cuenta y la misma IP', () => {
+  it('bloquea al sexto intento fallido para la misma cuenta y la misma IP', () => {
     const { limiter } = setup()
     const subject = { ip: '1.1.1.1', account: 'milpa001' }
-    for (let i = 0; i < 5; i += 1) { expect(limiter.check(subject).allowed).toBe(true); limiter.fail(subject) }
-    const result = limiter.check(subject)
+    for (let i = 0; i < 5; i += 1) expect(limiter.consume(subject).allowed).toBe(true)
+    const result = limiter.consume(subject)
     expect(result.allowed).toBe(false)
     expect(result.retryAfterSeconds).toBe(15 * 60)
     // Otra IP para esa cuenta todavía puede (hasta el tope por cuenta).
-    expect(limiter.check({ ip: '2.2.2.2', account: 'milpa001' }).allowed).toBe(true)
+    expect(limiter.consume({ ip: '2.2.2.2', account: 'milpa001' }).allowed).toBe(true)
+  })
+
+  it('cuenta el intento al revisarlo: peticiones simultáneas no pasan todas', () => {
+    const { limiter } = setup()
+    const subject = { ip: '1.1.1.1', account: 'milpa001' }
+    // Cien intentos «a la vez» (antes de que termine cualquier bcrypt): sólo 5 pasan.
+    const allowed = Array.from({ length: 100 }, () => limiter.consume(subject)).filter((r) => r.allowed)
+    expect(allowed).toHaveLength(5)
   })
 
   it('la ventana vence y vuelve a dejar pasar', () => {
     const { limiter, advance } = setup()
     const subject = { ip: '1.1.1.1', account: 'milpa001' }
-    for (let i = 0; i < 5; i += 1) limiter.fail(subject)
+    failN(limiter, subject, 5)
     advance(15 * 60_000 - 1000)
-    expect(limiter.check(subject)).toEqual({ allowed: false, retryAfterSeconds: 1 })
+    expect(limiter.consume(subject)).toEqual({ allowed: false, retryAfterSeconds: 1 })
     advance(1000)
-    expect(limiter.check(subject).allowed).toBe(true)
+    expect(limiter.consume(subject).allowed).toBe(true)
   })
 
   it('frena a una IP que prueba muchas cuentas', () => {
     const { limiter } = setup()
-    for (let i = 0; i < 20; i += 1) limiter.fail({ ip: '1.1.1.1', account: `cuenta${i}` })
-    expect(limiter.check({ ip: '1.1.1.1', account: 'otra' }).allowed).toBe(false)
-    expect(limiter.check({ ip: '3.3.3.3', account: 'otra' }).allowed).toBe(true)
+    for (let i = 0; i < 20; i += 1) limiter.consume({ ip: '1.1.1.1', account: `cuenta${i}` })
+    expect(limiter.consume({ ip: '1.1.1.1', account: 'otra' }).allowed).toBe(false)
+    expect(limiter.consume({ ip: '3.3.3.3', account: 'otra' }).allowed).toBe(true)
   })
 
   it('frena un ataque a una cuenta repartido entre IPs', () => {
     const { limiter } = setup()
-    for (let i = 0; i < 30; i += 1) limiter.fail({ ip: `10.0.0.${i}`, account: 'milpa001' })
-    expect(limiter.check({ ip: '10.0.1.1', account: 'milpa001' }).allowed).toBe(false)
+    for (let i = 0; i < 30; i += 1) limiter.consume({ ip: `10.0.0.${i}`, account: 'milpa001' })
+    expect(limiter.consume({ ip: '10.0.1.1', account: 'milpa001' }).allowed).toBe(false)
   })
 
-  it('un acceso correcto limpia los fallos de esa cuenta, no los de la IP', () => {
+  it('un acceso correcto se devuelve y limpia los fallos de esa cuenta, no los de la IP', () => {
     const { limiter } = setup()
-    for (let i = 0; i < 4; i += 1) limiter.fail({ ip: '1.1.1.1', account: 'milpa001' })
-    limiter.succeed({ ip: '1.1.1.1', account: 'milpa001' })
-    for (let i = 0; i < 4; i += 1) limiter.fail({ ip: '1.1.1.1', account: 'milpa001' })
-    expect(limiter.check({ ip: '1.1.1.1', account: 'milpa001' }).allowed).toBe(true)
-    // La IP ya lleva 8 fallos de 20 aunque haya entrado bien en medio.
-    for (let i = 0; i < 12; i += 1) limiter.fail({ ip: '1.1.1.1', account: `x${i}` })
-    expect(limiter.check({ ip: '1.1.1.1', account: 'milpa001' }).allowed).toBe(false)
+    const subject = { ip: '1.1.1.1', account: 'milpa001' }
+    const ok = () => { limiter.consume(subject); limiter.refund(subject); limiter.succeed(subject) }
+    failN(limiter, subject, 4); ok()
+    failN(limiter, subject, 4); ok()
+    expect(limiter.consume(subject).allowed).toBe(true)
+    // La IP lleva 9 fallos de 20 (los accesos buenos no cuentan) aunque haya entrado bien en medio.
+    for (let i = 0; i < 11; i += 1) limiter.consume({ ip: '1.1.1.1', account: `x${i}` })
+    expect(limiter.consume({ ip: '1.1.1.1', account: 'milpa001' }).allowed).toBe(false)
   })
 
-  it('no crece sin límite con muchas IPs distintas', () => {
-    let clock = 0
-    const limiter = createAttemptLimiter({ rules: ATTEMPT_RULES.google, now: () => clock, maxKeys: 100 })
-    for (let i = 0; i < 1000; i += 1) { limiter.fail({ ip: `ip-${i}` }); clock += 1 }
+  it('muchos accesos correctos desde la misma IP (una oficina) no la bloquean', () => {
+    const { limiter } = setup()
+    for (let i = 0; i < 50; i += 1) {
+      const subject = { ip: '1.1.1.1', account: `persona${i}` }
+      expect(limiter.consume(subject).allowed).toBe(true)
+      limiter.refund(subject); limiter.succeed(subject)
+    }
+  })
+
+  it('inundar de llaves nuevas no suelta un bloqueo vigente', () => {
+    const { limiter, advance } = setup(ATTEMPT_RULES.google, 100)
+    failN(limiter, { ip: 'atacante' }, 20)
+    expect(limiter.consume({ ip: 'atacante' }).allowed).toBe(false)
+    for (let i = 0; i < 1000; i += 1) { limiter.consume({ ip: `relleno-${i}` }); advance(1) }
     expect(limiter.size()).toBeLessThanOrEqual(100)
+    expect(limiter.consume({ ip: 'atacante' }).allowed).toBe(false)
+  })
+
+  it('con la memoria llena de bloqueos sigue atendiendo a clientes nuevos (no deja fuera a todos)', () => {
+    const { limiter, advance } = setup(ATTEMPT_RULES.changePassword, 10)
+    for (let i = 0; i < 10; i += 1) { failN(limiter, { account: `bloqueada${i}` }, 5); advance(1000) }
+    expect(limiter.consume({ account: 'nueva' }).allowed).toBe(true)
+    expect(limiter.size()).toBeLessThanOrEqual(10)
+    // Se soltaron los que vencían antes; el más reciente sigue bloqueado.
+    expect(limiter.consume({ account: 'bloqueada9' }).allowed).toBe(false)
+  })
+
+  it('libera espacio por tandas, no recorre todo en cada intento', () => {
+    const { limiter } = setup(ATTEMPT_RULES.google, 1000)
+    for (let i = 0; i < 1000; i += 1) limiter.consume({ ip: `ip-${i}` })
+    limiter.consume({ ip: 'una-mas' })
+    expect(limiter.size()).toBeLessThanOrEqual(900)
+  })
+
+  it('una cuenta larguísima no ocupa más memoria que una normal', () => {
+    const { limiter } = setup()
+    limiter.consume({ ip: '1.1.1.1', account: 'x'.repeat(100_000) })
+    limiter.consume({ ip: '1.1.1.1', account: 'y'.repeat(100_000) })
+    expect(Math.max(...limiter.keys().map((key) => key.length))).toBeLessThan(120)
+    // Dos cuentas largas distintas siguen contando por separado.
+    expect(new Set(limiter.keys().filter((key) => key.startsWith('login-account:'))).size).toBe(2)
   })
 
   it('el mensaje da los minutos en español', () => {
     expect(tooManyAttemptsMessage(30)).toBe('Demasiados intentos. Espera 1 minuto e intenta de nuevo.')
     expect(tooManyAttemptsMessage(900)).toBe('Demasiados intentos. Espera 15 minutos e intenta de nuevo.')
+  })
+})
+
+describe('llave de cliente', () => {
+  it('IPv4 tal cual, también la mapeada de un socket dual', () => {
+    expect(clientKey('203.0.113.7')).toBe('203.0.113.7')
+    expect(clientKey('::ffff:203.0.113.7')).toBe('203.0.113.7')
+  })
+  it('IPv6 por su /64, para que no estrene dirección en cada intento', () => {
+    expect(clientKey('2001:db8:abcd:12:1:2:3:4')).toBe('2001:db8:abcd:12::/64')
+    expect(clientKey('2001:DB8:ABCD:0012:ffff::1')).toBe('2001:db8:abcd:12::/64')
+    expect(clientKey('2001:db8::1')).toBe('2001:db8:0:0::/64')
+    expect(clientKey('::1')).toBe('0:0:0:0::/64')
+    expect(clientKey('fe80::1%eth0')).toBe('fe80:0:0:0::/64')
+  })
+  it('sin IP no hay llave', () => {
+    expect(clientKey('')).toBe('')
+    expect(clientKey(undefined)).toBe('')
   })
 })

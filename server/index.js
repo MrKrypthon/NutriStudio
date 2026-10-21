@@ -26,7 +26,7 @@ import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValid
 import { copyCatalog } from './domain/catalogCopy.js'
 import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
 import { foldText, toWinAnsi } from './domain/text.js'
-import { ATTEMPT_RULES, corsOriginOption, createAttemptLimiter, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './domain/security.js'
+import { ATTEMPT_RULES, clientKey, corsOriginOption, createAttemptLimiter, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './domain/security.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
 // 10 MB PDF becomes ~13.3 MB as base64 JSON text, see POST /consultations/:id/lab-attachments.
@@ -141,9 +141,14 @@ app.addHook('onRequest', async (request, reply) => {
       const payload = jwt.verify(header.slice(7), ADMIN_JWT_SECRET, JWT_VERIFY_OPTIONS)
       if (!payload.admin) throw new Error('not admin')
       request.adminId = payload.sub
+      request.adminSessionVersion = payload.sv || 0
     } catch {
       return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Sesión de administrador inválida.', fields: {} })
     }
+    // Salir o restablecer la contraseña incrementa sessionVersion y cierra los tokens anteriores
+    // (fase 112). Fuera del try: una falla de la base es un 500, no un cierre de sesión.
+    const admin = await prisma.adminUser.findUnique({ where: { id: request.adminId }, select: { sessionVersion: true } })
+    if (!admin || admin.sessionVersion !== request.adminSessionVersion) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Tu sesión de administrador se cerró. Inicia sesión de nuevo.', fields: {} })
     return
   }
   if (!header?.startsWith('Bearer ')) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Inicia sesión para continuar.', fields: {} })
@@ -261,11 +266,17 @@ const attemptLimiters = Object.fromEntries(Object.entries(ATTEMPT_RULES).map(([n
 // Cuando el correo o identificador no existe se compara igual contra este hash, para que la respuesta
 // tarde lo mismo que con una contraseña equivocada y no delate qué cuentas existen.
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomUUID(), 10)
+// Cuenta el intento antes de probar la contraseña (ver `consume`); quien entra bien lo recupera con
+// `acceptAttempt`.
 function rejectIfThrottled(limiter, subject, reply) {
-  const result = limiter.check(subject)
+  const result = limiter.consume(subject)
   if (result.allowed) return false
   reply.code(429).header('Retry-After', String(result.retryAfterSeconds)).send({ code: 'TOO_MANY_ATTEMPTS', message: tooManyAttemptsMessage(result.retryAfterSeconds), fields: {} })
   return true
+}
+function acceptAttempt(limiter, subject) {
+  limiter.refund(subject)
+  limiter.succeed(subject)
 }
 
 // Se entra con el correo o con el identificador que dio el administrador (un identificador nunca
@@ -276,19 +287,18 @@ app.post('/api/v1/auth/login', async (request, reply) => {
   const { email, password } = request.body || {}
   const login = String(email || '').trim()
   if (!login || !password || typeof password !== 'string') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Correo o identificador y contraseña son obligatorios.', fields: { email: !login, password: !password } })
+  // Un correo mide a lo más 254 caracteres y un identificador 30: lo demás no es una cuenta.
+  if (login.length > 254) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Correo o identificador demasiado largo.', fields: { email: true } })
   const byEmail = login.includes('@')
-  const attempt = { ip: request.ip, account: byEmail ? login.toLowerCase() : normalizeLoginId(login) }
+  const attempt = { ip: clientKey(request.ip), account: byEmail ? login.toLowerCase() : normalizeLoginId(login) }
   if (rejectIfThrottled(attemptLimiters.login, attempt, reply)) return reply
   const where = byEmail ? { email: { equals: login, mode: 'insensitive' } } : { loginId: attempt.account }
   const candidates = await prisma.user.findMany({ where: { ...where, status: 'ACTIVE' }, include: { practice: true }, orderBy: { createdAt: 'asc' }, take: 10 })
   let user = null
   if (!candidates.length) await bcrypt.compare(password, DUMMY_PASSWORD_HASH)
   for (const candidate of candidates) if (await bcrypt.compare(password, candidate.passwordHash)) { user = candidate; break }
-  if (!user) {
-    attemptLimiters.login.fail(attempt)
-    return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Correo, identificador o contraseña incorrectos.', fields: {} })
-  }
-  attemptLimiters.login.succeed(attempt)
+  if (!user) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Correo, identificador o contraseña incorrectos.', fields: {} })
+  acceptAttempt(attemptLimiters.login, attempt)
   if (user.practice.status === 'SUSPENDED') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
   return signSession(user)
 })
@@ -327,7 +337,7 @@ async function verifyGoogleCredential(request, reply) {
   if (!googleClient) { reply.code(503).send({ code: 'GOOGLE_NOT_CONFIGURED', message: 'El acceso con Google todavía no está activo en este servidor.', fields: {} }); return null }
   const credential = request.body?.credential
   if (!credential || typeof credential !== 'string') { reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Falta la respuesta de Google.', fields: {} }); return null }
-  const attempt = { ip: request.ip }
+  const attempt = { ip: clientKey(request.ip) }
   if (rejectIfThrottled(attemptLimiters.google, attempt, reply)) return null
   let profile
   try {
@@ -335,11 +345,11 @@ async function verifyGoogleCredential(request, reply) {
     profile = ticket.getPayload()
   } catch (err) {
     request.log.warn({ err: err.message }, 'Token de Google inválido')
-    attemptLimiters.google.fail(attempt)
     reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Google no confirmó tu cuenta. Intenta de nuevo.', fields: {} })
     return null
   }
-  if (!profile?.sub || !profile.email || !profile.email_verified) { attemptLimiters.google.fail(attempt); reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Tu cuenta de Google no tiene un correo verificado.', fields: {} }); return null }
+  if (!profile?.sub || !profile.email || !profile.email_verified) { reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Tu cuenta de Google no tiene un correo verificado.', fields: {} }); return null }
+  attemptLimiters.google.refund(attempt)
   return profile
 }
 
@@ -455,18 +465,23 @@ app.put('/api/v1/practice/fees', async (request) => {
 app.post('/api/v1/admin/auth/login', async (request, reply) => {
   const { email, password } = request.body || {}
   if (!email || !password || typeof email !== 'string' || typeof password !== 'string') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Email y contraseña son obligatorios.', fields: {} })
-  const attempt = { ip: request.ip, account: email.trim().toLowerCase() }
+  if (email.trim().length > 254) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Email demasiado largo.', fields: {} })
+  const attempt = { ip: clientKey(request.ip), account: email.trim().toLowerCase() }
   if (rejectIfThrottled(attemptLimiters.adminLogin, attempt, reply)) return reply
   // Sin distinguir mayúsculas: admin:create guarda el correo en minúsculas.
   const admin = await prisma.adminUser.findFirst({ where: { email: { equals: email.trim(), mode: 'insensitive' } } })
   const valid = await bcrypt.compare(password, admin ? admin.passwordHash : DUMMY_PASSWORD_HASH)
-  if (!admin || !valid) {
-    attemptLimiters.adminLogin.fail(attempt)
-    return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Credenciales de administrador incorrectas.', fields: {} })
-  }
-  attemptLimiters.adminLogin.succeed(attempt)
-  const token = jwt.sign({ sub: admin.id, admin: true }, ADMIN_JWT_SECRET, { expiresIn: '12h' })
+  if (!admin || !valid) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Credenciales de administrador incorrectas.', fields: {} })
+  acceptAttempt(attemptLimiters.adminLogin, attempt)
+  const token = jwt.sign({ sub: admin.id, admin: true, sv: admin.sessionVersion }, ADMIN_JWT_SECRET, { expiresIn: '12h' })
   return { token, admin: { id: admin.id, name: admin.name, email: admin.email } }
+})
+
+// Salir del panel cierra TODAS las sesiones de ese administrador (otros navegadores incluidos): el
+// token del panel da acceso a todas las cuentas, así que salir es también la forma de revocarlo.
+app.post('/api/v1/admin/auth/logout', async (request, reply) => {
+  await prisma.adminUser.update({ where: { id: request.adminId }, data: { sessionVersion: { increment: 1 } } })
+  return reply.code(204).send()
 })
 
 // Cuántas cuentas lleva creadas el administrador y qué identificador sugerir para la siguiente.
@@ -803,11 +818,8 @@ app.post('/api/v1/auth/change-password', async (request, reply) => {
   const attempt = { account: user.id }
   if (rejectIfThrottled(attemptLimiters.changePassword, attempt, reply)) return reply
   const valid = await bcrypt.compare(currentPassword, user.passwordHash)
-  if (!valid) {
-    attemptLimiters.changePassword.fail(attempt)
-    return reply.code(400).send({ code: 'INVALID_PASSWORD', message: 'La contraseña actual no es correcta.', fields: { currentPassword: true } })
-  }
-  attemptLimiters.changePassword.succeed(attempt)
+  if (!valid) return reply.code(400).send({ code: 'INVALID_PASSWORD', message: 'La contraseña actual no es correcta.', fields: { currentPassword: true } })
+  acceptAttempt(attemptLimiters.changePassword, attempt)
   const passwordHash = await bcrypt.hash(newPassword, 10)
   // Cierra las demás sesiones; esta sigue con el token nuevo que se devuelve.
   const updated = await prisma.user.update({ where: { id: user.id }, data: { passwordHash, sessionVersion: { increment: 1 } } })

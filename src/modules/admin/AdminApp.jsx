@@ -84,7 +84,8 @@ export default function AdminApp() {
       setAuthError(error.code === 'DEMO_MODE' ? 'Conecta el API para iniciar sesión.' : (error.message || 'No se pudo iniciar sesión.'))
     }
   }
-  const logout = () => { clearAdminToken(); setAdmin(null); setAuthed(false) }
+  // El servidor invalida el token (y los de otros navegadores); si no responde, igual se sale aquí.
+  const logout = () => { adminApi.logout().catch(() => {}).finally(() => { clearAdminToken(); setAdmin(null); setAuthed(false) }) }
 
   // Suspender deja a la cuenta sin acceso: se confirma antes, y un fallo se avisa (antes se tragaba).
   const toggleStatus = async (practice) => {

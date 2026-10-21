@@ -3,7 +3,8 @@
 // A pull only updates the code; the database still needs the new columns and the new rows
 // (recetario recipes, SMAE catalog, computed SMAE values). This runs before the API starts
 // (via the `predev:all` npm hook) and is idempotent:
-//   1. `prisma db push` to sync the schema and regenerate the client.
+//   1. `node prisma/migrate.js`: apply pending migrations (adopting a pre-migrations `db push`
+//      database once, if it matches the baseline) and regenerate the client.
 //   2. seed only when the practice doesn't exist yet (fresh database).
 //   3. import the catalogs only when they're missing.
 //   4. import the recipe book only when it isn't complete.
@@ -27,9 +28,9 @@ const main = async () => {
   if (!process.env.DATABASE_URL) { console.warn('[sync] DATABASE_URL no está configurada; copia .env.example a .env. Se omite la sincronización.'); return }
 
   try {
-    run('npx prisma db push')
+    run('node prisma/migrate.js')
   } catch {
-    console.error('\n[sync] No se pudo preparar la base de datos. ¿Está corriendo PostgreSQL? Prueba: docker compose up -d postgres\n')
+    console.error('\n[sync] No se pudo preparar la base de datos (el motivo está arriba). Si PostgreSQL no está corriendo: docker compose up -d postgres\n')
     process.exit(1)
   }
 

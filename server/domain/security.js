@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 // Configuración de seguridad de la API (fase 111): proxy de confianza, orígenes de CORS, secretos
 // de los tokens y límite de intentos de acceso. Lógica pura, sin Fastify ni base de datos, para
 // probarla aparte.
@@ -61,57 +63,110 @@ export function jwtSecretProblems({ nodeEnv, jwtSecret, adminJwtSecret, exampleS
   return problems
 }
 
-// Límite de intentos fallidos, en memoria (una sola instancia de la API; con varias haría falta un
-// almacén compartido). Cada regla cuenta fallos por su propia llave dentro de una ventana fija; si
-// cualquiera de las llaves de un intento llegó a su tope, se rechaza sin probar la contraseña.
+// Llave de cliente para el límite: una IPv4 tal cual (también la «::ffff:a.b.c.d» que da Node en
+// sockets duales) y una IPv6 por su prefijo /64, porque a una sola conexión le asignan el /64 entero
+// y podría estrenar dirección en cada intento.
+export function clientKey(ip) {
+  const raw = String(ip || '').trim().toLowerCase()
+  if (!raw) return ''
+  const mapped = raw.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/)
+  if (mapped) return mapped[1]
+  if (!raw.includes(':')) return raw
+  const [head, tail = ''] = raw.split('%')[0].split('::')
+  const left = head ? head.split(':') : []
+  const right = raw.includes('::') && tail ? tail.split(':') : []
+  const groups = raw.includes('::') ? [...left, ...Array(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right] : left
+  return `${groups.slice(0, 4).map((group) => (group || '0').replace(/^0+(?=.)/, '')).join(':')}::/64`
+}
+
+// Límite de intentos, en memoria (una sola instancia de la API; con varias haría falta un almacén
+// compartido). Cada regla cuenta intentos por su propia llave dentro de una ventana fija.
+//
+// `consume` cuenta el intento ANTES de probar la contraseña, en la misma vuelta síncrona en que lo
+// revisa: si se contara después del bcrypt, cien peticiones simultáneas pasarían todas la revisión
+// antes de que se registrara la primera. Si el acceso resulta correcto, `refund` devuelve el intento
+// y `succeed` limpia las reglas marcadas.
 export function createAttemptLimiter({ rules, now = () => Date.now(), maxKeys = 50_000 }) {
   const buckets = new Map()
 
-  const prune = (at) => {
+  const blocking = (bucket, at) => bucket.resetAt > at && bucket.count >= bucket.max
+
+  // Con la memoria llena se libera un 10 % de una vez (así el recorrido no se repite en cada intento):
+  // primero las llaves vencidas, después las que todavía no bloquean y, sólo si no alcanza, los
+  // bloqueos que vencen antes. Nunca se rechaza a un cliente nuevo por falta de espacio, porque eso
+  // dejaría a todos fuera; soltar un bloqueo exige antes llenar la memoria con miles de bloqueos
+  // nuevos, y cada uno cuesta sus intentos.
+  const makeRoom = (at, needed) => {
     for (const [key, bucket] of buckets) if (bucket.resetAt <= at) buckets.delete(key)
-    // Si aun así hay demasiadas (muchas IPs distintas), se descartan las más viejas.
-    if (buckets.size > maxKeys) {
-      const excess = buckets.size - maxKeys
-      let removed = 0
-      for (const key of buckets.keys()) { buckets.delete(key); if (++removed >= excess) break }
+    if (buckets.size + needed <= maxKeys) return
+    const target = Math.max(0, Math.floor(maxKeys * 0.9) - needed)
+    for (const [key, bucket] of buckets) {
+      if (buckets.size <= target) return
+      if (!blocking(bucket, at)) buckets.delete(key)
     }
+    const bySoonest = [...buckets.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt)
+    for (const [key] of bySoonest) {
+      if (buckets.size <= target) return
+      buckets.delete(key)
+    }
+  }
+
+  // Cada parte de la llave ocupa a lo más ~65 caracteres: lo que escribe el usuario (la cuenta) se
+  // resume con SHA-256 si es más largo, para que nadie llene la memoria con llaves enormes.
+  const keyPart = (value) => {
+    const text = String(value)
+    return text.length > 64 ? `#${createHash('sha256').update(text).digest('base64url')}` : text
   }
 
   const keysFor = (subject) => rules
     .map((rule) => {
       const parts = rule.by.map((field) => subject[field])
       if (parts.some((part) => part === undefined || part === null || part === '')) return null
-      return { rule, key: `${rule.name}:${parts.join('|')}` }
+      return { rule, key: `${rule.name}:${parts.map(keyPart).join('|')}` }
     })
     .filter(Boolean)
 
+  const live = (key, at) => {
+    const bucket = buckets.get(key)
+    return bucket && bucket.resetAt > at ? bucket : null
+  }
+
   return {
-    // { allowed: true } o { allowed: false, retryAfterSeconds }
-    check(subject) {
+    // Revisa y cuenta en un solo paso. { allowed: true } o { allowed: false, retryAfterSeconds }.
+    consume(subject) {
       const at = now()
+      const entries = keysFor(subject)
       let retryAfterMs = 0
-      for (const { rule, key } of keysFor(subject)) {
-        const bucket = buckets.get(key)
-        if (!bucket || bucket.resetAt <= at) continue
-        if (bucket.count >= rule.max) retryAfterMs = Math.max(retryAfterMs, bucket.resetAt - at)
+      for (const { key } of entries) {
+        const bucket = live(key, at)
+        if (bucket && bucket.count >= bucket.max) retryAfterMs = Math.max(retryAfterMs, bucket.resetAt - at)
       }
-      return retryAfterMs ? { allowed: false, retryAfterSeconds: Math.ceil(retryAfterMs / 1000) } : { allowed: true }
+      if (retryAfterMs) return { allowed: false, retryAfterSeconds: Math.ceil(retryAfterMs / 1000) }
+      const missing = entries.filter(({ key }) => !live(key, at)).length
+      if (buckets.size + missing > maxKeys) makeRoom(at, missing)
+      for (const { rule, key } of entries) {
+        const bucket = live(key, at)
+        if (bucket) bucket.count += 1
+        else buckets.set(key, { count: 1, max: rule.max, resetAt: at + rule.windowMs })
+      }
+      return { allowed: true }
     },
-    fail(subject) {
+    // El intento resultó válido (contraseña correcta, token de Google bueno): no cuenta como fallo.
+    refund(subject) {
       const at = now()
-      for (const { rule, key } of keysFor(subject)) {
-        const bucket = buckets.get(key)
-        if (!bucket || bucket.resetAt <= at) buckets.set(key, { count: 1, resetAt: at + rule.windowMs })
-        else bucket.count += 1
+      for (const { key } of keysFor(subject)) {
+        const bucket = live(key, at)
+        if (bucket && bucket.count > 0) bucket.count -= 1
       }
-      if (buckets.size > maxKeys) prune(at)
     },
-    // Un acceso correcto borra los fallos de las reglas marcadas con `resetOnSuccess` (por ejemplo
-    // IP + cuenta), no los de la IP sola: si no, alternar con una cuenta propia anularía el límite.
+    // Un acceso correcto borra además los intentos de las reglas marcadas con `resetOnSuccess`
+    // (IP + cuenta, cuenta), no los de la IP sola: si no, alternar con una cuenta propia anularía el
+    // límite por IP.
     succeed(subject) {
       for (const { rule, key } of keysFor(subject)) if (rule.resetOnSuccess) buckets.delete(key)
     },
     size: () => buckets.size,
+    keys: () => [...buckets.keys()],
   }
 }
 
