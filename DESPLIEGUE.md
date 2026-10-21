@@ -192,7 +192,10 @@ Si algo falla, el script imprime el comando para volver a la versión anterior (
 
 ## 7. Antes de abrir
 
-- [ ] **Aviso de privacidad y términos de servicio**, revisados por un abogado. Los datos de salud son sensibles: hace falta el consentimiento expreso que pide la LFPDPPP, y avisar que los datos se alojan fuera de México si el VPS está en EE. UU.
+- [ ] **Aviso de privacidad, términos y aviso para pacientes revisados por un abogado** (fase 117: ya están en la app como borradores).
+  - Los textos están en `src/modules/legal/legalTexts.js`.
+  - Llena los datos entre [corchetes]: razón social, domicilio, RFC, correo de privacidad y ciudad.
+  - En `src/lib/legal.js`, quita `draft: true` y cambia `version` de cada documento revisado. Así todos vuelven a aceptarlo, y queda registrado qué versión aceptó cada quien. Los datos de salud son sensibles: hace falta el consentimiento expreso que pide la LFPDPPP, y avisar que los datos se alojan fuera de México si el VPS está en EE. UU.
 - [ ] **Respaldo restaurado con éxito** en un servidor de prueba.
 - [ ] **Monitor de disponibilidad** activo.
 - [ ] **`RESTIC_PASSWORD` y `.env.docker`** guardados en tu gestor de contraseñas.

@@ -1,6 +1,6 @@
 # Stack tecnológico — Nutri Studio / milpa
 
-Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker), 111 (autenticación), 112 (migraciones de Prisma), 113 (Docker), 114 (CI) y 115 (servidor). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
+Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker), 111 (autenticación), 112 (migraciones de Prisma), 113 (Docker), 114 (CI), 115 (servidor) y 117 (documentos legales y consentimientos). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
 
 SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo**, que paga una suscripción y tiene acceso a todo. Lleva pacientes, consultas, expediente clínico, mediciones, diagnósticos PES, planes de alimentación con equivalentes SMAE, recetas, agenda, finanzas, tareas, plantillas y documentos PDF.
 
@@ -33,6 +33,7 @@ SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo
 | Lenguaje | **Node.js** con ESM (`"type": "module"`), en JavaScript plano. Versión objetivo: **24 LTS** (`.nvmrc`; las imágenes de Docker usan 24 y ahí pasan todas las pruebas); mínimo 22.13, porque `pdfjs-dist` 6.4 y npm 12 ya no aceptan Node 20 |
 | Autenticación | JWT propio (`jsonwebtoken`) y contraseñas con **bcryptjs**. El token lleva `practiceId` y `sv`, la versión de sesión: cambiar la contraseña, que el administrador la restablezca o desvincular Google cierra las sesiones abiertas. El superadministrador usa otro token, firmado con su propio secreto (`ADMIN_JWT_SECRET`), con su propia versión de sesión (`AdminUser.sessionVersion`): salir del panel o `npm run admin:reset-password` cierran todas sus sesiones. La verificación sólo acepta HS256 |
 | Protección del acceso | Límite de intentos en memoria (`server/domain/security.js`; cuenta el intento antes de comparar la contraseña, agrupa IPv6 por /64 y nunca suelta un bloqueo vigente al llenarse): 5 por IP y cuenta, 20 por IP y 30 por cuenta cada 15 min en el login; topes parecidos en el panel, Google y cambio de contraseña; responde **429** con `Retry-After`. Con un usuario inexistente se compara igual contra un hash de relleno, para no delatar qué cuentas existen. Con `NODE_ENV=production` la API no arranca si los secretos faltan, miden menos de 32 caracteres, son iguales o son los de ejemplo |
+| Documentos legales | Fase 117. `src/lib/legal.js` (versiones, compartido con la API) y `src/modules/legal/` (textos en borrador para revisión legal, páginas públicas `/legal/terminos`, `/legal/privacidad` y `/legal/aviso-pacientes`, imprimible). Mientras un usuario no acepte la versión vigente de los términos y del aviso, la API responde **403** `LEGAL_ACCEPTANCE_REQUIRED` (salvo sesión, cambio de contraseña y las rutas legales) y la app muestra la pantalla para aceptarlos. Cada aceptación queda en `LegalAcceptance` (documento, versión, fecha, IP y navegador). El paciente guarda aparte el consentimiento de datos de salud (`consentDataAt` + `consentVersion`, nunca premarcado) y el de comunicación (`communicationConsentAt`); registrarlos o retirarlos queda en la bitácora |
 | Encabezados | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` y `Cache-Control: no-store` en todo lo que no fija su propio caché. CORS: cualquier origen en desarrollo; en producción sólo `CORS_ORIGINS` o `APP_URL`. `TRUST_PROXY` hace que la IP de la bitácora y del límite sea la del usuario detrás de Nginx |
 | Multi-tenant | Cada consulta a la base se filtra por el `practiceId` de la sesión |
 | Cuentas | Las primeras 100 las crea el administrador, con identificador (`loginId`) y contraseña temporal. Las demás se registran con Google (`signupSource` `ADMIN` o `GOOGLE`; las prácticas anteriores tienen `null` y nunca se bloquean). Se entra con correo o identificador |
@@ -45,12 +46,13 @@ SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo
 | Pieza | Detalle |
 |---|---|
 | Motor | **PostgreSQL 16**. En desarrollo corre en Docker Compose (`postgres:16-alpine`) |
-| Modelos | **26 modelos** y 9 enums en `prisma/schema.prisma` |
+| Modelos | **27 modelos** y 9 enums en `prisma/schema.prisma` |
 | ORM | **Prisma 6.19** con **migraciones** en `prisma/migrations/` desde la fase 112: línea base `0_init` (el esquema de la fase 111) y después un directorio por cambio. `npm run db:migrate` aplica lo pendiente y adopta una sola vez las bases creadas antes con `db push`, sólo si coinciden con `prisma/baseline/0_init.prisma`. En producción, `prisma migrate deploy`. Ya no se usa `db push` |
 | Cuenta y acceso | `Practice` (la cuenta), `User`, `AdminUser` |
 | Pacientes y consulta | `Patient`, `Appointment`, `Consultation`, `ClinicalSection`, `PatientSection`, `Measurement`, `Diagnosis`, `LabAttachment` |
 | Plan y catálogo | `NutritionPlan`, `MealSlot`, `Recipe`, `RecipeIngredient`, `Ingredient`, `SmaeFood` (libro SMAE), `EducationMaterial`, `SuggestionChip` |
 | Documentos y trabajo diario | `Document`, `Template`, `Task` |
+| Legal | `LegalAcceptance` (fase 117) |
 | Dinero | `FinanceEntry`, `Transaction`, `StripeEvent` (eventos de webhook procesados, para la idempotencia) |
 | Auditoría | `AuditEvent` |
 | Versionado clínico | Las mediciones, los diagnósticos y los planes se guardan por consulta: se crea una versión nueva en lugar de sobrescribir |

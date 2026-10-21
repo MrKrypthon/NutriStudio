@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
-import { authApi } from './api.js'
-import { clearToken, getToken, onSubscriptionRequired, onUnauthorized, setToken } from './auth.js'
+import { authApi, legalApi } from './api.js'
+import { clearToken, getToken, onLegalRequired, onSubscriptionRequired, onUnauthorized, setToken } from './auth.js'
 
 const AuthContext = createContext(null)
 
@@ -11,6 +11,8 @@ export function AuthProvider({ children }) {
   // ¿La cuenta puede usar el sistema? { allowed, reason, inGrace } — sin suscripción pagada la app
   // sólo muestra la pantalla de pago (fase 109).
   const [access, setAccess] = useState(null)
+  // Documentos legales por aceptar: { pending: [{ document, version, title, path }] } (fase 117).
+  const [legal, setLegal] = useState(null)
 
   const logout = useCallback(() => {
     // Fire this while the token is still attached — it's the last authenticated call this
@@ -20,6 +22,7 @@ export function AuthProvider({ children }) {
     setUser(null)
     setPractice(null)
     setAccess(null)
+    setLegal(null)
     setStatus('anonymous')
   }, [])
 
@@ -27,10 +30,13 @@ export function AuthProvider({ children }) {
     setUser(response.user)
     setPractice(response.practice)
     setAccess(response.access || { allowed: true })
+    // Algunas respuestas de sesión (vincular Google) no traen el estado legal: se conserva el anterior.
+    if (response.legal) setLegal(response.legal)
   }, [])
 
   useEffect(() => { onUnauthorized(() => { clearToken(); setUser(null); setPractice(null); setAccess(null); setStatus('anonymous') }) }, [])
   useEffect(() => { onSubscriptionRequired(() => setAccess({ allowed: false, reason: 'SUBSCRIPTION_REQUIRED' })) }, [])
+  useEffect(() => { onLegalRequired(() => { legalApi.status().then((response) => setLegal({ pending: response.pending })).catch(() => {}) }) }, [])
 
   useEffect(() => {
     if (!getToken()) { setStatus('anonymous'); return }
@@ -67,7 +73,14 @@ export function AuthProvider({ children }) {
     } catch { return null /* keep the current state; a reload will retry */ }
   }, [applySession])
 
-  return <AuthContext.Provider value={{ user, practice, status, access, login, loginWithGoogle, logout, refreshPractice }}>{children}</AuthContext.Provider>
+  // Acepta los documentos en la versión que se le mostró; el servidor rechaza una versión vieja.
+  const acceptLegal = useCallback(async (documents) => {
+    const response = await legalApi.accept(documents)
+    setLegal({ pending: response.pending })
+    return response
+  }, [])
+
+  return <AuthContext.Provider value={{ user, practice, status, access, legal, login, loginWithGoogle, logout, refreshPractice, acceptLegal }}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {

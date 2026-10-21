@@ -74,6 +74,7 @@ export default function LoginPage() {
         {state === 'error' && <div className="form-error">⚠ {error}</div>}
         <button className="primary full-button" disabled={state === 'loading' || state === 'google'}>{state === 'loading' ? 'Entrando…' : 'Iniciar sesión'}</button>
       </form>
+      <p className="login-legal"><a href="/legal/terminos" target="_blank" rel="noopener noreferrer">Términos y condiciones</a> · <a href="/legal/privacidad" target="_blank" rel="noopener noreferrer">Aviso de privacidad</a></p>
     </div>
   </div>
 }

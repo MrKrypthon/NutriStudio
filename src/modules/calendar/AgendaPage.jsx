@@ -330,7 +330,7 @@ export default function AgendaPage({ setActive, onStartConsultation, autoOpenNew
   // Quick "add patient" inside the appointment modal: keeps the in-progress booking (date, time,
   // notes) instead of navigating away to the full patient form.
   const persistNewPatient = async () => {
-    const created = await patientsApi.create({ firstName: newPatient.firstName.trim(), lastName: newPatient.lastName.trim(), phone: newPatient.phone, email: newPatient.email, consentDataAt: new Date().toISOString() })
+    const created = await patientsApi.create({ firstName: newPatient.firstName.trim(), lastName: newPatient.lastName.trim(), phone: newPatient.phone, email: newPatient.email })
     setPatients((prev) => [created, ...prev])
     setNewPatient(EMPTY_NEW_PATIENT)
     setNewPatientState('idle')

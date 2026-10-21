@@ -24,6 +24,7 @@ import Stripe from 'stripe'
 import { OAuth2Client } from 'google-auth-library'
 import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId } from './domain/accounts.js'
 import { copyCatalog } from './domain/catalogCopy.js'
+import { LEGAL_DOCUMENTS, pendingAcceptances, validateAcceptance } from '../src/lib/legal.js'
 import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
 import { foldText, toWinAnsi } from './domain/text.js'
 import { ATTEMPT_RULES, clientKey, corsOriginOption, createAttemptLimiter, createBlockSketch, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './domain/security.js'
@@ -67,7 +68,12 @@ const SESSION_TTL = '7d'
 // Entrar con Google y leer su configuración (el client id) tampoco llevan sesión.
 const PUBLIC_ROUTES = new Set(['/health', '/api/v1/auth/login', '/api/v1/auth/google', '/api/v1/auth/config', '/api/v1/stripe/webhook'])
 // Sin suscripción pagada la cuenta sólo puede ver su sesión, cambiar su contraseña y pagar.
-const SUBSCRIPTION_FREE_ROUTES = new Set(['/api/v1/auth/me', '/api/v1/auth/logout', '/api/v1/auth/google/link', '/api/v1/auth/google/unlink', '/api/v1/auth/change-password', '/api/v1/billing', '/api/v1/billing/checkout', '/api/v1/billing/portal', '/api/v1/billing/sync'])
+// Mientras falte aceptar los términos o el aviso de privacidad vigentes (fase 117), sólo la sesión y
+// las rutas para leerlos y aceptarlos. Esas rutas también están libres del cobro (abajo): una cuenta
+// sin pagar tiene que poder aceptarlos para llegar a la pantalla de pago.
+// Cambiar la propia contraseña también: es una medida de seguridad que no debe esperar.
+const LEGAL_FREE_ROUTES = new Set(['/api/v1/auth/me', '/api/v1/auth/logout', '/api/v1/auth/change-password', '/api/v1/legal/status', '/api/v1/legal/accept'])
+const SUBSCRIPTION_FREE_ROUTES = new Set(['/api/v1/auth/me', '/api/v1/auth/logout', '/api/v1/auth/google/link', '/api/v1/auth/google/unlink', '/api/v1/auth/change-password', '/api/v1/billing', '/api/v1/billing/checkout', '/api/v1/billing/portal', '/api/v1/billing/sync', '/api/v1/legal/status', '/api/v1/legal/accept'])
 // Practice logos and recipe photos are branding/content, not patient data, and need to load in a
 // plain <img src> (which can't send an Authorization header) both in-app and inside generated
 // PDFs/emails — so these routes are public by design, scoped by unguessable ids/file names.
@@ -88,6 +94,16 @@ async function currentSessionVersion(userId) {
   const version = user && user.status === 'ACTIVE' ? user.sessionVersion : null
   sessionVersionCache.set(userId, { version, expires: Date.now() + 30000 })
   return version
+}
+// Documentos legales que le faltan a cada usuario (cacheado 30 s; aceptar borra la entrada).
+const legalPendingCache = new Map()
+async function legalPendingFor(userId) {
+  const cached = legalPendingCache.get(userId)
+  if (cached && cached.expires > Date.now()) return cached.pending
+  const accepted = await prisma.legalAcceptance.findMany({ where: { userId }, select: { document: true, version: true } })
+  const pending = pendingAcceptances(accepted)
+  legalPendingCache.set(userId, { pending, expires: Date.now() + 30000 })
+  return pending
 }
 async function practiceAccessFor(practiceId) {
   const cached = practiceStatusCache.get(practiceId)
@@ -171,6 +187,8 @@ app.addHook('onRequest', async (request, reply) => {
   // Una cuenta suspendida no puede operar (se cachea para no consultar en cada petición).
   const access = await practiceAccessFor(request.practiceId)
   if (access.reason === 'SUSPENDED' || access.reason === 'NOT_FOUND') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
+  // Sin aceptar los términos y el aviso de privacidad vigentes, nada más que leerlos y aceptarlos.
+  if (!LEGAL_FREE_ROUTES.has(pathname) && (await legalPendingFor(request.userId)).length) return reply.code(403).send({ code: 'LEGAL_ACCEPTANCE_REQUIRED', message: 'Antes de continuar, lee y acepta los términos y el aviso de privacidad.', fields: {} })
   // Sin suscripción pagada: sólo la sesión y la pantalla de pago (402 = pago requerido).
   if (!access.allowed && !SUBSCRIPTION_FREE_ROUTES.has(pathname)) return reply.code(402).send({ code: 'SUBSCRIPTION_REQUIRED', message: 'Tu suscripción no está activa. Suscríbete para seguir usando Milpa.', fields: {} })
 })
@@ -267,6 +285,8 @@ const sessionPayload = (user) => ({
   practice: { id: user.practice.id, name: user.practice.name, timeZone: user.practice.timeZone },
   access: practiceAccess(user.practice),
 })
+// Lo que la app necesita saber al entrar: qué documentos legales faltan por aceptar.
+const withLegal = async (payload, userId) => ({ ...payload, legal: { pending: await legalPendingFor(userId) } })
 const signToken = (user) => jwt.sign({ sub: user.id, practiceId: user.practiceId, role: user.role, sv: user.sessionVersion || 0 }, JWT_SECRET, { expiresIn: SESSION_TTL })
 const signSession = (user) => ({ token: signToken(user), ...sessionPayload(user) })
 
@@ -312,7 +332,7 @@ app.post('/api/v1/auth/login', async (request, reply) => {
   if (!user) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Correo, identificador o contraseña incorrectos.', fields: {} })
   acceptAttempt(attemptLimiters.login, attempt)
   if (user.practice.status === 'SUSPENDED') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
-  return signSession(user)
+  return withLegal(signSession(user), user.id)
 })
 
 // ── Cuentas nuevas (fase 109) ───────────────────────────────────────────────
@@ -386,7 +406,7 @@ app.post('/api/v1/auth/google', async (request, reply) => {
   }
   if (user.status !== 'ACTIVE') return reply.code(403).send({ code: 'ACCOUNT_DISABLED', message: 'Este usuario está desactivado. Contacta al administrador.', fields: {} })
   if (user.practice.status === 'SUSPENDED') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
-  return { ...signSession(user), created }
+  return { ...(await withLegal(signSession(user), user.id)), created }
 })
 
 // Stateless JWT: there is no server-side session to invalidate yet, so this only exists for
@@ -425,7 +445,28 @@ app.post('/api/v1/auth/google/unlink', async (request, reply) => {
 app.get('/api/v1/auth/me', async (request, reply) => {
   const user = await prisma.user.findUnique({ where: { id: request.userId }, include: { practice: true } })
   if (!user) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Sesión inválida.', fields: {} })
-  return sessionPayload(user)
+  return withLegal(sessionPayload(user), user.id)
+})
+
+// ── Documentos legales (fase 117) ───────────────────────────────────────────
+app.get('/api/v1/legal/status', async (request) => {
+  const accepted = await prisma.legalAcceptance.findMany({ where: { userId: request.userId }, orderBy: { acceptedAt: 'desc' }, select: { document: true, version: true, acceptedAt: true } })
+  return { pending: pendingAcceptances(accepted), accepted, documents: LEGAL_DOCUMENTS }
+})
+
+// Acepta los documentos en su versión vigente. Queda una fila por documento y versión, con la fecha,
+// la IP y el navegador: la constancia del consentimiento expreso.
+app.post('/api/v1/legal/accept', async (request, reply) => {
+  const check = validateAcceptance(request.body?.documents)
+  if (!check.ok) return reply.code(check.stale ? 409 : 400).send({ code: check.stale ? 'LEGAL_VERSION_CHANGED' : 'VALIDATION_ERROR', message: check.message, fields: {} })
+  const userAgent = String(request.headers['user-agent'] || '').slice(0, 300) || null
+  await prisma.legalAcceptance.createMany({
+    data: check.documents.map((document) => ({ userId: request.userId, document, version: LEGAL_DOCUMENTS[document].version, ip: request.ip || null, userAgent })),
+    skipDuplicates: true,
+  })
+  legalPendingCache.delete(request.userId)
+  await logAudit(request, { action: 'legal_accepted', entity: 'User', entityId: request.userId, metadata: { documents: check.documents.map((document) => `${document}@${LEGAL_DOCUMENTS[document].version}`) } })
+  return { pending: await legalPendingFor(request.userId) }
 })
 
 app.get('/api/v1/practice', async (request, reply) => {
@@ -1012,11 +1053,14 @@ app.get('/api/v1/patients', async (request) => {
 const emptyToNull = (value) => (value === undefined ? undefined : value === '' ? null : value)
 
 app.post('/api/v1/patients', async (request, reply) => {
-  const { firstName, lastName, email, phone, birthDate, sex, occupation, consentDataAt, address, curp } = request.body || {}
+  const { firstName, lastName, email, phone, birthDate, sex, occupation, consentDataAt, address, curp, healthDataConsent, communicationConsent } = request.body || {}
+  // Consentimiento expreso para los datos de salud (fase 117): sólo si se marcó, y con la versión del
+  // aviso para pacientes. `consentDataAt` se acepta por compatibilidad con clientes anteriores.
+  const healthConsent = healthDataConsent === true || Boolean(consentDataAt)
   if (!firstName || !lastName) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido son obligatorios.', fields: { firstName: !firstName, lastName: !lastName } })
   if (curp && !CURP_PATTERN.test(normalizeCurp(curp))) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La CURP no tiene un formato válido (18 caracteres).', fields: { curp: true } })
   if (birthDate && Number.isNaN(new Date(birthDate).getTime())) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Fecha de nacimiento inválida.', fields: { birthDate: true } })
-  const created = await prisma.patient.create({ data: { practiceId: request.practiceId, address: emptyToNull(address ? String(address).trim().slice(0, 240) : null), curp: curp ? normalizeCurp(curp) : null, firstName, lastName, email: emptyToNull(email), phone: emptyToNull(phone), sex: sex === undefined || sex === null || sex === '' ? null : String(sex), occupation: emptyToNull(occupation), birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: consentDataAt ? new Date(consentDataAt) : undefined } })
+  const created = await prisma.patient.create({ data: { practiceId: request.practiceId, address: emptyToNull(address ? String(address).trim().slice(0, 240) : null), curp: curp ? normalizeCurp(curp) : null, firstName, lastName, email: emptyToNull(email), phone: emptyToNull(phone), sex: sex === undefined || sex === null || sex === '' ? null : String(sex), occupation: emptyToNull(occupation), birthDate: birthDate ? new Date(birthDate) : undefined, consentDataAt: healthConsent ? new Date() : undefined, consentVersion: healthConsent ? LEGAL_DOCUMENTS.patientNotice.version : undefined, communicationConsentAt: communicationConsent === true ? new Date() : undefined } })
   const patient = await ensureRecordNumber(created)
   return reply.code(201).send(patient)
 })
@@ -1037,7 +1081,9 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
   const practiceId = request.practiceId
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
-  const { firstName, lastName, email, phone, birthDate, sex, occupation, status, address, curp } = request.body || {}
+  const { firstName, lastName, email, phone, birthDate, sex, occupation, status, address, curp, healthDataConsent, communicationConsent } = request.body || {}
+  if (healthDataConsent !== undefined && typeof healthDataConsent !== 'boolean') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Consentimiento inválido.', fields: { healthDataConsent: true } })
+  if (communicationConsent !== undefined && typeof communicationConsent !== 'boolean') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Consentimiento inválido.', fields: { communicationConsent: true } })
   if (curp && !CURP_PATTERN.test(normalizeCurp(curp))) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La CURP no tiene un formato válido (18 caracteres).', fields: { curp: true } })
   if ((firstName !== undefined && !firstName) || (lastName !== undefined && !lastName)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y apellido no pueden quedar vacíos.', fields: { firstName: firstName !== undefined && !firstName, lastName: lastName !== undefined && !lastName } })
   if (status !== undefined && !['ACTIVE', 'ARCHIVED'].includes(status)) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Estado inválido.', fields: { status: true } })
@@ -1057,8 +1103,18 @@ app.patch('/api/v1/patients/:patientId', async (request, reply) => {
       ...(address !== undefined ? { address: emptyToNull(address ? String(address).trim().slice(0, 240) : null) } : {}),
       ...(curp !== undefined ? { curp: curp ? normalizeCurp(curp) : null } : {}),
       ...(status !== undefined ? { status, archivedAt: status === 'ARCHIVED' ? new Date() : null } : {}),
+      // Registrar el consentimiento guarda la fecha y la versión vigente del aviso; retirarlo las borra.
+      ...(healthDataConsent === true && !patient.consentDataAt ? { consentDataAt: new Date(), consentVersion: LEGAL_DOCUMENTS.patientNotice.version } : {}),
+      ...(healthDataConsent === false ? { consentDataAt: null, consentVersion: null } : {}),
+      ...(communicationConsent === true && !patient.communicationConsentAt ? { communicationConsentAt: new Date() } : {}),
+      ...(communicationConsent === false ? { communicationConsentAt: null } : {}),
     },
   })
+  // Cada cambio de consentimiento queda en la bitácora del expediente.
+  for (const [kind, value, before] of [['health_data', healthDataConsent, patient.consentDataAt], ['communication', communicationConsent, patient.communicationConsentAt]]) {
+    if (value === true && !before) await logAudit(request, { action: 'consent_granted', entity: 'Patient', entityId: patient.id, patientId: patient.id, metadata: { kind, version: kind === 'health_data' ? LEGAL_DOCUMENTS.patientNotice.version : undefined } })
+    if (value === false && before) await logAudit(request, { action: 'consent_revoked', entity: 'Patient', entityId: patient.id, patientId: patient.id, metadata: { kind } })
+  }
   if (status !== undefined && status !== patient.status) {
     await logAudit(request, { action: status === 'ARCHIVED' ? 'archived' : 'reactivated', entity: 'Patient', entityId: patient.id, patientId: patient.id })
   } else {
@@ -2896,7 +2952,8 @@ function drawConsultationExport(file, document, practice, user, logoBuffer) {
     ['Domicilio', patient.address || 'No registrado'],
     ['CURP', patient.curp || 'No registrada'],
     ['Ocupación', patient.occupation || 'No registrada'],
-    ['Consentimiento de datos sensibles', patient.consentDataAt ? `Otorgado el ${formatDateOnly(patient.consentDataAt, tz)}` : 'No registrado'],
+    ['Consentimiento de datos sensibles', patient.consentDataAt ? `Otorgado el ${formatDateOnly(patient.consentDataAt, tz)}${patient.consentVersion ? ` (aviso versión ${patient.consentVersion})` : ''}` : 'No registrado'],
+    ['Recordatorios y materiales', patient.communicationConsentAt ? `Autorizados el ${formatDateOnly(patient.communicationConsentAt, tz)}` : 'No autorizados'],
   ])
   // Datos de la atención (5.10): fecha y hora, y nombre completo y cédula de quien la elabora.
   const closed = consultation?.status === 'COMPLETED'

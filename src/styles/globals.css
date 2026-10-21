@@ -2410,3 +2410,36 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 .google-link-button{width:260px;min-height:44px}
 .google-link-button[aria-busy="true"]{opacity:.5;pointer-events:none}
 .google-link-row .form-error{width:100%}
+
+/* Fase 117: documentos legales (públicos) y pantalla para aceptarlos */
+.legal-shell{min-height:100vh;background:var(--bg);color:var(--ink)}
+.legal-header{max-width:780px;margin:0 auto;padding:22px 16px 0}
+.legal-brand{display:inline-flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none;font:700 20px Outfit}
+.legal-doc{max-width:780px;margin:0 auto;padding:22px 16px 60px;line-height:1.6;font-size:14.5px}
+.legal-doc h1{font:600 28px Outfit;margin:4px 0 4px}
+.legal-doc h2{font:600 17px Outfit;margin:26px 0 8px}
+.legal-doc ul{padding-left:20px;margin:0}.legal-doc li{margin:4px 0}.legal-doc p{margin:6px 0}
+.legal-version{color:var(--muted);font-size:13px;margin:0 0 14px}
+.legal-intro{font-size:15px}
+.legal-draft{background:#FFF7E6;border:1px solid #F0C36D;color:#6B4A00;border-radius:8px;padding:10px 14px;margin:0 0 18px;font-size:13.5px}
+.legal-actions{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:30px;padding-top:16px;border-top:1px solid var(--line);font-size:13px}
+.legal-accept .legal-accept-list{display:flex;flex-direction:column;gap:12px;margin:4px 0 16px}
+.legal-accept .legal-accept-item{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;line-height:1.5}
+.legal-accept .legal-accept-item a{white-space:nowrap}
+.login-legal{text-align:center;color:var(--muted);font-size:12px;margin-top:14px}
+.login-legal a{color:var(--muted)}
+@media print{.legal-shell{background:#fff}.legal-doc{padding:0;max-width:none;font-size:12px}.legal-draft{border-color:#999;background:#fff;color:#000}.no-print{display:none!important}}
+.consent-box .consent-check+.consent-check{margin-top:12px}.consent-box .consent-check small{display:block;margin:4px 0 0;color:var(--muted)}
+.patient-consent-card{display:flex;flex-direction:column;gap:12px}
+.consent-status{display:flex;justify-content:space-between;align-items:center;gap:12px;border-radius:8px;padding:10px 12px;border:1px solid var(--line)}
+.consent-status small{display:block;color:var(--muted);margin-top:2px}
+.consent-status.is-pending{background:#FFF7E6;border-color:#F0C36D}
+.consent-status.is-given{background:var(--surface)}
+.consent-confirm{border:1px solid var(--line);border-radius:8px;padding:10px 12px;font-size:13.5px}
+.consent-confirm p{margin:0 0 10px}.consent-confirm div{display:flex;justify-content:flex-end;gap:10px}
+.patient-consent-card .consent-check small{display:block;color:var(--muted)}
+.consent-modal{max-width:560px}.consent-modal .patient-consent-card{border:0;padding:0;box-shadow:none}
+.consent-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#E5A100;margin-right:7px;vertical-align:middle}
+.patient-consent-card .consent-check{display:flex;flex-direction:row;align-items:flex-start;gap:9px;font-weight:500}
+.patient-consent-card .consent-check input{display:inline-block;width:auto;flex:0 0 auto;margin:3px 0 0;padding:0}
+.consent-modal .patient-consent-card .summary-card-head{justify-content:flex-end}.consent-modal .patient-consent-card .summary-card-head h3{display:none}

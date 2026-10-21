@@ -22,3 +22,9 @@ export function notifyUnauthorized() { unauthorizedHandler?.() }
 let subscriptionRequiredHandler = null
 export function onSubscriptionRequired(handler) { subscriptionRequiredHandler = handler }
 export function notifySubscriptionRequired() { subscriptionRequiredHandler?.() }
+
+// Y para un 403 LEGAL_ACCEPTANCE_REQUIRED (fase 117): faltan por aceptar los términos o el aviso de
+// privacidad vigentes; AuthProvider vuelve a pedir el estado y muestra la pantalla para aceptarlos.
+let legalRequiredHandler = null
+export function onLegalRequired(handler) { legalRequiredHandler = handler }
+export function notifyLegalRequired() { legalRequiredHandler?.() }

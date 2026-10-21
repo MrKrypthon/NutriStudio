@@ -5,6 +5,7 @@ import { growTextareas } from '../lib/autoGrow.js'
 
 import LoginPage from '../modules/auth/LoginPage.jsx'
 import PaywallPage from '../modules/settings/PaywallPage.jsx'
+import LegalAcceptancePage from '../modules/legal/LegalAcceptancePage.jsx'
 import DashboardPage from '../modules/dashboard/DashboardPage.jsx'
 import AgendaPage from '../modules/calendar/AgendaPage.jsx'
 import PatientsPage from '../modules/patients/PatientsPage.jsx'
@@ -27,7 +28,7 @@ import SettingsPage from '../modules/settings/SettingsPage.jsx'
 import FinancePage from '../modules/finance/FinancePage.jsx'
 
 export default function App() {
-  const { status, access } = useAuth()
+  const { status, access, legal } = useAuth()
   const initial = parseLocation(window.location.pathname)
   const [active, setActiveState] = useState(() => initial.module)
   // Sin paciente por defecto: antes arrancaba con el paciente de demostración, así que Consultas y
@@ -147,6 +148,8 @@ export default function App() {
 
   if (status === 'checking') return null
   if (status === 'anonymous') return <LoginPage />
+  // Términos y aviso de privacidad vigentes sin aceptar: sólo la pantalla para aceptarlos (fase 117).
+  if (legal?.pending?.length) return <LegalAcceptancePage />
   // Cuenta sin suscripción pagada: sólo la pantalla de pago (fase 109).
   if (access && !access.allowed) return <PaywallPage />
 
