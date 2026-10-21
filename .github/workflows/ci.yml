@@ -1,0 +1,92 @@
+# CI (fase 114): en cada PR y en cada push a main.
+#   pruebas → npm ci, prisma validate, que las migraciones coincidan con schema.prisma, Vitest y build
+#   docker  → construye las dos imágenes, levanta docker-compose.app.yml desde cero y corre deploy/smoke.sh
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      # Base de sombra para comparar las migraciones con el esquema.
+      postgres:
+        image: postgres:16.14-alpine
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: shadow
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci -d shadow"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      # Sólo para que Prisma resuelva env("DATABASE_URL"); las pruebas no usan base.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/shadow?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx prisma validate
+      - name: Las migraciones coinciden con schema.prisma
+        run: >-
+          npx prisma migrate diff
+          --from-migrations prisma/migrations
+          --to-schema-datamodel prisma/schema.prisma
+          --shadow-database-url "$DATABASE_URL"
+          --exit-code
+      - run: npm test
+      - run: npm run build
+
+  docker:
+    needs: pruebas
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      MILPA_ENV_FILE: ${{ github.workspace }}/.env.ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Variables del stack con secretos de un solo uso
+        run: |
+          secret() { node -e "console.log(require('crypto').randomBytes(36).toString('base64url'))"; }
+          pw=$(secret)
+          umask 077
+          cat > .env.ci <<EOF
+          POSTGRES_USER=milpa
+          POSTGRES_PASSWORD=$pw
+          POSTGRES_DB=milpa
+          DATABASE_URL=postgresql://milpa:$pw@db:5432/milpa?schema=public
+          NODE_ENV=production
+          TZ=UTC
+          JWT_SECRET=$(secret)
+          ADMIN_JWT_SECRET=$(secret)
+          APP_URL=http://localhost:8080
+          TRUST_PROXY=uniquelocal
+          CATALOG_PRACTICE_ID=00000000-0000-0000-0000-000000000001
+          EOF
+      - name: Construir y levantar desde cero
+        run: docker compose -f docker-compose.app.yml up -d --build --wait --wait-timeout 300
+      - name: Cargar el catálogo
+        run: docker compose -f docker-compose.app.yml run --rm -T migrate npm run catalog:import
+      - name: Verificación rápida
+        run: sh deploy/smoke.sh http://localhost:8080
+      - name: Registros si algo falló
+        if: failure()
+        run: docker compose -f docker-compose.app.yml logs --no-color --tail 200
+      - name: Apagar
+        if: always()
+        run: docker compose -f docker-compose.app.yml down -v

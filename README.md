@@ -163,6 +163,21 @@ docker compose -f docker-compose.app.yml run --rm -e ADMIN_EMAIL=tu@correo.mx -e
   `deploy/security-headers.conf`; agrega el dominio a `APP_URL`, a los orígenes de Google y al
   webhook de Stripe.
 
+## CI
+
+`.github/workflows/ci.yml` corre en cada PR y en cada push a `main`:
+
+1. **pruebas:** `npm ci`, `prisma validate`, que `prisma/migrations` coincida con `schema.prisma`
+   (falla si cambias el esquema sin crear su migración), Vitest y el build.
+2. **docker:** construye las dos imágenes, levanta `docker-compose.app.yml` desde cero con secretos de
+   un solo uso, carga el catálogo y corre `deploy/smoke.sh`.
+
+`deploy/smoke.sh [dirección]` es la misma verificación rápida para cualquier stack levantado.
+
+Dependencias: lo que usa la API (y la CLI de Prisma, para las migraciones) está en `dependencies`; lo
+que sólo usa el frontend (React, Vite, OCR, pdf.js, Recharts) está en `devDependencies`, para que la
+imagen de la API instale sólo lo suyo (`npm ci --omit=dev`).
+
 ## Rutas de prueba
 
 - `GET http://localhost:3001/health`
