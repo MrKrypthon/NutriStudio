@@ -142,7 +142,7 @@ En el VPS (fase 115, guía en `DESPLIEGUE.md`):
 
 Falta para producción:
 
-- Contratar el VPS, el dominio y el bucket de respaldos.
+- Contratar el VPS y el dominio en **Hostinger** (decidido el 21/10/2026) y el bucket de respaldos (Backblaze B2).
 
 ## 11. Resumen en una línea
 
