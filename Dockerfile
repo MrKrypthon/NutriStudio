@@ -10,14 +10,17 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# Dependencias primero, para que la capa se reutilice mientras el lockfile no cambie. Se instalan
-# todas (también las de desarrollo): `migrate` usa la CLI de Prisma, que es devDependency.
+# Dependencias primero, para que la capa se reutilice mientras el lockfile no cambie. Sólo las de
+# producción (fase 114): lo del frontend (React, Vite, OCR, pdf.js) es devDependency y lo usa
+# Dockerfile.web; la CLI de Prisma sí va, porque `migrate` la usa. --ignore-scripts: el único script
+# del proyecto copia el OCR, que aquí no existe; Prisma genera el cliente abajo.
 COPY package.json package-lock.json ./
-COPY tools/copy-ocr-assets.mjs tools/
-RUN npm ci --no-audit --no-fund
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+  && npm cache clean --force
 
 COPY prisma ./prisma
-RUN npx prisma generate
+# Descarga los motores de Prisma para Debian y genera el cliente; la caché de la descarga no viaja.
+RUN npx prisma generate && rm -rf /root/.cache /root/.npm
 
 COPY server ./server
 # La API comparte con el frontend algunas funciones puras de src/lib (líneas de ingredientes, campos
