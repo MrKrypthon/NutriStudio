@@ -1,6 +1,6 @@
 # Stack tecnológico — Nutri Studio / milpa
 
-Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker), 111 (autenticación) y 112 (migraciones de Prisma). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
+Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker), 111 (autenticación), 112 (migraciones de Prisma) y 113 (Docker). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
 
 SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo**, que paga una suscripción y tiene acceso a todo. Lleva pacientes, consultas, expediente clínico, mediciones, diagnósticos PES, planes de alimentación con equivalentes SMAE, recetas, agenda, finanzas, tareas, plantillas y documentos PDF.
 
@@ -30,7 +30,7 @@ SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo
 | Pieza | Detalle |
 |---|---|
 | Framework | **Fastify 5.12.1** con `@fastify/cors` 11.3.0. Es un monolito: `server/index.js`, de unas 3,400 líneas y 119 rutas (REST bajo `/api/v1` más `/health`) |
-| Lenguaje | **Node.js** con ESM (`"type": "module"`), en JavaScript plano. Versión objetivo: **24 LTS** (`.nvmrc`); mínimo 22.13, porque `pdfjs-dist` 6.4 y npm 12 ya no aceptan Node 20. La compatibilidad con 24 todavía se tiene que probar |
+| Lenguaje | **Node.js** con ESM (`"type": "module"`), en JavaScript plano. Versión objetivo: **24 LTS** (`.nvmrc`; las imágenes de Docker usan 24 y ahí pasan todas las pruebas); mínimo 22.13, porque `pdfjs-dist` 6.4 y npm 12 ya no aceptan Node 20 |
 | Autenticación | JWT propio (`jsonwebtoken`) y contraseñas con **bcryptjs**. El token lleva `practiceId` y `sv`, la versión de sesión: cambiar la contraseña, que el administrador la restablezca o desvincular Google cierra las sesiones abiertas. El superadministrador usa otro token, firmado con su propio secreto (`ADMIN_JWT_SECRET`), con su propia versión de sesión (`AdminUser.sessionVersion`): salir del panel o `npm run admin:reset-password` cierran todas sus sesiones. La verificación sólo acepta HS256 |
 | Protección del acceso | Límite de intentos en memoria (`server/domain/security.js`; cuenta el intento antes de comparar la contraseña, agrupa IPv6 por /64 y nunca suelta un bloqueo vigente al llenarse): 5 por IP y cuenta, 20 por IP y 30 por cuenta cada 15 min en el login; topes parecidos en el panel, Google y cambio de contraseña; responde **429** con `Retry-After`. Con un usuario inexistente se compara igual contra un hash de relleno, para no delatar qué cuentas existen. Con `NODE_ENV=production` la API no arranca si los secretos faltan, miden menos de 32 caracteres, son iguales o son los de ejemplo |
 | Encabezados | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` y `Cache-Control: no-store` en todo lo que no fija su propio caché. CORS: cualquier origen en desarrollo; en producción sólo `CORS_ORIGINS` o `APP_URL`. `TRUST_PROXY` hace que la IP de la bitácora y del límite sea la del usuario detrás de Nginx |
@@ -114,17 +114,28 @@ Pendientes:
 - **dotenv** carga las variables de entorno.
 - Git y GitHub (`MrKrypthon/NutriStudio`): se trabaja en una rama por fase del roadmap y se integra con un PR a `main`.
 
-## 10. Infraestructura y despliegue: **pendiente de definir**
+## 10. Infraestructura y despliegue
 
-Todavía no hay infraestructura de producción. Solo PostgreSQL corre en Docker, y para desarrollo. Desde la fase 110 existe `.dockerignore`: deja fuera de la imagen los secretos, los documentos, los archivos de `storage/` (salvo las fotos base del recetario) y `prisma/data/demo-practice.json`, el historial de la práctica de demostración, que no debe viajar a producción. Falta decidir:
+Desde la fase 113 la app completa corre en contenedores con `docker-compose.app.yml` (detalle y comandos en el README, sección «La app completa en Docker»):
 
-- Contenerizar el frontend (build estático de Vite) y el backend (Fastify).
-- Reverse proxy y TLS (por ejemplo, Nginx con Let's Encrypt), que el webhook de Stripe y el login con Google necesitan en producción.
-- El host o VPS (por ejemplo, Hetzner con Docker Compose).
-- Si PostgreSQL vive en el mismo VPS, sin exponerse a internet, o en un servicio administrado.
-- Dónde guardar los archivos de `storage/` (volumen persistente o almacenamiento de objetos) y cómo respaldarlos junto con la base.
+| Pieza | Detalle |
+|---|---|
+| `db` | `postgres:16.14-alpine`, red interna sin salida ni puertos publicados, volumen `db-data` |
+| `migrate` | Imagen de la API; `prisma migrate deploy` antes de que arranque la API |
+| `api` | `Dockerfile`: `node:24-bookworm-slim` con `openssl` (motor de Prisma para Debian), `npm ci` y `prisma generate` dentro de la imagen, usuario `node`, `TZ=UTC`, volumen `storage`, healthcheck contra `/health` (que comprueba la base), cierre limpio con SIGTERM |
+| `web` | `Dockerfile.web`: build de Vite en Node 24 y `nginx:1.27-alpine` con `deploy/nginx.conf` y `deploy/security-headers.conf` (CSP para Google Identity, Google Fonts, OCR con WebAssembly y vistas previas `blob:`) |
+| Catálogo | `npm run catalog:import` (práctica sin usuarios, idempotente) |
+| Respaldos | `deploy/backup.sh` y `deploy/restore.sh` (pg_dump + tar del volumen, con SHA-256) |
+
+`.dockerignore` deja fuera de la imagen los secretos, los documentos, los archivos de `storage/` (salvo las fotos base del recetario) y `prisma/data/demo-practice.json`.
+
+Falta para producción:
+
+- El VPS (por ejemplo, Hetzner) y HTTPS delante de Nginx (Let's Encrypt), con HSTS.
+- Dónde guardar los respaldos (cifrados, fuera del servidor) y cada cuánto.
 - CI: correr pruebas y build en cada PR.
+- Adelgazar la imagen de la API (~1,6 GB: instala también las dependencias del frontend).
 
 ## 11. Resumen en una línea
 
-**Vite 8 + React 19** · **Fastify 5** (Node 24 LTS como objetivo, JavaScript sin TS) · **Prisma 6** · **PostgreSQL 16** · pdfkit · pdfjs-dist · tesseract.js · JWT + bcrypt · **Stripe** · **Google Identity** · USDA / Open Food Facts · Vitest · Docker _(solo Postgres hoy)_ · Nginx, TLS y VPS _(por definir)_
+**Vite 8 + React 19** · **Fastify 5** (Node 24 LTS como objetivo, JavaScript sin TS) · **Prisma 6** · **PostgreSQL 16** · pdfkit · pdfjs-dist · tesseract.js · JWT + bcrypt · **Stripe** · **Google Identity** · USDA / Open Food Facts · Vitest · Docker Compose (PostgreSQL, API, Nginx) · TLS y VPS _(por definir)_

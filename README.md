@@ -128,6 +128,41 @@ Este comando define automáticamente `VITE_API_URL=http://localhost:3001` para c
 
 Si aparece `ECONNREFUSED`, el frontend no encuentra el API en `localhost:3001`. Ejecuta `npm run dev:all` o levanta `npm run api` en otra terminal. Si el API responde con errores de base de datos, verifica `docker compose ps`.
 
+## La app completa en Docker
+
+`docker-compose.app.yml` levanta todo en contenedores con Node 24: PostgreSQL 16.14, las migraciones,
+la API y Nginx con el frontend. Es independiente de `docker-compose.yml` (sólo PostgreSQL para
+desarrollo): usa su propio proyecto (`milpa`), su propia base y sus propios volúmenes.
+
+```bash
+cp .env.docker.example .env.docker      # llena los secretos (el archivo explica cómo generarlos)
+docker compose -f docker-compose.app.yml up -d --build
+docker compose -f docker-compose.app.yml run --rm migrate npm run catalog:import
+read -rs ADMIN_PASSWORD && export ADMIN_PASSWORD   # en fish: read -s -x ADMIN_PASSWORD
+docker compose -f docker-compose.app.yml run --rm -e ADMIN_EMAIL=tu@correo.mx -e ADMIN_PASSWORD migrate npm run admin:create
+# → http://localhost:8080   (MILPA_HTTP_PORT cambia el puerto)
+```
+
+| Servicio | Qué hace |
+|---|---|
+| `db` | PostgreSQL 16.14 en la red interna, sin puertos publicados; datos en el volumen `db-data` |
+| `migrate` | `prisma migrate deploy` y termina; la API espera a que salga bien |
+| `api` | Fastify con `NODE_ENV=production`, usuario sin privilegios, archivos en el volumen `storage`; `/health` comprueba también la base |
+| `web` | Nginx: el build de Vite, proxy de `/api`, CSP y demás encabezados (`deploy/`), cuerpos de hasta 20 MB |
+
+- **Catálogo:** `catalog:import` carga alimentos, recetas y el libro SMAE en una práctica sin usuarios
+  (`CATALOG_PRACTICE_ID`); cada cuenta nueva copia de ahí. Es idempotente. El seed no corre en producción.
+- **Fotos del recetario:** las 501 fotos base viajan en la imagen y el entrypoint copia al volumen las que
+  falten, sin pisar las que suben los usuarios.
+- **IP real:** Nginx reemplaza `X-Forwarded-For` por la IP de la conexión y la API confía en la red
+  interna (`TRUST_PROXY=uniquelocal`), así que la bitácora y el límite de intentos ven la IP real.
+- **Respaldo:** `deploy/backup.sh [carpeta]` guarda `db.dump` (pg_dump), `storage.tgz` y sus SHA-256.
+  `deploy/restore.sh <carpeta> --si-reemplazar` lo restaura (comprueba las sumas antes de tocar nada).
+  Los respaldos llevan datos clínicos: guárdalos cifrados y fuera del servidor.
+- **En un VPS:** agrega HTTPS delante (o en este mismo Nginx) y activa la línea de HSTS de
+  `deploy/security-headers.conf`; agrega el dominio a `APP_URL`, a los orígenes de Google y al
+  webhook de Stripe.
+
 ## Rutas de prueba
 
 - `GET http://localhost:3001/health`

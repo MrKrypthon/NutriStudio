@@ -1,0 +1,79 @@
+# La app completa en contenedores (fase 113): PostgreSQL, migraciones, API y Nginx con el frontend.
+# Es independiente de docker-compose.yml (sólo PostgreSQL para desarrollo): proyecto, base y
+# volúmenes propios, así que no toca tu base de desarrollo.
+#
+#   cp .env.docker.example .env.docker            # y llena los secretos
+#   docker compose -f docker-compose.app.yml up -d --build
+#   docker compose -f docker-compose.app.yml run --rm migrate npm run catalog:import
+#   docker compose -f docker-compose.app.yml run --rm migrate npm run admin:create   (con ADMIN_EMAIL/ADMIN_PASSWORD)
+#   → http://localhost:8080
+#
+# MILPA_ENV_FILE elige otro archivo de variables (por defecto .env.docker).
+name: milpa
+
+x-api-env: &api-env
+  env_file: ${MILPA_ENV_FILE:-.env.docker}
+
+services:
+  db:
+    image: postgres:16.14-alpine
+    <<: *api-env
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    # Sin puertos publicados: sólo la API llega a la base, por la red interna.
+    networks: [backend]
+
+  # Aplica las migraciones pendientes y termina; la API espera a que salga bien.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: milpa-api:local
+    <<: *api-env
+    command: ["npx", "prisma", "migrate", "deploy"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks: [backend]
+
+  api:
+    image: milpa-api:local
+    <<: *api-env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    volumes:
+      - storage:/app/storage
+    restart: unless-stopped
+    stop_grace_period: 15s
+    # backend: la base; frontend: Nginx y la salida a internet (Stripe, Google, USDA).
+    networks: [backend, frontend]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    image: milpa-web:local
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${MILPA_HTTP_PORT:-8080}:80"
+    restart: unless-stopped
+    networks: [frontend]
+
+volumes:
+  db-data:
+  storage:
+
+networks:
+  backend:
+    internal: true
+  frontend:

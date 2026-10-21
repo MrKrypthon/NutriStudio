@@ -246,7 +246,17 @@ const consultationClosed = (consultation, reply) => {
   return true
 }
 
-app.get('/health', async () => ({ status: 'ok', service: 'nutri-studio-api' }))
+// Salud para Docker y el balanceador: la API responde Y la base contesta (fase 113). Sin detalles del
+// error: la ruta es pública.
+app.get('/health', async (request, reply) => {
+  try {
+    await Promise.race([prisma.$queryRaw`SELECT 1`, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))])
+    return { status: 'ok', service: 'nutri-studio-api', database: 'ok' }
+  } catch (err) {
+    request.log.warn({ err: err.message }, 'La base de datos no responde')
+    return reply.code(503).send({ status: 'error', service: 'nutri-studio-api', database: 'unavailable' })
+  }
+})
 
 // Sesión de la nutrióloga: el token y lo que la app necesita al entrar. `access` dice si la cuenta
 // puede usar el sistema o sólo ver la pantalla de pago.
@@ -3520,3 +3530,24 @@ app.setErrorHandler((error, request, reply) => {
 
 const port = Number(process.env.PORT || 3001)
 app.listen({ port, host: '0.0.0.0' }).catch(async (error) => { app.log.error(error); await prisma.$disconnect(); process.exit(1) })
+
+// Al detener el contenedor (SIGTERM) o con Ctrl+C: dejar de aceptar conexiones, terminar las
+// peticiones en curso y cerrar la base antes de salir (fase 113).
+let shuttingDown = false
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, async () => {
+    if (shuttingDown) return
+    shuttingDown = true
+    app.log.info({ signal }, 'Cerrando la API')
+    const forceExit = setTimeout(() => process.exit(1), 10_000)
+    forceExit.unref()
+    try {
+      await app.close()
+      await prisma.$disconnect()
+      process.exit(0)
+    } catch (error) {
+      app.log.error(error)
+      process.exit(1)
+    }
+  })
+}
