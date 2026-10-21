@@ -14,14 +14,38 @@ Los respaldos se cifran con restic y se guardan fuera del servidor.
 > Antes de recibir pacientes reales: el aviso de privacidad y los términos (datos de salud =
 > datos sensibles en la LFPDPPP). Ver «Antes de abrir» al final.
 
-## 0. Lo que necesitas
+## 0. Lo que necesitas (Hostinger)
 
-- **Un VPS con Ubuntu 24.04**, de 2 vCPU y 4 GB de RAM o más.
-  - Recomendado: Hetzner, en Ashburn (EE. UU.), por la latencia desde México.
-  - Al crearlo, agrega tu llave SSH pública.
-- **Un dominio**, por ejemplo `app.milpa.mx`, con un registro **A** que apunte a la IP del VPS.
-  - Pon también un registro AAAA si el VPS tiene IPv6.
-- **Un destino para los respaldos.** Recomendado: un bucket privado de Backblaze B2, con una «application key» que solo tenga acceso a ese bucket.
+El VPS y el dominio se contratan en Hostinger y se administran en el mismo panel, hPanel. Los
+nombres exactos de los menús pueden cambiar; aquí va qué buscar.
+
+### El VPS
+- **Plan:** uno de 2 vCPU y 4 GB de RAM como mínimo; KVM 2 o superior. El build de las imágenes se hace en el servidor y ocupa memoria.
+- **Ubicación:** el centro de datos de EE. UU., por la latencia desde México.
+- **Sistema:** la plantilla **Ubuntu 24.04 sin panel**. Las plantillas con panel o con Docker preinstalado no hacen falta: `server-setup.sh` instala Docker desde el repositorio oficial.
+- **Llave SSH:** agrégala en la configuración del VPS en hPanel; así queda en `/root/.ssh/authorized_keys`, que el script necesita. Si no tienes una, créala en tu computadora con `ssh-keygen -t ed25519` y pega el contenido de `~/.ssh/id_ed25519.pub`.
+- **Contraseña de root:** Hostinger la pide al crear el VPS. Guárdala en tu gestor de contraseñas. El script cierra el SSH de root, pero la **terminal del navegador** de hPanel sigue funcionando con ella: es tu acceso de emergencia si algún día te quedas sin SSH.
+- **Firewall de hPanel:** si lo activas, permite 22/TCP, 80/TCP, 443/TCP y 443/UDP. El servidor tiene además su propio firewall (ufw).
+- **Respaldos o snapshots de Hostinger:** si tu plan los incluye, déjalos activos como capa extra y toma un snapshot antes de cambios grandes. Los respaldos principales son los de restic (paso 4), que viven fuera de Hostinger.
+
+### El dominio
+En la zona DNS del dominio en hPanel, para el nombre que vas a usar (`app` → `app.tudominio.mx`, o `@` para el dominio solo):
+
+1. Crea un registro **A** que apunte a la IP del VPS, con un TTL corto (300) mientras haces pruebas.
+2. **Borra los registros A y AAAA que Hostinger crea por defecto para ese mismo nombre**, los que apuntan a su página de estacionamiento. Si queda un AAAA viejo, Let's Encrypt intenta por IPv6, no encuentra el servidor y el certificado falla.
+3. Comprueba desde tu computadora, antes de desplegar, que la IP sea la del VPS y que no salga ningún AAAA:
+
+   ```bash
+   dig +short app.tudominio.mx A
+   dig +short app.tudominio.mx AAAA
+   ```
+
+### Los respaldos
+- **Recomendado:** un bucket privado de **Backblaze B2**, con una «application key» que solo tenga acceso a ese bucket.
+- **Por qué fuera de Hostinger:** si se pierde el VPS o la cuenta, los respaldos siguen a salvo.
+
+### Aviso de privacidad
+- **Datos fuera de México:** el VPS en EE. UU. aloja datos de salud fuera del país. El aviso de privacidad tiene que decirlo (ver «Antes de abrir»).
 
 ## 1. Preparar el servidor (una vez)
 
@@ -44,6 +68,7 @@ Qué deja configurado:
 - El temporizador del respaldo diario.
 
 **Antes de cerrar la sesión de root, abre otra terminal y comprueba que entras:** `ssh milpa@IP-DEL-SERVIDOR`.
+Si algo sale mal con SSH, entra con la terminal del navegador de hPanel, como root y con la contraseña de root.
 
 ## 2. Código y variables
 
@@ -59,6 +84,7 @@ nano .env.docker
 En `.env.docker`:
 
 - **Contraseña de PostgreSQL:** `POSTGRES_PASSWORD`, y la misma dentro de `DATABASE_URL`.
+- **Sin `$` en los valores:** Docker Compose lo interpreta como variable y corrompe el valor sin avisar. Los secretos generados con los comandos de abajo no lo usan.
 - **Secretos de los tokens:** `JWT_SECRET` y `ADMIN_JWT_SECRET`, distintos entre sí. Genera cada uno con:
   `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Si el servidor no
   tiene Node, usa `openssl rand -base64 48 | tr -d '/+='`.
@@ -126,10 +152,13 @@ Cómo funcionan:
 
 ### Restaurar
 
+Los scripts leen ellos mismos `/etc/milpa/restic.env`, sin ejecutarlo, así que la clave no aparece en la línea de comandos:
+
 ```bash
-sudo -E env $(sudo cat /etc/milpa/restic.env | xargs) deploy/restore-offsite.sh --lista
-sudo -E env $(sudo cat /etc/milpa/restic.env | xargs) deploy/restore-offsite.sh --si-reemplazar          # el más reciente
-sudo -E env $(sudo cat /etc/milpa/restic.env | xargs) deploy/restore-offsite.sh 57e3bda1 --si-reemplazar # uno en particular
+cd /opt/milpa
+sudo MILPA_RESTIC_ENV=/etc/milpa/restic.env MILPA_ENV_FILE=/opt/milpa/.env.docker deploy/restore-offsite.sh --lista
+sudo MILPA_RESTIC_ENV=/etc/milpa/restic.env MILPA_ENV_FILE=/opt/milpa/.env.docker deploy/restore-offsite.sh --si-reemplazar            # el más reciente
+sudo MILPA_RESTIC_ENV=/etc/milpa/restic.env MILPA_ENV_FILE=/opt/milpa/.env.docker deploy/restore-offsite.sh 57e3bda1 --si-reemplazar   # uno en particular
 ```
 
 **Haz un simulacro de restauración al menos cada 3 meses**, en un servidor de prueba. Un respaldo que

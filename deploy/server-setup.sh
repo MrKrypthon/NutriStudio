@@ -26,8 +26,10 @@ export DEBIAN_FRONTEND=noninteractive
 
 log "Sistema al día y paquetes base"
 apt-get update -q
-apt-get -y -q upgrade
-apt-get install -y -q ca-certificates curl gnupg git ufw fail2ban unattended-upgrades
+# confdef/confold: si un archivo de configuración cambió, se queda el actual sin preguntar.
+apt_opts=(-y -q -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+apt-get "${apt_opts[@]}" upgrade
+apt-get install "${apt_opts[@]}" ca-certificates curl gnupg git ufw fail2ban unattended-upgrades
 timedatectl set-timezone UTC
 
 log "Actualizaciones de seguridad automáticas"
@@ -43,7 +45,7 @@ if ! command -v docker >/dev/null; then
   chmod a+r /etc/apt/keyrings/docker.asc
   echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu ${VERSION_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
   apt-get update -q
-  apt-get install -y -q docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  apt-get install "${apt_opts[@]}" docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 fi
 mkdir -p /etc/docker
 [ -f /etc/docker/daemon.json ] || cat > /etc/docker/daemon.json <<'EOF'
@@ -67,7 +69,9 @@ KbdInteractiveAuthentication no
 PermitRootLogin no
 EOF
 sshd -t
-systemctl reload ssh
+# Ubuntu 24.04 arranca SSH por socket: si el servicio no está activo, reload falla. Esto recarga si
+# corre y, si no, lo deja para la próxima conexión (las sesiones abiertas no se cortan).
+systemctl try-reload-or-restart ssh.service || true
 
 log "fail2ban para SSH"
 cat > /etc/fail2ban/jail.d/milpa.conf <<'EOF'
