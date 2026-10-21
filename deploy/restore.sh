@@ -9,7 +9,14 @@ cd "$(dirname "$0")/.."
 src="${1:?Uso: deploy/restore.sh <carpeta-del-respaldo> --si-reemplazar}"
 [ "${2:-}" = "--si-reemplazar" ] || { echo "[restaurar] Esto reemplaza la base y los archivos. Repite con --si-reemplazar." >&2; exit 2; }
 project="${MILPA_PROJECT:-milpa}"
-compose() { docker compose -p "$project" -f docker-compose.app.yml "$@"; }
+# Con MILPA_DOMAIN en el archivo de variables es el stack de producción (Caddy delante, fase 115):
+# se usan los dos archivos de compose, para no recrear Nginx sin Caddy.
+env_file="${MILPA_ENV_FILE:-.env.docker}"
+if [ -f "$env_file" ] && grep -q '^MILPA_DOMAIN=.' "$env_file"; then
+  compose() { docker compose -p "$project" --env-file "$env_file" -f docker-compose.app.yml -f docker-compose.prod.yml "$@"; }
+else
+  compose() { docker compose -p "$project" -f docker-compose.app.yml "$@"; }
+fi
 
 (cd "$src" && sha256sum -c SHA256SUMS) || { echo "[restaurar] Las sumas no coinciden; no se tocó nada." >&2; exit 1; }
 

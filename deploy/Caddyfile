@@ -1,0 +1,13 @@
+# Caddy en el VPS (fase 115, docker-compose.prod.yml): HTTPS automático delante de Nginx.
+# Pide y renueva el certificado de Let's Encrypt para MILPA_DOMAIN, redirige HTTP a HTTPS y agrega
+# HSTS. Pone en X-Forwarded-For la IP de la conexión (sin creerle al X-Forwarded-For que mande el
+# cliente), y Nginx la pasa a la API.
+{
+	email {$MILPA_ACME_EMAIL}
+}
+
+{$MILPA_DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	reverse_proxy web:80
+}

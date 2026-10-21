@@ -159,9 +159,9 @@ docker compose -f docker-compose.app.yml run --rm -e ADMIN_EMAIL=tu@correo.mx -e
 - **Respaldo:** `deploy/backup.sh [carpeta]` guarda `db.dump` (pg_dump), `storage.tgz` y sus SHA-256.
   `deploy/restore.sh <carpeta> --si-reemplazar` lo restaura (comprueba las sumas antes de tocar nada).
   Los respaldos llevan datos clínicos: guárdalos cifrados y fuera del servidor.
-- **En un VPS:** agrega HTTPS delante (o en este mismo Nginx) y activa la línea de HSTS de
-  `deploy/security-headers.conf`; agrega el dominio a `APP_URL`, a los orígenes de Google y al
-  webhook de Stripe.
+- **En un VPS:** sigue [`DESPLIEGUE.md`](DESPLIEGUE.md). `docker-compose.prod.yml` agrega Caddy delante
+  (HTTPS de Let's Encrypt, HSTS), `deploy/deploy.sh` despliega con respaldo previo y verificación, y
+  `deploy/backup-offsite.sh` sube respaldos cifrados con restic cada noche.
 
 ## CI
 

@@ -1,0 +1,51 @@
+# Producción en el VPS (fase 115). Se usa ENCIMA de docker-compose.app.yml:
+#   docker compose --env-file .env.docker -f docker-compose.app.yml -f docker-compose.prod.yml up -d
+# (deploy/deploy.sh lo hace por ti). Agrega Caddy delante de Nginx: HTTPS con certificados de
+# Let's Encrypt que se renuevan solos, HTTP → HTTPS y HSTS. Nginx deja de publicar su puerto: lo
+# único expuesto a internet son el 80 y el 443 de Caddy.
+#
+# Variables (en .env.docker, que --env-file usa también para estas sustituciones):
+#   MILPA_DOMAIN       dominio público, p. ej. app.milpa.mx (su DNS apunta a este servidor)
+#   MILPA_ACME_EMAIL   correo para avisos de Let's Encrypt
+
+services:
+  web:
+    ports: !reset []
+    networks: [frontend, edge]
+    volumes:
+      # Nginx toma la IP real del usuario del X-Forwarded-For que pone Caddy (sólo desde la red edge).
+      - ./deploy/nginx-real-ip.conf:/etc/nginx/conf.d/00-real-ip.conf:ro
+
+  caddy:
+    image: caddy:2.8.4-alpine
+    environment:
+      MILPA_DOMAIN: ${MILPA_DOMAIN:?Falta MILPA_DOMAIN en .env.docker}
+      MILPA_ACME_EMAIL: ${MILPA_ACME_EMAIL:?Falta MILPA_ACME_EMAIL en .env.docker}
+    ports:
+      - "${MILPA_EDGE_HTTP_PORT:-80}:80"
+      - "${MILPA_EDGE_HTTPS_PORT:-443}:443"
+      - "${MILPA_EDGE_HTTPS_PORT:-443}:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificados y llaves de Let's Encrypt: si se pierden, Caddy los vuelve a pedir.
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    networks: [edge]
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  # Subred fija: es la única de la que Nginx acepta X-Forwarded-For (deploy/nginx-real-ip.conf).
+  edge:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24

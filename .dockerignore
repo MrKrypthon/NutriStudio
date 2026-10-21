@@ -24,6 +24,9 @@ storage/*
 !storage/recipes
 storage/recipes/u-*
 
+# Respaldos que deja deploy/deploy.sh en el servidor (base y archivos con datos clínicos).
+respaldos
+
 # Documentos y material de trabajo: pueden traer datos clínicos o tener derechos de autor.
 **/*.pdf
 **/*.docx

@@ -13,6 +13,10 @@ name: milpa
 
 x-api-env: &api-env
   env_file: ${MILPA_ENV_FILE:-.env.docker}
+  # Registros con tope (fase 115): sin esto, Docker los guarda sin límite y llenan el disco.
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
 
 services:
   db:
@@ -61,6 +65,9 @@ services:
       context: .
       dockerfile: Dockerfile.web
     image: milpa-web:local
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
     depends_on:
       api:
         condition: service_healthy
