@@ -28,5 +28,5 @@ compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --cle
 echo "[restaurar] Archivos"
 compose run --rm --no-deps -T --entrypoint sh api -c 'find /app/storage -mindepth 1 -delete && tar xzf - -C /app/storage' < "$src/storage.tgz"
 echo "[restaurar] Levantando el stack (migrate aplica lo que falte)"
-compose up -d
-echo "[restaurar] Listo."
+compose up -d --wait --wait-timeout 300
+echo "[restaurar] Listo: el stack está arriba y sano."

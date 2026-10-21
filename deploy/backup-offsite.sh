@@ -12,6 +12,16 @@
 set -eu
 
 cd "$(dirname "$0")/.."
+# Con MILPA_RESTIC_ENV=/etc/milpa/restic.env las variables se leen de ese archivo (CLAVE=valor por
+# línea, como el EnvironmentFile de systemd), sin ejecutarlo como script: un valor con espacios o
+# símbolos no se rompe y la clave nunca pasa por la línea de comandos.
+if [ -n "${MILPA_RESTIC_ENV:-}" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    key="${line%%=*}"; value="${line#*=}"
+    case "$key" in RESTIC_*|B2_*|AWS_*|MILPA_KEEP) export "$key=$value" ;; esac
+  done < "$MILPA_RESTIC_ENV"
+fi
 : "${RESTIC_REPOSITORY:?Falta RESTIC_REPOSITORY}"
 : "${RESTIC_PASSWORD:?Falta RESTIC_PASSWORD}"
 restic_image="restic/restic:0.17.3"

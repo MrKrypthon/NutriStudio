@@ -59,6 +59,7 @@ nano .env.docker
 En `.env.docker`:
 
 - **Contraseña de PostgreSQL:** `POSTGRES_PASSWORD`, y la misma dentro de `DATABASE_URL`.
+- **Sin `$` en los valores:** Docker Compose lo interpreta como variable y corrompe el valor sin avisar. Los secretos generados con los comandos de abajo no lo usan.
 - **Secretos de los tokens:** `JWT_SECRET` y `ADMIN_JWT_SECRET`, distintos entre sí. Genera cada uno con:
   `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Si el servidor no
   tiene Node, usa `openssl rand -base64 48 | tr -d '/+='`.
@@ -126,10 +127,13 @@ Cómo funcionan:
 
 ### Restaurar
 
+Los scripts leen ellos mismos `/etc/milpa/restic.env`, sin ejecutarlo, así que la clave no aparece en la línea de comandos:
+
 ```bash
-sudo -E env $(sudo cat /etc/milpa/restic.env | xargs) deploy/restore-offsite.sh --lista
-sudo -E env $(sudo cat /etc/milpa/restic.env | xargs) deploy/restore-offsite.sh --si-reemplazar          # el más reciente
-sudo -E env $(sudo cat /etc/milpa/restic.env | xargs) deploy/restore-offsite.sh 57e3bda1 --si-reemplazar # uno en particular
+cd /opt/milpa
+sudo MILPA_RESTIC_ENV=/etc/milpa/restic.env MILPA_ENV_FILE=/opt/milpa/.env.docker deploy/restore-offsite.sh --lista
+sudo MILPA_RESTIC_ENV=/etc/milpa/restic.env MILPA_ENV_FILE=/opt/milpa/.env.docker deploy/restore-offsite.sh --si-reemplazar            # el más reciente
+sudo MILPA_RESTIC_ENV=/etc/milpa/restic.env MILPA_ENV_FILE=/opt/milpa/.env.docker deploy/restore-offsite.sh 57e3bda1 --si-reemplazar   # uno en particular
 ```
 
 **Haz un simulacro de restauración al menos cada 3 meses**, en un servidor de prueba. Un respaldo que
