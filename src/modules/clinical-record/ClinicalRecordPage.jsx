@@ -20,6 +20,7 @@ import { interpretLab } from '../../lib/labs/interpret.js'
 import LabImportModal from './LabImportModal.jsx'
 import { deviceLabel } from '../../lib/device.js'
 import { planFileName } from '../../../server/domain/pdfTheme.js'
+import PatientConsentCard from './PatientConsentCard.jsx'
 
 const TABS = ['Resumen', 'Antropométrico', 'Bioquímico', 'Clínico', 'Dietético', 'Estilo de vida', 'Sociocultural', 'Diagnóstico', 'Tratamiento', 'Monitoreo', 'Notas', 'Transcripción']
 // Los antecedentes familiares viven ahora en Clínico (ver flujo-consulta-nutricional.md), así que
@@ -701,6 +702,9 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
   // Registro de accesos: quién abrió el expediente o el historial y quién generó o descargó sus
   // documentos (lo registra el servidor; aquí sólo se consulta).
   const [accessLog, setAccessLog] = useState(null)
+  // Consentimientos del paciente (fase 117): en una ventana fuera del <fieldset> de sólo lectura,
+  // porque se registran aunque no haya una consulta abierta (normalmente antes de la primera).
+  const [consentOpen, setConsentOpen] = useState(false)
   const openAccessLog = async () => {
     setAccessLog({ state: 'loading', items: [] })
     try { const response = await patientsApi.accessLog(patientId); setAccessLog({ state: 'ready', items: response.items || [] }) }
@@ -1217,6 +1221,7 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
       <div className="clinical-actions">
         {consultation && consultation.status !== 'COMPLETED' && <button className="secondary" disabled={completionState === 'saving'} onClick={openCompletion}>{completionState === 'saving' ? 'Cerrando…' : 'Terminar consulta'}</button>}
         <button className="secondary" onClick={() => onScheduleAppointment?.()}>▱ Agendar</button>
+        <button className="secondary" onClick={() => setConsentOpen(true)} title={patient?.consentDataAt ? 'Consentimientos del paciente' : 'Falta registrar su consentimiento para tratar datos de salud'}>{patient && !patient.consentDataAt && <span className="consent-dot" aria-label="Pendiente" />}Consentimientos</button>
         <button className="secondary" onClick={openAccessLog} title="Quién ha consultado este expediente">◉ Accesos</button>
         <div className="header-pop" ref={reportMenuRef}>
           <button className="primary" onClick={() => setReportMenuOpen((v) => !v)}>Generar expediente {reportMenuOpen ? '▴' : '▾'}</button>
@@ -1706,6 +1711,10 @@ export default function ClinicalRecordPage({ setActive, patientId, consultationI
     </fieldset>}
   </div>
   {labImport && <LabImportModal file={labImport.file} existing={labs} canAttach={labImport.canAttach} onApply={applyLabImport} onClose={() => setLabImport(null)} />}
+  {consentOpen && <div className="modal-backdrop" onClick={() => setConsentOpen(false)}><div className="modal consent-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="modal-head"><div><p className="eyebrow">PRIVACIDAD</p><h2>Consentimientos de {patient?.firstName || 'la paciente'}</h2></div><button type="button" aria-label="Cerrar" onClick={() => setConsentOpen(false)}>×</button></div>
+    <PatientConsentCard patient={patient} onChange={reloadPatient} />
+  </div></div>}
   {accessLog && <div className="modal-backdrop" onClick={() => setAccessLog(null)}><div className="modal access-log-modal" onClick={(e) => e.stopPropagation()}>
     <div className="modal-head"><div><p className="eyebrow">REGISTRO DE ACCESOS</p><h2>¿Quién ha consultado este expediente?</h2><span className="modal-subtitle">Cada apertura del expediente o del historial (agrupadas por media hora) y cada PDF generado o descargado, con usuario, fecha, hora y equipo. Las ediciones están en la línea de tiempo del paciente.</span></div><button type="button" aria-label="Cerrar" onClick={() => setAccessLog(null)}>×</button></div>
     {accessLog.state === 'loading' && <p className="muted">Cargando…</p>}

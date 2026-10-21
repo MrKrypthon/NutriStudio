@@ -21,6 +21,8 @@ const AUDIT_LABELS = {
   'Patient:archived': 'Paciente archivado',
   'Patient:reactivated': 'Paciente reactivado',
   'Patient:updated': 'Datos del paciente editados',
+  'Patient:consent_granted': 'Consentimiento registrado',
+  'Patient:consent_revoked': 'Consentimiento retirado',
   'Diagnosis:created': 'Diagnóstico agregado',
   'Diagnosis:updated': 'Diagnóstico editado',
   'Diagnosis:deleted': 'Diagnóstico eliminado',

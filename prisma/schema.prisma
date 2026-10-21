@@ -143,6 +143,7 @@ model User {
   consultations  Consultation[]
   auditEvents    AuditEvent[]
   labAttachments LabAttachment[]
+  legalAcceptances LegalAcceptance[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -170,7 +171,11 @@ model Patient {
   email              String?
   phone              String?
   status             RecordStatus     @default(ACTIVE)
+  // Consentimiento expreso para tratar sus datos de salud y versión del aviso para pacientes con la
+  // que se dio (fase 117). Aparte, el permiso de recibir recordatorios y materiales.
   consentDataAt      DateTime?
+  consentVersion     String?
+  communicationConsentAt DateTime?
   consentRecordingAt DateTime?
   appointments       Appointment[]
   consultations      Consultation[]
@@ -658,4 +663,20 @@ model SmaeFood {
 
   @@unique([practiceId, edition, page, row])
   @@index([practiceId, group])
+}
+
+// Aceptación de los términos y del aviso de privacidad (fase 117): una fila por documento y versión
+// aceptados, con fecha, IP y navegador. Es un historial: nunca se sobrescribe.
+model LegalAcceptance {
+  id         String   @id @default(uuid())
+  userId     String
+  document   String
+  version    String
+  acceptedAt DateTime @default(now())
+  ip         String?
+  userAgent  String?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, document, version])
+  @@index([userId])
 }

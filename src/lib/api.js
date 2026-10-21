@@ -1,4 +1,4 @@
-import { getToken, notifySubscriptionRequired, notifyUnauthorized } from './auth.js'
+import { getToken, notifyLegalRequired, notifySubscriptionRequired, notifyUnauthorized } from './auth.js'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -47,6 +47,8 @@ export async function apiRequest(path, options = {}) {
     if (response.status === 401 && error.code !== 'INVALID_CREDENTIALS' && error.code !== 'INVALID_GOOGLE_TOKEN') notifyUnauthorized()
     // La suscripción venció a media sesión: la app cambia a la pantalla de pago.
     if (response.status === 402) notifySubscriptionRequired()
+    // Cambiaron los términos o el aviso de privacidad: la app pide aceptarlos antes de seguir.
+    if (response.status === 403 && error.code === 'LEGAL_ACCEPTANCE_REQUIRED') notifyLegalRequired()
     throw Object.assign(new Error(error.message), error)
   }
 
@@ -78,6 +80,12 @@ export const authApi = {
   logout: () => apiRequest('/auth/logout', { method: 'POST' }),
   me: () => apiRequest('/auth/me'),
   changePassword: (currentPassword, newPassword) => apiRequest('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) }),
+}
+
+// Términos y aviso de privacidad (fase 117).
+export const legalApi = {
+  status: () => apiRequest('/legal/status'),
+  accept: (documents) => apiRequest('/legal/accept', { method: 'POST', body: JSON.stringify({ documents }) }),
 }
 
 export const dashboardApi = {
