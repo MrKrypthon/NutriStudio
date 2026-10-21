@@ -6,6 +6,9 @@ storage/ingredients/*
 storage/lab-attachments/*
 *.traineddata
 .env
+.env.*
+!.env.example
+!.env.docker.example
 *.local
 DIETOCALCULO.xlsx
 datta-able-free-react-admin-template/

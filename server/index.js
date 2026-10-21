@@ -26,7 +26,7 @@ import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValid
 import { copyCatalog } from './domain/catalogCopy.js'
 import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
 import { foldText, toWinAnsi } from './domain/text.js'
-import { ATTEMPT_RULES, clientKey, corsOriginOption, createAttemptLimiter, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './domain/security.js'
+import { ATTEMPT_RULES, clientKey, corsOriginOption, createAttemptLimiter, createBlockSketch, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './domain/security.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
 // 10 MB PDF becomes ~13.3 MB as base64 JSON text, see POST /consultations/:id/lab-attachments.
@@ -246,7 +246,17 @@ const consultationClosed = (consultation, reply) => {
   return true
 }
 
-app.get('/health', async () => ({ status: 'ok', service: 'nutri-studio-api' }))
+// Salud para Docker y el balanceador: la API responde Y la base contesta (fase 113). Sin detalles del
+// error: la ruta es pública.
+app.get('/health', async (request, reply) => {
+  try {
+    await Promise.race([prisma.$queryRaw`SELECT 1`, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))])
+    return { status: 'ok', service: 'nutri-studio-api', database: 'ok' }
+  } catch (err) {
+    request.log.warn({ err: err.message }, 'La base de datos no responde')
+    return reply.code(503).send({ status: 'error', service: 'nutri-studio-api', database: 'unavailable' })
+  }
+})
 
 // Sesión de la nutrióloga: el token y lo que la app necesita al entrar. `access` dice si la cuenta
 // puede usar el sistema o sólo ver la pantalla de pago.
@@ -262,7 +272,9 @@ const signSession = (user) => ({ token: signToken(user), ...sessionPayload(user)
 
 // Límite de intentos fallidos (fase 111): login, login del panel, Google y cambio de contraseña. Los
 // topes están en ATTEMPT_RULES (domain/security.js); viven en memoria de esta instancia.
-const attemptLimiters = Object.fromEntries(Object.entries(ATTEMPT_RULES).map(([name, rules]) => [name, createAttemptLimiter({ rules })]))
+// Un solo sketch para los bloqueos desplazados de todos los limitadores (ver createBlockSketch).
+const blockSketch = createBlockSketch()
+const attemptLimiters = Object.fromEntries(Object.entries(ATTEMPT_RULES).map(([name, rules]) => [name, createAttemptLimiter({ rules, sketch: blockSketch })]))
 // Cuando el correo o identificador no existe se compara igual contra este hash, para que la respuesta
 // tarde lo mismo que con una contraseña equivocada y no delate qué cuentas existen.
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomUUID(), 10)
@@ -3518,3 +3530,24 @@ app.setErrorHandler((error, request, reply) => {
 
 const port = Number(process.env.PORT || 3001)
 app.listen({ port, host: '0.0.0.0' }).catch(async (error) => { app.log.error(error); await prisma.$disconnect(); process.exit(1) })
+
+// Al detener el contenedor (SIGTERM) o con Ctrl+C: dejar de aceptar conexiones, terminar las
+// peticiones en curso y cerrar la base antes de salir (fase 113).
+let shuttingDown = false
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, async () => {
+    if (shuttingDown) return
+    shuttingDown = true
+    app.log.info({ signal }, 'Cerrando la API')
+    const forceExit = setTimeout(() => process.exit(1), 10_000)
+    forceExit.unref()
+    try {
+      await app.close()
+      await prisma.$disconnect()
+      process.exit(0)
+    } catch (error) {
+      app.log.error(error)
+      process.exit(1)
+    }
+  })
+}

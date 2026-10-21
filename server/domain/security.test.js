@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ATTEMPT_RULES, clientKey, corsOriginOption, createAttemptLimiter, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './security.js'
+import { ATTEMPT_RULES, clientKey, corsOriginOption, createAttemptLimiter, createBlockSketch, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './security.js'
 
 const LONG = 'a'.repeat(40)
 const OTHER = 'b'.repeat(40)
@@ -131,13 +131,39 @@ describe('límite de intentos', () => {
     expect(limiter.consume({ ip: 'atacante' }).allowed).toBe(false)
   })
 
-  it('con la memoria llena de bloqueos sigue atendiendo a clientes nuevos (no deja fuera a todos)', () => {
+  it('con la memoria llena de bloqueos atiende a clientes nuevos y no suelta ningún bloqueo', () => {
     const { limiter, advance } = setup(ATTEMPT_RULES.changePassword, 10)
     for (let i = 0; i < 10; i += 1) { failN(limiter, { account: `bloqueada${i}` }, 5); advance(1000) }
+    // Un cliente nuevo entra (no se deja fuera a todos)…
     expect(limiter.consume({ account: 'nueva' }).allowed).toBe(true)
     expect(limiter.size()).toBeLessThanOrEqual(10)
-    // Se soltaron los que vencían antes; el más reciente sigue bloqueado.
-    expect(limiter.consume({ account: 'bloqueada9' }).allowed).toBe(false)
+    // …y los bloqueos que salieron del mapa siguen valiendo desde el sketch, con su vencimiento.
+    for (let i = 0; i < 10; i += 1) {
+      const result = limiter.consume({ account: `bloqueada${i}` })
+      expect(result.allowed).toBe(false)
+      expect(result.retryAfterSeconds).toBe(15 * 60 - (10 - i))
+    }
+  })
+
+  it('un bloqueo desplazado vence a su hora y la cuenta vuelve a entrar', () => {
+    const { limiter, advance } = setup(ATTEMPT_RULES.changePassword, 4)
+    failN(limiter, { account: 'objetivo' }, 5)
+    // Relleno que también bloquea, para obligar a sacar del mapa el bloqueo más viejo (el del objetivo).
+    for (let i = 0; i < 20; i += 1) { advance(1); failN(limiter, { account: `relleno${i}` }, 5) }
+    expect(limiter.keys().some((key) => key.includes('objetivo'))).toBe(false)
+    expect(limiter.consume({ account: 'objetivo' }).allowed).toBe(false)
+    advance(15 * 60_000)
+    expect(limiter.consume({ account: 'objetivo' }).allowed).toBe(true)
+  })
+
+  it('el sketch casi no confunde a clientes nuevos con bloqueados', () => {
+    const sketch = createBlockSketch()
+    for (let i = 0; i < 20_000; i += 1) sketch.add(`bloqueada-${i}`, 5, 1_000, 0)
+    let confused = 0
+    for (let i = 0; i < 20_000; i += 1) if (sketch.estimate(`nueva-${i}`, 0).count >= 5) confused += 1
+    expect(confused / 20_000).toBeLessThan(0.001)
+    for (let i = 0; i < 100; i += 1) expect(sketch.estimate(`bloqueada-${i}`, 0).count).toBeGreaterThanOrEqual(5)
+    expect(sketch.estimate('bloqueada-1', 1_000).count).toBe(0)
   })
 
   it('libera espacio por tandas, no recorre todo en cada intento', () => {
