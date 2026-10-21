@@ -5,18 +5,21 @@
 set -u
 
 base="${1:-http://localhost:8080}"
+# MILPA_SMOKE_INSECURE=1 acepta un certificado no público (pruebas locales con el de Caddy).
+k=""
+[ "${MILPA_SMOKE_INSECURE:-}" = 1 ] && k="-k"
 fail=0
 check() {
   label="$1"; shift
   if "$@" >/dev/null 2>&1; then echo "✓ $label"; else echo "✗ $label"; fail=1; fi
 }
 
-check "API y base de datos (/health)" sh -c "curl -fsS '$base/health' | grep -q '\"database\":\"ok\"'"
-check "index.html con CSP" sh -c "curl -fsSI '$base/' | grep -qi '^content-security-policy:'"
-check "configuración de acceso (/api/v1/auth/config)" curl -fsS "$base/api/v1/auth/config"
-check "motor del OCR servido por Nginx" curl -fsS -o /dev/null "$base/ocr/worker.min.js"
-check "rutas de la SPA caen en index.html" sh -c "curl -fsS '$base/pacientes' | grep -q 'id=\"root\"'"
-check "login con credenciales falsas responde 401" sh -c "test \"\$(curl -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json' -d '{\"email\":\"nadie@example.com\",\"password\":\"no-es-esta\"}' '$base/api/v1/auth/login')\" = 401"
+check "API y base de datos (/health)" sh -c "curl $k -fsS '$base/health' | grep -q '\"database\":\"ok\"'"
+check "index.html con CSP" sh -c "curl $k -fsSI '$base/' | grep -qi '^content-security-policy:'"
+check "configuración de acceso (/api/v1/auth/config)" curl $k -fsS "$base/api/v1/auth/config"
+check "motor del OCR servido por Nginx" curl $k -fsS -o /dev/null "$base/ocr/worker.min.js"
+check "rutas de la SPA caen en index.html" sh -c "curl $k -fsS '$base/pacientes' | grep -q 'id=\"root\"'"
+check "login con credenciales falsas responde 401" sh -c "test \"\$(curl $k -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json' -d '{\"email\":\"nadie@example.com\",\"password\":\"no-es-esta\"}' '$base/api/v1/auth/login')\" = 401"
 
 [ "$fail" -eq 0 ] && echo "Todo bien en $base" || echo "Hay fallas en $base"
 exit "$fail"

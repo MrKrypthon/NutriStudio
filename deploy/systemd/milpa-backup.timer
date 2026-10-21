@@ -1,0 +1,12 @@
+# Todos los días a las 03:30 (hora del centro de México). Si el servidor estaba apagado a esa hora,
+# corre al encender (Persistent).
+[Unit]
+Description=Milpa: respaldo diario
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 America/Mexico_City
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

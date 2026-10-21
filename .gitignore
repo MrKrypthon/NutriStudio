@@ -37,3 +37,6 @@ SMAE*.pdf
 
 # Motor y modelos del OCR: se copian de node_modules (tools/copy-ocr-assets.mjs)
 public/ocr/
+
+# Respaldos de deploy/deploy.sh y deploy/backup.sh (datos clínicos): nunca al repositorio
+respaldos/

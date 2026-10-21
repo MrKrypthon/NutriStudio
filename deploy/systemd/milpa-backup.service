@@ -1,0 +1,15 @@
+# Respaldo cifrado fuera del servidor (fase 115). Lo dispara milpa-backup.timer.
+# Instalar: deploy/server-setup.sh lo copia a /etc/systemd/system/.
+[Unit]
+Description=Milpa: respaldo cifrado de la base y los archivos (restic)
+Wants=network-online.target docker.service
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/milpa
+EnvironmentFile=/etc/milpa/restic.env
+Environment=MILPA_ENV_FILE=/opt/milpa/.env.docker
+ExecStart=/opt/milpa/deploy/backup-offsite.sh
+Nice=10
+IOSchedulingClass=idle

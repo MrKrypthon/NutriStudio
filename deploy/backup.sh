@@ -9,7 +9,14 @@ set -eu
 cd "$(dirname "$0")/.."
 project="${MILPA_PROJECT:-milpa}"
 dest="${1:-respaldos}/milpa-$(date -u +%Y%m%d-%H%M%S)"
-compose() { docker compose -p "$project" -f docker-compose.app.yml "$@"; }
+# Con MILPA_DOMAIN en el archivo de variables es el stack de producción (Caddy delante, fase 115):
+# se usan los dos archivos de compose, para no recrear Nginx sin Caddy.
+env_file="${MILPA_ENV_FILE:-.env.docker}"
+if [ -f "$env_file" ] && grep -q '^MILPA_DOMAIN=.' "$env_file"; then
+  compose() { docker compose -p "$project" --env-file "$env_file" -f docker-compose.app.yml -f docker-compose.prod.yml "$@"; }
+else
+  compose() { docker compose -p "$project" -f docker-compose.app.yml "$@"; }
+fi
 
 umask 077
 mkdir -p "$dest"

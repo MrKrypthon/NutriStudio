@@ -78,6 +78,10 @@ jobs:
           TRUST_PROXY=uniquelocal
           CATALOG_PRACTICE_ID=00000000-0000-0000-0000-000000000001
           EOF
+      - name: La configuración de producción (Caddy) es válida
+        run: >-
+          MILPA_DOMAIN=ejemplo.invalid MILPA_ACME_EMAIL=ci@ejemplo.invalid
+          docker compose -f docker-compose.app.yml -f docker-compose.prod.yml config --quiet
       - name: Construir y levantar desde cero
         run: docker compose -f docker-compose.app.yml up -d --build --wait --wait-timeout 300
       - name: Cargar el catálogo

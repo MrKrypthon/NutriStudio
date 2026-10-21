@@ -1,6 +1,6 @@
 # Stack tecnológico — Nutri Studio / milpa
 
-Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker), 111 (autenticación), 112 (migraciones de Prisma), 113 (Docker) y 114 (CI). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
+Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker), 111 (autenticación), 112 (migraciones de Prisma), 113 (Docker), 114 (CI) y 115 (servidor). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
 
 SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo**, que paga una suscripción y tiene acceso a todo. Lleva pacientes, consultas, expediente clínico, mediciones, diagnósticos PES, planes de alimentación con equivalentes SMAE, recetas, agenda, finanzas, tareas, plantillas y documentos PDF.
 
@@ -131,11 +131,19 @@ Desde la fase 113 la app completa corre en contenedores con `docker-compose.app.
 
 `.dockerignore` deja fuera de la imagen los secretos, los documentos, los archivos de `storage/` (salvo las fotos base del recetario) y `prisma/data/demo-practice.json`.
 
+En el VPS (fase 115, guía en `DESPLIEGUE.md`):
+
+| Pieza | Detalle |
+|---|---|
+| HTTPS | `docker-compose.prod.yml` agrega `caddy:2.8.4-alpine` (Let's Encrypt automático, HTTP→HTTPS, HSTS); Nginx deja de publicar su puerto y toma la IP real de Caddy sólo desde la red `edge` (`deploy/nginx-real-ip.conf`) |
+| Despliegue | `deploy/deploy.sh [commit]`: respaldo previo, build, migraciones, `smoke.sh` contra el dominio y, si falla, el comando para volver |
+| Respaldos | `deploy/backup-offsite.sh` con restic (cifrado, deduplicado; 7 diarios, 4 semanales, 12 mensuales) a Backblaze B2 o S3, cada noche con `deploy/systemd/milpa-backup.timer`; `restore-offsite.sh` los restaura |
+| Servidor | `deploy/server-setup.sh` (Ubuntu 24.04): actualizaciones automáticas, Docker con tope de registros, usuario `milpa`, SSH sólo con llave, fail2ban, firewall 22/80/443, swap |
+
 Falta para producción:
 
-- El VPS (por ejemplo, Hetzner) y HTTPS delante de Nginx (Let's Encrypt), con HSTS.
-- Dónde guardar los respaldos (cifrados, fuera del servidor) y cada cuánto.
+- Contratar el VPS, el dominio y el bucket de respaldos.
 
 ## 11. Resumen en una línea
 
-**Vite 8 + React 19** · **Fastify 5** (Node 24 LTS como objetivo, JavaScript sin TS) · **Prisma 6** · **PostgreSQL 16** · pdfkit · pdfjs-dist · tesseract.js · JWT + bcrypt · **Stripe** · **Google Identity** · USDA / Open Food Facts · Vitest · Docker Compose (PostgreSQL, API, Nginx) · TLS y VPS _(por definir)_
+**Vite 8 + React 19** · **Fastify 5** (Node 24 LTS como objetivo, JavaScript sin TS) · **Prisma 6** · **PostgreSQL 16** · pdfkit · pdfjs-dist · tesseract.js · JWT + bcrypt · **Stripe** · **Google Identity** · USDA / Open Food Facts · Vitest · Docker Compose (PostgreSQL, API, Nginx, Caddy con HTTPS) · restic · VPS _(por contratar)_
