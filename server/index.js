@@ -282,6 +282,8 @@ app.post('/api/v1/auth/login', async (request, reply) => {
   const { email, password } = request.body || {}
   const login = String(email || '').trim()
   if (!login || !password || typeof password !== 'string') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Correo o identificador y contraseña son obligatorios.', fields: { email: !login, password: !password } })
+  // Un correo mide a lo más 254 caracteres y un identificador 30: lo demás no es una cuenta.
+  if (login.length > 254) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Correo o identificador demasiado largo.', fields: { email: true } })
   const byEmail = login.includes('@')
   const attempt = { ip: clientKey(request.ip), account: byEmail ? login.toLowerCase() : normalizeLoginId(login) }
   if (rejectIfThrottled(attemptLimiters.login, attempt, reply)) return reply
@@ -458,6 +460,7 @@ app.put('/api/v1/practice/fees', async (request) => {
 app.post('/api/v1/admin/auth/login', async (request, reply) => {
   const { email, password } = request.body || {}
   if (!email || !password || typeof email !== 'string' || typeof password !== 'string') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Email y contraseña son obligatorios.', fields: {} })
+  if (email.trim().length > 254) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Email demasiado largo.', fields: {} })
   const attempt = { ip: clientKey(request.ip), account: email.trim().toLowerCase() }
   if (rejectIfThrottled(attemptLimiters.adminLogin, attempt, reply)) return reply
   // Sin distinguir mayúsculas: admin:create guarda el correo en minúsculas.

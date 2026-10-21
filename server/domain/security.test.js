@@ -131,10 +131,29 @@ describe('límite de intentos', () => {
     expect(limiter.consume({ ip: 'atacante' }).allowed).toBe(false)
   })
 
-  it('con la memoria llena sólo de bloqueos, rechaza llaves nuevas (falla cerrado)', () => {
-    const { limiter } = setup(ATTEMPT_RULES.changePassword, 3)
-    for (const account of ['a', 'b', 'c']) failN(limiter, { account }, 5)
-    expect(limiter.consume({ account: 'd' })).toEqual({ allowed: false, retryAfterSeconds: 60 })
+  it('con la memoria llena de bloqueos sigue atendiendo a clientes nuevos (no deja fuera a todos)', () => {
+    const { limiter, advance } = setup(ATTEMPT_RULES.changePassword, 10)
+    for (let i = 0; i < 10; i += 1) { failN(limiter, { account: `bloqueada${i}` }, 5); advance(1000) }
+    expect(limiter.consume({ account: 'nueva' }).allowed).toBe(true)
+    expect(limiter.size()).toBeLessThanOrEqual(10)
+    // Se soltaron los que vencían antes; el más reciente sigue bloqueado.
+    expect(limiter.consume({ account: 'bloqueada9' }).allowed).toBe(false)
+  })
+
+  it('libera espacio por tandas, no recorre todo en cada intento', () => {
+    const { limiter } = setup(ATTEMPT_RULES.google, 1000)
+    for (let i = 0; i < 1000; i += 1) limiter.consume({ ip: `ip-${i}` })
+    limiter.consume({ ip: 'una-mas' })
+    expect(limiter.size()).toBeLessThanOrEqual(900)
+  })
+
+  it('una cuenta larguísima no ocupa más memoria que una normal', () => {
+    const { limiter } = setup()
+    limiter.consume({ ip: '1.1.1.1', account: 'x'.repeat(100_000) })
+    limiter.consume({ ip: '1.1.1.1', account: 'y'.repeat(100_000) })
+    expect(Math.max(...limiter.keys().map((key) => key.length))).toBeLessThan(120)
+    // Dos cuentas largas distintas siguen contando por separado.
+    expect(new Set(limiter.keys().filter((key) => key.startsWith('login-account:'))).size).toBe(2)
   })
 
   it('el mensaje da los minutos en español', () => {

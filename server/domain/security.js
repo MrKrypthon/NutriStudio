@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 // Configuración de seguridad de la API (fase 111): proxy de confianza, orígenes de CORS, secretos
 // de los tokens y límite de intentos de acceso. Lógica pura, sin Fastify ni base de datos, para
 // probarla aparte.
@@ -89,24 +91,38 @@ export function createAttemptLimiter({ rules, now = () => Date.now(), maxKeys = 
 
   const blocking = (bucket, at) => bucket.resetAt > at && bucket.count >= bucket.max
 
-  // Con la memoria llena se descartan primero las vencidas y después las que todavía no bloquean,
-  // nunca un bloqueo vigente: si se borraran las más viejas, inundar de llaves nuevas soltaría a
-  // quien ya está bloqueado. Si sólo quedan bloqueos, `consume` rechaza llaves nuevas (falla cerrado).
+  // Con la memoria llena se libera un 10 % de una vez (así el recorrido no se repite en cada intento):
+  // primero las llaves vencidas, después las que todavía no bloquean y, sólo si no alcanza, los
+  // bloqueos que vencen antes. Nunca se rechaza a un cliente nuevo por falta de espacio, porque eso
+  // dejaría a todos fuera; soltar un bloqueo exige antes llenar la memoria con miles de bloqueos
+  // nuevos, y cada uno cuesta sus intentos.
   const makeRoom = (at, needed) => {
     for (const [key, bucket] of buckets) if (bucket.resetAt <= at) buckets.delete(key)
-    if (buckets.size + needed <= maxKeys) return true
+    if (buckets.size + needed <= maxKeys) return
+    const target = Math.max(0, Math.floor(maxKeys * 0.9) - needed)
     for (const [key, bucket] of buckets) {
+      if (buckets.size <= target) return
       if (!blocking(bucket, at)) buckets.delete(key)
-      if (buckets.size + needed <= maxKeys) return true
     }
-    return false
+    const bySoonest = [...buckets.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt)
+    for (const [key] of bySoonest) {
+      if (buckets.size <= target) return
+      buckets.delete(key)
+    }
+  }
+
+  // Cada parte de la llave ocupa a lo más ~65 caracteres: lo que escribe el usuario (la cuenta) se
+  // resume con SHA-256 si es más largo, para que nadie llene la memoria con llaves enormes.
+  const keyPart = (value) => {
+    const text = String(value)
+    return text.length > 64 ? `#${createHash('sha256').update(text).digest('base64url')}` : text
   }
 
   const keysFor = (subject) => rules
     .map((rule) => {
       const parts = rule.by.map((field) => subject[field])
       if (parts.some((part) => part === undefined || part === null || part === '')) return null
-      return { rule, key: `${rule.name}:${parts.join('|')}` }
+      return { rule, key: `${rule.name}:${parts.map(keyPart).join('|')}` }
     })
     .filter(Boolean)
 
@@ -127,7 +143,7 @@ export function createAttemptLimiter({ rules, now = () => Date.now(), maxKeys = 
       }
       if (retryAfterMs) return { allowed: false, retryAfterSeconds: Math.ceil(retryAfterMs / 1000) }
       const missing = entries.filter(({ key }) => !live(key, at)).length
-      if (buckets.size + missing > maxKeys && !makeRoom(at, missing)) return { allowed: false, retryAfterSeconds: 60 }
+      if (buckets.size + missing > maxKeys) makeRoom(at, missing)
       for (const { rule, key } of entries) {
         const bucket = live(key, at)
         if (bucket) bucket.count += 1
@@ -150,6 +166,7 @@ export function createAttemptLimiter({ rules, now = () => Date.now(), maxKeys = 
       for (const { rule, key } of keysFor(subject)) if (rule.resetOnSuccess) buckets.delete(key)
     },
     size: () => buckets.size,
+    keys: () => [...buckets.keys()],
   }
 }
 
