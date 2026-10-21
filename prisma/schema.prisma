@@ -602,11 +602,14 @@ model StripeEvent {
 
 // Cuenta de administrador del SaaS (independiente de los usuarios de cada práctica).
 model AdminUser {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  name         String
-  createdAt    DateTime @default(now())
+  id             String   @id @default(uuid())
+  email          String   @unique
+  passwordHash   String
+  name           String
+  // Va en el token del panel (sv); salir o restablecer la contraseña lo incrementa y cierra todas las
+  // sesiones de ese administrador (fase 112).
+  sessionVersion Int      @default(0)
+  createdAt      DateTime @default(now())
 }
 
 // Sugerencias de redacción que la nutrióloga guarda con "+ Agregar" en los campos con chips del

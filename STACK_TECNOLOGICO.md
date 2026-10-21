@@ -1,6 +1,6 @@
 # Stack tecnológico — Nutri Studio / milpa
 
-Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker) y 111 (autenticación). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
+Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker), 111 (autenticación) y 112 (migraciones de Prisma). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
 
 SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo**, que paga una suscripción y tiene acceso a todo. Lleva pacientes, consultas, expediente clínico, mediciones, diagnósticos PES, planes de alimentación con equivalentes SMAE, recetas, agenda, finanzas, tareas, plantillas y documentos PDF.
 
@@ -31,7 +31,7 @@ SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo
 |---|---|
 | Framework | **Fastify 5.12.1** con `@fastify/cors` 11.3.0. Es un monolito: `server/index.js`, de unas 3,400 líneas y 119 rutas (REST bajo `/api/v1` más `/health`) |
 | Lenguaje | **Node.js** con ESM (`"type": "module"`), en JavaScript plano. Versión objetivo: **24 LTS** (`.nvmrc`); mínimo 22.13, porque `pdfjs-dist` 6.4 y npm 12 ya no aceptan Node 20. La compatibilidad con 24 todavía se tiene que probar |
-| Autenticación | JWT propio (`jsonwebtoken`) y contraseñas con **bcryptjs**. El token lleva `practiceId` y `sv`, la versión de sesión: cambiar la contraseña, que el administrador la restablezca o desvincular Google cierra las sesiones abiertas. El superadministrador usa otro token, firmado con su propio secreto (`ADMIN_JWT_SECRET`). La verificación sólo acepta HS256 |
+| Autenticación | JWT propio (`jsonwebtoken`) y contraseñas con **bcryptjs**. El token lleva `practiceId` y `sv`, la versión de sesión: cambiar la contraseña, que el administrador la restablezca o desvincular Google cierra las sesiones abiertas. El superadministrador usa otro token, firmado con su propio secreto (`ADMIN_JWT_SECRET`), con su propia versión de sesión (`AdminUser.sessionVersion`): salir del panel o `npm run admin:reset-password` cierran todas sus sesiones. La verificación sólo acepta HS256 |
 | Protección del acceso | Límite de intentos en memoria (`server/domain/security.js`; cuenta el intento antes de comparar la contraseña, agrupa IPv6 por /64 y nunca suelta un bloqueo vigente al llenarse): 5 por IP y cuenta, 20 por IP y 30 por cuenta cada 15 min en el login; topes parecidos en el panel, Google y cambio de contraseña; responde **429** con `Retry-After`. Con un usuario inexistente se compara igual contra un hash de relleno, para no delatar qué cuentas existen. Con `NODE_ENV=production` la API no arranca si los secretos faltan, miden menos de 32 caracteres, son iguales o son los de ejemplo |
 | Encabezados | `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` y `Cache-Control: no-store` en todo lo que no fija su propio caché. CORS: cualquier origen en desarrollo; en producción sólo `CORS_ORIGINS` o `APP_URL`. `TRUST_PROXY` hace que la IP de la bitácora y del límite sea la del usuario detrás de Nginx |
 | Multi-tenant | Cada consulta a la base se filtra por el `practiceId` de la sesión |
@@ -46,7 +46,7 @@ SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo
 |---|---|
 | Motor | **PostgreSQL 16**. En desarrollo corre en Docker Compose (`postgres:16-alpine`) |
 | Modelos | **26 modelos** y 9 enums en `prisma/schema.prisma` |
-| ORM | **Prisma 6.19**. Los cambios de esquema se aplican con `prisma db push`, sin migraciones; solo se hacen cambios aditivos (`@@index` no únicos, columnas opcionales) |
+| ORM | **Prisma 6.19** con **migraciones** en `prisma/migrations/` desde la fase 112: línea base `0_init` (el esquema de la fase 111) y después un directorio por cambio. `npm run db:migrate` aplica lo pendiente y adopta una sola vez las bases creadas antes con `db push`, sólo si coinciden con `prisma/baseline/0_init.prisma`. En producción, `prisma migrate deploy`. Ya no se usa `db push` |
 | Cuenta y acceso | `Practice` (la cuenta), `User`, `AdminUser` |
 | Pacientes y consulta | `Patient`, `Appointment`, `Consultation`, `ClinicalSection`, `PatientSection`, `Measurement`, `Diagnosis`, `LabAttachment` |
 | Plan y catálogo | `NutritionPlan`, `MealSlot`, `Recipe`, `RecipeIngredient`, `Ingredient`, `SmaeFood` (libro SMAE), `EducationMaterial`, `SuggestionChip` |
@@ -108,6 +108,7 @@ Pendientes:
 - `npm run dev:all` levanta la API (puerto 3001) y Vite (puerto 5173) con **concurrently**. Antes sincroniza la base con `prisma/sync-dev.js`.
 - `npm test` corre las pruebas con **Vitest**.
 - `npm run db:setup` crea el esquema, siembra la base e importa el SMAE, los alimentos base, los recetarios y la práctica de demostración (scripts en `prisma/`). **Solo para desarrollo:** el seed crea cuentas con contraseña conocida y, con `NODE_ENV=production`, tanto el seed como `import-demo-practice.js` se detienen antes de conectarse (`prisma/tools/devOnly.js`).
+- `npm run admin:reset-password` cambia la contraseña de un administrador y cierra sus sesiones.
 - `npm run admin:create` crea el primer administrador del panel con `ADMIN_EMAIL` y `ADMIN_PASSWORD` del entorno, sin imprimir la contraseña (`prisma/create-admin.js`).
 - Las dependencias directas tienen versiones fijas: nada queda en `latest`. Para instalar exactamente las del lockfile, usar `npm ci`.
 - **dotenv** carga las variables de entorno.

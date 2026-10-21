@@ -141,9 +141,14 @@ app.addHook('onRequest', async (request, reply) => {
       const payload = jwt.verify(header.slice(7), ADMIN_JWT_SECRET, JWT_VERIFY_OPTIONS)
       if (!payload.admin) throw new Error('not admin')
       request.adminId = payload.sub
+      request.adminSessionVersion = payload.sv || 0
     } catch {
       return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Sesión de administrador inválida.', fields: {} })
     }
+    // Salir o restablecer la contraseña incrementa sessionVersion y cierra los tokens anteriores
+    // (fase 112). Fuera del try: una falla de la base es un 500, no un cierre de sesión.
+    const admin = await prisma.adminUser.findUnique({ where: { id: request.adminId }, select: { sessionVersion: true } })
+    if (!admin || admin.sessionVersion !== request.adminSessionVersion) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Tu sesión de administrador se cerró. Inicia sesión de nuevo.', fields: {} })
     return
   }
   if (!header?.startsWith('Bearer ')) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Inicia sesión para continuar.', fields: {} })
@@ -468,8 +473,15 @@ app.post('/api/v1/admin/auth/login', async (request, reply) => {
   const valid = await bcrypt.compare(password, admin ? admin.passwordHash : DUMMY_PASSWORD_HASH)
   if (!admin || !valid) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Credenciales de administrador incorrectas.', fields: {} })
   acceptAttempt(attemptLimiters.adminLogin, attempt)
-  const token = jwt.sign({ sub: admin.id, admin: true }, ADMIN_JWT_SECRET, { expiresIn: '12h' })
+  const token = jwt.sign({ sub: admin.id, admin: true, sv: admin.sessionVersion }, ADMIN_JWT_SECRET, { expiresIn: '12h' })
   return { token, admin: { id: admin.id, name: admin.name, email: admin.email } }
+})
+
+// Salir del panel cierra TODAS las sesiones de ese administrador (otros navegadores incluidos): el
+// token del panel da acceso a todas las cuentas, así que salir es también la forma de revocarlo.
+app.post('/api/v1/admin/auth/logout', async (request, reply) => {
+  await prisma.adminUser.update({ where: { id: request.adminId }, data: { sessionVersion: { increment: 1 } } })
+  return reply.code(204).send()
 })
 
 // Cuántas cuentas lleva creadas el administrador y qué identificador sugerir para la siguiente.

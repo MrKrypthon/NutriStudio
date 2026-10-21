@@ -1,0 +1,658 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  NUTRITIONIST
+  ASSISTANT
+}
+
+enum RecordStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  PENDING_CONFIRMATION
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AppointmentType {
+  INITIAL
+  FOLLOW_UP
+  QUICK_CONTROL
+  EMERGENCY
+  BLOCK
+}
+
+enum ConsultationStatus {
+  DRAFT
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum PlanStatus {
+  DRAFT
+  READY
+  PUBLISHED
+  SUPERSEDED
+  CANCELLED
+}
+
+enum FinanceEntryType {
+  INCOME
+  EXPENSE
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+}
+
+// Estado de la cuenta (tenant) del SaaS: una práctica suspendida no puede iniciar sesión.
+enum PracticeStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+model Practice {
+  id                 String              @id @default(uuid())
+  name               String
+  timeZone           String              @default("America/Mexico_City")
+  locale             String              @default("es-MX")
+  defaultPalette     String              @default("minimal")
+  logoUrl            String?
+  // Dirección del consultorio; sale en el pie del plan de alimentación entregado.
+  address            String?
+  // Tipo de establecimiento para el encabezado del expediente (NOM-004-SSA3-2012, 5.2.1).
+  establishmentType  String?
+  // Diseño del plan de alimentación en PDF (colores, tipografía, ondas, logo); ver
+  // server/domain/pdfTheme.js. Vacío = blanco y negro.
+  pdfTheme           Json?
+  businessHours      Json?
+  // Tarifas por tipo de cita, en centavos: { INITIAL, FOLLOW_UP, QUICK_CONTROL, EMERGENCY }.
+  fees               Json?
+  // Administración del SaaS (panel /admin).
+  status             PracticeStatus      @default(ACTIVE)
+  paymentMethod      PaymentMethod?
+  paidUntil          DateTime?
+  // Suscripción con Stripe (fase 108). El estado es el de Stripe (trialing, active, past_due,
+  // canceled, unpaid, incomplete…); `paidUntil` sigue siendo la cobertura y el webhook la mueve al
+  // fin del periodo pagado. `stripeSyncedAt` guarda la fecha del último evento aplicado para no
+  // retroceder si Stripe entrega los avisos fuera de orden.
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  subscriptionStatus   String?
+  subscriptionInterval String?
+  cancelAtPeriodEnd    Boolean           @default(false)
+  stripeSyncedAt       DateTime?
+  // Cómo se abrió la cuenta (fase 109): 'ADMIN' (creada desde /admin) o 'GOOGLE' (registro con
+  // Google). Vacío = práctica anterior a las cuentas de pago, que no se bloquea por falta de pago.
+  signupSource         String?
+  transactions       Transaction[]
+  users              User[]
+  patients           Patient[]
+  appointments       Appointment[]
+  recipes            Recipe[]
+  ingredients        Ingredient[]
+  tasks              Task[]
+  auditEvents        AuditEvent[]
+  templates          Template[]
+  educationMaterials EducationMaterial[]
+  financeEntries     FinanceEntry[]
+  suggestionChips    SuggestionChip[]
+  smaeFoods          SmaeFood[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@index([stripeCustomerId])
+  @@index([stripeSubscriptionId])
+}
+
+model User {
+  id             String          @id @default(uuid())
+  practiceId     String
+  practice       Practice        @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  name           String
+  email          String
+  passwordHash   String
+  specialty      String?
+  phone          String?
+  // Cédula profesional; sale en el encabezado del plan de alimentación entregado.
+  licenseNumber  String?
+  role           UserRole        @default(NUTRITIONIST)
+  status         RecordStatus    @default(ACTIVE)
+  // Identificador para entrar sin correo (cuentas creadas desde /admin) y la cuenta de Google con
+  // la que entra (`sub` del token de Google). Únicos en todo el sistema; se valida al guardarlos.
+  loginId        String?
+  googleSub      String?
+  // Versión de sesión: va dentro del token y sube al cambiar o restablecer la contraseña, lo que
+  // cierra todas las sesiones abiertas (los tokens no se guardan en el servidor).
+  sessionVersion Int             @default(0)
+  consultations  Consultation[]
+  auditEvents    AuditEvent[]
+  labAttachments LabAttachment[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@unique([practiceId, email])
+  @@index([practiceId, status])
+  @@index([loginId])
+  @@index([googleSub])
+  @@index([email])
+}
+
+model Patient {
+  id                 String           @id @default(uuid())
+  practiceId         String
+  practice           Practice         @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  firstName          String
+  lastName           String
+  birthDate          DateTime?
+  sex                String?
+  occupation         String?
+  // Ficha de identificación del expediente (NOM-004-SSA3-2012, 5.2.3 y 5.9): domicilio, CURP
+  // (identificador de la NOM-024-SSA3-2012) y número de expediente único dentro del consultorio.
+  address            String?
+  curp               String?
+  recordNumber       Int?
+  email              String?
+  phone              String?
+  status             RecordStatus     @default(ACTIVE)
+  consentDataAt      DateTime?
+  consentRecordingAt DateTime?
+  appointments       Appointment[]
+  consultations      Consultation[]
+  sections           PatientSection[]
+  measurements       Measurement[]
+  plans              NutritionPlan[]
+  documents          Document[]
+  tasks              Task[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  archivedAt         DateTime?
+
+  @@index([practiceId, lastName, firstName])
+  @@index([practiceId, status])
+  @@unique([practiceId, recordNumber])
+}
+
+model Appointment {
+  id             String            @id @default(uuid())
+  practiceId     String
+  practice       Practice          @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  patientId      String?
+  patient        Patient?          @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  startAt        DateTime
+  endAt          DateTime
+  type           AppointmentType
+  status         AppointmentStatus @default(SCHEDULED)
+  notifyVia      String[]
+  internalNote   String?
+  patientNote    String?
+  recurrenceRule String?
+  timeZone       String
+  consultation   Consultation?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([practiceId, startAt, endAt])
+  @@index([patientId, startAt])
+}
+
+model Consultation {
+  id             String             @id @default(uuid())
+  patientId      String
+  patient        Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointmentId  String?            @unique
+  appointment    Appointment?       @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  nutritionistId String
+  nutritionist   User               @relation(fields: [nutritionistId], references: [id])
+  status         ConsultationStatus @default(DRAFT)
+  version        Int                @default(1)
+  templateId     String?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  sections       ClinicalSection[]
+  measurements   Measurement[]
+  diagnoses      Diagnosis[]
+  plans          NutritionPlan[]
+  documents      Document[]
+  labAttachments LabAttachment[]
+  financeEntry   FinanceEntry?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([patientId, createdAt])
+}
+
+// Movimiento de finanzas del consultorio. Los INCOME se generan solos al terminar una consulta
+// (toman la tarifa del tipo de cita y el método de pago elegido); los EXPENSE los captura la
+// nutrióloga (insumos, renta…). amountCents entero para no arrastrar errores de punto flotante.
+model FinanceEntry {
+  id             String           @id @default(uuid())
+  practiceId     String
+  practice       Practice         @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  type           FinanceEntryType
+  amountCents    Int
+  method         PaymentMethod?
+  category       String?
+  description    String?
+  occurredAt     DateTime         @default(now())
+  consultationId String?          @unique
+  consultation   Consultation?    @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([practiceId, occurredAt])
+}
+
+// A lab-results PDF the professional attaches for reference while filling "Estudios" in
+// Bioquímico by hand -- there's no automated extraction yet (that needs an ANTHROPIC_API_KEY
+// the practice doesn't have, see ESTADO_Y_PENDIENTES.md), so this is deliberately just storage
+// + manual transcription, not analysis.
+model LabAttachment {
+  id             String       @id @default(uuid())
+  consultationId String
+  consultation   Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  fileName       String
+  storageKey     String
+  fileSize       Int
+  uploadedById   String
+  uploadedBy     User         @relation(fields: [uploadedById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([consultationId])
+}
+
+// Datos permanentes del paciente: lo que no pertenece a una visita concreta sino a la persona
+// (antecedentes familiares, cirugías ya realizadas, alergias e intolerancias). Antes vivían dentro
+// de la ClinicalSection de cada consulta, así que había que recapturarlos en cada visita o quedaban
+// enterrados en la consulta donde se escribieron por primera vez.
+//
+// Es un espejo de ClinicalSection a propósito: mismo payload libre por clave de sección y el mismo
+// lastSavedAt para detectar ediciones concurrentes, de modo que la pantalla guarda igual en los dos
+// sitios y sólo cambia a dónde va cada campo.
+model PatientSection {
+  id          String   @id @default(uuid())
+  patientId   String
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  sectionKey  String
+  payload     Json
+  lastSavedAt DateTime @updatedAt
+  lastSavedBy String
+
+  @@unique([patientId, sectionKey])
+}
+
+model ClinicalSection {
+  id              String       @id @default(uuid())
+  consultationId  String
+  consultation    Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  sectionKey      String
+  payload         Json
+  completionState String       @default("empty")
+  lastSavedAt     DateTime     @updatedAt
+  lastSavedBy     String
+
+  @@unique([consultationId, sectionKey])
+}
+
+model Measurement {
+  id             String       @id @default(uuid())
+  patientId      String
+  patient        Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultationId String
+  consultation   Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  measuredAt     DateTime
+  weightKg       Decimal?     @db.Decimal(6, 2)
+  heightCm       Decimal?     @db.Decimal(6, 2)
+  waistCm        Decimal?     @db.Decimal(6, 2)
+  hipCm          Decimal?     @db.Decimal(6, 2)
+  abdomenCm      Decimal?     @db.Decimal(6, 2)
+  bodyFatPercent Decimal?     @db.Decimal(5, 2)
+  muscleMassKg   Decimal?     @db.Decimal(6, 2)
+  method         String?
+  notes          String?
+  createdAt      DateTime     @default(now())
+
+  @@index([patientId, measuredAt])
+}
+
+model Diagnosis {
+  id             String       @id @default(uuid())
+  consultationId String
+  consultation   Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  domain         String
+  code           String?
+  problem        String
+  etiology       String?
+  evidence       String?
+  createdAt      DateTime     @default(now())
+}
+
+model NutritionPlan {
+  id              String       @id @default(uuid())
+  patientId       String
+  patient         Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultationId  String
+  consultation    Consultation @relation(fields: [consultationId], references: [id], onDelete: Cascade)
+  status          PlanStatus   @default(DRAFT)
+  version         Int          @default(1)
+  goal            String?
+  formula         String?
+  activityMethod  String?
+  activityFactor  Decimal?     @db.Decimal(5, 3)
+  metsPayload     Json?
+  targetKcal      Int?
+  carbsPercent    Decimal?     @db.Decimal(5, 2)
+  proteinPercent  Decimal?     @db.Decimal(5, 2)
+  fatPercent      Decimal?     @db.Decimal(5, 2)
+  evaluation      Json?
+  menuSnapshot    Json?
+  // Datos del encabezado del plan tal como eran al publicar (paciente, medición, nutrióloga y
+  // contacto), para que regenerar el PDF después no los cambie.
+  headerSnapshot  Json?
+  // Hora de cada tiempo de comida, "HH:MM" por clave de tiempo de comida; sale junto
+  // al nombre del tiempo en el plan entregado.
+  mealTimes       Json?
+  // Cálculo por equivalentes: { groups: { <grupo>: n }, distribution: { <tiempo>: { <grupo>: n } } }
+  // (ver server/domain/equivalents.js). Son las porciones que muestra el plan entregado.
+  equivalents     Json?
+  // Nombre propio de un tiempo de comida en este plan y su indicación particular:
+  // { <tiempo>: texto }.
+  // Menús adicionales del plan (tipos de día), ver normalizeMenus en server/domain/equivalents.js.
+  menus           Json?
+  mealLabels      Json?
+  mealNotes       Json?
+  // Tiempos de comida que usa este plan (claves de server/domain/planMeals.js). Vacío = todavía
+  // no se personalizó: se proponen según la consulta.
+  activeMeals     String[]     @default([])
+  // Cantidades de una receta reescritas para este plan, sin tocar la receta del catálogo:
+  // { "<tiempo>|<recipeId>": { lines: [...] } }.
+  recipeAdjustments Json?
+  hydrationNote   String?
+  recommendations String?
+  publishedAt     DateTime?
+  mealSlots       MealSlot[]
+  documents       Document[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([patientId, status])
+}
+
+model MealSlot {
+  id        String        @id @default(uuid())
+  planId    String
+  plan      NutritionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  dayOfWeek Int
+  mealType  String
+  recipeId  String?
+  recipe    Recipe?       @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  servings  Decimal?      @db.Decimal(5, 2)
+  notes     String?
+
+  @@unique([planId, dayOfWeek, mealType])
+}
+
+model Recipe {
+  id                   String             @id @default(uuid())
+  practiceId           String
+  practice             Practice           @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  name                 String
+  mealTypes            String[]
+  portions             Decimal?           @db.Decimal(5, 2)
+  instructions         String?
+  nutrition            Json
+  restrictions         String[]
+  imageUrl             String?
+  // Imported cookbook recipes (see prisma/import-recetario.js) carry free-text ingredient lines
+  // and a prep time instead of catalog-linked RecipeIngredient rows, because the source states
+  // quantities in household measures ("1/2 taza") and only gives per-serving macros. `nutrition`
+  // keeps its usual meaning: values for one portion, scaled by `portions`/servings at read time.
+  ingredientsText      Json?
+  timeMinutes          Int?
+  imageFile            String?
+  source               String?
+  // For imported recipes, `nutrition` holds the book's per-serving values and stays untouched.
+  // `calculatedNutrition` is the per-serving result of the manually linked SMAE ingredients, so
+  // the recipe view can contrast "Original (PDF)" against "Calculado (SMAE)".
+  calculatedNutrition  Json?
+  calculationUpdatedAt DateTime?
+  status               RecordStatus       @default(ACTIVE)
+  version              Int                @default(1)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  ingredients          RecipeIngredient[]
+  mealSlots            MealSlot[]
+
+  @@index([practiceId, source])
+  @@index([practiceId, status, name])
+}
+
+model EducationMaterial {
+  id          String       @id @default(uuid())
+  practiceId  String
+  practice    Practice     @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  title       String
+  category    String
+  description String
+  body        String
+  color       String       @default("mint")
+  readMinutes Int          @default(5)
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  attachmentFileName   String?
+  attachmentStorageKey String?
+  attachmentFileSize   Int?
+  attachmentMime       String?
+
+  @@index([practiceId, status])
+}
+
+model Ingredient {
+  id          String             @id @default(uuid())
+  practiceId  String
+  practice    Practice           @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  name        String
+  group       String
+  unit        String
+  nutrition   Json
+  equivalence Json?
+  imageFile   String?
+  status      RecordStatus       @default(ACTIVE)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  recipes     RecipeIngredient[]
+
+  // Cada cuenta tiene su copia del catálogo (~3,000 ingredientes): sin este índice cada búsqueda
+  // recorría los ingredientes de todas las cuentas.
+  @@index([practiceId, status, name])
+}
+
+model RecipeIngredient {
+  id           String     @id @default(uuid())
+  recipeId     String
+  recipe       Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  quantity     Decimal    @db.Decimal(8, 3)
+  unit         String
+  equivalence  Decimal?   @db.Decimal(8, 3)
+  createdAt    DateTime   @default(now())
+
+  @@unique([recipeId, ingredientId])
+  @@index([ingredientId])
+}
+
+model Document {
+  id             String         @id @default(uuid())
+  patientId      String
+  patient        Patient        @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  consultationId String?
+  consultation   Consultation?  @relation(fields: [consultationId], references: [id], onDelete: SetNull)
+  planId         String?
+  plan           NutritionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  type           String
+  version        Int            @default(1)
+  sections       Json
+  storageKey     String?
+  checksum       String?
+  generatedAt    DateTime?
+  deliveredAt    DateTime?
+  createdAt      DateTime       @default(now())
+
+  // Documentos de un paciente (expediente, carpetas) y el de una consulta (se reutiliza por tipo).
+  @@index([patientId, createdAt])
+  @@index([consultationId])
+}
+
+model Task {
+  id          String    @id @default(uuid())
+  practiceId  String
+  practice    Practice  @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  patientId   String?
+  patient     Patient?  @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  type        String
+  dueAt       DateTime
+  status      String    @default("pending")
+  referenceId String?
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([practiceId, status, dueAt])
+}
+
+// A snapshot, not a live reference: applying a template copies its sections/mealSlots onto a
+// new consultation or plan, the same way publishing a plan freezes a menu snapshot — editing
+// the template afterward must not reach back and change anything already created from it.
+model Template {
+  id          String       @id @default(uuid())
+  practiceId  String
+  practice    Practice     @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  type        String // 'clinical' | 'plan'
+  name        String
+  description String?
+  sections    Json? // clinical: { [sectionKey]: payload }
+  mealSlots   Json? // plan: [{ dayOfWeek, mealType, recipeId, servings }]
+  usageCount  Int          @default(0)
+  status      RecordStatus @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([practiceId, type, status])
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
+  practiceId String
+  practice   Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String
+  entity     String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([practiceId, entity, entityId])
+  // Línea de tiempo y registro de accesos: los eventos más recientes de la cuenta. El filtro por
+  // `metadata.patientId` necesitaría un índice de expresión, que Prisma no puede declarar.
+  @@index([practiceId, createdAt])
+}
+
+// Pago recibido de una cuenta (práctica) del SaaS. Se registra desde el panel /admin.
+model Transaction {
+  id          String         @id @default(uuid())
+  practiceId  String
+  practice    Practice       @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  amountCents Int
+  method      PaymentMethod?
+  concept     String?
+  occurredAt  DateTime       @default(now())
+  // Factura de Stripe que originó el pago (los registrados a mano en /admin no llevan).
+  stripeInvoiceId String?
+  createdAt   DateTime       @default(now())
+
+  @@index([practiceId, occurredAt])
+  @@index([stripeInvoiceId])
+}
+
+// Avisos (webhooks) de Stripe ya procesados: Stripe puede reenviar el mismo evento, y cada uno debe
+// aplicarse una sola vez.
+model StripeEvent {
+  id          String   @id
+  type        String
+  processedAt DateTime @default(now())
+}
+
+// Cuenta de administrador del SaaS (independiente de los usuarios de cada práctica).
+model AdminUser {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
+// Sugerencias de redacción que la nutrióloga guarda con "+ Agregar" en los campos con chips del
+// expediente. Son atajos por campo (`fieldKey`), compartidos por toda la práctica — no son datos
+// del paciente, por eso viven aquí y no dentro de la consulta.
+model SuggestionChip {
+  id         String   @id @default(uuid())
+  practiceId String
+  practice   Practice @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  fieldKey   String
+  label      String
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@unique([practiceId, fieldKey, label])
+  @@index([practiceId, fieldKey])
+}
+
+// Alimento del libro "Sistema Mexicano de Alimentos Equivalentes" (5ª ed.), tal como viene en sus
+// tablas: una fila por renglón impreso, con la hoja y el renglón de donde salió. Es la referencia
+// de equivalencias (módulo Equivalencias); el catálogo de Ingredientes sigue siendo lo que usan las
+// recetas. Se carga con prisma/import-smae-libro.js desde prisma/data/smae-libro.json, que a su vez
+// sale de leer el PDF escaneado (prisma/tools/smae-libro/).
+//
+// `nutrients` guarda los valores por equivalente; null = "ND" (no determinado) en el libro, que no
+// es lo mismo que 0. `review` lista las celdas cuya lectura automática no es segura
+// ({ campo: { reason, alt, catalog } }): se resuelven a mano en la app y entonces se quitan.
+model SmaeFood {
+  id          String    @id @default(uuid())
+  practiceId  String
+  practice    Practice  @relation(fields: [practiceId], references: [id], onDelete: Cascade)
+  edition     String    @default("5")
+  page        Int
+  row         Int
+  group       String
+  name        String
+  qty         Decimal?  @db.Decimal(8, 3)
+  qtyText     String?
+  unit        String?
+  nutrients   Json
+  review      Json?
+  // Celdas corregidas a mano: el importador no las vuelve a pisar.
+  corrections Json?
+  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime  @default(now())
+
+  @@unique([practiceId, edition, page, row])
+  @@index([practiceId, group])
+}
