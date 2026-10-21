@@ -2,8 +2,10 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import { Prisma, PrismaClient } from '@prisma/client'
 import 'dotenv/config'
+import dotenv from 'dotenv'
 import PDFDocument from 'pdfkit'
 import { createHash, randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import bcrypt from 'bcryptjs'
@@ -24,16 +26,38 @@ import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValid
 import { copyCatalog } from './domain/catalogCopy.js'
 import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
 import { foldText, toWinAnsi } from './domain/text.js'
+import { ATTEMPT_RULES, corsOriginOption, createAttemptLimiter, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './domain/security.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
 // 10 MB PDF becomes ~13.3 MB as base64 JSON text, see POST /consultations/:id/lab-attachments.
-const app = Fastify({ logger: true, bodyLimit: 15 * 1024 * 1024 })
+// trustProxy: detrás de Nginx, `request.ip` (bitácora de accesos y límite de intentos) es la del
+// usuario y no la del proxy. Ver TRUST_PROXY en .env.example.
+const NODE_ENV = process.env.NODE_ENV
+const app = Fastify({ logger: true, bodyLimit: 15 * 1024 * 1024, trustProxy: parseTrustProxy(process.env.TRUST_PROXY) })
 const prisma = new PrismaClient()
 
 if (!process.env.DATABASE_URL) app.log.warn('DATABASE_URL no está configurada. Copia .env.example a .env antes de usar persistencia.')
 
 const JWT_SECRET = process.env.JWT_SECRET
-if (!JWT_SECRET) app.log.warn('JWT_SECRET no está configurada. Copia .env.example a .env antes de usar autenticación.')
+// El panel de administración firma con su propio secreto (obligatorio en producción): un token de
+// práctica no valida en /admin ni uno de administrador en la app. En desarrollo, sin él, usa JWT_SECRET.
+const ADMIN_JWT_SECRET = process.env.ADMIN_JWT_SECRET || JWT_SECRET
+// Sólo HS256: un token con otro algoritmo en el encabezado no se acepta.
+const JWT_VERIFY_OPTIONS = { algorithms: ['HS256'] }
+{
+  let exampleSecrets = []
+  try {
+    const example = dotenv.parse(readFileSync(new URL('../.env.example', import.meta.url)))
+    exampleSecrets = [example.JWT_SECRET, example.ADMIN_JWT_SECRET]
+  } catch { /* sin .env.example no hay valores de ejemplo que comparar */ }
+  for (const problem of jwtSecretProblems({ nodeEnv: NODE_ENV, jwtSecret: process.env.JWT_SECRET, adminJwtSecret: process.env.ADMIN_JWT_SECRET, exampleSecrets })) {
+    if (problem.fatal) {
+      app.log.fatal(`${problem.message} La API no arranca así en producción.`)
+      process.exit(1)
+    }
+    app.log.warn(`${problem.message} Copia .env.example a .env antes de usar autenticación.`)
+  }
+}
 const SESSION_TTL = '7d'
 
 // Public routes need no session: the login endpoint itself, and Fastify's own CORS
@@ -88,7 +112,18 @@ const safeFileName = (name) => String(name || 'archivo').replace(/[\r\n"]/g, '')
 // so without this every PUT here has silently failed preflight for any cross-origin caller
 // (e.g. `npm run dev:all`, or the SPA and API on separate domains in production) — it only
 // ever worked same-origin through Vite's dev proxy.
-await app.register(cors, { origin: true, methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] })
+// Orígenes: cualquiera en desarrollo; en producción sólo CORS_ORIGINS o APP_URL (domain/security.js).
+await app.register(cors, { origin: corsOriginOption({ nodeEnv: NODE_ENV, corsOrigins: process.env.CORS_ORIGINS, appUrl: process.env.APP_URL }), methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'] })
+
+// Encabezados de seguridad en toda respuesta. Lo que no fija su propio Cache-Control (las imágenes
+// públicas y el logo sí lo hacen) es dato de una cuenta: que no lo guarde ningún caché ni proxy.
+app.addHook('onSend', async (request, reply, payload) => {
+  reply.header('X-Content-Type-Options', 'nosniff')
+  reply.header('Referrer-Policy', 'no-referrer')
+  reply.header('X-Frame-Options', 'DENY')
+  if (!reply.hasHeader('Cache-Control')) reply.header('Cache-Control', 'no-store')
+  return payload
+})
 
 app.addHook('onRequest', async (request, reply) => {
   // La ruta que Fastify ya resolvió, no la dirección cruda: el enrutador decodifica el
@@ -103,7 +138,7 @@ app.addHook('onRequest', async (request, reply) => {
     if (pathname === '/api/v1/admin/auth/login') return
     if (!header?.startsWith('Bearer ')) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Inicia sesión como administrador.', fields: {} })
     try {
-      const payload = jwt.verify(header.slice(7), JWT_SECRET)
+      const payload = jwt.verify(header.slice(7), ADMIN_JWT_SECRET, JWT_VERIFY_OPTIONS)
       if (!payload.admin) throw new Error('not admin')
       request.adminId = payload.sub
     } catch {
@@ -115,7 +150,7 @@ app.addHook('onRequest', async (request, reply) => {
   const invalidSession = () => reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Tu sesión expiró o no es válida. Inicia sesión de nuevo.', fields: {} })
   let payload
   try {
-    payload = jwt.verify(header.slice(7), JWT_SECRET)
+    payload = jwt.verify(header.slice(7), JWT_SECRET, JWT_VERIFY_OPTIONS)
   } catch {
     return invalidSession()
   }
@@ -220,6 +255,19 @@ const sessionPayload = (user) => ({
 const signToken = (user) => jwt.sign({ sub: user.id, practiceId: user.practiceId, role: user.role, sv: user.sessionVersion || 0 }, JWT_SECRET, { expiresIn: SESSION_TTL })
 const signSession = (user) => ({ token: signToken(user), ...sessionPayload(user) })
 
+// Límite de intentos fallidos (fase 111): login, login del panel, Google y cambio de contraseña. Los
+// topes están en ATTEMPT_RULES (domain/security.js); viven en memoria de esta instancia.
+const attemptLimiters = Object.fromEntries(Object.entries(ATTEMPT_RULES).map(([name, rules]) => [name, createAttemptLimiter({ rules })]))
+// Cuando el correo o identificador no existe se compara igual contra este hash, para que la respuesta
+// tarde lo mismo que con una contraseña equivocada y no delate qué cuentas existen.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomUUID(), 10)
+function rejectIfThrottled(limiter, subject, reply) {
+  const result = limiter.check(subject)
+  if (result.allowed) return false
+  reply.code(429).header('Retry-After', String(result.retryAfterSeconds)).send({ code: 'TOO_MANY_ATTEMPTS', message: tooManyAttemptsMessage(result.retryAfterSeconds), fields: {} })
+  return true
+}
+
 // Se entra con el correo o con el identificador que dio el administrador (un identificador nunca
 // lleva «@»). El correo sólo es único por práctica (y se edita sin verificar en Configuración, o lo
 // trae una cuenta de Google), así que se prueba la contraseña con cada usuario activo que lo tenga:
@@ -228,11 +276,19 @@ app.post('/api/v1/auth/login', async (request, reply) => {
   const { email, password } = request.body || {}
   const login = String(email || '').trim()
   if (!login || !password || typeof password !== 'string') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Correo o identificador y contraseña son obligatorios.', fields: { email: !login, password: !password } })
-  const where = login.includes('@') ? { email: { equals: login, mode: 'insensitive' } } : { loginId: normalizeLoginId(login) }
+  const byEmail = login.includes('@')
+  const attempt = { ip: request.ip, account: byEmail ? login.toLowerCase() : normalizeLoginId(login) }
+  if (rejectIfThrottled(attemptLimiters.login, attempt, reply)) return reply
+  const where = byEmail ? { email: { equals: login, mode: 'insensitive' } } : { loginId: attempt.account }
   const candidates = await prisma.user.findMany({ where: { ...where, status: 'ACTIVE' }, include: { practice: true }, orderBy: { createdAt: 'asc' }, take: 10 })
   let user = null
+  if (!candidates.length) await bcrypt.compare(password, DUMMY_PASSWORD_HASH)
   for (const candidate of candidates) if (await bcrypt.compare(password, candidate.passwordHash)) { user = candidate; break }
-  if (!user) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Correo, identificador o contraseña incorrectos.', fields: {} })
+  if (!user) {
+    attemptLimiters.login.fail(attempt)
+    return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Correo, identificador o contraseña incorrectos.', fields: {} })
+  }
+  attemptLimiters.login.succeed(attempt)
   if (user.practice.status === 'SUSPENDED') return reply.code(403).send({ code: 'ACCOUNT_SUSPENDED', message: 'Tu cuenta está suspendida. Contacta al administrador.', fields: {} })
   return signSession(user)
 })
@@ -271,16 +327,19 @@ async function verifyGoogleCredential(request, reply) {
   if (!googleClient) { reply.code(503).send({ code: 'GOOGLE_NOT_CONFIGURED', message: 'El acceso con Google todavía no está activo en este servidor.', fields: {} }); return null }
   const credential = request.body?.credential
   if (!credential || typeof credential !== 'string') { reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Falta la respuesta de Google.', fields: {} }); return null }
+  const attempt = { ip: request.ip }
+  if (rejectIfThrottled(attemptLimiters.google, attempt, reply)) return null
   let profile
   try {
     const ticket = await googleClient.verifyIdToken({ idToken: credential, audience: GOOGLE_CLIENT_ID })
     profile = ticket.getPayload()
   } catch (err) {
     request.log.warn({ err: err.message }, 'Token de Google inválido')
+    attemptLimiters.google.fail(attempt)
     reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Google no confirmó tu cuenta. Intenta de nuevo.', fields: {} })
     return null
   }
-  if (!profile?.sub || !profile.email || !profile.email_verified) { reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Tu cuenta de Google no tiene un correo verificado.', fields: {} }); return null }
+  if (!profile?.sub || !profile.email || !profile.email_verified) { attemptLimiters.google.fail(attempt); reply.code(401).send({ code: 'INVALID_GOOGLE_TOKEN', message: 'Tu cuenta de Google no tiene un correo verificado.', fields: {} }); return null }
   return profile
 }
 
@@ -395,11 +454,18 @@ app.put('/api/v1/practice/fees', async (request) => {
 // ── Panel de administración del SaaS (/admin) ────────────────────────────────
 app.post('/api/v1/admin/auth/login', async (request, reply) => {
   const { email, password } = request.body || {}
-  if (!email || !password) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Email y contraseña son obligatorios.', fields: {} })
-  const admin = await prisma.adminUser.findUnique({ where: { email } })
-  const valid = admin ? await bcrypt.compare(password, admin.passwordHash) : false
-  if (!admin || !valid) return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Credenciales de administrador incorrectas.', fields: {} })
-  const token = jwt.sign({ sub: admin.id, admin: true }, JWT_SECRET, { expiresIn: '12h' })
+  if (!email || !password || typeof email !== 'string' || typeof password !== 'string') return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Email y contraseña son obligatorios.', fields: {} })
+  const attempt = { ip: request.ip, account: email.trim().toLowerCase() }
+  if (rejectIfThrottled(attemptLimiters.adminLogin, attempt, reply)) return reply
+  // Sin distinguir mayúsculas: admin:create guarda el correo en minúsculas.
+  const admin = await prisma.adminUser.findFirst({ where: { email: { equals: email.trim(), mode: 'insensitive' } } })
+  const valid = await bcrypt.compare(password, admin ? admin.passwordHash : DUMMY_PASSWORD_HASH)
+  if (!admin || !valid) {
+    attemptLimiters.adminLogin.fail(attempt)
+    return reply.code(401).send({ code: 'INVALID_CREDENTIALS', message: 'Credenciales de administrador incorrectas.', fields: {} })
+  }
+  attemptLimiters.adminLogin.succeed(attempt)
+  const token = jwt.sign({ sub: admin.id, admin: true }, ADMIN_JWT_SECRET, { expiresIn: '12h' })
   return { token, admin: { id: admin.id, name: admin.name, email: admin.email } }
 })
 
@@ -734,8 +800,14 @@ app.post('/api/v1/auth/change-password', async (request, reply) => {
   if (newPassword.length < 8) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La nueva contraseña debe tener al menos 8 caracteres.', fields: { newPassword: true } })
   const user = await prisma.user.findUnique({ where: { id: request.userId } })
   if (!user) return reply.code(401).send({ code: 'UNAUTHORIZED', message: 'Sesión inválida.', fields: {} })
+  const attempt = { account: user.id }
+  if (rejectIfThrottled(attemptLimiters.changePassword, attempt, reply)) return reply
   const valid = await bcrypt.compare(currentPassword, user.passwordHash)
-  if (!valid) return reply.code(400).send({ code: 'INVALID_PASSWORD', message: 'La contraseña actual no es correcta.', fields: { currentPassword: true } })
+  if (!valid) {
+    attemptLimiters.changePassword.fail(attempt)
+    return reply.code(400).send({ code: 'INVALID_PASSWORD', message: 'La contraseña actual no es correcta.', fields: { currentPassword: true } })
+  }
+  attemptLimiters.changePassword.succeed(attempt)
   const passwordHash = await bcrypt.hash(newPassword, 10)
   // Cierra las demás sesiones; esta sigue con el token nuevo que se devuelve.
   const updated = await prisma.user.update({ where: { id: user.id }, data: { passwordHash, sessionVersion: { increment: 1 } } })
