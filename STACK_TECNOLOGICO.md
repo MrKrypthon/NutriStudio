@@ -1,6 +1,6 @@
 # Stack tecnológico — Nutri Studio / milpa
 
-Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker), 111 (autenticación), 112 (migraciones de Prisma) y 113 (Docker). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
+Inventario del stack **real** del proyecto, actualizado al 20/10/2026, después de las fases 108 (Stripe), 109 (cuentas y auditoría) 110 (preparación para Docker), 111 (autenticación), 112 (migraciones de Prisma), 113 (Docker) y 114 (CI). Las diferencias se comprobaron contra el código en `VALIDACION_STACK_DOCKER.md`. `ARQUITECTURA.md` es el documento de planeación original y ya no coincide del todo con el código.
 
 SaaS para nutriólogos en México, en español. Hay **una cuenta por nutriólogo**, que paga una suscripción y tiene acceso a todo. Lleva pacientes, consultas, expediente clínico, mediciones, diagnósticos PES, planes de alimentación con equivalentes SMAE, recetas, agenda, finanzas, tareas, plantillas y documentos PDF.
 
@@ -113,6 +113,8 @@ Pendientes:
 - Las dependencias directas tienen versiones fijas: nada queda en `latest`. Para instalar exactamente las del lockfile, usar `npm ci`.
 - **dotenv** carga las variables de entorno.
 - Git y GitHub (`MrKrypthon/NutriStudio`): se trabaja en una rama por fase del roadmap y se integra con un PR a `main`.
+- **CI** (GitHub Actions, `.github/workflows/ci.yml`): en cada PR, pruebas, build, que las migraciones coincidan con el esquema, y el stack de Docker levantado desde cero con `deploy/smoke.sh`.
+- `package.json` declara `engines.node >=22.13`. La API y la CLI de Prisma están en `dependencies`; lo del frontend, en `devDependencies`.
 
 ## 10. Infraestructura y despliegue
 
@@ -122,7 +124,7 @@ Desde la fase 113 la app completa corre en contenedores con `docker-compose.app.
 |---|---|
 | `db` | `postgres:16.14-alpine`, red interna sin salida ni puertos publicados, volumen `db-data` |
 | `migrate` | Imagen de la API; `prisma migrate deploy` antes de que arranque la API |
-| `api` | `Dockerfile`: `node:24-bookworm-slim` con `openssl` (motor de Prisma para Debian), `npm ci` y `prisma generate` dentro de la imagen, usuario `node`, `TZ=UTC`, volumen `storage`, healthcheck contra `/health` (que comprueba la base), cierre limpio con SIGTERM |
+| `api` | `Dockerfile`: `node:24-bookworm-slim` con `openssl` (motor de Prisma para Debian), `npm ci --omit=dev` (sólo dependencias de la API, ~800 MB en total) y `prisma generate` dentro de la imagen, usuario `node`, `TZ=UTC`, volumen `storage`, healthcheck contra `/health` (que comprueba la base), cierre limpio con SIGTERM |
 | `web` | `Dockerfile.web`: build de Vite en Node 24 y `nginx:1.27-alpine` con `deploy/nginx.conf` y `deploy/security-headers.conf` (CSP para Google Identity, Google Fonts, OCR con WebAssembly y vistas previas `blob:`) |
 | Catálogo | `npm run catalog:import` (práctica sin usuarios, idempotente) |
 | Respaldos | `deploy/backup.sh` y `deploy/restore.sh` (pg_dump + tar del volumen, con SHA-256) |
@@ -133,8 +135,6 @@ Falta para producción:
 
 - El VPS (por ejemplo, Hetzner) y HTTPS delante de Nginx (Let's Encrypt), con HSTS.
 - Dónde guardar los respaldos (cifrados, fuera del servidor) y cada cuánto.
-- CI: correr pruebas y build en cada PR.
-- Adelgazar la imagen de la API (~1,6 GB: instala también las dependencias del frontend).
 
 ## 11. Resumen en una línea
 
