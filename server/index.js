@@ -26,7 +26,7 @@ import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValid
 import { copyCatalog } from './domain/catalogCopy.js'
 import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
 import { foldText, toWinAnsi } from './domain/text.js'
-import { ATTEMPT_RULES, clientKey, corsOriginOption, createAttemptLimiter, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './domain/security.js'
+import { ATTEMPT_RULES, clientKey, corsOriginOption, createAttemptLimiter, createBlockSketch, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './domain/security.js'
 
 // Default is 1 MiB, too small for base64-encoded file uploads (logo, lab attachments) -- a
 // 10 MB PDF becomes ~13.3 MB as base64 JSON text, see POST /consultations/:id/lab-attachments.
@@ -262,7 +262,9 @@ const signSession = (user) => ({ token: signToken(user), ...sessionPayload(user)
 
 // Límite de intentos fallidos (fase 111): login, login del panel, Google y cambio de contraseña. Los
 // topes están en ATTEMPT_RULES (domain/security.js); viven en memoria de esta instancia.
-const attemptLimiters = Object.fromEntries(Object.entries(ATTEMPT_RULES).map(([name, rules]) => [name, createAttemptLimiter({ rules })]))
+// Un solo sketch para los bloqueos desplazados de todos los limitadores (ver createBlockSketch).
+const blockSketch = createBlockSketch()
+const attemptLimiters = Object.fromEntries(Object.entries(ATTEMPT_RULES).map(([name, rules]) => [name, createAttemptLimiter({ rules, sketch: blockSketch })]))
 // Cuando el correo o identificador no existe se compara igual contra este hash, para que la respuesta
 // tarde lo mismo que con una contraseña equivocada y no delate qué cuentas existen.
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomUUID(), 10)

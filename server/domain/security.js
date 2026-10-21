@@ -79,6 +79,42 @@ export function clientKey(ip) {
   return `${groups.slice(0, 4).map((group) => (group || '0').replace(/^0+(?=.)/, '')).join(':')}::/64`
 }
 
+// Memoria de respaldo de tamaño fijo (count-min sketch con vencimiento) para los bloqueos que salen
+// del mapa cuando éste se llena. Por cada llave guarda, en DEPTH filas, el mayor conteo y el mayor
+// vencimiento que cayeron en esa celda; la consulta toma el menor de las filas. Las colisiones sólo
+// pueden SUBIR un conteo, nunca bajarlo: un bloqueo desplazado nunca se olvida antes de vencer.
+// El costo es que, bajo una inundación enorme, un cliente nuevo puede coincidir con bloqueados en
+// todas las filas y esperar como ellos (con 100 000 desplazados, alrededor del 1 %).
+// Las llaves llevan el nombre de su regla, así que varios limitadores pueden compartir uno. La memoria
+// (~10 MB) se reserva al desplazar el primer bloqueo, no antes.
+export function createBlockSketch({ depth = 4, width = 1 << 18 } = {}) {
+  let counts = null
+  let resets = null
+  const cells = (key) => {
+    const digest = createHash('sha256').update(key).digest()
+    return Array.from({ length: depth }, (_, row) => row * width + (digest.readUInt32BE(row * 4) % width))
+  }
+  return {
+    add(key, count, resetAt, at) {
+      if (!counts) { counts = new Uint16Array(depth * width); resets = new Float64Array(depth * width) }
+      for (const index of cells(key)) {
+        if (resets[index] <= at) { counts[index] = Math.min(count, 65535); resets[index] = resetAt }
+        else { counts[index] = Math.max(counts[index], Math.min(count, 65535)); resets[index] = Math.max(resets[index], resetAt) }
+      }
+    },
+    // { count, resetAt } con el conteo más bajo entre las filas (0 si alguna fila está vencida).
+    estimate(key, at) {
+      if (!counts) return { count: 0, resetAt: 0 }
+      let best = null
+      for (const index of cells(key)) {
+        const count = resets[index] > at ? counts[index] : 0
+        if (!best || count < best.count) best = { count, resetAt: resets[index] }
+      }
+      return best
+    },
+  }
+}
+
 // Límite de intentos, en memoria (una sola instancia de la API; con varias haría falta un almacén
 // compartido). Cada regla cuenta intentos por su propia llave dentro de una ventana fija.
 //
@@ -86,16 +122,19 @@ export function clientKey(ip) {
 // revisa: si se contara después del bcrypt, cien peticiones simultáneas pasarían todas la revisión
 // antes de que se registrara la primera. Si el acceso resulta correcto, `refund` devuelve el intento
 // y `succeed` limpia las reglas marcadas.
-export function createAttemptLimiter({ rules, now = () => Date.now(), maxKeys = 50_000 }) {
+//
+// Memoria acotada sin abrir ni cerrar de más: el mapa exacto tiene `maxKeys` llaves; al llenarse se
+// borran las vencidas y las que no bloquean, y los bloqueos vigentes que haya que sacar pasan al
+// sketch, que los sigue haciendo valer hasta que vencen. Nunca se rechaza a un cliente por falta de
+// espacio (eso dejaría fuera a todos) y nunca se suelta un bloqueo antes de tiempo.
+export function createAttemptLimiter({ rules, now = () => Date.now(), maxKeys = 50_000, sketch = createBlockSketch() }) {
   const buckets = new Map()
+  // Hasta que no se desplaza ningún bloqueo, el sketch está vacío y no hace falta consultarlo.
+  let sketchInUse = false
 
   const blocking = (bucket, at) => bucket.resetAt > at && bucket.count >= bucket.max
 
-  // Con la memoria llena se libera un 10 % de una vez (así el recorrido no se repite en cada intento):
-  // primero las llaves vencidas, después las que todavía no bloquean y, sólo si no alcanza, los
-  // bloqueos que vencen antes. Nunca se rechaza a un cliente nuevo por falta de espacio, porque eso
-  // dejaría a todos fuera; soltar un bloqueo exige antes llenar la memoria con miles de bloqueos
-  // nuevos, y cada uno cuesta sus intentos.
+  // Se libera un 10 % de una vez, para que el recorrido no se repita en cada intento.
   const makeRoom = (at, needed) => {
     for (const [key, bucket] of buckets) if (bucket.resetAt <= at) buckets.delete(key)
     if (buckets.size + needed <= maxKeys) return
@@ -105,8 +144,10 @@ export function createAttemptLimiter({ rules, now = () => Date.now(), maxKeys = 
       if (!blocking(bucket, at)) buckets.delete(key)
     }
     const bySoonest = [...buckets.entries()].sort((a, b) => a[1].resetAt - b[1].resetAt)
-    for (const [key] of bySoonest) {
+    for (const [key, bucket] of bySoonest) {
       if (buckets.size <= target) return
+      sketch.add(key, bucket.count, bucket.resetAt, at)
+      sketchInUse = true
       buckets.delete(key)
     }
   }
@@ -135,19 +176,24 @@ export function createAttemptLimiter({ rules, now = () => Date.now(), maxKeys = 
     // Revisa y cuenta en un solo paso. { allowed: true } o { allowed: false, retryAfterSeconds }.
     consume(subject) {
       const at = now()
-      const entries = keysFor(subject)
+      const entries = keysFor(subject).map((entry) => {
+        const bucket = live(entry.key, at)
+        // Sin llave en el mapa, lo que recuerde el sketch (un bloqueo desplazado) sigue contando.
+        const spilled = bucket || !sketchInUse ? null : sketch.estimate(entry.key, at)
+        return { ...entry, bucket, spilled: spilled && spilled.count > 0 ? spilled : null }
+      })
       let retryAfterMs = 0
-      for (const { key } of entries) {
-        const bucket = live(key, at)
-        if (bucket && bucket.count >= bucket.max) retryAfterMs = Math.max(retryAfterMs, bucket.resetAt - at)
+      for (const { rule, bucket, spilled } of entries) {
+        const current = bucket || spilled
+        if (current && current.count >= (bucket ? bucket.max : rule.max)) retryAfterMs = Math.max(retryAfterMs, current.resetAt - at)
       }
       if (retryAfterMs) return { allowed: false, retryAfterSeconds: Math.ceil(retryAfterMs / 1000) }
-      const missing = entries.filter(({ key }) => !live(key, at)).length
+      const missing = entries.filter(({ bucket }) => !bucket).length
       if (buckets.size + missing > maxKeys) makeRoom(at, missing)
-      for (const { rule, key } of entries) {
-        const bucket = live(key, at)
-        if (bucket) bucket.count += 1
-        else buckets.set(key, { count: 1, max: rule.max, resetAt: at + rule.windowMs })
+      for (const { rule, key, bucket, spilled } of entries) {
+        if (bucket && buckets.get(key) === bucket) bucket.count += 1
+        else if (bucket) buckets.set(key, { ...bucket, count: bucket.count + 1 })
+        else buckets.set(key, spilled ? { count: spilled.count + 1, max: rule.max, resetAt: spilled.resetAt } : { count: 1, max: rule.max, resetAt: at + rule.windowMs })
       }
       return { allowed: true }
     },
