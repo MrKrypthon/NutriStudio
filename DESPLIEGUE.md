@@ -84,7 +84,7 @@ nano .env.docker
 En `.env.docker`:
 
 - **Contraseña de PostgreSQL:** `POSTGRES_PASSWORD`, y la misma dentro de `DATABASE_URL`.
-- **Sin `$` en los valores:** Docker Compose lo interpreta como variable y corrompe el valor sin avisar. Los secretos generados con los comandos de abajo no lo usan.
+- **Sin `$` en los valores:** Docker Compose lo interpreta como variable y corrompe el valor sin avisar. Los secretos generados con los comandos de abajo no lo usan. Si un valor necesita `$`, como el hash del Basic Auth de desarrollo, va entre comillas simples: `CLAVE='valor'`.
 - **Secretos de los tokens:** `JWT_SECRET` y `ADMIN_JWT_SECRET`, distintos entre sí. Genera cada uno con:
   `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`. Si el servidor no
   tiene Node, usa `openssl rand -base64 48 | tr -d '/+='`.
@@ -176,6 +176,37 @@ Qué hace el script:
 3. Verifica el sitio.
 
 Si algo falla, el script imprime el comando para volver a la versión anterior (`deploy/deploy.sh <commit>`).
+
+### Entorno de desarrollo en el mismo servidor
+
+`dev.milpa.com.mx` corre en `/opt/milpa-dev`, con su propia base y sus propios archivos, detrás del
+mismo Caddy de producción. Caddy le pone Basic Auth a todo menos a `/api/*`: la API ya exige su token,
+y las dos cabeceras `Authorization` chocan. Dev usa sus propias imágenes (`milpa-dev-*`) y una red
+aparte con Caddy (`dev-edge`), así que no toca las imágenes ni el Nginx de producción.
+
+1. **DNS:** un registro A de `dev` hacia la IP del VPS.
+2. **Producción:** en `/opt/milpa/.env.docker`, y luego `deploy/deploy.sh`:
+
+   ```bash
+   MILPA_CADDY_SITES=dev
+   MILPA_DEV_DOMAIN=dev.milpa.com.mx
+   MILPA_DEV_BASIC_USER=milpa-dev
+   MILPA_DEV_BASIC_HASH='$2a$14$…'   # docker run --rm caddy:2.8.4-alpine caddy hash-password
+   ```
+
+3. **Desarrollo:**
+
+   ```bash
+   git clone https://github.com/MrKrypthon/NutriStudio.git /opt/milpa-dev
+   cd /opt/milpa-dev
+   cp .env.docker.example .env.docker && chmod 600 .env.docker
+   nano .env.docker   # secretos propios (no los de producción) y APP_URL=https://dev.milpa.com.mx
+   alias milpa-dev='docker compose -p milpa-dev --env-file .env.docker -f docker-compose.app.yml -f docker-compose.dev.yml'
+   milpa-dev up -d --build --wait
+   ```
+
+   Para actualizarlo: `git pull && milpa-dev up -d --build --wait`. No uses `deploy/deploy.sh` aquí:
+   ese script es sólo para producción.
 
 ## 6. Integraciones
 

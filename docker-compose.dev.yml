@@ -1,0 +1,29 @@
+# Entorno de desarrollo en el VPS (fase 118), en otra carpeta (/opt/milpa-dev) y otro proyecto:
+#   docker compose -p milpa-dev --env-file .env.docker -f docker-compose.app.yml -f docker-compose.dev.yml up -d --build
+# No tiene Caddy propio: el Caddy de producción lo publica en MILPA_DEV_DOMAIN con Basic Auth
+# (MILPA_CADDY_SITES=dev, ver DESPLIEGUE.md). Producción tiene que estar arriba antes, porque crea la
+# red dev-edge.
+
+services:
+  # Imágenes con otro nombre: con las de docker-compose.app.yml, construir dev reemplazaría las que
+  # usa producción, y el siguiente contenedor de producción que se recreara correría código de dev.
+  migrate:
+    image: milpa-dev-api:local
+  api:
+    image: milpa-dev-api:local
+  web:
+    image: milpa-dev-web:local
+    ports: !reset []
+    networks:
+      frontend: {}
+      # Su propia red con Caddy, no edge: así no llega al Nginx de producción, que confía en el
+      # X-Forwarded-For de todo lo que hay en edge.
+      dev-edge:
+        aliases: [dev-web]
+    volumes:
+      - ./deploy/nginx-real-ip-dev.conf:/etc/nginx/conf.d/00-real-ip.conf:ro
+
+networks:
+  dev-edge:
+    external: true
+    name: milpa_dev_edge

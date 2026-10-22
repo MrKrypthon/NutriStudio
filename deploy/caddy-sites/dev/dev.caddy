@@ -1,0 +1,21 @@
+# Entorno de desarrollo (fase 118) en el mismo Caddy que producción: MILPA_CADDY_SITES=dev.
+# El stack de desarrollo corre aparte (docker-compose.dev.yml) y su Nginx entra a la red dev-edge
+# como dev-web.
+{$MILPA_DEV_DOMAIN} {
+	encode zstd gzip
+	header Strict-Transport-Security "max-age=31536000"
+
+	# La API no lleva Basic Auth: usa su propio Authorization: Bearer, y las dos cabeceras chocan
+	# (el navegador volvía a pedir la contraseña). La API se protege con sus tokens.
+	@api path /api/*
+	handle @api {
+		reverse_proxy dev-web:80
+	}
+
+	handle {
+		basic_auth {
+			{$MILPA_DEV_BASIC_USER} {$MILPA_DEV_BASIC_HASH}
+		}
+		reverse_proxy dev-web:80
+	}
+}

@@ -2,12 +2,19 @@
 # Pide y renueva el certificado de Let's Encrypt para MILPA_DOMAIN, redirige HTTP a HTTPS y agrega
 # HSTS. Pone en X-Forwarded-For la IP de la conexión (sin creerle al X-Forwarded-For que mande el
 # cliente), y Nginx la pasa a la API.
+#
+# HSTS sin includeSubDomains (fase 118): obligaría a HTTPS en cualquier subdominio, también en los
+# que no sirve este Caddy.
 {
 	email {$MILPA_ACME_EMAIL}
 }
 
 {$MILPA_DOMAIN} {
 	encode zstd gzip
-	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	reverse_proxy web:80
+	header Strict-Transport-Security "max-age=31536000"
+	# prod-web y no web: Caddy también está en dev-edge, donde web es el Nginx de desarrollo.
+	reverse_proxy prod-web:80
 }
+
+# Sitios extra (fase 118): la carpeta de deploy/caddy-sites que elige MILPA_CADDY_SITES.
+import sites/*.caddy
