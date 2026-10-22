@@ -12,7 +12,7 @@
 {$MILPA_DOMAIN} {
 	encode zstd gzip
 	header Strict-Transport-Security "max-age=31536000"
-	# prod-web y no web: el Nginx de desarrollo también está en la red edge y también se llama web.
+	# prod-web y no web: Caddy también está en dev-edge, donde web es el Nginx de desarrollo.
 	reverse_proxy prod-web:80
 }
 

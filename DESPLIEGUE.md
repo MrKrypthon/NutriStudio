@@ -181,7 +181,8 @@ Si algo falla, el script imprime el comando para volver a la versión anterior (
 
 `dev.milpa.com.mx` corre en `/opt/milpa-dev`, con su propia base y sus propios archivos, detrás del
 mismo Caddy de producción. Caddy le pone Basic Auth a todo menos a `/api/*`: la API ya exige su token,
-y las dos cabeceras `Authorization` chocan.
+y las dos cabeceras `Authorization` chocan. Dev usa sus propias imágenes (`milpa-dev-*`) y una red
+aparte con Caddy (`dev-edge`), así que no toca las imágenes ni el Nginx de producción.
 
 1. **DNS:** un registro A de `dev` hacia la IP del VPS.
 2. **Producción:** en `/opt/milpa/.env.docker`, y luego `deploy/deploy.sh`:

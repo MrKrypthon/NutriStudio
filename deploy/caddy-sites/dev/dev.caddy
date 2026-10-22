@@ -1,5 +1,5 @@
 # Entorno de desarrollo (fase 118) en el mismo Caddy que producción: MILPA_CADDY_SITES=dev.
-# El stack de desarrollo corre aparte (docker-compose.dev.yml) y su Nginx entra a la red edge
+# El stack de desarrollo corre aparte (docker-compose.dev.yml) y su Nginx entra a la red dev-edge
 # como dev-web.
 {$MILPA_DEV_DOMAIN} {
 	encode zstd gzip
