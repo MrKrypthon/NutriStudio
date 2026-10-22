@@ -1,0 +1,21 @@
+# Entorno de desarrollo en el VPS (fase 118), en otra carpeta (/opt/milpa-dev) y otro proyecto:
+#   docker compose -p milpa-dev --env-file .env.docker -f docker-compose.app.yml -f docker-compose.dev.yml up -d --build
+# No tiene Caddy propio: su Nginx entra a la red edge de producción como dev-web, y el Caddy de
+# producción lo publica en MILPA_DEV_DOMAIN con Basic Auth (MILPA_CADDY_SITES=dev, ver DESPLIEGUE.md).
+# Producción tiene que estar arriba antes, porque crea la red edge.
+
+services:
+  web:
+    ports: !reset []
+    networks:
+      frontend: {}
+      edge:
+        aliases: [dev-web]
+    volumes:
+      # Igual que en producción: la IP real del usuario sale del X-Forwarded-For de Caddy.
+      - ./deploy/nginx-real-ip.conf:/etc/nginx/conf.d/00-real-ip.conf:ro
+
+networks:
+  edge:
+    external: true
+    name: milpa_edge

@@ -84,6 +84,17 @@ jobs:
         run: >-
           MILPA_DOMAIN=ejemplo.invalid MILPA_ACME_EMAIL=ci@ejemplo.invalid
           docker compose -f docker-compose.app.yml -f docker-compose.prod.yml config --quiet
+      - name: Caddy acepta su configuración, con y sin el sitio de desarrollo
+        run: |
+          for sites in ninguno dev; do
+            docker run --rm -e MILPA_DOMAIN=ejemplo.invalid -e MILPA_ACME_EMAIL=ci@ejemplo.invalid \
+              -e MILPA_DEV_DOMAIN=dev.ejemplo.invalid -e MILPA_DEV_BASIC_USER=ci \
+              -e 'MILPA_DEV_BASIC_HASH=$2a$14$Zkq0aCVpTeKFkmPLA0xDme5U9hGx2vmD0Zr1OA3sjdmdZNdBlv7AW' \
+              -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" -v "$PWD/deploy/caddy-sites/$sites:/etc/caddy/sites:ro" \
+              caddy:2.8.4-alpine caddy validate --config /etc/caddy/Caddyfile
+          done
+      - name: La configuración del entorno de desarrollo es válida
+        run: docker compose -p milpa-dev -f docker-compose.app.yml -f docker-compose.dev.yml config --quiet
       - name: Construir y levantar desde cero
         run: docker compose -f docker-compose.app.yml up -d --build --wait --wait-timeout 300
       - name: Cargar el catálogo

@@ -17,6 +17,11 @@ export MILPA_ENV_FILE="$env_file"
 compose() { docker compose --env-file "$env_file" -f docker-compose.app.yml -f docker-compose.prod.yml "$@"; }
 domain="$(sed -n 's/^MILPA_DOMAIN=//p' "$env_file" | tail -n 1)"
 [ -n "$domain" ] || { echo "[deploy] Falta MILPA_DOMAIN en $env_file." >&2; exit 1; }
+if [ "$(sed -n 's/^MILPA_CADDY_SITES=//p' "$env_file" | tail -n 1)" = dev ]; then
+  for var in MILPA_DEV_DOMAIN MILPA_DEV_BASIC_USER MILPA_DEV_BASIC_HASH; do
+    grep -q "^$var=." "$env_file" || { echo "[deploy] MILPA_CADDY_SITES=dev necesita $var en $env_file." >&2; exit 1; }
+  done
+fi
 
 [ -z "$(git status --porcelain --untracked-files=no)" ] || { echo "[deploy] Hay cambios sin commit en el servidor; no se despliega encima de ellos." >&2; exit 1; }
 
