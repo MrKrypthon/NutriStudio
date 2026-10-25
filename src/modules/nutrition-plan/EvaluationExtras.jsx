@@ -42,40 +42,66 @@ export function GoalEditor({ plan, locked, onSaved }) {
   const [state, setState] = useState('idle')
   const [error, setError] = useState('')
   const savedRef = useRef(plan?.goal || '')
-  useEffect(() => {
-    setDraft(plan?.goal || '')
-    savedRef.current = plan?.goal || ''
-    setState('idle')
-    setError('')
-  }, [plan?.id])
+  // El texto y el plan actuales, para guardar desde el temporizador o al desmontar sin depender
+  // del render en que se programó.
+  const draftRef = useRef(plan?.goal || '')
+  const planIdRef = useRef(plan?.id || null)
+  const onSavedRef = useRef(onSaved)
+  const lockedRef = useRef(locked)
+  const timerRef = useRef(null)
+  planIdRef.current = plan?.id || null
+  onSavedRef.current = onSaved
+  lockedRef.current = locked
+
   const save = async () => {
-    if (!plan || locked) return
-    const next = draft.trim()
+    clearTimeout(timerRef.current)
+    const planId = planIdRef.current
+    if (!planId || lockedRef.current) return
+    const next = draftRef.current.trim()
     if (next === savedRef.current) return
     setState('saving')
     setError('')
     try {
-      const updated = await plansApi.update(plan.id, { goal: next })
+      const updated = await plansApi.update(planId, { goal: next })
       savedRef.current = updated?.goal ?? next
       setState('saved')
-      onSaved?.(updated)
+      onSavedRef.current?.(updated)
     } catch (saveError) {
       setState('error')
       setError(saveError?.message || 'No se pudo guardar el objetivo.')
     }
   }
+  // Se guarda solo, con una pausa corta, para que el cambio no se pierda si se cambia de paso.
+  const schedule = () => {
+    clearTimeout(timerRef.current)
+    timerRef.current = setTimeout(save, 700)
+  }
+  useEffect(() => {
+    draftRef.current = plan?.goal || ''
+    savedRef.current = plan?.goal || ''
+    setDraft(plan?.goal || '')
+    setState('idle')
+    setError('')
+  }, [plan?.id])
+  // Al salir de la pantalla, lo escrito y no guardado se manda igual (como las indicaciones).
+  useEffect(() => () => {
+    clearTimeout(timerRef.current)
+    const planId = planIdRef.current
+    const next = draftRef.current.trim()
+    if (planId && !lockedRef.current && next !== savedRef.current) plansApi.update(planId, { goal: next }).catch(() => {})
+  }, [])
   return <div className="goal-editor">
     <textarea
       className="wide-textarea"
       placeholder="Resultado clínico y conductual esperado..."
       value={draft}
       disabled={locked}
-      onChange={(event) => { setDraft(event.target.value); setState('dirty'); setError('') }}
+      onChange={(event) => { draftRef.current = event.target.value; setDraft(event.target.value); setState('dirty'); setError(''); schedule() }}
       onBlur={save}
-      onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); event.currentTarget.blur() } }}
+      onKeyDown={(event) => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); save() } }}
     />
     <div className="goal-editor-foot">
-      <small className="muted">Se guarda al salir del campo.</small>
+      <small className="muted">Se guarda solo.</small>
       {state === 'saving' && <small className="muted">Guardando…</small>}
       {state === 'saved' && <small className="saved">Guardado ✓</small>}
       {state === 'dirty' && <small className="muted">Cambios sin guardar</small>}
