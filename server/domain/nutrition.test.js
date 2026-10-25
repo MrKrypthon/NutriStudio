@@ -135,6 +135,26 @@ describe('computeEnergyRequirement formulas', () => {
     expect(result.activityMethod).toBe('mets')
   })
 
+  it('sums several MET activities and keeps the per-activity detail', () => {
+    const result = computeEnergyRequirement({ ...base, formula: 'mifflin', activities: [
+      { name: 'Pesas', met: 5, minutes: 30, sessionsPerWeek: 3 },
+      { name: 'Caminar', met: 4.3, minutes: 60, sessionsPerWeek: 7 },
+    ] })
+    expect(result.activityMethod).toBe('mets')
+    expect(result.metsActivities).toHaveLength(2)
+    const expected = 5 * 3.5 * 72.4 / 200 * 30 * 3 / 7 + 4.3 * 3.5 * 72.4 / 200 * 60 * 7 / 7
+    expect(result.get).toBe(Math.round(1454.25 + expected))
+    expect(result.activityKcal).toBe(Math.round(expected))
+  })
+
+  it('drops invalid activities and falls back to the factor when none is valid', () => {
+    const result = computeEnergyRequirement({ ...base, formula: 'mifflin', activityFactor: 1.2, activities: [{ met: 5, minutes: 30, sessionsPerWeek: 3 }, { met: -1, minutes: 30, sessionsPerWeek: 3 }] })
+    expect(result.metsActivities).toHaveLength(1)
+    const none = computeEnergyRequirement({ ...base, formula: 'mifflin', activityFactor: 1.2, activities: [{ met: 0, minutes: 30, sessionsPerWeek: 3 }] })
+    expect(none.activityMethod).toBe('factor')
+    expect(none.metsActivities).toEqual([])
+  })
+
   it('ignores non-numeric or negative METS and falls back to the activity factor', () => {
     const plain = computeEnergyRequirement({ ...base, formula: 'mifflin', activityFactor: 1.2 })
     for (const mets of [{ met: 'abc', minutes: 45, sessionsPerWeek: 3 }, { met: -6, minutes: 45, sessionsPerWeek: 3 }]) {

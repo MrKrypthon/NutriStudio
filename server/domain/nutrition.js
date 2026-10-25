@@ -199,7 +199,24 @@ function normalizeEnergyAdjust(value) {
   return Math.max(-ENERGY_ADJUST_LIMIT, Math.min(ENERGY_ADJUST_LIMIT, number))
 }
 
-function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent, formula, activityFactor, activityPercent, mets, energyAdjustKcal }) {
+// Calorías diarias de UNA actividad: MET × 3.5 × peso / 200 × minutos × días / 7. Se aceptan
+// varias actividades (pesas, caminata…) y se suman; `mets` suelto sigue funcionando para los
+// planes guardados antes de que existiera la lista.
+const MAX_METS_ACTIVITIES = 12
+function normalizeMetsActivities({ activities, mets } = {}, weightKg) {
+  const raw = Array.isArray(activities) ? activities : mets ? [mets] : []
+  return raw.slice(0, MAX_METS_ACTIVITIES).flatMap((activity, index) => {
+    const met = Number(activity?.met ?? activity?.mets)
+    const minutes = Number(activity?.minutes)
+    const sessionsPerWeek = Number(activity?.sessionsPerWeek ?? activity?.sessions)
+    const valid = met > 0 && met <= 30 && minutes > 0 && minutes <= 1440 && sessionsPerWeek > 0 && sessionsPerWeek <= 21
+    if (!valid) return []
+    const label = typeof activity?.name === 'string' ? activity.name.trim().slice(0, 120) : ''
+    return [{ id: activity?.id || `act-${index}`, name: label, met, minutes, sessionsPerWeek, kcalPerDay: met * 3.5 * weightKg / 200 * minutes * sessionsPerWeek / 7 }]
+  })
+}
+
+function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent, formula, activityFactor, activityPercent, mets, activities, energyAdjustKcal }) {
   const weight = Number(weightKg)
   const height = Number(heightCm)
   const ageValue = Number(age)
@@ -223,9 +240,9 @@ function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent
 
   // Sólo cuentan METs, minutos y sesiones numéricos y positivos: antes bastaba con que fueran
   // "verdaderos", así que un texto daba GET NaN (y un 500 al guardar) y un negativo restaba al BMR.
-  const metsValues = [mets?.met, mets?.minutes, mets?.sessionsPerWeek].map(Number)
-  const metsKcal = metsValues.every((value) => Number.isFinite(value) && value > 0)
-    ? (metsValues[0] * 3.5 * weight / 200 * metsValues[1] * metsValues[2]) / 7
+  const metsActivities = normalizeMetsActivities({ activities, mets }, weight)
+  const metsKcal = metsActivities.length
+    ? metsActivities.reduce((sum, activity) => sum + activity.kcalPerDay, 0)
     : null
   // El gasto total = metabolismo basal + energía de la actividad. Con METS, la actividad es la
   // energía del ejercicio (que se SUMA al BMR); con factor de actividad, el factor ya multiplica al
@@ -273,6 +290,7 @@ function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent
     targetKcal,
     activityMethod: percentValid ? 'percent' : metsKcal ? 'mets' : 'factor',
     activityPercent: percentValid ? percent : null,
+    metsActivities,
     bmi: bmi == null ? null : round1(bmi),
     bmiCategory: classifyBmi(bmi),
     idealWeightRange: idealWeightRange(height),
