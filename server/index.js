@@ -1210,7 +1210,15 @@ app.get('/api/v1/patients/:patientId/access-log', async (request, reply) => {
 app.get('/api/v1/patients/:patientId/consultations', async (request, reply) => {
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
-  const consultations = await prisma.consultation.findMany({ where: { patientId: request.params.patientId }, include: { sections: true, measurements: true, diagnoses: true, plans: true }, orderBy: { createdAt: 'desc' } })
+  // El Constructor sólo necesita las mediciones (peso/talla) y si hay una consulta en curso; no
+  // todo el expediente de cada visita. `lite=1` evita descargar años de secciones y diagnósticos.
+  const consultations = request.query.lite === '1'
+    ? await prisma.consultation.findMany({
+        where: { patientId: request.params.patientId },
+        select: { id: true, status: true, createdAt: true, startedAt: true, measurements: { select: { id: true, measuredAt: true, weightKg: true, heightCm: true, bodyFatPercent: true } } },
+        orderBy: { createdAt: 'desc' },
+      })
+    : await prisma.consultation.findMany({ where: { patientId: request.params.patientId }, include: { sections: true, measurements: true, diagnoses: true, plans: true }, orderBy: { createdAt: 'desc' } })
   await logAccess(request, { patientId: patient.id, scope: 'history' })
   return { items: consultations }
 })
@@ -1249,7 +1257,13 @@ app.put('/api/v1/patients/:patientId/sections/:sectionKey', async (request, repl
 app.get('/api/v1/patients/:patientId/plans', async (request, reply) => {
   const patient = await prisma.patient.findFirst({ where: { id: request.params.patientId, practiceId: request.practiceId } })
   if (!patient) return reply.code(404).send({ code: 'PATIENT_NOT_FOUND', message: 'Paciente no encontrado.', fields: {} })
-  const plans = await prisma.nutritionPlan.findMany({ where: { patientId: request.params.patientId }, include: { mealSlots: { include: { recipe: true } }, documents: true }, orderBy: [{ createdAt: 'desc' }, { version: 'desc' }] })
+  // Lista de planes de la paciente: el Constructor sólo necesita la fila del plan y, de cada celda
+  // de la semana, el nombre y la foto de la receta (el detalle completo se pide al abrir el plan).
+  const plans = await prisma.nutritionPlan.findMany({
+    where: { patientId: request.params.patientId },
+    include: { mealSlots: { select: { dayOfWeek: true, mealType: true, recipeId: true, servings: true, recipe: { select: { id: true, name: true, imageFile: true } } } } },
+    orderBy: [{ createdAt: 'desc' }, { version: 'desc' }],
+  })
   return { items: plans }
 })
 

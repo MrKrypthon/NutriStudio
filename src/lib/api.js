@@ -132,6 +132,8 @@ export const patientsApi = {
   create: (payload) => invalidateAfter(apiRequest('/patients', { method: 'POST', body: JSON.stringify(payload) }), 'patients:'),
   update: (id, payload) => invalidateAfter(apiRequest(`/patients/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }), 'patients:'),
   consultations: (id) => apiRequest(`/patients/${id}/consultations`),
+  // Sólo mediciones y estado de las consultas, para el Constructor de plan (no el expediente).
+  consultationsLite: (id) => apiRequest(`/patients/${id}/consultations?lite=1`),
   plans: (id) => apiRequest(`/patients/${id}/plans`),
   timeline: (id) => apiRequest(`/patients/${id}/timeline`),
   // Datos permanentes del paciente, los que no pertenecen a una visita concreta.

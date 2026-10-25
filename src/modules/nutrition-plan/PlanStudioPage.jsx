@@ -392,7 +392,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     const epoch = planEpochRef.current
     if (!patientAtStart) { setLoadState('ready'); return }
     try {
-      const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientAtStart), recipesApi.catalog(), patientsApi.consultations(patientAtStart)])
+      const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientAtStart), recipesApi.catalog(), patientsApi.consultationsLite(patientAtStart)])
       // La paciente cambió mientras cargaba: esta respuesta ya no aplica.
       if (activePatientRef.current !== patientAtStart) return
       const planItems = plansResponse.items || []
@@ -600,7 +600,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     planEpochRef.current += 1
     planOpeningRef.current += 1
     try {
-      const consultationsResponse = await patientsApi.consultations(targetId)
+      const consultationsResponse = await patientsApi.consultationsLite(targetId)
       let consultation = (consultationsResponse.items || []).find((item) => item.status === 'IN_PROGRESS')
       if (!consultation) consultation = await clinicalApi.create(targetId, {})
       const created = await plansApi.create(targetId, { consultationId: consultation.id })
