@@ -29,6 +29,44 @@ const EQUIVALENT_TABLE = [
 ]
 const EQUIVALENT_BY_CODE = Object.fromEntries(EQUIVALENT_TABLE.map((group) => [group.code, group]))
 
+// Perfil nutrimental promedio de UN equivalente por grupo (fibra, azúcares, perfil de lípidos y
+// micronutrientes). Es la media de los alimentos de cada grupo en el catálogo SMAE
+// (prisma/data/smae.json): los mismos datos de origen que ya usa la app, no valores inventados.
+// Sirve para el resumen en vivo del paso Porciones; al asignar recetas, la adecuación se calcula
+// con los alimentos reales. Si se recarga el catálogo SMAE, estas medias deben regenerarse.
+const EQUIVALENT_NUTRIENT_KEYS = ['fiber', 'sugar', 'saturatedFat', 'monounsaturatedFat', 'polyunsaturatedFat', 'vitaminA', 'vitaminC', 'folicAcid', 'calcium', 'iron', 'potassium', 'sodium', 'phosphorus']
+const EQUIVALENT_NUTRIENT_PROFILES = {
+  V: { fiber: 1.46, sugar: 2.66, saturatedFat: 0.01, monounsaturatedFat: 0.01, polyunsaturatedFat: 0.06, vitaminA: 111.26, vitaminC: 27.73, folicAcid: 21.44, calcium: 39.83, iron: 1.04, potassium: 169.77, sodium: 46.96, phosphorus: 22.98 },
+  F: { fiber: 2.19, sugar: 6.95, saturatedFat: 0.03, monounsaturatedFat: 0.03, polyunsaturatedFat: 0.06, vitaminA: 36.12, vitaminC: 25.61, folicAcid: 6.1, calcium: 18.08, iron: 0.73, potassium: 148.34, sodium: 4.11, phosphorus: 6.32 },
+  C_SG: { fiber: 1.52, sugar: 1.36, saturatedFat: 0.3, monounsaturatedFat: 0.17, polyunsaturatedFat: 0.22, vitaminA: 27.53, vitaminC: 1.59, folicAcid: 10.3, calcium: 20.2, iron: 1.17, potassium: 48.95, sodium: 61.79, phosphorus: 20.07 },
+  C_CG: { fiber: 1.95, sugar: 4.1, saturatedFat: 1.9, monounsaturatedFat: 1.43, polyunsaturatedFat: 0.76, vitaminA: 9.02, vitaminC: 0.52, folicAcid: 4.01, calcium: 10.05, iron: 0.35, potassium: 18.46, sodium: 200.62, phosphorus: 15.9 },
+  LEG: { fiber: 4.18, sugar: 1.17, saturatedFat: 0.16, monounsaturatedFat: 0.23, polyunsaturatedFat: 0.57, vitaminA: 6.68, vitaminC: 4.04, folicAcid: 97.32, calcium: 47.77, iron: 2.34, potassium: 334.13, sodium: 113.29, phosphorus: 112.7 },
+  AOA_MB: { fiber: 0.06, sugar: 0.05, saturatedFat: 0.24, monounsaturatedFat: 0.26, polyunsaturatedFat: 0.21, vitaminA: 26.56, vitaminC: 0.64, folicAcid: 3.8, calcium: 22.02, iron: 0.75, potassium: 95.54, sodium: 95.17, phosphorus: 64.07 },
+  AOA_B: { fiber: 0.01, sugar: 0.03, saturatedFat: 0.81, monounsaturatedFat: 0.85, polyunsaturatedFat: 0.4, vitaminA: 208.03, vitaminC: 0.65, folicAcid: 15.41, calcium: 20.67, iron: 1.15, potassium: 85.04, sodium: 66.02, phosphorus: 38.79 },
+  AOA_M: { fiber: 0.03, sugar: 0.2, saturatedFat: 1.45, monounsaturatedFat: 1.57, polyunsaturatedFat: 0.65, vitaminA: 29.07, vitaminC: 0.32, folicAcid: 5.01, calcium: 45.59, iron: 0.57, potassium: 48.04, sodium: 113.41, phosphorus: 58.22 },
+  AOA_A: { fiber: 0.04, sugar: 0.28, saturatedFat: 3.45, monounsaturatedFat: 2.46, polyunsaturatedFat: 0.61, vitaminA: 32.03, vitaminC: 0.26, folicAcid: 4.38, calcium: 71.04, iron: 0.56, potassium: 62.16, sodium: 200.43, phosphorus: 81.69 },
+  LAC_D: { fiber: 0.28, sugar: 5.17, saturatedFat: 0.21, monounsaturatedFat: 0.01, polyunsaturatedFat: 0, vitaminA: 22.34, vitaminC: 0.36, folicAcid: 4.14, calcium: 226.84, iron: 0.03, potassium: 105.3, sodium: 126.35, phosphorus: 72.33 },
+  LAC_S: { fiber: 0.1, sugar: 7.26, saturatedFat: 1.88, monounsaturatedFat: 0.26, polyunsaturatedFat: 0.03, vitaminA: 35.12, vitaminC: 0.52, folicAcid: 2.93, calcium: 206.2, iron: 0.03, potassium: 125.53, sodium: 87.44, phosphorus: 58.39 },
+  LAC_E: { fiber: 0, sugar: 3.1, saturatedFat: 4.01, monounsaturatedFat: 1.66, polyunsaturatedFat: 0.25, vitaminA: 70.32, vitaminC: 2.49, folicAcid: 8.74, calcium: 235.95, iron: 0.41, potassium: 292.49, sodium: 113.77, phosphorus: 140.01 },
+  LAC_A: { fiber: 0.84, sugar: 26.84, saturatedFat: 2.59, monounsaturatedFat: 0.8, polyunsaturatedFat: 0.12, vitaminA: 61.94, vitaminC: 1.46, folicAcid: 4.04, calcium: 229.28, iron: 0.3, potassium: 145.16, sodium: 127.51, phosphorus: 99.89 },
+  G_SP: { fiber: 0.18, sugar: 0.4, saturatedFat: 1.58, monounsaturatedFat: 1.46, polyunsaturatedFat: 0.62, vitaminA: 18.8, vitaminC: 0.19, folicAcid: 1.16, calcium: 5.16, iron: 0.06, potassium: 18.8, sodium: 67.33, phosphorus: 2.44 },
+  G_CP: { fiber: 0.49, sugar: 0.09, saturatedFat: 0.88, monounsaturatedFat: 2.1, polyunsaturatedFat: 1.14, vitaminA: 19.24, vitaminC: 1.24, folicAcid: 8.18, calcium: 38.09, iron: 0.48, potassium: 45.77, sodium: 74.03, phosphorus: 30 },
+  AZ_SG: { fiber: 0.18, sugar: 8.52, saturatedFat: 0.09, monounsaturatedFat: 0.02, polyunsaturatedFat: 0.01, vitaminA: 4.49, vitaminC: 1.48, folicAcid: 0.25, calcium: 6.02, iron: 0.14, potassium: 8.79, sodium: 82.57, phosphorus: 1.68 },
+  AZ_CG: { fiber: 0.52, sugar: 6.65, saturatedFat: 2.08, monounsaturatedFat: 0.58, polyunsaturatedFat: 0.31, vitaminA: 25.23, vitaminC: 0.1, folicAcid: 1.13, calcium: 20.51, iron: 0.55, potassium: 30.93, sodium: 76.92, phosphorus: 12.65 },
+}
+
+// Totales de fibra, azúcares, perfil de lípidos y micronutrientes de los equivalentes prescritos.
+function equivalentNutrientTotals(groups) {
+  const totals = Object.fromEntries(EQUIVALENT_NUTRIENT_KEYS.map((key) => [key, 0]))
+  for (const group of EQUIVALENT_TABLE) {
+    const count = Number(groups?.[group.code]) || 0
+    if (!count) continue
+    const profile = EQUIVALENT_NUTRIENT_PROFILES[group.code] || {}
+    for (const key of EQUIVALENT_NUTRIENT_KEYS) totals[key] += count * (Number(profile[key]) || 0)
+  }
+  return Object.fromEntries(Object.entries(totals).map(([key, value]) => [key, round1(value)]))
+}
+
 // Nombre con que cada grupo está en el catálogo de Ingredientes (SMAE), para consultar sus alimentos.
 const CATALOG_GROUP = {
   V: 'Verduras', F: 'Frutas', C_SG: 'Cereales S/G', C_CG: 'Cereales C/G', LEG: 'Leguminosas',
@@ -243,7 +281,7 @@ function mealBadgePortions(mealCounts) {
 
 export {
   EQUIVALENT_TABLE, EQUIVALENT_BY_CODE, EQUIVALENT_MEALS, CATALOG_GROUP,
-  macroTargets, equivalentTotals, equivalentAdequacy, adequacyStatus,
+  macroTargets, equivalentTotals, equivalentNutrientTotals, EQUIVALENT_NUTRIENT_KEYS, equivalentAdequacy, adequacyStatus,
   suggestEquivalents, suggestDistribution, remainingEquivalents, normalizeEquivalentPlan, mealBadgePortions, toHalf,
   normalizeExtras, extrasTotals, addTotals, normalizeMenus, planMenus,
 }

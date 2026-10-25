@@ -3,12 +3,34 @@ import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { ingredientsApi } from '../../lib/api.js'
 import {
   CATALOG_GROUP, EQUIVALENT_MEALS, EQUIVALENT_TABLE,
-  addTotals, adequacyStatus, equivalentAdequacy, equivalentTotals, extrasTotals, macroTargets, suggestDistribution, suggestEquivalents, toHalf,
+  addTotals, adequacyStatus, equivalentAdequacy, equivalentNutrientTotals, equivalentTotals, extrasTotals, macroTargets, suggestDistribution, suggestEquivalents, toHalf,
 } from '../../../server/domain/equivalents.js'
+import { IDR_TABLE, resolveIdrBracket } from '../../../server/domain/micronutrients.js'
 
-const MACROS = [['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['fat', 'Lípidos', 'g'], ['carbs', 'HdC', 'g']]
-const STATUS_LABEL = { ok: 'En rango', low: 'Falta', high: 'Excede', none: '—' }
+const MACRO_ROWS = [
+  { key: 'carbs', label: 'Carbohidratos', kcalPerGram: 4, color: '#D9A441' },
+  { key: 'protein', label: 'Proteína', kcalPerGram: 4, color: '#6E93A8' },
+  { key: 'fat', label: 'Lípidos', kcalPerGram: 9, color: '#C58B72' },
+]
+// Micronutrientes que trae el catálogo SMAE por equivalente. Los que no tienen IDR en la tabla de
+// referencia se muestran sólo como cantidad (sin inventar una meta).
+const MICRO_ROWS = [
+  ['vitaminA', 'Vitamina A', 'µg'],
+  ['vitaminC', 'Vitamina C', 'mg'],
+  ['folicAcid', 'Ácido fólico', 'µg'],
+  ['calcium', 'Calcio', 'mg'],
+  ['iron', 'Hierro', 'mg'],
+  ['phosphorus', 'Fósforo', 'mg'],
+  ['sodium', 'Sodio', 'mg'],
+  ['potassium', 'Potasio', 'mg'],
+]
+const LIPID_ROWS = [
+  ['saturatedFat', 'AGS (Saturadas)'],
+  ['monounsaturatedFat', 'AGM (Monoinsaturadas)'],
+  ['polyunsaturatedFat', 'AGP (Poliinsaturadas)'],
+]
 const formatCount = (value) => { const number = Number(value) || 0; return Number.isInteger(number) ? String(number) : number.toFixed(1) }
+const formatAmount = (value) => { const number = Number(value) || 0; return number >= 100 ? String(Math.round(number)) : String(Math.round(number * 10) / 10) }
 
 // Campo de equivalentes: − / + de medio en medio, o escribir la cantidad. Mientras se teclea se
 // conserva el texto tal cual y sólo se normaliza al salir: antes cada tecla pasaba por `toHalf`, así
@@ -39,6 +61,29 @@ export default function EquivalentsStep({ plan, value, onChange, locked, expedie
   const totals = addTotals(equivalentTotals(groups), extrasTotals(extras))
   const adequacy = equivalentAdequacy(totals, hasTarget ? targets : null)
   const weightKg = Number(plan?.evaluation?.inputs?.weightKg) || null
+  // Fibra, azúcares, perfil de lípidos y micronutrientes de lo prescrito (media del catálogo SMAE).
+  const nutrientTotals = useMemo(() => equivalentNutrientTotals(groups), [groups])
+  const idrBracket = resolveIdrBracket(plan?.evaluation?.inputs?.age, plan?.evaluation?.inputs?.sex)
+  const idr = idrBracket ? IDR_TABLE[idrBracket] : null
+  const realPercent = (grams, kcalPerGram) => (totals.kcal > 0 ? Math.round((grams * kcalPerGram) / totals.kcal * 100) : null)
+  const macroCards = MACRO_ROWS.map((row) => ({
+    ...row,
+    percent: Number(plan?.[`${row.key}Percent`]) || 0,
+    grams: totals[row.key],
+    targetGrams: targets[row.key],
+    realPercent: realPercent(totals[row.key], row.kcalPerGram),
+    perKg: weightKg ? totals[row.key] / weightKg : null,
+  }))
+  const donutGradient = (() => {
+    if (!macroCards.some((row) => row.percent > 0)) return 'conic-gradient(#ECEDF0 0 100%)'
+    let start = 0
+    const stops = macroCards.map((row) => { const end = start + row.percent; const stop = `${row.color} ${start}% ${end}%`; start = end; return stop })
+    return `conic-gradient(${stops.join(', ')})`
+  })()
+  const fiberTarget = idr?.fiber ?? null
+  const fiberStatus = fiberTarget ? (nutrientTotals.fiber >= fiberTarget * 0.9 ? 'ok' : 'low') : 'none'
+  const sugarPercent = totals.kcal > 0 ? Math.round((nutrientTotals.sugar * 4 / totals.kcal) * 100) : null
+  const sugarStatus = sugarPercent == null ? 'none' : sugarPercent <= 10 ? 'ok' : 'high'
   const [catalogCode, setCatalogCode] = useState(null)
   const [catalogSearch, setCatalogSearch] = useState('')
   const [catalog, setCatalog] = useState({ state: 'idle', items: [] })
@@ -113,17 +158,52 @@ export default function EquivalentsStep({ plan, value, onChange, locked, expedie
       </section>
 
       <aside className="eq-side">
-        <section className="panel eq-summary">
-          <p className="eyebrow">REQUERIMIENTO DE LA PACIENTE</p>
-          {hasTarget ? <div className="eq-macros">{MACROS.map(([key, label, unit]) => {
-            const status = adequacyStatus(adequacy[key])
-            return <div className="eq-macro" key={key}>
-              <div><b>{label}</b><small>{formatCount(totals[key])} de {formatCount(targets[key])} {unit}{key !== 'kcal' && weightKg ? ` · ${formatCount(targets[key] / weightKg)} g/kg` : ''}</small></div>
-              <div className="eq-bar"><i className={status} style={{ width: `${Math.min(100, adequacy[key] || 0)}%` }} /></div>
-              <span className={'eq-chip ' + status}>{STATUS_LABEL[status]}</span>
+        <section className="panel eq-summary eq-summary-rich">
+          <div className="eq-summary-head">
+            <p className="eyebrow">MACRONUTRIENTES</p>
+            {weightKg && <span className="eq-weight-badge">Peso: {formatCount(weightKg)} kg</span>}
+          </div>
+          {hasTarget ? <>
+            <div className="eq-macro-hero">
+              <div className="eq-donut" style={{ background: donutGradient }} role="img" aria-label={`Distribución meta: ${macroCards.map((row) => `${row.label} ${row.percent}%`).join(', ')}`}>
+                <div className="eq-donut-center"><b>{Math.round(totals.kcal).toLocaleString('es-MX')}</b><small>kcal</small><em>Meta: {formatCount(targets.kcal)} kcal</em></div>
+              </div>
+              <div className="eq-macro-cards">
+                {macroCards.map((row) => <div className="eq-macro-card" key={row.key}>
+                  <span className="eq-macro-top"><i style={{ background: row.color }} />{row.label}<b>{row.percent}%</b></span>
+                  <span className="eq-macro-line">Real: <b>{row.realPercent ?? '—'}%</b></span>
+                  <span className="eq-macro-line">Meta: <b>{formatCount(row.targetGrams)} g</b></span>
+                  <span className="eq-macro-line">Real: <b>{formatCount(row.grams)} g</b></span>
+                  {weightKg && <span className="eq-macro-line">g/kg: <b>{formatCount(row.grams / weightKg)}</b></span>}
+                </div>)}
+              </div>
             </div>
-          })}</div> : <p className="muted">Calcula el requerimiento en "Dietocálculo" para ver aquí la meta de energía y macronutrimentos.</p>}
-          {weightKg && <p className="muted eq-weight">Peso usado en el cálculo: {formatCount(weightKg)} kg.</p>}
+
+            <div className="eq-nutrient-quality">
+              <p className="eyebrow">CALIDAD DE NUTRIENTES</p>
+              <div className="eq-quality-row"><span>Fibra</span><b>{formatAmount(nutrientTotals.fiber)} g / Meta: {fiberTarget ? `${formatCount(fiberTarget)} g` : 'sin referencia'}</b><i className={'eq-chip ' + fiberStatus}>{fiberStatus === 'ok' ? 'Óptimo' : fiberStatus === 'low' ? 'Falta' : '—'}</i></div>
+              <div className="eq-quality-row"><span>Azúcares simples</span><b>{sugarPercent ?? '—'}% / Meta &lt; 10%</b><i className={'eq-chip ' + sugarStatus}>{sugarStatus === 'ok' ? 'Óptimo' : sugarStatus === 'high' ? 'Excede' : '—'}</i></div>
+            </div>
+
+            <div className="eq-lipids">
+              <p className="eyebrow">PERFIL DE LÍPIDOS</p>
+              {LIPID_ROWS.map(([key, label]) => {
+                const grams = nutrientTotals[key]
+                const percent = totals.kcal > 0 ? Math.round((grams * 9 / totals.kcal) * 100) : null
+                return <div className="eq-lipid-row" key={key}><span>{label}</span><b>{percent ?? '—'}%</b><small>{formatAmount(grams)} g</small></div>
+              })}
+            </div>
+
+            <div className="eq-micros">
+              <p className="eyebrow">MICRONUTRIENTES (IDR)</p>
+              <div className="eq-micro-grid">
+                {MICRO_ROWS.map(([key, label, unit]) => {
+                  const target = idr?.[key] ?? null
+                  return <div className="eq-micro-item" key={key}><span>{label}{target ? ` (${formatCount(target)} ${unit})` : ''}</span><b>{formatAmount(nutrientTotals[key])} {unit}</b>{target && <small>{Math.round((nutrientTotals[key] / target) * 100)}% de la IDR</small>}</div>
+                })}
+              </div>
+            </div>
+          </> : <p className="muted">Calcula el requerimiento en "Dietocálculo" para ver aquí la meta de energía y macronutrimentos.</p>}
         </section>
 
         {(expediente?.allergies?.length > 0 || expediente?.avoid?.length > 0 || expediente?.prefers || expediente?.conditions?.length > 0) && <section className="panel eq-considerations">

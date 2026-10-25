@@ -2485,3 +2485,39 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 .mets-total>span:first-child{text-align:left}
 .mets-formula{background:#F7F8F9;border-radius:7px;padding:9px 11px;margin:4px 0 0;font-size:11.5px;line-height:1.45}
 .mets-modal{width:min(560px,calc(100% - 32px))}
+
+/* Resumen del paso Porciones: dona de macros, calidad, lípidos y micronutrientes. */
+.eq-summary-rich{display:grid;gap:13px}
+.eq-summary-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.eq-summary-head .eyebrow{margin:0}
+.eq-weight-badge{font-size:11px;color:var(--muted);background:#F7F8F9;border-radius:10px;padding:3px 8px;white-space:nowrap}
+.eq-macro-hero{display:grid;grid-template-columns:112px minmax(0,1fr);gap:12px;align-items:center}
+.eq-donut{width:112px;height:112px;border-radius:50%;display:grid;place-items:center;position:relative;flex:0 0 auto}
+.eq-donut:after{content:'';position:absolute;inset:17px;background:#fff;border-radius:50%}
+.eq-donut-center{position:relative;z-index:1;text-align:center;line-height:1.08}
+.eq-donut-center b{display:block;font:800 17px Outfit;color:var(--ink)}
+.eq-donut-center small{display:block;font-size:9.5px;color:var(--muted)}
+.eq-donut-center em{display:block;font:400 9px Outfit;color:var(--muted);margin-top:2px;font-style:normal}
+.eq-macro-cards{display:grid;gap:6px;min-width:0}
+.eq-macro-card{border-bottom:1px solid var(--line);padding-bottom:5px;min-width:0}
+.eq-macro-card:last-child{border-bottom:0;padding-bottom:0}
+.eq-macro-top{display:flex;align-items:center;gap:5px;font:600 11.5px Outfit;color:var(--ink)}
+.eq-macro-top i{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.eq-macro-top b{margin-left:auto;font-size:12px}
+.eq-macro-line{display:block;font-size:10.5px;color:var(--muted);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eq-macro-line b{color:var(--ink);font-weight:600}
+.eq-nutrient-quality,.eq-lipids,.eq-micros{border-top:1px solid var(--line);padding-top:9px}
+.eq-nutrient-quality .eyebrow,.eq-lipids .eyebrow,.eq-micros .eyebrow{margin:0 0 5px}
+.eq-quality-row{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center;font-size:11.5px;padding:3px 0}
+.eq-quality-row>span{color:var(--muted)}
+.eq-quality-row>b{font-weight:500;color:var(--ink);font-size:11px;text-align:right}
+.eq-quality-row .eq-chip{font-size:9.5px;padding:2px 6px}
+.eq-lipid-row{display:grid;grid-template-columns:1fr 38px 48px;gap:6px;align-items:center;font-size:11.5px;padding:3px 0;color:var(--muted)}
+.eq-lipid-row b{text-align:right;color:var(--ink);font-size:11.5px}
+.eq-lipid-row small{text-align:right;color:var(--muted);font-size:11px}
+.eq-micro-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.eq-micro-item{border:1px solid var(--line);border-radius:7px;padding:5px 7px;min-width:0}
+.eq-micro-item span{display:block;font-size:9.5px;color:var(--muted);line-height:1.25}
+.eq-micro-item b{display:block;font-size:11.5px;color:var(--ink);margin-top:2px}
+.eq-micro-item small{display:block;font-size:9.5px;color:var(--muted);margin-top:1px}
+@media(max-width:1100px){.eq-macro-hero{grid-template-columns:112px minmax(0,1fr)}}
