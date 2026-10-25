@@ -2443,3 +2443,22 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 .patient-consent-card .consent-check{display:flex;flex-direction:row;align-items:flex-start;gap:9px;font-weight:500}
 .patient-consent-card .consent-check input{display:inline-block;width:auto;flex:0 0 auto;margin:3px 0 0;padding:0}
 .consent-modal .patient-consent-card .summary-card-head{justify-content:flex-end}.consent-modal .patient-consent-card .summary-card-head h3{display:none}
+
+/* Evaluación del plan: pesos anteriores y objetivo editable. */
+.weight-field{position:relative;display:block}
+.weight-field input{padding-right:34px}
+.weight-history{position:absolute;right:7px;top:16px;z-index:12}
+.weight-history-trigger{border:0;background:none;color:#9AA0A9;font-size:15px;line-height:1;padding:2px 3px;cursor:pointer;border-radius:50%}
+.weight-history-trigger:hover,.weight-history-trigger[aria-expanded="true"]{color:var(--green);background:var(--mint)}
+.weight-history-pop{position:absolute;right:0;top:27px;width:250px;background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 30px #16181D1f;padding:12px 14px;text-align:left}
+.weight-history-pop>b{display:block;font:700 13px Outfit;color:var(--ink);margin-bottom:8px}
+.weight-history-pop ul{list-style:none;margin:0;padding:0;max-height:190px;overflow:auto}
+.weight-history-pop li{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.weight-history-pop li.current{color:var(--ink);font-weight:600}
+.weight-history-pop li strong{font-weight:600;font-variant-numeric:tabular-nums}
+.weight-history-pop p{margin:0 0 8px;font-size:12.5px;color:var(--muted);line-height:1.45}
+.weight-history-pop small{display:block;margin-top:8px;font-size:11px;color:var(--muted);line-height:1.4}
+.goal-editor textarea{width:100%;min-height:86px;resize:vertical;border:1px solid var(--line);border-radius:6px;background:#fbfcfc;padding:10px;font:12.5px Outfit;color:#16181D}
+.goal-editor textarea:focus{border-color:var(--green);outline:none}
+.goal-editor-foot{display:flex;justify-content:flex-end;gap:10px;min-height:18px;margin-top:6px}
+.goal-editor-foot .form-error{margin:0;padding:0;background:none}

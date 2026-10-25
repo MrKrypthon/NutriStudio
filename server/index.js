@@ -2519,10 +2519,12 @@ app.patch('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED' || plan.status === 'CANCELLED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados o cancelados no pueden modificarse.', fields: {} })
-  const { hydrationNote, recommendations, mealTimes, equivalents, activeMeals, recipeAdjustments, mealLabels, mealNotes, menus } = request.body || {}
+  const { hydrationNote, recommendations, mealTimes, equivalents, activeMeals, recipeAdjustments, mealLabels, mealNotes, menus, goal } = request.body || {}
   const updated = await prisma.nutritionPlan.update({
     where: { id: plan.id },
     data: {
+      // El objetivo terapéutico también se edita desde Evaluación, sin recalcular el requerimiento.
+      ...(goal !== undefined ? { goal: cleanPlanText(goal, 1000) } : {}),
       ...(hydrationNote !== undefined ? { hydrationNote: cleanPlanText(hydrationNote, 2000) } : {}),
       ...(recommendations !== undefined ? { recommendations: cleanPlanText(recommendations, 6000) } : {}),
       ...(mealTimes !== undefined ? { mealTimes: normalizeMealTimes(mealTimes) } : {}),
