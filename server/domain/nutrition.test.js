@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { activityFactorPresets, calculateBmi, classifyBmi, computeEnergyRequirement, computeMacros, idealWeightRange, NutritionEngineError } from './nutrition.js'
+import { activityFactorPresets, activityPercentPresets, calculateBmi, classifyBmi, computeEnergyRequirement, computeMacros, idealWeightRange, NutritionEngineError } from './nutrition.js'
 
 describe('activityFactorPresets', () => {
   it('offers Harris-Benedict five levels including "Muy activa" 1.9', () => {
@@ -13,6 +13,36 @@ describe('activityFactorPresets', () => {
     }
     expect(activityFactorPresets({ formula: 'mifflin', sex: 'Mujer' }).map((preset) => preset.value)).toEqual([1.2, 1.56, 1.64, 1.82])
     expect(activityFactorPresets({ formula: 'mifflin', sex: 'Hombre' }).map((preset) => preset.value)).toEqual([1.2, 1.55, 1.78, 2.1])
+  })
+})
+
+describe('activityPercentPresets', () => {
+  it('offers 30/40/50 for Mifflin and 10/20/30/40 for the other formulas', () => {
+    expect(activityPercentPresets({ formula: 'mifflin' }).map((preset) => preset.value)).toEqual([30, 40, 50])
+    for (const formula of ['harris', 'fao', 'valencia', 'cunningham']) {
+      expect(activityPercentPresets({ formula }).map((preset) => preset.value)).toEqual([10, 20, 30, 40])
+    }
+  })
+})
+
+describe('computeEnergyRequirement activity by percentage', () => {
+  const base = { sex: 'female', age: 28, weightKg: 72.4, heightCm: 165, activityFactor: 1.375 }
+  it('adds the percentage of the BMR to the total expenditure', () => {
+    const result = computeEnergyRequirement({ ...base, formula: 'mifflin', activityPercent: 40 })
+    expect(result.activityMethod).toBe('percent')
+    expect(result.activityPercent).toBe(40)
+    expect(result.bmr).toBe(1454)
+    expect(result.get).toBe(Math.round(1454 * 1.4))
+    expect(result.activityKcal).toBe(result.get - result.bmr)
+    expect(result.inputs.activityPercent).toBe(40)
+  })
+  it('ignores an invalid percentage and falls back to the factor', () => {
+    for (const activityPercent of [0, -10, 101, 'abc']) {
+      const result = computeEnergyRequirement({ ...base, formula: 'mifflin', activityPercent })
+      expect(result.activityMethod).toBe('factor')
+      expect(result.get).toBe(2000)
+      expect(result.inputs.activityPercent).toBeNull()
+    }
   })
 })
 

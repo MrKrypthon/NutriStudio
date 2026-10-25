@@ -44,6 +44,25 @@ function activityFactorPresets({ formula, sex } = {}) {
   return isMaleSexValue(sex) ? STANDARD_ACTIVITY_FACTORS.male : STANDARD_ACTIVITY_FACTORS.female
 }
 
+// Actividad expresada como porcentaje sobre el metabolismo basal. Mifflin usa la propuesta de
+// 30/40/50 %; el resto de las fórmulas, 10/20/30/40 %. Igual que el factor, el porcentaje se puede
+// escribir a mano fuera de la lista.
+const MIFFLIN_ACTIVITY_PERCENTS = [
+  { value: 30, label: 'Sedentaria' },
+  { value: 40, label: 'Ligera a moderada' },
+  { value: 50, label: 'Intensa' },
+]
+const STANDARD_ACTIVITY_PERCENTS = [
+  { value: 10, label: 'Sedentaria' },
+  { value: 20, label: 'Ligera' },
+  { value: 30, label: 'Moderada' },
+  { value: 40, label: 'Intensa' },
+]
+
+function activityPercentPresets({ formula } = {}) {
+  return formula === 'mifflin' ? MIFFLIN_ACTIVITY_PERCENTS : STANDARD_ACTIVITY_PERCENTS
+}
+
 function leanMassKg(weightKg, bodyFatPercent) {
   return weightKg * (1 - (Number(bodyFatPercent) || 0) / 100)
 }
@@ -180,7 +199,7 @@ function normalizeEnergyAdjust(value) {
   return Math.max(-ENERGY_ADJUST_LIMIT, Math.min(ENERGY_ADJUST_LIMIT, number))
 }
 
-function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent, formula, activityFactor, mets, energyAdjustKcal }) {
+function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent, formula, activityFactor, activityPercent, mets, energyAdjustKcal }) {
   const weight = Number(weightKg)
   const height = Number(heightCm)
   const ageValue = Number(age)
@@ -213,7 +232,13 @@ function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent
   // BMR. Antes `get = metsKcal || ...` descartaba el BMR cuando había METS (GET ≈ kcal del ejercicio).
   const factor = Number(activityFactor)
   const factorValid = Number.isFinite(factor) && factor > 0
-  const get = metsKcal != null ? bmr + metsKcal : bmr * (factorValid ? factor : ACTIVITY_FACTORS.sedentary)
+  // Actividad en porcentaje: se suma al metabolismo basal (no multiplica), igual que el ejercicio
+  // por METs. Se valida el rango para no aceptar un porcentaje negativo o absurdamente alto.
+  const percent = Number(activityPercent)
+  const percentValid = Number.isFinite(percent) && percent > 0 && percent <= 100
+  const get = percentValid
+    ? bmr + (bmr * percent / 100)
+    : metsKcal != null ? bmr + metsKcal : bmr * (factorValid ? factor : ACTIVITY_FACTORS.sedentary)
 
   const bmi = calculateBmi(weight, height)
   const flags = []
@@ -222,7 +247,7 @@ function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent
     flags.push({ code: 'SEX_UNSPECIFIED', message: 'No se reconoció el sexo (Hombre/Mujer); se usó la ecuación femenina. Verifica el dato.' })
   }
   // Un factor de actividad no numérico daba GET=NaN sin flag: se avisa y se usa el sedentario.
-  if (metsKcal == null && activityFactor != null && !factorValid) {
+  if (!percentValid && metsKcal == null && activityFactor != null && !factorValid) {
     flags.push({ code: 'INVALID_ACTIVITY_FACTOR', message: 'El factor de actividad no es válido; se usó el nivel sedentario.' })
   }
   // `get < min || get > max` era falso para NaN (dato faltante): se evalúa también el no-finito.
@@ -246,11 +271,12 @@ function computeEnergyRequirement({ sex, age, weightKg, heightCm, bodyFatPercent
     get: Math.round(get),
     energyAdjustKcal: adjust,
     targetKcal,
-    activityMethod: metsKcal ? 'mets' : 'factor',
+    activityMethod: percentValid ? 'percent' : metsKcal ? 'mets' : 'factor',
+    activityPercent: percentValid ? percent : null,
     bmi: bmi == null ? null : round1(bmi),
     bmiCategory: classifyBmi(bmi),
     idealWeightRange: idealWeightRange(height),
-    inputs: { age: ageValue, weightKg: weight, heightCm: height, sex, bodyFatPercent: bodyFatPercent || null },
+    inputs: { age: ageValue, weightKg: weight, heightCm: height, sex, bodyFatPercent: bodyFatPercent || null, activityPercent: percentValid ? percent : null },
     flags,
     reviewed: false,
   }
@@ -287,6 +313,7 @@ function computeMacros({ kcal, carbsPercent, proteinPercent, fatPercent }) {
 export {
   ACTIVITY_FACTORS,
   activityFactorPresets,
+  activityPercentPresets,
   BMR_FORMULAS,
   NutritionEngineError,
   calculateBmi,

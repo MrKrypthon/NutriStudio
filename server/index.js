@@ -2558,7 +2558,7 @@ app.get('/api/v1/plans/:planId/adequacy', async (request, reply) => {
 })
 
 app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
-  const { sex, age, weightKg, heightCm, bodyFatPercent, formula = 'mifflin', activityFactor, mets, energyAdjustKcal, carbsPercent, proteinPercent, fatPercent, goal } = request.body || {}
+  const { sex, age, weightKg, heightCm, bodyFatPercent, formula = 'mifflin', activityFactor, activityPercent, mets, energyAdjustKcal, carbsPercent, proteinPercent, fatPercent, goal } = request.body || {}
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED' || plan.status === 'CANCELLED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados o cancelados no pueden modificarse.', fields: {} })
@@ -2570,7 +2570,7 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
 
   try {
     const factor = normalizeActivityFactor(activityFactor)
-    const energy = computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor: factor, mets, energyAdjustKcal })
+    const energy = computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor: factor, activityPercent, mets, energyAdjustKcal })
     // El requerimiento del plan (y sus macros) ya incluye el ajuste por objetivo: déficit o superávit.
     const macros = computeMacros({ kcal: energy.targetKcal, carbsPercent, proteinPercent, fatPercent })
     const updated = await prisma.nutritionPlan.update({

@@ -166,11 +166,13 @@ export const nutritionApi = {
       const age = Number(payload.age)
       const female = payload.sex !== 'male'
       const bmr = (10 * weight) + (6.25 * height) - (5 * age) + (female ? -161 : 5)
-      const factor = Number(payload.activityFactor || 1.2)
+      const percent = Number(payload.activityPercent)
+      const percentValid = Number.isFinite(percent) && percent > 0 && percent <= 100
+      const factor = percentValid ? 1 + (percent / 100) : Number(payload.activityFactor || 1.2)
       const kcal = Math.round(bmr * factor)
       const heightM = height / 100
       const bmi = weight / (heightM * heightM)
-      return { formula: payload.formula || 'mifflin', formulaLabel: 'Mifflin-St Jeor', bmr: Math.round(bmr), activityKcal: Math.round(bmr * (factor - 1)), get: kcal, activityMethod: 'factor', bmi: Math.round(bmi * 10) / 10, idealWeightRange: { minKg: Math.round(18.5 * heightM * heightM * 10) / 10, maxKg: Math.round(24.9 * heightM * heightM * 10) / 10 }, flags: [], inputs: payload, reviewed: false, demo: true, macros: { carbs: { percent: carbsPercent, kcal: Math.round(kcal * carbsPercent / 100), grams: Math.round(kcal * carbsPercent / 100 / 4 * 10) / 10 }, protein: { percent: proteinPercent, kcal: Math.round(kcal * proteinPercent / 100), grams: Math.round(kcal * proteinPercent / 100 / 4 * 10) / 10 }, fat: { percent: fatPercent, kcal: Math.round(kcal * fatPercent / 100), grams: Math.round(kcal * fatPercent / 100 / 9 * 10) / 10 } } }
+      return { formula: payload.formula || 'mifflin', formulaLabel: 'Mifflin-St Jeor', bmr: Math.round(bmr), activityKcal: Math.round(bmr * (factor - 1)), get: kcal, activityMethod: percentValid ? 'percent' : 'factor', bmi: Math.round(bmi * 10) / 10, idealWeightRange: { minKg: Math.round(18.5 * heightM * heightM * 10) / 10, maxKg: Math.round(24.9 * heightM * heightM * 10) / 10 }, flags: [], inputs: payload, reviewed: false, demo: true, macros: { carbs: { percent: carbsPercent, kcal: Math.round(kcal * carbsPercent / 100), grams: Math.round(kcal * carbsPercent / 100 / 4 * 10) / 10 }, protein: { percent: proteinPercent, kcal: Math.round(kcal * proteinPercent / 100), grams: Math.round(kcal * proteinPercent / 100 / 4 * 10) / 10 }, fat: { percent: fatPercent, kcal: Math.round(kcal * fatPercent / 100), grams: Math.round(kcal * fatPercent / 100 / 9 * 10) / 10 } } }
     }
   },
   macros: (payload) => apiRequest('/nutrition-plans/macros', { method: 'POST', body: JSON.stringify(payload) }),
