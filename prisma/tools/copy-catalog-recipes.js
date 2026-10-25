@@ -1,4 +1,5 @@
-// Agrega a las cuentas que ya existen las recetas del catálogo que les faltan (por nombre), con sus
+// Agrega a las cuentas que ya existen las recetas del catálogo que les faltan (por nombre y origen:
+// hay recetas de recetarios que se llaman igual que una del DIETOCÁLCULO), con sus
 // ingredientes reenlazados a los de cada cuenta (mismo nombre y grupo). Sirve cuando el catálogo
 // creció después de abrirse la cuenta, p. ej. las recetas del DIETOCÁLCULO, que antes no se
 // repartían (ver server/domain/catalogCopy.js). No toca las recetas que la cuenta ya tiene.
@@ -16,6 +17,7 @@ const write = process.argv.includes('--write')
 const onlyPracticeId = process.argv.slice(2).find((arg) => !arg.startsWith('--'))
 const catalogId = process.env.CATALOG_PRACTICE_ID || process.env.DEFAULT_PRACTICE_ID || '00000000-0000-0000-0000-000000000001'
 const ingredientKey = (ingredient) => `${ingredient.name}\u0000${ingredient.group}`
+const recipeKey = (recipe) => `${recipe.name}\u0000${recipe.source ?? ''}`
 
 const main = async () => {
   const catalogRecipes = await prisma.recipe.findMany({ where: catalogRecipeWhere(catalogId), include: { ingredients: { include: { ingredient: { select: { name: true, group: true } } } } } })
@@ -24,17 +26,17 @@ const main = async () => {
 
   for (const practice of practices) {
     const [existing, ingredients] = await Promise.all([
-      prisma.recipe.findMany({ where: { practiceId: practice.id }, select: { name: true } }),
+      prisma.recipe.findMany({ where: { practiceId: practice.id }, select: { name: true, source: true } }),
       prisma.ingredient.findMany({ where: { practiceId: practice.id, status: 'ACTIVE' }, select: { id: true, name: true, group: true } }),
     ])
-    const names = new Set(existing.map((recipe) => recipe.name))
+    const present = new Set(existing.map(recipeKey))
     const ingredientIds = new Map()
     for (const ingredient of ingredients) if (!ingredientIds.has(ingredientKey(ingredient))) ingredientIds.set(ingredientKey(ingredient), ingredient.id)
 
     const recipeRows = []
     const recipeIngredientRows = []
     let unlinked = 0
-    for (const recipe of catalogRecipes.filter((item) => !names.has(item.name))) {
+    for (const recipe of catalogRecipes.filter((item) => !present.has(recipeKey(item)))) {
       const row = recipeCopy(recipe, practice.id)
       recipeRows.push(row)
       for (const item of recipe.ingredients) {
