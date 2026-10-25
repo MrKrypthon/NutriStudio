@@ -1,5 +1,50 @@
 import { describe, expect, it } from 'vitest'
-import { calculateBmi, classifyBmi, computeEnergyRequirement, computeMacros, idealWeightRange, NutritionEngineError } from './nutrition.js'
+import { activityFactorPresets, activityPercentPresets, calculateBmi, classifyBmi, computeEnergyRequirement, computeMacros, idealWeightRange, NutritionEngineError } from './nutrition.js'
+
+describe('activityFactorPresets', () => {
+  it('offers Harris-Benedict five levels including "Muy activa" 1.9', () => {
+    expect(activityFactorPresets({ formula: 'harris', sex: 'female' }).map((preset) => preset.value)).toEqual([1.2, 1.375, 1.55, 1.725, 1.9])
+    expect(activityFactorPresets({ formula: 'harris', sex: 'male' }).map((preset) => preset.value)).toEqual([1.2, 1.375, 1.55, 1.725, 1.9])
+  })
+  it('uses the sex-specific set for Valencia, FAO/OMS and Mifflin', () => {
+    for (const formula of ['valencia', 'fao', 'schofield', 'mifflin']) {
+      expect(activityFactorPresets({ formula, sex: 'female' }).map((preset) => preset.value)).toEqual([1.2, 1.56, 1.64, 1.82])
+      expect(activityFactorPresets({ formula, sex: 'male' }).map((preset) => preset.value)).toEqual([1.2, 1.55, 1.78, 2.1])
+    }
+    expect(activityFactorPresets({ formula: 'mifflin', sex: 'Mujer' }).map((preset) => preset.value)).toEqual([1.2, 1.56, 1.64, 1.82])
+    expect(activityFactorPresets({ formula: 'mifflin', sex: 'Hombre' }).map((preset) => preset.value)).toEqual([1.2, 1.55, 1.78, 2.1])
+  })
+})
+
+describe('activityPercentPresets', () => {
+  it('offers 30/40/50 for Mifflin and 10/20/30/40 for the other formulas', () => {
+    expect(activityPercentPresets({ formula: 'mifflin' }).map((preset) => preset.value)).toEqual([30, 40, 50])
+    for (const formula of ['harris', 'fao', 'valencia', 'cunningham']) {
+      expect(activityPercentPresets({ formula }).map((preset) => preset.value)).toEqual([10, 20, 30, 40])
+    }
+  })
+})
+
+describe('computeEnergyRequirement activity by percentage', () => {
+  const base = { sex: 'female', age: 28, weightKg: 72.4, heightCm: 165, activityFactor: 1.375 }
+  it('adds the percentage of the BMR to the total expenditure', () => {
+    const result = computeEnergyRequirement({ ...base, formula: 'mifflin', activityPercent: 40 })
+    expect(result.activityMethod).toBe('percent')
+    expect(result.activityPercent).toBe(40)
+    expect(result.bmr).toBe(1454)
+    expect(result.get).toBe(Math.round(1454 * 1.4))
+    expect(result.activityKcal).toBe(result.get - result.bmr)
+    expect(result.inputs.activityPercent).toBe(40)
+  })
+  it('ignores an invalid percentage and falls back to the factor', () => {
+    for (const activityPercent of [0, -10, 101, 'abc']) {
+      const result = computeEnergyRequirement({ ...base, formula: 'mifflin', activityPercent })
+      expect(result.activityMethod).toBe('factor')
+      expect(result.get).toBe(2000)
+      expect(result.inputs.activityPercent).toBeNull()
+    }
+  })
+})
 
 describe('calculateBmi', () => {
   it('computes weight over height squared in meters', () => {
@@ -88,6 +133,26 @@ describe('computeEnergyRequirement formulas', () => {
   it('uses METS instead of the activity factor when a full METS payload is provided', () => {
     const result = computeEnergyRequirement({ ...base, formula: 'mifflin', mets: { met: 6, minutes: 45, sessionsPerWeek: 3 } })
     expect(result.activityMethod).toBe('mets')
+  })
+
+  it('sums several MET activities and keeps the per-activity detail', () => {
+    const result = computeEnergyRequirement({ ...base, formula: 'mifflin', activities: [
+      { name: 'Pesas', met: 5, minutes: 30, sessionsPerWeek: 3 },
+      { name: 'Caminar', met: 4.3, minutes: 60, sessionsPerWeek: 7 },
+    ] })
+    expect(result.activityMethod).toBe('mets')
+    expect(result.metsActivities).toHaveLength(2)
+    const expected = 5 * 3.5 * 72.4 / 200 * 30 * 3 / 7 + 4.3 * 3.5 * 72.4 / 200 * 60 * 7 / 7
+    expect(result.get).toBe(Math.round(1454.25 + expected))
+    expect(result.activityKcal).toBe(Math.round(expected))
+  })
+
+  it('drops invalid activities and falls back to the factor when none is valid', () => {
+    const result = computeEnergyRequirement({ ...base, formula: 'mifflin', activityFactor: 1.2, activities: [{ met: 5, minutes: 30, sessionsPerWeek: 3 }, { met: -1, minutes: 30, sessionsPerWeek: 3 }] })
+    expect(result.metsActivities).toHaveLength(1)
+    const none = computeEnergyRequirement({ ...base, formula: 'mifflin', activityFactor: 1.2, activities: [{ met: 0, minutes: 30, sessionsPerWeek: 3 }] })
+    expect(none.activityMethod).toBe('factor')
+    expect(none.metsActivities).toEqual([])
   })
 
   it('ignores non-numeric or negative METS and falls back to the activity factor', () => {

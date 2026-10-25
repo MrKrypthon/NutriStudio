@@ -2519,10 +2519,12 @@ app.patch('/api/v1/plans/:planId', async (request, reply) => {
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED' || plan.status === 'CANCELLED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados o cancelados no pueden modificarse.', fields: {} })
-  const { hydrationNote, recommendations, mealTimes, equivalents, activeMeals, recipeAdjustments, mealLabels, mealNotes, menus } = request.body || {}
+  const { hydrationNote, recommendations, mealTimes, equivalents, activeMeals, recipeAdjustments, mealLabels, mealNotes, menus, goal } = request.body || {}
   const updated = await prisma.nutritionPlan.update({
     where: { id: plan.id },
     data: {
+      // El objetivo terapéutico también se edita desde Evaluación, sin recalcular el requerimiento.
+      ...(goal !== undefined ? { goal: cleanPlanText(goal, 1000) } : {}),
       ...(hydrationNote !== undefined ? { hydrationNote: cleanPlanText(hydrationNote, 2000) } : {}),
       ...(recommendations !== undefined ? { recommendations: cleanPlanText(recommendations, 6000) } : {}),
       ...(mealTimes !== undefined ? { mealTimes: normalizeMealTimes(mealTimes) } : {}),
@@ -2556,7 +2558,7 @@ app.get('/api/v1/plans/:planId/adequacy', async (request, reply) => {
 })
 
 app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
-  const { sex, age, weightKg, heightCm, bodyFatPercent, formula = 'mifflin', activityFactor, mets, energyAdjustKcal, carbsPercent, proteinPercent, fatPercent, goal } = request.body || {}
+  const { sex, age, weightKg, heightCm, bodyFatPercent, formula = 'mifflin', activityFactor, activityPercent, mets, activities, energyAdjustKcal, carbsPercent, proteinPercent, fatPercent, goal } = request.body || {}
   const plan = await prisma.nutritionPlan.findFirst({ where: { id: request.params.planId, patient: { practiceId: request.practiceId } } })
   if (!plan) return reply.code(404).send({ code: 'PLAN_NOT_FOUND', message: 'Plan no encontrado.', fields: {} })
   if (plan.status === 'PUBLISHED' || plan.status === 'CANCELLED') return reply.code(409).send({ code: 'PLAN_LOCKED', message: 'Los planes publicados o cancelados no pueden modificarse.', fields: {} })
@@ -2568,7 +2570,7 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
 
   try {
     const factor = normalizeActivityFactor(activityFactor)
-    const energy = computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor: factor, mets, energyAdjustKcal })
+    const energy = computeEnergyRequirement({ sex, age: values.age, weightKg: values.weightKg, heightCm: values.heightCm, bodyFatPercent, formula, activityFactor: factor, activityPercent, mets, activities, energyAdjustKcal })
     // El requerimiento del plan (y sus macros) ya incluye el ajuste por objetivo: déficit o superávit.
     const macros = computeMacros({ kcal: energy.targetKcal, carbsPercent, proteinPercent, fatPercent })
     const updated = await prisma.nutritionPlan.update({
@@ -2578,7 +2580,9 @@ app.put('/api/v1/plans/:planId/evaluation', async (request, reply) => {
         formula,
         activityMethod: energy.activityMethod,
         activityFactor: energy.activityMethod === 'factor' ? factor : null,
-        metsPayload: energy.activityMethod === 'mets' ? { met: Number(mets?.met) || 0, minutes: Number(mets?.minutes) || 0, sessionsPerWeek: Number(mets?.sessionsPerWeek) || 0 } : Prisma.DbNull,
+        metsPayload: energy.activityMethod === 'mets'
+          ? { activities: energy.metsActivities.map(({ id, name, met, minutes, sessionsPerWeek }) => ({ id, name, met, minutes, sessionsPerWeek })) }
+          : Prisma.DbNull,
         targetKcal: energy.targetKcal,
         carbsPercent: macros.macros.carbs.percent,
         proteinPercent: macros.macros.protein.percent,

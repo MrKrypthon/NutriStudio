@@ -2443,3 +2443,81 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 .patient-consent-card .consent-check{display:flex;flex-direction:row;align-items:flex-start;gap:9px;font-weight:500}
 .patient-consent-card .consent-check input{display:inline-block;width:auto;flex:0 0 auto;margin:3px 0 0;padding:0}
 .consent-modal .patient-consent-card .summary-card-head{justify-content:flex-end}.consent-modal .patient-consent-card .summary-card-head h3{display:none}
+
+/* Evaluación del plan: pesos anteriores y objetivo editable. */
+.weight-field{position:relative;display:block}
+.weight-field input{padding-right:34px}
+.weight-history{position:absolute;right:7px;top:16px;z-index:12}
+.weight-history-trigger{border:0;background:none;color:#9AA0A9;font-size:15px;line-height:1;padding:2px 3px;cursor:pointer;border-radius:50%}
+.weight-history-trigger:hover,.weight-history-trigger[aria-expanded="true"]{color:var(--green);background:var(--mint)}
+.weight-history-pop{position:absolute;right:0;top:27px;width:250px;background:#fff;border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 30px #16181D1f;padding:12px 14px;text-align:left}
+.weight-history-pop>b{display:block;font:700 13px Outfit;color:var(--ink);margin-bottom:8px}
+.weight-history-pop ul{list-style:none;margin:0;padding:0;max-height:190px;overflow:auto}
+.weight-history-pop li{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.weight-history-pop li.current{color:var(--ink);font-weight:600}
+.weight-history-pop li strong{font-weight:600;font-variant-numeric:tabular-nums}
+.weight-history-pop p{margin:0 0 8px;font-size:12.5px;color:var(--muted);line-height:1.45}
+.weight-history-pop small{display:block;margin-top:8px;font-size:11px;color:var(--muted);line-height:1.4}
+.goal-editor textarea{width:100%;min-height:86px;resize:vertical;border:1px solid var(--line);border-radius:6px;background:#fbfcfc;padding:10px;font:12.5px Outfit;color:#16181D}
+.goal-editor textarea:focus{border-color:var(--green);outline:none}
+.goal-editor-foot{display:flex;justify-content:flex-end;gap:10px;min-height:18px;margin-top:6px}
+.goal-editor-foot .form-error{margin:0;padding:0;background:none}
+
+/* Actividad física: nivel sugerido + factor editable a mano. */
+.activity-factor-row{display:grid;grid-template-columns:1.5fr .8fr;gap:6px;align-items:center}
+.activity-factor-row select,.activity-factor-row input{margin-top:6px}
+.activity-factor-row input{text-align:center}
+
+/* Actividad física por METs: varias actividades en tabla y modal para agregar/editar. */
+.form-grid-full{grid-column:1/-1}
+.mets-editor{border:1px solid var(--line);border-radius:9px;padding:13px 14px;background:#fff}
+.mets-editor-head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:10px}
+.mets-editor-head .eyebrow{margin:0 0 3px}.mets-editor-head b{font:700 13.5px Outfit;color:var(--ink)}
+.mets-editor-head .secondary{padding:7px 11px;font-size:12px}
+.mets-table{display:grid;gap:1px}
+.mets-row{display:grid;grid-template-columns:1.6fr .7fr .8fr 26px;align-items:center;gap:10px;padding:6px 4px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+.mets-row>span{text-align:right;font-variant-numeric:tabular-nums}
+.mets-head{border-top:0;font:600 10.5px Outfit;text-transform:uppercase;letter-spacing:.4px;padding-bottom:3px}
+.mets-name{border:0;background:none;padding:0;text-align:left;cursor:pointer;color:var(--ink);font:600 12.5px Outfit}
+.mets-name small{display:block;color:var(--muted);font:400 11px Outfit;margin-top:1px}
+.mets-name:hover{color:var(--green)}
+.mets-total{color:var(--ink);font-weight:700;border-top:1px solid var(--line);padding-top:8px}
+.mets-total>span:first-child{text-align:left}
+.mets-formula{background:#F7F8F9;border-radius:7px;padding:9px 11px;margin:4px 0 0;font-size:11.5px;line-height:1.45}
+.mets-modal{width:min(560px,calc(100% - 32px))}
+
+/* Resumen del paso Porciones: dona de macros, calidad, lípidos y micronutrientes. */
+.eq-summary-rich{display:grid;gap:13px}
+.eq-summary-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.eq-summary-head .eyebrow{margin:0}
+.eq-weight-badge{font-size:11px;color:var(--muted);background:#F7F8F9;border-radius:10px;padding:3px 8px;white-space:nowrap}
+.eq-macro-hero{display:grid;grid-template-columns:112px minmax(0,1fr);gap:12px;align-items:center}
+.eq-donut{width:112px;height:112px;border-radius:50%;display:grid;place-items:center;position:relative;flex:0 0 auto}
+.eq-donut:after{content:'';position:absolute;inset:17px;background:#fff;border-radius:50%}
+.eq-donut-center{position:relative;z-index:1;text-align:center;line-height:1.08}
+.eq-donut-center b{display:block;font:800 17px Outfit;color:var(--ink)}
+.eq-donut-center small{display:block;font-size:9.5px;color:var(--muted)}
+.eq-donut-center em{display:block;font:400 9px Outfit;color:var(--muted);margin-top:2px;font-style:normal}
+.eq-macro-cards{display:grid;gap:6px;min-width:0}
+.eq-macro-card{border-bottom:1px solid var(--line);padding-bottom:5px;min-width:0}
+.eq-macro-card:last-child{border-bottom:0;padding-bottom:0}
+.eq-macro-top{display:flex;align-items:center;gap:5px;font:600 11.5px Outfit;color:var(--ink)}
+.eq-macro-top i{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.eq-macro-top b{margin-left:auto;font-size:12px}
+.eq-macro-line{display:block;font-size:10.5px;color:var(--muted);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eq-macro-line b{color:var(--ink);font-weight:600}
+.eq-nutrient-quality,.eq-lipids,.eq-micros{border-top:1px solid var(--line);padding-top:9px}
+.eq-nutrient-quality .eyebrow,.eq-lipids .eyebrow,.eq-micros .eyebrow{margin:0 0 5px}
+.eq-quality-row{display:grid;grid-template-columns:1fr auto auto;gap:7px;align-items:center;font-size:11.5px;padding:3px 0}
+.eq-quality-row>span{color:var(--muted)}
+.eq-quality-row>b{font-weight:500;color:var(--ink);font-size:11px;text-align:right}
+.eq-quality-row .eq-chip{font-size:9.5px;padding:2px 6px}
+.eq-lipid-row{display:grid;grid-template-columns:1fr 38px 48px;gap:6px;align-items:center;font-size:11.5px;padding:3px 0;color:var(--muted)}
+.eq-lipid-row b{text-align:right;color:var(--ink);font-size:11.5px}
+.eq-lipid-row small{text-align:right;color:var(--muted);font-size:11px}
+.eq-micro-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.eq-micro-item{border:1px solid var(--line);border-radius:7px;padding:5px 7px;min-width:0}
+.eq-micro-item span{display:block;font-size:9.5px;color:var(--muted);line-height:1.25}
+.eq-micro-item b{display:block;font-size:11.5px;color:var(--ink);margin-top:2px}
+.eq-micro-item small{display:block;font-size:9.5px;color:var(--muted);margin-top:1px}
+@media(max-width:1100px){.eq-macro-hero{grid-template-columns:112px minmax(0,1fr)}}

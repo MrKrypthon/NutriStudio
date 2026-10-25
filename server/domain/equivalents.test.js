@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { EQUIVALENT_MEALS, EQUIVALENT_TABLE, equivalentAdequacy, equivalentTotals, macroTargets, mealBadgePortions, normalizeEquivalentPlan, remainingEquivalents, suggestDistribution, suggestEquivalents } from './equivalents.js'
+import { EQUIVALENT_MEALS, EQUIVALENT_TABLE, equivalentAdequacy, equivalentNutrientTotals, equivalentTotals, macroTargets, mealBadgePortions, normalizeEquivalentPlan, remainingEquivalents, suggestDistribution, suggestEquivalents } from './equivalents.js'
 
 describe('macroTargets', () => {
   it('turns kcal and macro percentages into grams (the EQ sheet example)', () => {
@@ -16,6 +16,23 @@ describe('equivalentTotals', () => {
   it('ignores unknown groups and empty input', () => {
     expect(equivalentTotals({ X: 9 })).toEqual({ kcal: 0, protein: 0, fat: 0, carbs: 0 })
     expect(equivalentTotals(null)).toEqual({ kcal: 0, protein: 0, fat: 0, carbs: 0 })
+  })
+})
+
+describe('equivalentNutrientTotals', () => {
+  it('adds fiber, sugars, lipid profile and micronutrients by equivalent', () => {
+    const totals = equivalentNutrientTotals({ V: 2, LEG: 1 })
+    expect(totals.fiber).toBeCloseTo(1.46 * 2 + 4.18, 1)
+    expect(totals.potassium).toBeCloseTo(169.77 * 2 + 334.13, 1)
+    expect(totals.saturatedFat).toBeCloseTo(0.2, 1)
+    expect(totals.vitaminC).toBeCloseTo(27.73 * 2 + 4.04, 1)
+  })
+
+  it('returns zeros for unknown groups and empty input', () => {
+    const empty = equivalentNutrientTotals(null)
+    expect(empty.fiber).toBe(0)
+    expect(empty.sodium).toBe(0)
+    expect(equivalentNutrientTotals({ X: 9 })).toEqual(empty)
   })
 })
 

@@ -4,6 +4,8 @@ import ModuleHeader from '../../components/ModuleHeader.jsx'
 import DocumentPage from '../documents/DocumentPage.jsx'
 import DistributeMatrix from './DistributeMatrix.jsx'
 import EquivalentsStep from './EquivalentsStep.jsx'
+import { GoalEditor, WeightHistory } from './EvaluationExtras.jsx'
+import MetsActivityEditor from './MetsActivityEditor.jsx'
 import RecipeAdjustModal from './RecipeAdjustModal.jsx'
 import { itemLine } from '../../../server/domain/recipeEquivalents.js'
 import RecipeSuggestModal from './RecipeSuggestModal.jsx'
@@ -11,6 +13,7 @@ import { backdropClose, pruneAdjustments, scaledRecipeLines, clampFactor, MICROS
 import { PLAN_MEALS, formatMealTime, suggestMealsFromConsultation } from '../../../server/domain/planMeals.js'
 import { adjustmentFactor, adjustmentKey } from '../../../server/domain/documents.js'
 import { equivalentTotals, macroTargets, suggestDistribution } from '../../../server/domain/equivalents.js'
+import { activityFactorPresets, activityPercentPresets } from '../../../server/domain/nutrition.js'
 import { avoidTermsFromText } from '../../../server/domain/recipeSuggestions.js'
 import { clinicalApi, nutritionApi, patientsApi, plansApi, recipesApi } from '../../lib/api.js'
 import { usePatient } from '../../lib/usePatient.js'
@@ -44,46 +47,66 @@ const DAYS = [
 // Ajuste de energía por objetivo, en kcal/día sobre el gasto total (GET).
 const ENERGY_ADJUST_OPTIONS = [['0', 'Mantener peso · sin ajuste'], ['-300', 'Bajar de peso · −300 kcal'], ['-500', 'Bajar de peso · −500 kcal'], ['-750', 'Bajar de peso · −750 kcal'], ['300', 'Subir de peso · +300 kcal'], ['500', 'Subir de peso · +500 kcal']]
 const ENERGY_ADJUST_PRESETS = ENERGY_ADJUST_OPTIONS.map(([value]) => value)
-const ACTIVITY_FACTORS = ['1.2', '1.375', '1.55', '1.725']
+// Factores de actividad sugeridos según la fórmula y el sexo (misma tabla que valida el servidor).
+const activityPresetsFor = (formula, sex) => activityFactorPresets({ formula, sex })
+const defaultActivityFor = (formula, sex) => String(activityPresetsFor(formula, sex)[1]?.value ?? 1.375)
+const percentPresetsFor = (formula) => activityPercentPresets({ formula })
+const defaultPercentFor = (formula) => String(percentPresetsFor(formula)[1]?.value ?? 20)
 // Campos del formulario que cambian el requerimiento: tocarlos deja viejo el resultado calculado.
-const ENERGY_FIELDS = ['sex', 'age', 'weightKg', 'heightCm', 'bodyFatPercent', 'formula', 'activityFactor', 'energyAdjustKcal', 'activityMethod', 'metsValue', 'metsMinutes', 'metsSessions']
+const ENERGY_FIELDS = ['sex', 'age', 'weightKg', 'heightCm', 'bodyFatPercent', 'formula', 'activityFactor', 'activityPercent', 'energyAdjustKcal', 'activityMethod', 'metsActivities']
 // Porcentajes de macros: van en el mismo guardado que el requerimiento, pero no lo vuelven viejo.
 const MACRO_FIELDS = ['carbsPercent', 'proteinPercent', 'fatPercent']
 // Un 0 % es válido; sólo un campo vacío cae al valor por defecto (antes `Number(x) || 50` convertía
 // un 0 legítimo en 50).
 const percentValue = (value, fallback) => (value !== '' && value != null && Number.isFinite(Number(value)) ? Number(value) : fallback)
-// Ejercicios frecuentes con su intensidad en METs (Compendio de Actividades Físicas), para no tener
-// que recordar el número; se puede escribir cualquier otro valor.
-const MET_PRESETS = [['3.5', 'Caminar a paso normal'], ['4.3', 'Caminar rápido'], ['5', 'Pesas / fuerza'], ['6.5', 'Baile aeróbico'], ['7', 'Trotar o fútbol'], ['7.5', 'Ciclismo moderado'], ['8', 'HIIT o natación continua'], ['9.8', 'Correr (10 km/h)'], ['2.5', 'Yoga']]
-// Lo que se manda al servidor para calcular: con METs va el ejercicio; con factor, no.
+// Lo que se manda al servidor para calcular: con METs van las actividades; con porcentaje, el
+// porcentaje; con factor, el factor.
 const energyPayload = (form) => {
-  const { metsValue, metsMinutes, metsSessions, activityMethod, ...rest } = form
-  const mets = activityMethod === 'mets' ? { met: Number(metsValue), minutes: Number(metsMinutes), sessionsPerWeek: Number(metsSessions) } : null
-  return { ...rest, ...(mets && mets.met > 0 && mets.minutes > 0 && mets.sessionsPerWeek > 0 ? { mets } : {}) }
+  const { metsActivities, activityPercent, activityMethod, ...rest } = form
+  if (activityMethod === 'percent') return { ...rest, activityPercent: Number(activityPercent) }
+  if (activityMethod === 'mets') {
+    const activities = (Array.isArray(metsActivities) ? metsActivities : [])
+      .map(({ id, name, met, minutes, sessionsPerWeek }) => ({ id, name, met: Number(met), minutes: Number(minutes), sessionsPerWeek: Number(sessionsPerWeek) }))
+      .filter((activity) => activity.met > 0 && activity.minutes > 0 && activity.sessionsPerWeek > 0)
+    return { ...rest, ...(activities.length ? { activities } : {}) }
+  }
+  return rest
 }
-const EMPTY_FORM = { sex: 'female', age: '', weightKg: '', heightCm: '', bodyFatPercent: '', formula: 'mifflin', activityFactor: '1.375', activityMethod: 'factor', metsValue: '', metsMinutes: '', metsSessions: '', energyAdjustKcal: '0', goal: '', carbsPercent: '50', proteinPercent: '25', fatPercent: '25' }
+const EMPTY_FORM = { sex: 'female', age: '', weightKg: '', heightCm: '', bodyFatPercent: '', formula: 'mifflin', activityFactor: '1.375', activityPercent: '30', activityMethod: 'factor', metsActivities: [], energyAdjustKcal: '0', goal: '', carbsPercent: '50', proteinPercent: '25', fatPercent: '25' }
 const numberText = (value, fallback) => (value != null && value !== '' && Number.isFinite(Number(value)) ? String(Number(value)) : fallback)
 // Formulario del cálculo a partir de UN plan: lo guardado en él, luego los datos de la paciente
 // (sexo, edad, última medición) y, si no hay nada, los valores por defecto. Nunca lo que quedó
 // escrito del plan o de la paciente anterior.
 const formFromPlan = (plan, patient, measurement) => {
   const inputs = plan?.evaluation?.inputs || {}
+  // El cálculo guardado puede traer el sexo como 'female' (lo que manda este formulario) o como
+  // 'Mujer' (lo que guarda el expediente): se lleva siempre al valor del selector.
+  const sex = inputs.sex != null ? sexToFormValue(inputs.sex) : (patient ? sexToFormValue(patient.sex) : EMPTY_FORM.sex)
+  const formula = plan?.formula || EMPTY_FORM.formula
+  // Cualquier factor positivo guardado se respeta (también los escritos a mano fuera de la lista);
+  // si no hay, se propone el nivel "ligera" de la fórmula y el sexo.
   const activity = numberText(plan?.activityFactor, '')
+  const activityFactor = Number(activity) > 0 ? activity : defaultActivityFor(formula, sex)
+  // El plan puede traer varias actividades (diseño actual) o una sola (planes ya guardados).
+  const storedMets = plan?.metsPayload || null
+  const storedActivities = Array.isArray(storedMets?.activities)
+    ? storedMets.activities
+    : storedMets && ['met', 'minutes', 'sessionsPerWeek'].some((key) => storedMets[key] != null)
+      ? [{ id: 'legacy', name: 'Actividad física', met: storedMets.met, minutes: storedMets.minutes, sessionsPerWeek: storedMets.sessionsPerWeek }]
+      : []
   return {
-    // El cálculo guardado puede traer el sexo como 'female' (lo que manda este formulario) o como
-    // 'Mujer' (lo que guarda el expediente): se lleva siempre al valor del selector.
-    sex: inputs.sex != null ? sexToFormValue(inputs.sex) : (patient ? sexToFormValue(patient.sex) : EMPTY_FORM.sex),
+    sex,
     age: inputs.age != null ? String(inputs.age) : (patient ? computeAge(patient.birthDate) : ''),
     weightKg: numberText(inputs.weightKg ?? measurement?.weightKg, ''),
     heightCm: numberText(inputs.heightCm ?? measurement?.heightCm, ''),
     bodyFatPercent: numberText(inputs.bodyFatPercent, ''),
-    formula: plan?.formula || EMPTY_FORM.formula,
-    activityFactor: ACTIVITY_FACTORS.includes(activity) ? activity : EMPTY_FORM.activityFactor,
-    // Actividad por METs (ejercicio medido) en vez de por factor: se restaura lo guardado en el plan.
-    activityMethod: plan?.activityMethod === 'mets' && plan?.metsPayload ? 'mets' : 'factor',
-    metsValue: numberText(plan?.metsPayload?.met, ''),
-    metsMinutes: numberText(plan?.metsPayload?.minutes, ''),
-    metsSessions: numberText(plan?.metsPayload?.sessionsPerWeek, ''),
+    formula,
+    activityFactor,
+    activityPercent: numberText(inputs.activityPercent, defaultPercentFor(formula)),
+    // Actividad por METs (ejercicio medido) o por porcentaje en vez de por factor: se restaura lo
+    // guardado en el plan.
+    activityMethod: plan?.activityMethod === 'percent' && Number(inputs.activityPercent) > 0 ? 'percent' : plan?.activityMethod === 'mets' && plan?.metsPayload ? 'mets' : 'factor',
+    metsActivities: storedActivities.map((item, index) => ({ id: item.id || `stored-${index}`, name: item.name || 'Actividad física', met: numberText(item.met, ''), minutes: numberText(item.minutes, ''), sessionsPerWeek: numberText(item.sessionsPerWeek, '') })),
     energyAdjustKcal: numberText(plan?.evaluation?.energyAdjustKcal, '0'),
     goal: plan?.goal || '',
     carbsPercent: numberText(plan?.carbsPercent, EMPTY_FORM.carbsPercent),
@@ -94,6 +117,10 @@ const formFromPlan = (plan, patient, measurement) => {
 const notesFromPlan = (plan) => ({ hydrationNote: plan?.hydrationNote || '', recommendations: plan?.recommendations || '', mealTimes: plan?.mealTimes || {}, equivalents: plan?.equivalents || null, activeMeals: plan?.activeMeals || [], recipeAdjustments: plan?.recipeAdjustments || {}, mealLabels: plan?.mealLabels || {}, mealNotes: plan?.mealNotes || {}, menus: Array.isArray(plan?.menus) ? plan.menus : [] })
 const isEditablePlan = (plan) => plan?.status === 'DRAFT' || plan?.status === 'READY'
 const latestMeasurementOf = (consultations) => (consultations || []).flatMap((c) => c.measurements || []).sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))[0] || null
+// Pesos de las mediciones anteriores (más reciente primero), para el ⓘ del peso en Evaluación.
+const weightHistoryOf = (consultations) => (consultations || []).flatMap((c) => c.measurements || [])
+  .filter((measurement) => Number(measurement?.weightKg) > 0)
+  .sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))
 const RECIPE_COLORS = ['coral', 'blue', 'yellow', 'purple']
 const NUTRIENT_CHIPS = [['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['carbs', 'Carbohidratos', 'g'], ['fat', 'Grasas', 'g'], ['fiber', 'Fibra', 'g']]
 
@@ -214,6 +241,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [patients, setPatients] = useState([])
   const [loadState, setLoadState] = useState('loading')
   const [plan, setPlan] = useState(null)
+  // Pesos de las consultas de la paciente (más reciente primero), para el ⓘ del peso en Evaluación.
+  const [weightHistory, setWeightHistory] = useState([])
   const [recipes, setRecipes] = useState([])
   const [slots, setSlots] = useState({})
   // Porciones (factor de ración) por tiempo de comida; se aplican a las 7 días y alimentan el
@@ -365,9 +394,11 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       // guardado, luego la última medición clínica, y si no hay, campos vacíos por llenar.
       const measurement = latestMeasurementOf(consultationsResponse.items)
       measurementRef.current = { patientId: patientAtStart, measurement }
+      setWeightHistory(weightHistoryOf(consultationsResponse.items))
       // Se abrió o creó un plan a mano mientras cargaba: ese manda. Sólo se completan peso y
       // talla si quedaron vacíos (la medición no se conocía todavía).
       if (planOpeningRef.current > 0 || planEpochRef.current !== epoch) {
+        setWeightHistory(weightHistoryOf(consultationsResponse.items))
         if (measurement) setForm((prev) => ({ ...prev, weightKg: prev.weightKg || numberText(measurement.weightKg, ''), heightCm: prev.heightCm || numberText(measurement.heightCm, '') }))
         setLoadState('ready')
         return
@@ -430,6 +461,12 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   // silently fall back to total mass and inflate the requirement — so the field is only shown and
   // only required meaningfully for those two formulas.
   const needsBodyFat = form.formula === 'cunningham' || form.formula === 'katch-mcardle'
+  // Factores sugeridos para la fórmula y el sexo actuales; si el guardado no coincide con ninguno,
+  // el selector muestra "Personalizado" y el número se conserva tal cual.
+  const activityPresets = activityPresetsFor(form.formula, form.sex)
+  const activityPresetMatch = activityPresets.find((preset) => Number(preset.value) === Number(form.activityFactor))
+  const percentPresets = percentPresetsFor(form.formula)
+  const percentPresetMatch = percentPresets.find((preset) => Number(preset.value) === Number(form.activityPercent))
 
   const updateForm = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -440,6 +477,38 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     if (ENERGY_FIELDS.includes(key) && (calcResult || calcState === 'loading')) { setCalcStale(true); setEvalSaveState('idle') }
     // Un cambio de macros no invalida el cálculo, pero sí el "Guardado ✓" (van en el mismo guardado).
     else if (MACRO_FIELDS.includes(key)) setEvalSaveState('idle')
+  }
+
+  // Al cambiar de fórmula o de sexo, los niveles de actividad sugeridos cambian (Harris-Benedict
+  // tiene cinco; las demás fórmulas, cuatro por sexo). Se conserva el NIVEL elegido (sedentaria,
+  // ligera…) y se toma el valor equivalente de la lista nueva; un factor escrito a mano se respeta.
+  const updateActivityLevel = (nextFormula, nextSex) => {
+    const before = activityPresetsFor(form.formula, form.sex)
+    const after = activityPresetsFor(nextFormula, nextSex)
+    const index = before.findIndex((preset) => Number(preset.value) === Number(form.activityFactor))
+    if (nextFormula !== form.formula) updateForm('formula', nextFormula)
+    if (nextSex !== form.sex) updateForm('sex', nextSex)
+    if (index >= 0) {
+      const nextValue = String(after[Math.min(index, after.length - 1)].value)
+      if (nextValue !== form.activityFactor) updateForm('activityFactor', nextValue)
+    }
+    // El porcentaje también depende de la fórmula (Mifflin 30/40/50; las demás 10/20/30/40).
+    if (form.activityMethod === 'percent') {
+      const beforePercents = percentPresetsFor(form.formula)
+      const afterPercents = percentPresetsFor(nextFormula)
+      const percentIndex = beforePercents.findIndex((preset) => Number(preset.value) === Number(form.activityPercent))
+      if (percentIndex >= 0) {
+        const nextPercent = String(afterPercents[Math.min(percentIndex, afterPercents.length - 1)].value)
+        if (nextPercent !== form.activityPercent) updateForm('activityPercent', nextPercent)
+      }
+    }
+  }
+  const updateFormula = (nextFormula) => updateActivityLevel(nextFormula, form.sex)
+  const updateSex = (nextSex) => updateActivityLevel(form.formula, nextSex)
+  // Al entrar a "porcentaje" se propone el nivel ligero de la fórmula si aún no hay un valor.
+  const changeActivityMethod = (method) => {
+    if (method === 'percent' && !(Number(form.activityPercent) > 0)) updateForm('activityPercent', defaultPercentFor(form.formula))
+    updateForm('activityMethod', method)
   }
 
   const calculate = async (event) => {
@@ -531,6 +600,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       let full = created
       try { full = await plansApi.get(created.id) } catch { full = created }
       measurementRef.current = { patientId: targetId, measurement: latestMeasurementOf(consultationsResponse.items) }
+      setWeightHistory(weightHistoryOf(consultationsResponse.items))
       planEpochRef.current += 1
       applyPlan(full)
       setMode('patient')
@@ -1285,9 +1355,26 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
       </details>
     })()}
 
-    {step === STEP.EVALUATION && <><ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="Resumen del expediente y del último cálculo guardado en el paso Dietocálculo." action={<button className="secondary" onClick={() => selectStep(1)}>Ir al cálculo →</button>} /><div className="plan-grid"><div className="plan-card panel"><h3>Datos antropométricos</h3><div className="form-grid three"><label>Sexo<input value={sexLabel(patient?.sex) || '—'} readOnly /></label><label>Fecha nacimiento<input value={formatUTCDate(patient?.birthDate) || '—'} readOnly /></label><label>Edad<input value={computeAge(patient?.birthDate) ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label><label>Peso actual<input value={plan?.evaluation?.inputs?.weightKg ? `${plan.evaluation.inputs.weightKg} kg` : '—'} readOnly /></label><label>Talla<input value={plan?.evaluation?.inputs?.heightCm ? `${plan.evaluation.inputs.heightCm} cm` : '—'} readOnly /></label><label>IMC calculado<input value={plan?.evaluation?.bmi ?? '—'} readOnly /></label></div></div><div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3>{plan?.evaluation?.idealWeightRange ? <div className="ideal-number">{plan.evaluation.idealWeightRange.minKg} <small>– {plan.evaluation.idealWeightRange.maxKg} kg</small></div> : <p className="muted">Calcula el requerimiento en el paso "Dietocálculo" para ver el rango.</p>}<p className="muted">Rango estimado para su estatura</p></div><div className="plan-card panel full"><h3>Objetivo terapéutico</h3>{plan?.goal ? <p>{plan.goal}</p> : <p className="muted">Sin definir todavía — se guarda junto con el cálculo en el paso "Dietocálculo".</p>}</div></div></>}
+    {step === STEP.EVALUATION && <>
+      <ModuleHeader eyebrow="EVALUACIÓN NUTRICIONAL" title="Datos y objetivos" subtitle="Resumen del expediente y del último cálculo guardado en el paso Dietocálculo." action={<button className="secondary" onClick={() => selectStep(1)}>Ir al cálculo →</button>} />
+      <div className="plan-grid">
+        <div className="plan-card panel">
+          <h3>Datos antropométricos</h3>
+          <div className="form-grid three">
+            <label>Sexo<input value={sexLabel(patient?.sex) || '—'} readOnly /></label>
+            <label>Fecha nacimiento<input value={formatUTCDate(patient?.birthDate) || '—'} readOnly /></label>
+            <label>Edad<input value={computeAge(patient?.birthDate) ? `${computeAge(patient.birthDate)} años` : '—'} readOnly /></label>
+            <label>Peso actual<span className="weight-field"><input value={plan?.evaluation?.inputs?.weightKg ? `${plan.evaluation.inputs.weightKg} kg` : '—'} readOnly /><WeightHistory items={weightHistory} currentKg={plan?.evaluation?.inputs?.weightKg} /></span></label>
+            <label>Talla<input value={plan?.evaluation?.inputs?.heightCm ? `${plan.evaluation.inputs.heightCm} cm` : '—'} readOnly /></label>
+            <label>IMC calculado<input value={plan?.evaluation?.bmi ?? '—'} readOnly /></label>
+          </div>
+        </div>
+        <div className="plan-card panel ideal-card"><h3>Rangos de peso ideal <span>ⓘ</span></h3>{plan?.evaluation?.idealWeightRange ? <div className="ideal-number">{plan.evaluation.idealWeightRange.minKg} <small>– {plan.evaluation.idealWeightRange.maxKg} kg</small></div> : <p className="muted">Calcula el requerimiento en el paso "Dietocálculo" para ver el rango.</p>}<p className="muted">Rango estimado para su estatura</p></div>
+        <div className="plan-card panel full"><h3>Objetivo terapéutico</h3><GoalEditor plan={plan} locked={planLocked} onSaved={mergePlan} /></div>
+      </div>
+    </>}
 
-    {step === STEP.CALCULATION && <><ModuleHeader eyebrow="DIETOCÁLCULO · REQUERIMIENTO" title="Calcula el punto de partida" subtitle="Cada resultado queda asociado a la fórmula y a los datos utilizados." /><form className="calculator-layout" onSubmit={calculate}><section className="panel calculator-form"><div className="section-heading"><div><h2>Datos de la paciente</h2><p className="subtitle">Puedes ajustar estos valores para simular el plan.</p></div></div><div className="form-grid three"><label>Sexo<select value={form.sex} onChange={(e) => updateForm('sex', e.target.value)}><option value="male">Hombre</option><option value="female">Mujer</option></select></label><label>Edad (años)<input type="number" min="1" max="120" value={form.age} onChange={(e) => updateForm('age', e.target.value)} /></label><label>Peso (kg)<input type="number" step="0.1" min="1" value={form.weightKg} onChange={(e) => updateForm('weightKg', e.target.value)} /></label><label>Talla (cm)<input type="number" step="0.1" min="30" value={form.heightCm} onChange={(e) => updateForm('heightCm', e.target.value)} /></label><label>Fórmula energética<select value={form.formula} onChange={(e) => updateForm('formula', e.target.value)}><option value="mifflin">Mifflin-St Jeor</option><option value="harris">Harris-Benedict</option><option value="schofield">FAO/OMS/ONU (Schofield)</option><option value="valencia">Valencia (población mexicana)</option><option value="cunningham">Cunningham</option><option value="katch-mcardle">Katch-McArdle</option></select></label>{needsBodyFat && <label>% Grasa corporal<input type="number" step="0.1" min="1" max="75" value={form.bodyFatPercent} onChange={(e) => updateForm('bodyFatPercent', e.target.value)} /></label>}<label>Actividad física<select value={form.activityMethod === 'mets' ? 'mets' : form.activityFactor} onChange={(e) => { if (e.target.value === 'mets') updateForm('activityMethod', 'mets'); else { setForm((prev) => ({ ...prev, activityMethod: 'factor' })); updateForm('activityFactor', e.target.value) } }}><option value="1.2">Sedentaria · 1.2</option><option value="1.375">Ligera · 1.375</option><option value="1.55">Moderada · 1.55</option><option value="1.725">Intensa · 1.725</option><option value="mets">Por ejercicio (METs)…</option></select></label>{form.activityMethod === 'mets' && <><label>Ejercicio<select value={MET_PRESETS.some(([value]) => value === String(form.metsValue)) ? String(form.metsValue) : ''} onChange={(e) => updateForm('metsValue', e.target.value)}><option value="">Otro (escribe los METs)</option>{MET_PRESETS.map(([value, label]) => <option value={value} key={label}>{label} · {value} METs</option>)}</select></label><label>METs<input type="number" min="1" max="23" step="0.1" value={form.metsValue} onChange={(e) => updateForm('metsValue', e.target.value)} /></label><label>Minutos por sesión<input type="number" min="1" max="600" value={form.metsMinutes} onChange={(e) => updateForm('metsMinutes', e.target.value)} /></label><label>Sesiones por semana<input type="number" min="1" max="21" value={form.metsSessions} onChange={(e) => updateForm('metsSessions', e.target.value)} /></label></>}<label>Ajuste por objetivo<select value={showCustomAdjust ? 'custom' : String(form.energyAdjustKcal)} onChange={(e) => { if (e.target.value === 'custom') { setCustomAdjust(true); return } setCustomAdjust(false); updateForm('energyAdjustKcal', e.target.value) }}>{ENERGY_ADJUST_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}<option value="custom">Otro valor…</option></select></label>{showCustomAdjust && <label>Ajuste (kcal/día)<input type="number" step="50" min="-1500" max="1500" placeholder="0" value={form.energyAdjustKcal} onChange={(e) => updateForm('energyAdjustKcal', e.target.value)} /></label>}</div><div className="macro-distribution"><div className="section-heading"><div><h2>Distribución de macronutrientes</h2><p className="subtitle">Porcentaje del requerimiento energético. La suma debe dar 100%.</p></div></div><div className="form-grid three"><label>Carbohidratos (%)<input type="number" min="0" max="100" value={form.carbsPercent} onChange={(e) => updateForm('carbsPercent', e.target.value)} /></label><label>Proteína (%)<input type="number" min="0" max="100" value={form.proteinPercent} onChange={(e) => updateForm('proteinPercent', e.target.value)} /></label><label>Grasas (%)<input type="number" min="0" max="100" value={form.fatPercent} onChange={(e) => updateForm('fatPercent', e.target.value)} /></label></div><div className={'macro-sum' + (macroSum === 100 ? '' : ' invalid')}>{macroSum}% {macroSum === 100 ? '· distribución correcta' : '· debe sumar 100%'}</div>{calcResult?.get && macroSum === 100 && <div className="macro-grams">Carbohidratos {macroGrams(form.carbsPercent, 4)} g · Proteína {macroGrams(form.proteinPercent, 4)} g · Grasas {macroGrams(form.fatPercent, 9)} g</div>}</div><label>Objetivo terapéutico<textarea className="wide-textarea" placeholder="Resultado clínico y conductual esperado..." value={form.goal} onChange={(e) => updateForm('goal', e.target.value)} /></label><button className="primary calculate-button" disabled={calcState === 'loading'}>{calcState === 'loading' ? 'Calculando...' : 'Calcular requerimiento'} <span>→</span></button>{calcState === 'error' && <div className="form-error">⚠ {calcError}</div>}</section><aside className="panel calculation-result">{!calcResult && calcState !== 'loading' ? <div className="result-empty"><span>◌</span><h3>Tu resultado aparecerá aquí</h3><p>Completa o confirma los datos y calcula el requerimiento energético.</p></div> : calcState === 'loading' ? <div className="result-empty"><span className="loading-dot">●</span><h3>Calculando requerimiento...</h3><p>Estamos aplicando la fórmula seleccionada.</p></div> : <><div className="result-header"><div><p className="eyebrow">RESULTADO CALCULADO</p><h2>Requerimiento energético</h2></div><span className="result-check">✓</span></div><div className="get-number"><small>{calcResult.energyAdjustKcal ? 'Requerimiento del plan' : 'GET · Gasto energético total'}</small><b>{calcTarget.toLocaleString()} <em>kcal/día</em></b><span>{calcResult.energyAdjustKcal ? `GET ${calcResult.get.toLocaleString()} kcal ${calcResult.energyAdjustKcal > 0 ? '+' : '−'} ${Math.abs(calcResult.energyAdjustKcal)} kcal por objetivo · ` : ''}Basado en {calcResult.formulaLabel || calcResult.formula} · {calcResult.activityMethod === 'mets' ? 'metabolismo basal + ejercicio por METs' : `factor ${form.activityFactor}`}</span></div><div className="result-details"><div><small>Metabolismo basal</small><b>{calcResult.bmr.toLocaleString()} kcal</b></div><div><small>Actividad estimada</small><b>+{calcResult.activityKcal.toLocaleString()} kcal</b></div></div>{calcResult.bmi && <div className="result-details"><div><small>IMC</small><b>{calcResult.bmi}</b></div><div><small>Peso saludable estimado</small><b>{calcResult.idealWeightRange.minKg}–{calcResult.idealWeightRange.maxKg} kg</b></div></div>}{calcResult.flags?.length > 0 && <div className="form-error">⚠ {calcResult.flags.map((f) => f.message).join(' ')}</div>}{calcStale && <div className="form-error">⚠ Cambiaste los datos después de calcular: este resultado ya no corresponde. Vuelve a calcular antes de guardar.</div>}<button type="button" className="primary full-button" disabled={evalSaveState === 'saving' || !plan || planLocked || calcStale || macroSum !== 100} onClick={saveToPlan}>{evalSaveState === 'saving' ? 'Guardando...' : evalSaveState === 'saved' ? 'Guardado en el plan ✓' : 'Guardar en el plan'} <span>→</span></button>{!plan && <p className="muted">Crea una consulta y un plan en borrador para poder guardar.</p>}{evalSaveState === 'error' && <div className="form-error">⚠ {evalSaveError}</div>}</>}</aside></form></>}
+    {step === STEP.CALCULATION && <><ModuleHeader eyebrow="DIETOCÁLCULO · REQUERIMIENTO" title="Calcula el punto de partida" subtitle="Cada resultado queda asociado a la fórmula y a los datos utilizados." /><form className="calculator-layout" onSubmit={calculate}><section className="panel calculator-form"><div className="section-heading"><div><h2>Datos de la paciente</h2><p className="subtitle">Puedes ajustar estos valores para simular el plan.</p></div></div><div className="form-grid three"><label>Sexo<select value={form.sex} onChange={(e) => updateSex(e.target.value)}><option value="male">Hombre</option><option value="female">Mujer</option></select></label><label>Edad (años)<input type="number" min="1" max="120" value={form.age} onChange={(e) => updateForm('age', e.target.value)} /></label><label>Peso (kg)<input type="number" step="0.1" min="1" value={form.weightKg} onChange={(e) => updateForm('weightKg', e.target.value)} /></label><label>Talla (cm)<input type="number" step="0.1" min="30" value={form.heightCm} onChange={(e) => updateForm('heightCm', e.target.value)} /></label><label>Fórmula energética<select value={form.formula} onChange={(e) => updateFormula(e.target.value)}><option value="mifflin">Mifflin-St Jeor</option><option value="harris">Harris-Benedict</option><option value="schofield">FAO/OMS/ONU (Schofield)</option><option value="valencia">Valencia (población mexicana)</option><option value="cunningham">Cunningham</option><option value="katch-mcardle">Katch-McArdle</option></select></label>{needsBodyFat && <label>% Grasa corporal<input type="number" step="0.1" min="1" max="75" value={form.bodyFatPercent} onChange={(e) => updateForm('bodyFatPercent', e.target.value)} /></label>}<label>Actividad física<select value={form.activityMethod} onChange={(e) => changeActivityMethod(e.target.value)}><option value="factor">Factor de actividad</option><option value="percent">Porcentaje de actividad</option><option value="mets">Por ejercicio (METs)…</option></select></label>{form.activityMethod === 'factor' && <label>Nivel y factor<span className="activity-factor-row"><select value={activityPresetMatch ? String(activityPresetMatch.value) : 'custom'} onChange={(e) => { if (e.target.value !== 'custom') updateForm('activityFactor', e.target.value) }}>{activityPresets.map((preset) => <option value={preset.value} key={preset.value}>{preset.label} · {preset.value}</option>)}<option value="custom">Personalizado</option></select><input type="number" step="0.001" min="1" max="2.5" value={form.activityFactor} onChange={(e) => updateForm('activityFactor', e.target.value)} aria-label="Factor de actividad" /></span></label>}{form.activityMethod === 'percent' && <label>Nivel y porcentaje<span className="activity-factor-row"><select value={percentPresetMatch ? String(percentPresetMatch.value) : 'custom'} onChange={(e) => { if (e.target.value !== 'custom') updateForm('activityPercent', e.target.value) }}>{percentPresets.map((preset) => <option value={preset.value} key={preset.value}>{preset.label} · {preset.value}%</option>)}<option value="custom">Personalizado</option></select><input type="number" step="1" min="1" max="100" value={form.activityPercent} onChange={(e) => updateForm('activityPercent', e.target.value)} aria-label="Porcentaje de actividad" /></span></label>}{form.activityMethod === 'mets' && <div className="form-grid-full"><MetsActivityEditor value={form.metsActivities} weightKg={Number(form.weightKg) || null} onChange={(next) => updateForm('metsActivities', next)} /></div>}<label>Ajuste por objetivo<select value={showCustomAdjust ? 'custom' : String(form.energyAdjustKcal)} onChange={(e) => { if (e.target.value === 'custom') { setCustomAdjust(true); return } setCustomAdjust(false); updateForm('energyAdjustKcal', e.target.value) }}>{ENERGY_ADJUST_OPTIONS.map(([value, label]) => <option value={value} key={value}>{label}</option>)}<option value="custom">Otro valor…</option></select></label>{showCustomAdjust && <label>Ajuste (kcal/día)<input type="number" step="50" min="-1500" max="1500" placeholder="0" value={form.energyAdjustKcal} onChange={(e) => updateForm('energyAdjustKcal', e.target.value)} /></label>}</div><div className="macro-distribution"><div className="section-heading"><div><h2>Distribución de macronutrientes</h2><p className="subtitle">Porcentaje del requerimiento energético. La suma debe dar 100%.</p></div></div><div className="form-grid three"><label>Carbohidratos (%)<input type="number" min="0" max="100" value={form.carbsPercent} onChange={(e) => updateForm('carbsPercent', e.target.value)} /></label><label>Proteína (%)<input type="number" min="0" max="100" value={form.proteinPercent} onChange={(e) => updateForm('proteinPercent', e.target.value)} /></label><label>Grasas (%)<input type="number" min="0" max="100" value={form.fatPercent} onChange={(e) => updateForm('fatPercent', e.target.value)} /></label></div><div className={'macro-sum' + (macroSum === 100 ? '' : ' invalid')}>{macroSum}% {macroSum === 100 ? '· distribución correcta' : '· debe sumar 100%'}</div>{calcResult?.get && macroSum === 100 && <div className="macro-grams">Carbohidratos {macroGrams(form.carbsPercent, 4)} g · Proteína {macroGrams(form.proteinPercent, 4)} g · Grasas {macroGrams(form.fatPercent, 9)} g</div>}</div><label>Objetivo terapéutico<textarea className="wide-textarea" placeholder="Resultado clínico y conductual esperado..." value={form.goal} onChange={(e) => updateForm('goal', e.target.value)} /></label><button className="primary calculate-button" disabled={calcState === 'loading'}>{calcState === 'loading' ? 'Calculando...' : 'Calcular requerimiento'} <span>→</span></button>{calcState === 'error' && <div className="form-error">⚠ {calcError}</div>}</section><aside className="panel calculation-result">{!calcResult && calcState !== 'loading' ? <div className="result-empty"><span>◌</span><h3>Tu resultado aparecerá aquí</h3><p>Completa o confirma los datos y calcula el requerimiento energético.</p></div> : calcState === 'loading' ? <div className="result-empty"><span className="loading-dot">●</span><h3>Calculando requerimiento...</h3><p>Estamos aplicando la fórmula seleccionada.</p></div> : <><div className="result-header"><div><p className="eyebrow">RESULTADO CALCULADO</p><h2>Requerimiento energético</h2></div><span className="result-check">✓</span></div><div className="get-number"><small>{calcResult.energyAdjustKcal ? 'Requerimiento del plan' : 'GET · Gasto energético total'}</small><b>{calcTarget.toLocaleString()} <em>kcal/día</em></b><span>{calcResult.energyAdjustKcal ? `GET ${calcResult.get.toLocaleString()} kcal ${calcResult.energyAdjustKcal > 0 ? '+' : '−'} ${Math.abs(calcResult.energyAdjustKcal)} kcal por objetivo · ` : ''}Basado en {calcResult.formulaLabel || calcResult.formula} · {calcResult.activityMethod === 'mets' ? 'metabolismo basal + ejercicio por METs' : calcResult.activityMethod === 'percent' ? `metabolismo basal + ${form.activityPercent}% por actividad` : `factor ${form.activityFactor}`}</span></div><div className="result-details"><div><small>Metabolismo basal</small><b>{calcResult.bmr.toLocaleString()} kcal</b></div><div><small>Actividad estimada</small><b>+{calcResult.activityKcal.toLocaleString()} kcal</b></div></div>{calcResult.bmi && <div className="result-details"><div><small>IMC</small><b>{calcResult.bmi}</b></div><div><small>Peso saludable estimado</small><b>{calcResult.idealWeightRange.minKg}–{calcResult.idealWeightRange.maxKg} kg</b></div></div>}{calcResult.flags?.length > 0 && <div className="form-error">⚠ {calcResult.flags.map((f) => f.message).join(' ')}</div>}{calcStale && <div className="form-error">⚠ Cambiaste los datos después de calcular: este resultado ya no corresponde. Vuelve a calcular antes de guardar.</div>}<button type="button" className="primary full-button" disabled={evalSaveState === 'saving' || !plan || planLocked || calcStale || macroSum !== 100} onClick={saveToPlan}>{evalSaveState === 'saving' ? 'Guardando...' : evalSaveState === 'saved' ? 'Guardado en el plan ✓' : 'Guardar en el plan'} <span>→</span></button>{!plan && <p className="muted">Crea una consulta y un plan en borrador para poder guardar.</p>}{evalSaveState === 'error' && <div className="form-error">⚠ {evalSaveError}</div>}</>}</aside></form></>}
 
     {step === STEP.EQUIVALENTS && <>
       {renderMenuTabs()}
