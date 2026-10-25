@@ -2462,3 +2462,8 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 .goal-editor textarea:focus{border-color:var(--green);outline:none}
 .goal-editor-foot{display:flex;justify-content:flex-end;gap:10px;min-height:18px;margin-top:6px}
 .goal-editor-foot .form-error{margin:0;padding:0;background:none}
+
+/* Actividad física: nivel sugerido + factor editable a mano. */
+.activity-factor-row{display:grid;grid-template-columns:1.5fr .8fr;gap:6px;align-items:center}
+.activity-factor-row select,.activity-factor-row input{margin-top:6px}
+.activity-factor-row input{text-align:center}

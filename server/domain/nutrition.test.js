@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { calculateBmi, classifyBmi, computeEnergyRequirement, computeMacros, idealWeightRange, NutritionEngineError } from './nutrition.js'
+import { activityFactorPresets, calculateBmi, classifyBmi, computeEnergyRequirement, computeMacros, idealWeightRange, NutritionEngineError } from './nutrition.js'
+
+describe('activityFactorPresets', () => {
+  it('offers Harris-Benedict five levels including "Muy activa" 1.9', () => {
+    expect(activityFactorPresets({ formula: 'harris', sex: 'female' }).map((preset) => preset.value)).toEqual([1.2, 1.375, 1.55, 1.725, 1.9])
+    expect(activityFactorPresets({ formula: 'harris', sex: 'male' }).map((preset) => preset.value)).toEqual([1.2, 1.375, 1.55, 1.725, 1.9])
+  })
+  it('uses the sex-specific set for Valencia, FAO/OMS and Mifflin', () => {
+    for (const formula of ['valencia', 'fao', 'schofield', 'mifflin']) {
+      expect(activityFactorPresets({ formula, sex: 'female' }).map((preset) => preset.value)).toEqual([1.2, 1.56, 1.64, 1.82])
+      expect(activityFactorPresets({ formula, sex: 'male' }).map((preset) => preset.value)).toEqual([1.2, 1.55, 1.78, 2.1])
+    }
+    expect(activityFactorPresets({ formula: 'mifflin', sex: 'Mujer' }).map((preset) => preset.value)).toEqual([1.2, 1.56, 1.64, 1.82])
+    expect(activityFactorPresets({ formula: 'mifflin', sex: 'Hombre' }).map((preset) => preset.value)).toEqual([1.2, 1.55, 1.78, 2.1])
+  })
+})
 
 describe('calculateBmi', () => {
   it('computes weight over height squared in meters', () => {

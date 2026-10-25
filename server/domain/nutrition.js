@@ -7,6 +7,43 @@ const ACTIVITY_FACTORS = {
   intense: 1.725,
 }
 
+// Factores de actividad que propone el diseño del Constructor. La lista depende de la fórmula:
+// Harris-Benedict usa cinco niveles clásicos; Valencia, FAO/OMS (Schofield), Mifflin y el resto
+// usan cuatro niveles diferenciados por sexo. Son sólo valores sugeridos: el factor siempre se
+// puede escribir a mano fuera de la lista (el servidor acepta cualquier número entre 1 y 2.5).
+const HARRIS_ACTIVITY_FACTORS = [
+  { value: 1.2, label: 'Sedentaria' },
+  { value: 1.375, label: 'Ligera' },
+  { value: 1.55, label: 'Moderada' },
+  { value: 1.725, label: 'Activa' },
+  { value: 1.9, label: 'Muy activa' },
+]
+const STANDARD_ACTIVITY_FACTORS = {
+  female: [
+    { value: 1.2, label: 'Sedentaria' },
+    { value: 1.56, label: 'Ligera' },
+    { value: 1.64, label: 'Moderada' },
+    { value: 1.82, label: 'Intensa' },
+  ],
+  // La referencia del diseño escribe "Hombre"; se aceptan ambas formas al resolver el sexo.
+  male: [
+    { value: 1.2, label: 'Sedentaria' },
+    { value: 1.55, label: 'Ligera' },
+    { value: 1.78, label: 'Moderada' },
+    { value: 2.1, label: 'Intensa' },
+  ],
+}
+
+function isMaleSexValue(sex) {
+  const key = String(sex || '').trim().toLowerCase()
+  return key.startsWith('homb') || key.startsWith('masc') || key === 'male' || key === 'm'
+}
+
+function activityFactorPresets({ formula, sex } = {}) {
+  if (formula === 'harris') return HARRIS_ACTIVITY_FACTORS
+  return isMaleSexValue(sex) ? STANDARD_ACTIVITY_FACTORS.male : STANDARD_ACTIVITY_FACTORS.female
+}
+
 function leanMassKg(weightKg, bodyFatPercent) {
   return weightKg * (1 - (Number(bodyFatPercent) || 0) / 100)
 }
@@ -249,6 +286,7 @@ function computeMacros({ kcal, carbsPercent, proteinPercent, fatPercent }) {
 
 export {
   ACTIVITY_FACTORS,
+  activityFactorPresets,
   BMR_FORMULAS,
   NutritionEngineError,
   calculateBmi,
