@@ -60,7 +60,9 @@ export default function MetsActivityEditor({ value = [], weightKg = null, onChan
         </div>
       : <p className="muted">Sin actividades: el requerimiento se calcula con el metabolismo basal y el factor o porcentaje de actividad.</p>}
     {editing !== null && <div className="modal-backdrop" {...backdropClose(close)}>
-      <form className="modal mets-modal" onSubmit={(event) => { event.preventDefault(); save() }}>
+      {/* div, no form: este componente vive dentro del formulario del Dietocálculo y un <form>
+          anidado haría que "Guardar" disparara el cálculo del requerimiento. */}
+      <div className="modal mets-modal" role="dialog" aria-modal="true" aria-label={editing === 'new' ? 'Agregar actividad física' : 'Editar actividad física'} onKeyDown={(event) => { if (event.key === 'Escape') close(); if (event.key === 'Enter' && event.target.tagName === 'INPUT') { event.preventDefault(); save() } }}>
         <div className="modal-head"><h2>{editing === 'new' ? 'Agregar actividad física' : 'Editar actividad física'}</h2><button type="button" onClick={close} aria-label="Cerrar">×</button></div>
         <label>Actividad<input list="mets-activity-options" value={draft.name} required onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Ej. Pesas / fuerza" /><datalist id="mets-activity-options">{MET_PRESETS.map(([value, label]) => <option value={label} key={label}>{value} METs</option>)}</datalist></label>
         <div className="form-row">
@@ -72,8 +74,8 @@ export default function MetsActivityEditor({ value = [], weightKg = null, onChan
           <label>Calorías estimadas<input value={weightKg && draftKcal != null ? `${Math.round(draftKcal)} kcal/día` : 'Falta el peso'} readOnly /></label>
         </div>
         <p className="muted mets-formula">{draft.met} MET × {weightKg || '—'} kg × {(Number(draft.minutes) || 0) / 60} h × {draft.sessionsPerWeek} día(s) / 7 = {draftKcal != null ? round1(draftKcal) : '—'} kcal/día</p>
-        <div className="modal-actions"><button type="button" className="secondary" onClick={close}>Cancelar</button><button type="submit" className="primary" disabled={!validActivity(draft)}>Guardar</button></div>
-      </form>
+        <div className="modal-actions"><button type="button" className="secondary" onClick={close}>Cancelar</button><button type="button" className="primary" disabled={!validActivity(draft)} onClick={save}>Guardar</button></div>
+      </div>
     </div>}
   </div>
 }
