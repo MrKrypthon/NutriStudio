@@ -21,7 +21,8 @@ check "motor del OCR servido por Nginx" curl $k -fsS -o /dev/null "$base/ocr/wor
 # El worker de pdf.js (.mjs, con hash) tiene que salir como JavaScript: con nosniff, otro tipo no corre.
 pdf_worker_is_js() {
   js="$(curl $k -fsS "$base/" | grep -oE '/assets/index-[^"]+\.js' | head -n 1)"
-  worker="$(curl $k -fsS "$base$js" | grep -oE 'pdf\.worker[^"/]*\.mjs' | head -n 1)"
+  # Con el hash de Vite (pdf.worker.min-XXXX.mjs): el bundle también trae el texto «pdf.worker.mjs».
+  worker="$(curl $k -fsS "$base$js" | grep -oE 'pdf\.worker[^"/]*-[A-Za-z0-9_]+\.mjs' | head -n 1)"
   [ -n "$worker" ] && curl $k -fsSI "$base/assets/$worker" | grep -qiE '^content-type: (application|text)/javascript'
 }
 check "worker de pdf.js servido como JavaScript" pdf_worker_is_js
