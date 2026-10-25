@@ -1037,7 +1037,7 @@ app.get('/api/v1/patients', async (request) => {
       orderBy: sort === 'recent' ? [{ createdAt: 'desc' }] : sort === 'name' ? [{ firstName: 'asc' }, { lastName: 'asc' }] : [{ lastName: 'asc' }, { firstName: 'asc' }],
       skip: (currentPage - 1) * take,
       take,
-      select: { id: true, firstName: true, lastName: true, sex: true, birthDate: true, recordNumber: true, status: true },
+      select: { id: true, firstName: true, lastName: true, sex: true, birthDate: true, phone: true, recordNumber: true, status: true },
     })
     return { items, page: currentPage, pageSize: take, lite: true }
   }
