@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { copyCatalog, ingredientCopy, recipeCopy } from './catalogCopy.js'
+import { catalogRecipeWhere, copyCatalog, ingredientCopy, recipeCopy } from './catalogCopy.js'
 
 describe('copia del catálogo para una cuenta nueva', () => {
   it('no comparte fotos subidas a mano, que se borran del disco al cambiarlas', () => {
@@ -25,5 +25,14 @@ describe('copia del catálogo para una cuenta nueva', () => {
     const recipeId = created.recipe[0].id
     const newIds = new Set(created.ingredient.map((row) => row.id))
     expect(created.recipeIngredient.every((row) => row.recipeId === recipeId && newIds.has(row.ingredientId))).toBe(true)
+  })
+
+  it('reparte las recetas de los recetarios y las del DIETOCÁLCULO, no las hechas en la app', () => {
+    const where = catalogRecipeWhere('p1')
+    expect(where).toMatchObject({ practiceId: 'p1', status: 'ACTIVE' })
+    expect(where.OR[0]).toEqual({ source: { not: null } })
+    expect(where.OR[1].source).toBeNull()
+    expect(where.OR[1].name.in).toContain('Pizza de pollo búffalo')
+    expect(where.OR[1].name.in).toHaveLength(72)
   })
 })

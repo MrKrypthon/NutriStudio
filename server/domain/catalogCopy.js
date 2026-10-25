@@ -6,16 +6,25 @@
 // Se copian sólo los datos de catálogo, nunca pacientes ni nada clínico:
 //   - ingredientes activos (SMAE, base de alimentos y los agregados a mano),
 //   - el libro SMAE completo, con sus correcciones,
-//   - las recetas importadas de recetarios (`source` con valor) y sus ingredientes.
-// Las recetas propias de la práctica base (`source` vacío) no se reparten.
+//   - las recetas importadas de recetarios (`source` con valor) y las de la hoja «Recetas» de
+//     DIETOCALCULO.xlsx (sin `source`, se reconocen por nombre), con sus ingredientes.
+// Las demás recetas propias de la práctica base (`source` vacío, hechas en la app) no se reparten.
 //
 // Las fotos subidas a mano (`u-…` en recetas, todas las de ingredientes) se borran del disco al
 // cambiarlas o quitarlas; compartir ese archivo entre cuentas haría que una le borrara la foto a
 // otra, así que la copia no las lleva. Las fotos de los recetarios importados no se borran nunca y
 // sí se comparten.
 import { randomUUID } from 'node:crypto'
+import { DIETOCALCULO_RECIPE_NAMES } from '../../prisma/data/recetas-dietocalculo.js'
 
 const CHUNK = 500
+
+// Recetas de la práctica base que reparte el catálogo.
+export const catalogRecipeWhere = (practiceId) => ({
+  practiceId,
+  status: 'ACTIVE',
+  OR: [{ source: { not: null } }, { source: null, name: { in: DIETOCALCULO_RECIPE_NAMES } }],
+})
 
 export const ingredientCopy = (ingredient, practiceId, id = randomUUID()) => ({
   id,
@@ -73,7 +82,7 @@ export async function copyCatalog(tx, fromPracticeId, toPracticeId) {
   const [ingredients, smaeFoods, recipes] = await Promise.all([
     tx.ingredient.findMany({ where: { practiceId: fromPracticeId, status: 'ACTIVE' } }),
     tx.smaeFood.findMany({ where: { practiceId: fromPracticeId } }),
-    tx.recipe.findMany({ where: { practiceId: fromPracticeId, status: 'ACTIVE', source: { not: null } }, include: { ingredients: true } }),
+    tx.recipe.findMany({ where: catalogRecipeWhere(fromPracticeId), include: { ingredients: true } }),
   ])
 
   const ingredientIds = new Map()

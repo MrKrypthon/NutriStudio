@@ -22,6 +22,7 @@
     "admin:create": "node prisma/create-admin.js",
     "admin:reset-password": "node prisma/reset-admin-password.js",
     "catalog:import": "node prisma/import-catalog.js",
+    "catalog:copy-recipes": "node prisma/tools/copy-catalog-recipes.js",
     "db:import-recetario": "node prisma/import-recetario.js",
     "recetario:extract": "node prisma/tools/extract-recetario.js && node prisma/tools/extract-recetario-images.js",
     "test": "vitest run",
