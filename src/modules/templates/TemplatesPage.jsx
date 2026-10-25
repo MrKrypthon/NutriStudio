@@ -43,7 +43,7 @@ export default function TemplatesPage({ setActive, onOpenPatient }) {
   }
 
   useEffect(loadTemplates, [])
-  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=5000').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.active().then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
 
   const visible = templates.filter((t) => !TAB_TYPES[tab] || t.type === TAB_TYPES[tab])
 

@@ -1,6 +1,9 @@
 import { getToken, notifyLegalRequired, notifySubscriptionRequired, notifyUnauthorized } from './auth.js'
+import { cachedRequest, invalidateCache } from './dataCache.js'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
+// Una mutación deja vieja la caché de esa familia; se invalida sólo cuando termina bien.
+const invalidateAfter = (request, prefix) => request.then((value) => { invalidateCache(prefix); return value })
 
 /**
  * Small fetch boundary for all future modules. Components should not build
@@ -122,10 +125,15 @@ export const patientsApi = {
   // Quién abrió el expediente, generó o descargó sus documentos (registro de accesos).
   accessLog: (id) => apiRequest(`/patients/${id}/access-log`),
   list: (query = '') => apiRequest(`/patients${query}`),
+  // Lista de los selectores de paciente: sólo los datos que muestran, cacheada para no repetir la
+  // descarga en cada pantalla. Las mutaciones de paciente la invalidan.
+  active: () => cachedRequest('patients:active', () => apiRequest('/patients?status=ACTIVE&pageSize=5000&lite=1'), { ttl: 2 * 60_000 }),
   get: (id) => apiRequest(`/patients/${id}`),
-  create: (payload) => apiRequest('/patients', { method: 'POST', body: JSON.stringify(payload) }),
-  update: (id, payload) => apiRequest(`/patients/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  create: (payload) => invalidateAfter(apiRequest('/patients', { method: 'POST', body: JSON.stringify(payload) }), 'patients:'),
+  update: (id, payload) => invalidateAfter(apiRequest(`/patients/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }), 'patients:'),
   consultations: (id) => apiRequest(`/patients/${id}/consultations`),
+  // Sólo mediciones y estado de las consultas, para el Constructor de plan (no el expediente).
+  consultationsLite: (id) => apiRequest(`/patients/${id}/consultations?lite=1`),
   plans: (id) => apiRequest(`/patients/${id}/plans`),
   timeline: (id) => apiRequest(`/patients/${id}/timeline`),
   // Datos permanentes del paciente, los que no pertenecen a una visita concreta.
@@ -249,18 +257,21 @@ export const tasksApi = {
 
 export const recipesApi = {
   list: (query = '') => apiRequest(`/recipes${query}`),
+  // Catálogo completo que usa el Constructor de plan. Se pide en versión ligera y se guarda en
+  // memoria: al volver a un plan no se vuelve a bajar ni a procesar todo el recetario.
+  catalog: () => cachedRequest('recipes:catalog', () => apiRequest('/recipes?lite=1'), { ttl: 5 * 60_000 }),
   get: (id) => apiRequest(`/recipes/${id}`),
-  create: (payload) => apiRequest('/recipes', { method: 'POST', body: JSON.stringify(payload) }),
-  update: (id, payload) => apiRequest(`/recipes/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
-  archive: (id) => apiRequest(`/recipes/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ARCHIVED' }) }),
+  create: (payload) => invalidateAfter(apiRequest('/recipes', { method: 'POST', body: JSON.stringify(payload) }), 'recipes:'),
+  update: (id, payload) => invalidateAfter(apiRequest(`/recipes/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }), 'recipes:'),
+  archive: (id) => invalidateAfter(apiRequest(`/recipes/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'ARCHIVED' }) }), 'recipes:'),
   nutrition: (id) => apiRequest(`/recipes/${id}/nutrition`),
-  recalculate: (id) => apiRequest(`/recipes/${id}/recalculate`, { method: 'POST' }),
-  replaceIngredients: (id, ingredients) => apiRequest(`/recipes/${id}/ingredients`, { method: 'PUT', body: JSON.stringify({ ingredients }) }),
+  recalculate: (id) => invalidateAfter(apiRequest(`/recipes/${id}/recalculate`, { method: 'POST' }), 'recipes:'),
+  replaceIngredients: (id, ingredients) => invalidateAfter(apiRequest(`/recipes/${id}/ingredients`, { method: 'PUT', body: JSON.stringify({ ingredients }) }), 'recipes:'),
   // Imported cookbook recipes store only the file name (see prisma/import-recetario.js); build
   // the public URL here so the same relative API base works in dev and production.
   imageUrl: (file) => (file ? `${API_BASE}/recipes/images/${file}` : null),
-  uploadImage: (id, dataUrl) => apiRequest(`/recipes/${id}/image`, { method: 'POST', body: JSON.stringify({ dataUrl }) }),
-  removeImage: (id) => apiRequest(`/recipes/${id}/image`, { method: 'DELETE' }),
+  uploadImage: (id, dataUrl) => invalidateAfter(apiRequest(`/recipes/${id}/image`, { method: 'POST', body: JSON.stringify({ dataUrl }) }), 'recipes:'),
+  removeImage: (id) => invalidateAfter(apiRequest(`/recipes/${id}/image`, { method: 'DELETE' }), 'recipes:'),
 }
 
 export const educationApi = {
