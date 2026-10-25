@@ -40,3 +40,12 @@ public/ocr/
 
 # Respaldos de deploy/deploy.sh y deploy/backup.sh (datos clínicos): nunca al repositorio
 respaldos/
+
+# PDF y documentos sueltos en la raíz (planes y expedientes exportados de la app, material de
+# trabajo): pueden traer datos de pacientes y el repositorio es público. Los que ya están
+# versionados (MVP Software de Nutrición.pdf) no se ven afectados.
+/*.pdf
+/*.docx
+/*.xlsx
+# Notas de operación del VPS (IPs, nombres de host, registros)
+milpa-despliegue-*.md
