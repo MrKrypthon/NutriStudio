@@ -2521,3 +2521,14 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 .eq-micro-item b{display:block;font-size:11.5px;color:var(--ink);margin-top:2px}
 .eq-micro-item small{display:block;font-size:9.5px;color:var(--muted);margin-top:1px}
 @media(max-width:1100px){.eq-macro-hero{grid-template-columns:112px minmax(0,1fr)}}
+
+/* Modal de actividad por METs, como el diseño: MET destacado y tarjetas de kcal. */
+.mets-met-box{display:flex;align-items:center;gap:7px;background:#EAF1F8;border:1px solid #C9DAE8;border-radius:7px;padding:8px 11px;margin-top:6px;font:600 13px Outfit;color:#2F5F8F}
+.mets-met-box input{width:64px;border:0;background:none;padding:0;margin:0;font:700 14px Outfit;color:#2F5F8F;text-align:left}
+.mets-hint{display:block;font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.3}
+.mets-estimate{border-radius:8px;padding:9px 11px;margin:0 0 13px}
+.mets-estimate.is-warm{background:#FDF3E3;border:1px solid #F1DEC0}
+.mets-estimate.is-green{background:#EAF5EE;border:1px solid #CFE6D8}
+.mets-estimate b{display:block;font:600 12.5px Outfit;color:var(--ink)}
+.mets-estimate small{display:block;color:var(--muted);font-size:10.5px;margin-top:3px}
+.mets-modal label{margin-bottom:12px}

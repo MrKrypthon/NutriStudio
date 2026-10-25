@@ -1,23 +1,50 @@
 import { useState } from 'react'
 import { backdropClose, round1 } from './planAdjustments.js'
 
-// Ejercicios frecuentes con su intensidad en METs (Compendio de Actividades Físicas), para no tener
-// que recordar el número; se puede escribir cualquier otro valor.
-const MET_PRESETS = [['3.5', 'Caminar a paso normal'], ['4.3', 'Caminar rápido'], ['5', 'Pesas / fuerza'], ['6.5', 'Baile aeróbico'], ['7', 'Trotar o fútbol'], ['7.5', 'Ciclismo moderado'], ['8', 'HIIT o natación continua'], ['9.8', 'Correr (10 km/h)'], ['2.5', 'Yoga']]
+// Actividades frecuentes con su intensidad en METs (Compendio de Actividades Físicas), para no tener
+// que recordar el número; la actividad se elige de la lista y el MET se puede ajustar a mano.
+const ACTIVITY_PRESETS = [
+  ['Pesas (Fuerza)', '5'],
+  ['Caminar a paso normal', '3.5'],
+  ['Caminar rápido', '4.3'],
+  ['Baile aeróbico', '6.5'],
+  ['Trotar o fútbol', '7'],
+  ['Ciclismo moderado', '7.5'],
+  ['HIIT o natación continua', '8'],
+  ['Correr (10 km/h)', '9.8'],
+  ['Yoga', '2.5'],
+]
+// Niveles de intensidad que propone el diseño; al elegir uno se carga su MET sugerido.
+const MET_INTENSITIES = [
+  ['Muy ligera / rehabilitación', '2.5'],
+  ['Ligera', '3.5'],
+  ['Moderada', '5'],
+  ['Intensa', '7'],
+  ['Muy intensa', '9'],
+]
+const OTHER_ACTIVITY = '__other'
 const emptyActivity = () => ({ id: globalThis.crypto?.randomUUID?.() || `m${Date.now().toString(36)}`, name: '', met: '5', minutes: '30', sessionsPerWeek: '3' })
 
-// Calorías diarias de UNA actividad: MET × 3.5 × peso / 200 × minutos × días / 7 (misma fórmula
-// que usa el servidor en computeEnergyRequirement).
-export const metsActivityKcal = (activity, weightKg) => {
+// Calorías de UNA sesión: MET × 3.5 × peso / 200 × minutos.
+const metsSessionKcal = (activity, weightKg) => {
   const met = Number(activity?.met)
   const minutes = Number(activity?.minutes)
-  const sessions = Number(activity?.sessionsPerWeek)
   const weight = Number(weightKg)
-  if (!(weight > 0 && met > 0 && minutes > 0 && sessions > 0)) return null
-  return met * 3.5 * weight / 200 * minutes * sessions / 7
+  if (!(weight > 0 && met > 0 && minutes > 0)) return null
+  return met * 3.5 * weight / 200 * minutes
 }
 
-const validActivity = (activity) => Number(activity?.met) > 0 && Number(activity?.minutes) > 0 && Number(activity?.sessionsPerWeek) > 0
+// Promedio diario de UNA actividad: lo de una sesión por los días de la semana entre 7 (la misma
+// fórmula que usa el servidor en computeEnergyRequirement).
+export const metsActivityKcal = (activity, weightKg) => {
+  const session = metsSessionKcal(activity, weightKg)
+  const sessions = Number(activity?.sessionsPerWeek)
+  if (session == null || !(sessions > 0)) return null
+  return session * sessions / 7
+}
+
+const validActivity = (activity) => Boolean(activity?.name?.trim()) && Number(activity?.met) > 0 && Number(activity?.minutes) > 0 && Number(activity?.sessionsPerWeek) > 0
+const intensityOf = (met) => MET_INTENSITIES.find(([, value]) => Number(value) === Number(met))?.[0] || null
 
 // Varias actividades físicas por METs (pesas, caminata…) en lugar de una sola: el diseño del
 // Constructor las muestra como tabla con los minutos y las kcal diarias de cada una. El total se
@@ -33,19 +60,24 @@ export default function MetsActivityEditor({ value = [], weightKg = null, onChan
   const save = () => {
     if (!validActivity(draft)) return
     const next = [...activities]
-    const clean = { ...draft, name: draft.name.trim() || 'Actividad física' }
+    const clean = { ...draft, name: draft.name.trim() }
     if (editing === 'new') next.push(clean)
     else next[editing] = clean
     onChange(next)
     close()
   }
   const remove = (index) => onChange(activities.filter((_, position) => position !== index))
-  const draftKcal = metsActivityKcal(draft, weightKg)
+  const draftSessionKcal = metsSessionKcal(draft, weightKg)
+  const draftDailyKcal = metsActivityKcal(draft, weightKg)
+  const presetName = ACTIVITY_PRESETS.some(([name]) => name === draft.name)
+  const activitySelectValue = presetName ? draft.name : draft.name ? OTHER_ACTIVITY : ''
+  const draftIntensity = intensityOf(draft.met)
+  const weightText = Number(weightKg) > 0 ? `${round1(Number(weightKg))} kg` : '— kg'
 
   return <div className="mets-editor">
     <div className="mets-editor-head">
       <div><p className="eyebrow">ACTIVIDAD FÍSICA POR METS</p><b>Actividades de la semana</b></div>
-      <button type="button" className="secondary" disabled={disabled || activities.length >= 12} onClick={openNew}>+ Agregar actividad</button>
+      <button type="button" className="secondary" disabled={disabled || activities.length >= 12} onClick={openNew}>+ Agregar Actividad</button>
     </div>
     {activities.length > 0
       ? <div className="mets-table" role="table">
@@ -58,22 +90,35 @@ export default function MetsActivityEditor({ value = [], weightKg = null, onChan
           </div>)}
           <div className="mets-row mets-total" role="row"><span>Total de actividad</span><span /><span>{weightKg ? `${Math.round(total)} kcal` : '—'}</span><span /></div>
         </div>
-      : <p className="muted">Sin actividades: el requerimiento se calcula con el metabolismo basal y el factor o porcentaje de actividad.</p>}
+      : <p className="muted">Sin actividades: agrega el ejercicio de la semana o usa el factor / porcentaje de actividad.</p>}
     {editing !== null && <div className="modal-backdrop" {...backdropClose(close)}>
       {/* div, no form: este componente vive dentro del formulario del Dietocálculo y un <form>
           anidado haría que "Guardar" disparara el cálculo del requerimiento. */}
-      <div className="modal mets-modal" role="dialog" aria-modal="true" aria-label={editing === 'new' ? 'Agregar actividad física' : 'Editar actividad física'} onKeyDown={(event) => { if (event.key === 'Escape') close(); if (event.key === 'Enter' && event.target.tagName === 'INPUT') { event.preventDefault(); save() } }}>
-        <div className="modal-head"><h2>{editing === 'new' ? 'Agregar actividad física' : 'Editar actividad física'}</h2><button type="button" onClick={close} aria-label="Cerrar">×</button></div>
-        <label>Actividad<input list="mets-activity-options" value={draft.name} required onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Ej. Pesas / fuerza" /><datalist id="mets-activity-options">{MET_PRESETS.map(([value, label]) => <option value={label} key={label}>{value} METs</option>)}</datalist></label>
-        <div className="form-row">
-          <label>Intensidad (METs)<input type="number" min="1" max="23" step="0.1" required value={draft.met} onChange={(event) => setDraft((prev) => ({ ...prev, met: event.target.value }))} /></label>
-          <label>Minutos por sesión<input type="number" min="1" max="600" required value={draft.minutes} onChange={(event) => setDraft((prev) => ({ ...prev, minutes: event.target.value }))} /></label>
+      <div className="modal mets-modal" role="dialog" aria-modal="true" aria-label={editing === 'new' ? 'Agregar Actividad Física' : 'Editar Actividad Física'} onKeyDown={(event) => { if (event.key === 'Escape') close(); if (event.key === 'Enter' && event.target.tagName === 'INPUT') { event.preventDefault(); save() } }}>
+        <div className="modal-head"><h2>{editing === 'new' ? 'Agregar Actividad Física' : 'Editar Actividad Física'}</h2><button type="button" onClick={close} aria-label="Cerrar">×</button></div>
+        <label>Actividad *<select required value={activitySelectValue} onChange={(event) => {
+          const name = event.target.value
+          if (name === OTHER_ACTIVITY) { setDraft((prev) => ({ ...prev, name: '' })); return }
+          const preset = ACTIVITY_PRESETS.find(([label]) => label === name)
+          setDraft((prev) => ({ ...prev, name, ...(preset ? { met: preset[1] } : {}) }))
+        }}><option value="">Elige una actividad…</option>{ACTIVITY_PRESETS.map(([name, met]) => <option value={name} key={name}>{name}</option>)}<option value={OTHER_ACTIVITY}>Otra actividad…</option></select></label>
+        {activitySelectValue === OTHER_ACTIVITY && <label>Nombre de la actividad *<input value={draft.name} required onChange={(event) => setDraft((prev) => ({ ...prev, name: event.target.value }))} placeholder="Ej. Natación recreativa" /></label>}
+        <label>Intensidad *<select value={draftIntensity || 'custom'} onChange={(event) => {
+          if (event.target.value === 'custom') return
+          const preset = MET_INTENSITIES.find(([label]) => label === event.target.value)
+          if (preset) setDraft((prev) => ({ ...prev, met: preset[1] }))
+        }}>{MET_INTENSITIES.map(([label, met]) => <option value={label} key={label}>{label} · {met} MET</option>)}<option value="custom">Personalizada (MET escrito)</option></select></label>
+        <label>MET (Equivalente Metabólico)<span className="mets-met-box">⚡ MET: <input type="number" min="1" max="23" step="0.1" required value={draft.met} onChange={(event) => setDraft((prev) => ({ ...prev, met: event.target.value }))} aria-label="MET" /></span></label>
+        <label>Minutos por día *<input type="number" min="1" max="600" required value={draft.minutes} onChange={(event) => setDraft((prev) => ({ ...prev, minutes: event.target.value }))} /><small className="mets-hint">Duración diaria de la actividad en minutos</small></label>
+        <div className="mets-estimate is-warm" aria-live="polite">
+          <b>Calorías estimadas por día: {draftSessionKcal != null ? `${Math.round(draftSessionKcal)} kcal` : 'falta el peso'}</b>
+          <small>({draft.met || '—'} MET × {weightText} × {((Number(draft.minutes) || 0) / 60).toFixed(2)} h)</small>
         </div>
-        <div className="form-row">
-          <label>Días a la semana<input type="number" min="1" max="21" required value={draft.sessionsPerWeek} onChange={(event) => setDraft((prev) => ({ ...prev, sessionsPerWeek: event.target.value }))} /></label>
-          <label>Calorías estimadas<input value={weightKg && draftKcal != null ? `${Math.round(draftKcal)} kcal/día` : 'Falta el peso'} readOnly /></label>
+        <label>Días a la semana *<input type="number" min="1" max="7" required value={draft.sessionsPerWeek} onChange={(event) => setDraft((prev) => ({ ...prev, sessionsPerWeek: event.target.value }))} /><small className="mets-hint">Frecuencia semanal (1-7 días)</small></label>
+        <div className="mets-estimate is-green" aria-live="polite">
+          <b>Promedio de kcal por día: {draftDailyKcal != null ? `${Math.round(draftDailyKcal)} kcal` : 'falta el peso'}</b>
+          <small>({draftSessionKcal != null ? Math.round(draftSessionKcal) : '—'} kcal × {draft.sessionsPerWeek || '—'} días ÷ 7)</small>
         </div>
-        <p className="muted mets-formula">{draft.met} MET × {weightKg || '—'} kg × {(Number(draft.minutes) || 0) / 60} h × {draft.sessionsPerWeek} día(s) / 7 = {draftKcal != null ? round1(draftKcal) : '—'} kcal/día</p>
         <div className="modal-actions"><button type="button" className="secondary" onClick={close}>Cancelar</button><button type="button" className="primary" disabled={!validActivity(draft)} onClick={save}>Guardar</button></div>
       </div>
     </div>}
