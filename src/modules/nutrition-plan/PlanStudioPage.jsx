@@ -122,6 +122,9 @@ const weightHistoryOf = (consultations) => (consultations || []).flatMap((c) => 
   .filter((measurement) => Number(measurement?.weightKg) > 0)
   .sort((a, b) => new Date(b.measuredAt) - new Date(a.measuredAt))
 const RECIPE_COLORS = ['coral', 'blue', 'yellow', 'purple']
+// El buscador de recetas del Constructor se dibuja por tandas: el catálogo trae cientos de recetas
+// y montar todas sus fotos de golpe era lo que trababa la pantalla.
+const RECIPE_PAGE = 24
 const NUTRIENT_CHIPS = [['kcal', 'Energía', 'kcal'], ['protein', 'Proteína', 'g'], ['carbs', 'Carbohidratos', 'g'], ['fat', 'Grasas', 'g'], ['fiber', 'Fibra', 'g']]
 
 // Nutrición "efectiva" de una receta para los cálculos del plan: si tiene cálculo SMAE
@@ -253,6 +256,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const [pickerTarget, setPickerTarget] = useState(null)
   const [pickerSearch, setPickerSearch] = useState('')
   const [pickerRestriction, setPickerRestriction] = useState('')
+  const [pickerShown, setPickerShown] = useState(RECIPE_PAGE)
   const [pickerDetail, setPickerDetail] = useState(null)
   const [pickerNutrition, setPickerNutrition] = useState(null)
   const [adequacy, setAdequacy] = useState(null)
@@ -322,7 +326,10 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
   const slotsDirtyRef = useRef(null)
   const flushPromiseRef = useRef(null)
 
-  useEffect(() => { patientsApi.list('?status=ACTIVE&pageSize=5000').then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  useEffect(() => { patientsApi.active().then((payload) => setPatients(payload.items || [])).catch(() => setPatients([])) }, [])
+  // Calienta el catálogo desde que se entra al Constructor: cuando se elige un plan, las recetas
+  // ya están en la caché en memoria (o la petición ya va en camino) en vez de empezar a bajar ahí.
+  useEffect(() => { recipesApi.catalog().catch(() => {}) }, [])
 
   // El hub lista todos los planes de la práctica (sin elegir paciente antes).
   const loadHub = useCallback(() => {
@@ -333,6 +340,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   // Si llega un patientId desde otra pantalla, abrir ese paciente.
   useEffect(() => { if (patientId) { setActivePatientId(patientId); setMode('patient') } }, [patientId])
+  // Cada búsqueda o filtro del buscador de recetas vuelve a empezar por la primera tanda.
+  useEffect(() => { setPickerShown(RECIPE_PAGE) }, [pickerTarget, pickerSearch, pickerRestriction])
 
   useEffect(() => {
     if (!patient) return
@@ -383,7 +392,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
     const epoch = planEpochRef.current
     if (!patientAtStart) { setLoadState('ready'); return }
     try {
-      const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientAtStart), recipesApi.list(), patientsApi.consultations(patientAtStart)])
+      const [plansResponse, recipesResponse, consultationsResponse] = await Promise.all([patientsApi.plans(patientAtStart), recipesApi.catalog(), patientsApi.consultations(patientAtStart)])
       // La paciente cambió mientras cargaba: esta respuesta ya no aplica.
       if (activePatientRef.current !== patientAtStart) return
       const planItems = plansResponse.items || []
@@ -1127,7 +1136,7 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   // Imported cookbook recipes have real photos (`imageFile`); handmade ones keep the color block.
   const recipeThumb = (recipe, index, className = 'recipe-image') => {
-    if (recipe?.imageFile) return <div className={className + ' has-photo'}><img src={recipesApi.imageUrl(recipe.imageFile)} alt={recipe.name} loading="lazy" /></div>
+    if (recipe?.imageFile) return <div className={className + ' has-photo'}><img src={recipesApi.imageUrl(recipe.imageFile)} alt={recipe.name} loading="lazy" decoding="async" fetchPriority="low" /></div>
     return <div className={className + ' ' + RECIPE_COLORS[index % RECIPE_COLORS.length]}><span>✦</span></div>
   }
 
@@ -1160,7 +1169,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
             <div className="recipe-search"><input value={pickerSearch} onChange={(e) => setPickerSearch(e.target.value)} placeholder="Buscar receta..." /></div>
             <select value={pickerRestriction} onChange={(e) => setPickerRestriction(e.target.value)}><option value="">Todas las restricciones</option>{availableRestrictions.map((restriction) => <option value={restriction} key={restriction}>{restriction}</option>)}</select>
           </div>
-          <div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas para este filtro.</p>}{pickerRecipes.map((recipe, i) => <button className="recipe-pick" onClick={() => setPickerDetail(recipe)} key={recipe.id}>{recipeThumb(recipe, i)}<b>{recipe.name}</b><small>{Math.round(effectiveNutrition(recipe).kcal || 0)} kcal · ver detalle</small></button>)}</div>
+          <div className="recipe-picker-grid">{pickerRecipes.length === 0 && <p className="muted">No hay recetas para este filtro.</p>}{pickerRecipes.slice(0, pickerShown).map((recipe, i) => <button className="recipe-pick" onClick={() => setPickerDetail(recipe)} key={recipe.id}>{recipeThumb(recipe, i)}<b>{recipe.name}</b><small>{Math.round(effectiveNutrition(recipe).kcal || 0)} kcal · ver detalle</small></button>)}</div>
+          {pickerRecipes.length > pickerShown && <button type="button" className="secondary picker-more" onClick={() => setPickerShown((value) => value + RECIPE_PAGE)}>Mostrar más ({pickerRecipes.length - pickerShown})</button>}
         </>}
   </div></div> : null
 

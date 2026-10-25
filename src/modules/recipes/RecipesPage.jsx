@@ -50,7 +50,7 @@ async function shrinkToJpeg(file) {
 
 const RecipeImage = ({ recipe, colorIndex, className }) => {
   const src = recipe.imageFile ? recipesApi.imageUrl(recipe.imageFile) : null
-  if (src) return <div className={className + ' has-photo'}><img src={src} alt={recipe.name} loading="lazy" /></div>
+  if (src) return <div className={className + ' has-photo'}><img src={src} alt={recipe.name} loading="lazy" decoding="async" fetchPriority="low" /></div>
   return <div className={className + ' ' + CARD_COLORS[colorIndex % 4]}><span>✦</span></div>
 }
 

@@ -2532,3 +2532,7 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 .mets-estimate b{display:block;font:600 12.5px Outfit;color:var(--ink)}
 .mets-estimate small{display:block;color:var(--muted);font-size:10.5px;margin-top:3px}
 .mets-modal label{margin-bottom:12px}
+
+/* Catálogo de recetas: dibujar sólo lo visible y de a tandas (las fotos ya van con lazy loading). */
+.recipe-pick,.gallery-card{content-visibility:auto;contain-intrinsic-size:220px}
+.picker-more{display:block;margin:14px auto 0}

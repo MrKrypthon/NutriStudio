@@ -5,8 +5,8 @@ import 'dotenv/config'
 import dotenv from 'dotenv'
 import PDFDocument from 'pdfkit'
 import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { createReadStream, readFileSync } from 'node:fs'
+import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
@@ -920,6 +920,38 @@ app.get('/api/v1/practice/:practiceId/logo', async (request, reply) => {
 // src>. The strict file-name pattern blocks path traversal. Files live in storage/recipes, which
 // prisma/import-recetario.js fills from the ebook's embedded photos; the ones the nutritionist
 // uploads herself (POST /recipes/:id/image) are named `u-<recipe id>-<stamp>.jpg`.
+// Imágenes de receta/ingrediente: se mandan en streaming y con ETag para que el navegador pueda
+// revalidar con un 304 (sin volver a bajar el archivo). Las subidas llevan marca de tiempo en el
+// nombre, así que son inmutables y se cachean un año; las del recetario importado conservan su
+// nombre y se cachean una semana.
+async function sendImageFile(request, reply, filePath, mime, { immutable = false } = {}) {
+  try {
+    const info = await stat(filePath)
+    if (!info.isFile()) throw new Error('not a file')
+    const etag = `"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}"`
+    const cacheControl = immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=604800'
+    if (request.headers['if-none-match'] === etag) {
+      return reply.code(304).header('ETag', etag).header('Cache-Control', cacheControl).send()
+    }
+    return reply
+      .type(mime)
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Cache-Control', cacheControl)
+      .header('ETag', etag)
+      .header('Content-Length', String(info.size))
+      .send(createReadStream(filePath))
+  } catch {
+    return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
+  }
+}
+
+// El Constructor pide el recetario completo cada vez que se abre un plan. La consulta (cientos de
+// recetas con sus ingredientes) se guarda unos segundos por consultorio: varias pestañas o volver
+// a entrar no la repiten, y cualquier cambio de receta la invalida al instante.
+const RECIPE_CATALOG_TTL_MS = 30_000
+const recipeCatalogCache = new Map()
+const invalidateRecipeCatalog = (practiceId) => recipeCatalogCache.delete(practiceId)
+
 const recipeImageDir = () => path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH || './storage/recipes')
 // La app reduce la foto antes de subirla (1600 px), así que estos topes sólo frenan lo que llegue
 // por fuera de ella. Se limita el total de pixeles, no sólo cada lado: es lo que cuesta memoria a
@@ -931,12 +963,7 @@ const RECIPE_IMAGE_MAX_PIXELS = 4_000_000
 app.get('/api/v1/recipes/images/:fileName', async (request, reply) => {
   const { fileName } = request.params
   if (!/^[a-z0-9][a-z0-9-]*\.jpg$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
-  try {
-    const file = await readFile(path.join(recipeImageDir(), fileName))
-    return reply.type('image/jpeg').header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'public, max-age=86400').send(file)
-  } catch {
-    return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
-  }
+  return sendImageFile(request, reply, path.join(recipeImageDir(), fileName), 'image/jpeg', { immutable: fileName.startsWith('u-') })
 })
 
 // Sólo se borran del disco las fotos subidas a mano; las del recetario importado se conservan
@@ -965,6 +992,7 @@ app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
   // se borraba primero y, si el guardado fallaba, la receta quedaba apuntando a un archivo inexistente.
   const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey } })
   await removeUploadedRecipeImage(recipe.imageFile)
+  invalidateRecipeCatalog(request.practiceId)
   return updated
 })
 
@@ -972,7 +1000,9 @@ app.delete('/api/v1/recipes/:recipeId/image', async (request, reply) => {
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   await removeUploadedRecipeImage(recipe.imageFile)
-  return prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: null } })
+  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: null } })
+  invalidateRecipeCatalog(request.practiceId)
+  return updated
 })
 
 app.get('/api/v1/patients', async (request) => {
@@ -998,6 +1028,18 @@ app.get('/api/v1/patients', async (request) => {
     status: status === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE',
     ...termsWhere,
     ...(noNext === '1' ? noNextWhere : {}),
+  }
+  // Los selectores de paciente (Agenda, Consultas, Constructor…) sólo muestran el nombre. `lite=1`
+  // devuelve únicamente esos campos en vez del expediente completo de hasta 5,000 pacientes.
+  if (request.query.lite === '1') {
+    const items = await prisma.patient.findMany({
+      where,
+      orderBy: sort === 'recent' ? [{ createdAt: 'desc' }] : sort === 'name' ? [{ firstName: 'asc' }, { lastName: 'asc' }] : [{ lastName: 'asc' }, { firstName: 'asc' }],
+      skip: (currentPage - 1) * take,
+      take,
+      select: { id: true, firstName: true, lastName: true, sex: true, birthDate: true, recordNumber: true, status: true },
+    })
+    return { items, page: currentPage, pageSize: take, lite: true }
   }
   // La lista de Pacientes pide `summary=1`: además de la última consulta y la próxima cita trae el
   // plan vigente, el peso más reciente, si hay una consulta abierta, los documentos por entregar y
@@ -1800,8 +1842,17 @@ function invalidRecipeFields({ name, mealTypes, portions, restrictions, timeMinu
   return fields
 }
 
+// Campos que necesita el Constructor de plan: nada de auditoría, cuenta ni fechas, y de cada
+// ingrediente sólo lo que usan el cálculo de equivalentes y el detalle de la receta.
+const RECIPE_LIST_LITE_SELECT = {
+  id: true, name: true, mealTypes: true, restrictions: true, timeMinutes: true, imageFile: true,
+  nutrition: true, calculatedNutrition: true, portions: true, ingredientsText: true, instructions: true, status: true,
+  ingredients: { select: { id: true, quantity: true, unit: true, equivalence: true, ingredient: { select: { id: true, name: true, nutrition: true, equivalence: true, group: true } } } },
+}
+
 app.get('/api/v1/recipes', async (request) => {
   const { search = '', mealType, restriction, status = 'ACTIVE', page, pageSize } = request.query
+  const lite = request.query.lite === '1'
   const where = await nameSearchWhere(prisma.recipe, {
     practiceId: request.practiceId,
     status: status === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE',
@@ -1822,7 +1873,16 @@ app.get('/api/v1/recipes', async (request) => {
   // Sin tope: el Constructor descarta de la semana las recetas que no vienen aquí (las toma por
   // archivadas), así que el `take: 1000` de antes borraba al guardar las asignaciones de las recetas
   // que quedaban después de la 1000 en orden alfabético (el catálogo base ya trae ~760).
-  const recipes = await prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' } })
+  // Sólo la petición canónica del Constructor (sin búsqueda, filtros ni paginación) se cachea.
+  const catalogKey = lite && !search && !mealType && !restriction && status === 'ACTIVE' && page === undefined ? request.practiceId : null
+  const cached = catalogKey ? recipeCatalogCache.get(catalogKey) : null
+  if (cached && Date.now() - cached.at < RECIPE_CATALOG_TTL_MS) return { items: cached.items }
+  const recipes = await prisma.recipe.findMany({
+    where,
+    ...(lite ? { select: RECIPE_LIST_LITE_SELECT } : { include: { ingredients: { include: { ingredient: true } } } }),
+    orderBy: { name: 'asc' },
+  })
+  if (catalogKey) recipeCatalogCache.set(catalogKey, { at: Date.now(), items: recipes })
   return { items: recipes }
 })
 
@@ -1836,6 +1896,7 @@ app.post('/api/v1/recipes', async (request, reply) => {
   const validIngredients = rows.length ? await prisma.ingredient.findMany({ where: { id: { in: rows.map((item) => item.ingredientId) }, practiceId: request.practiceId }, select: { id: true } }) : []
   const validIds = new Set(validIngredients.map((item) => item.id))
   const recipe = await prisma.recipe.create({ data: { practiceId: request.practiceId, name, mealTypes, portions, instructions, nutrition, restrictions, imageUrl, ...(ingredientsText !== undefined ? { ingredientsText } : {}), ...(timeMinutes !== undefined ? { timeMinutes } : {}), ingredients: { create: rows.filter((item) => validIds.has(item.ingredientId)) } }, include: { ingredients: { include: { ingredient: true } } } })
+  invalidateRecipeCatalog(request.practiceId)
   return reply.code(201).send(recipe)
 })
 
@@ -1868,6 +1929,7 @@ app.patch('/api/v1/recipes/:recipeId', async (request, reply) => {
     },
     include: { ingredients: { include: { ingredient: true } } },
   })
+  invalidateRecipeCatalog(request.practiceId)
   return updated
 })
 
@@ -1883,6 +1945,7 @@ app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
   // An imported recipe may legitimately have no SMAE linkage (that just clears the calculated
   // side); a handmade recipe still needs at least one ingredient or its nutrition would be 0.
   if (!filteredIngredients.length && !recipe.source) return reply.code(400).send({ code: 'EMPTY_RECIPE', message: 'La receta debe conservar al menos un ingrediente.', fields: {} })
+  invalidateRecipeCatalog(request.practiceId)
   // El recálculo va dentro de la misma transacción: si fallaba después de cambiar los ingredientes,
   // la receta quedaba con los nuevos ingredientes y los nutrimentos de los anteriores.
   return prisma.$transaction(async (transaction) => {
@@ -1915,6 +1978,7 @@ app.post('/api/v1/recipes/:recipeId/recalculate', async (request, reply) => {
     ? { calculatedNutrition: recipe.ingredients.length ? computed : null, calculationUpdatedAt: new Date(), version: { increment: 1 } }
     : { nutrition: computed, version: { increment: 1 } }
   const updated = await prisma.recipe.update({ where: { id: recipe.id }, data })
+  invalidateRecipeCatalog(request.practiceId)
   return { recipe: updated, nutrition: recipe.source ? recipe.nutrition : computed, calculatedNutrition: recipe.source ? updated.calculatedNutrition : null, version: updated.version }
 })
 
@@ -2055,12 +2119,7 @@ app.get('/api/v1/ingredients/images/:fileName', async (request, reply) => {
   if (!/^[a-z0-9][a-z0-9-]*\.(png|jpg|webp)$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
   const ext = fileName.split('.').pop()
   const mime = Object.entries(LOGO_MIME_EXT).find(([, value]) => value === ext)?.[0] || 'application/octet-stream'
-  try {
-    const file = await readFile(path.join(ingredientImageDir(), fileName))
-    return reply.type(mime).header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'public, max-age=86400').send(file)
-  } catch {
-    return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
-  }
+  return sendImageFile(request, reply, path.join(ingredientImageDir(), fileName), mime, { immutable: true })
 })
 
 app.delete('/api/v1/ingredients/:ingredientId/image', async (request, reply) => {
