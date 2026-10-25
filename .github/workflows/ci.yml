@@ -1,4 +1,4 @@
-# CI (fase 114): en cada PR y en cada push a main.
+# CI (fase 114): en cada PR y en cada push a main (producción) y develop (desarrollo).
 #   pruebas → npm ci, prisma validate, que las migraciones coincidan con schema.prisma, Vitest y build
 #   docker  → construye las dos imágenes, levanta docker-compose.app.yml desde cero y corre deploy/smoke.sh
 name: CI
@@ -6,12 +6,12 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 permissions:
   contents: read
 
-# En un PR, un push nuevo cancela la ejecución anterior (ya quedó vieja). En main no: cada commit
+# En un PR, un push nuevo cancela la ejecución anterior (ya quedó vieja). En main y develop no: cada commit
 # fusionado conserva su propio resultado, y una cancelación no se confunde con un fallo.
 concurrency:
   group: ci-${{ github.ref }}

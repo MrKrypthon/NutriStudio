@@ -179,6 +179,9 @@ Si algo falla, el script imprime el comando para volver a la versión anterior (
 
 ### Entorno de desarrollo en el mismo servidor
 
+Cada entorno sigue una rama: producción (`/opt/milpa`) despliega `main` y desarrollo
+(`/opt/milpa-dev`) corre `develop`.
+
 `dev.milpa.com.mx` corre en `/opt/milpa-dev`, con su propia base y sus propios archivos, detrás del
 mismo Caddy de producción. Caddy le pone Basic Auth a todo menos a `/api/*`: la API ya exige su token,
 y las dos cabeceras `Authorization` chocan. Dev usa sus propias imágenes (`milpa-dev-*`) y una red
@@ -197,7 +200,7 @@ aparte con Caddy (`dev-edge`), así que no toca las imágenes ni el Nginx de pro
 3. **Desarrollo:**
 
    ```bash
-   git clone https://github.com/MrKrypthon/NutriStudio.git /opt/milpa-dev
+   git clone -b develop https://github.com/MrKrypthon/NutriStudio.git /opt/milpa-dev
    cd /opt/milpa-dev
    cp .env.docker.example .env.docker && chmod 600 .env.docker
    nano .env.docker   # secretos propios (no los de producción) y APP_URL=https://dev.milpa.com.mx
@@ -205,7 +208,7 @@ aparte con Caddy (`dev-edge`), así que no toca las imágenes ni el Nginx de pro
    milpa-dev up -d --build --wait
    ```
 
-   Para actualizarlo: `git pull && milpa-dev up -d --build --wait`. No uses `deploy/deploy.sh` aquí:
+   Para actualizarlo con lo último de `develop`: `git pull && milpa-dev up -d --build --wait`. No uses `deploy/deploy.sh` aquí:
    ese script es sólo para producción.
 
 ## 6. Integraciones
