@@ -18,6 +18,13 @@ check "API y base de datos (/health)" sh -c "curl $k -fsS '$base/health' | grep 
 check "index.html con CSP" sh -c "curl $k -fsSI '$base/' | grep -qi '^content-security-policy:'"
 check "configuración de acceso (/api/v1/auth/config)" curl $k -fsS "$base/api/v1/auth/config"
 check "motor del OCR servido por Nginx" curl $k -fsS -o /dev/null "$base/ocr/worker.min.js"
+# El worker de pdf.js (.mjs, con hash) tiene que salir como JavaScript: con nosniff, otro tipo no corre.
+pdf_worker_is_js() {
+  js="$(curl $k -fsS "$base/" | grep -oE '/assets/index-[^"]+\.js' | head -n 1)"
+  worker="$(curl $k -fsS "$base$js" | grep -oE 'pdf\.worker[^"/]*\.mjs' | head -n 1)"
+  [ -n "$worker" ] && curl $k -fsSI "$base/assets/$worker" | grep -qiE '^content-type: (application|text)/javascript'
+}
+check "worker de pdf.js servido como JavaScript" pdf_worker_is_js
 check "rutas de la SPA caen en index.html" sh -c "curl $k -fsS '$base/pacientes' | grep -q 'id=\"root\"'"
 check "login con credenciales falsas responde 401" sh -c "test \"\$(curl $k -s -o /dev/null -w '%{http_code}' -H 'content-type: application/json' -d '{\"email\":\"nadie@example.com\",\"password\":\"no-es-esta\"}' '$base/api/v1/auth/login')\" = 401"
 
