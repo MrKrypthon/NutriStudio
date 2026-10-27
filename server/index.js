@@ -22,7 +22,7 @@ import { normalizeRecipeIngredientRows, perServingFromIngredients } from './doma
 import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 import Stripe from 'stripe'
 import { OAuth2Client } from 'google-auth-library'
-import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId } from './domain/accounts.js'
+import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId, trialEndFrom } from './domain/accounts.js'
 import { copyCatalog } from './domain/catalogCopy.js'
 import { LEGAL_DOCUMENTS, pendingAcceptances, validateAcceptance } from '../src/lib/legal.js'
 import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
@@ -108,7 +108,7 @@ async function legalPendingFor(userId) {
 async function practiceAccessFor(practiceId) {
   const cached = practiceStatusCache.get(practiceId)
   if (cached && cached.expires > Date.now()) return cached.access
-  const practice = await prisma.practice.findUnique({ where: { id: practiceId }, select: { status: true, signupSource: true, paidUntil: true } })
+  const practice = await prisma.practice.findUnique({ where: { id: practiceId }, select: { status: true, signupSource: true, paidUntil: true, trialEndsAt: true } })
   const access = practiceAccess(practice)
   practiceStatusCache.set(practiceId, { access, expires: Date.now() + 30000 })
   return access
@@ -346,7 +346,7 @@ const googleClient = GOOGLE_CLIENT_ID ? new OAuth2Client(GOOGLE_CLIENT_ID) : nul
 // «Continuar con Google», el aviso de Google repetido) abrían dos cuentas para la misma persona. Un
 // candado de la transacción por identidad las forma en fila; la segunda encuentra la cuenta ya creada
 // y la devuelve (`existing`) en lugar de abrir otra.
-async function createAccount({ signupSource, practiceName, name, email, loginId = null, googleSub = null, passwordHash, paidUntil = null }) {
+async function createAccount({ signupSource, practiceName, name, email, loginId = null, googleSub = null, passwordHash, paidUntil = null, trialEndsAt = null }) {
   return prisma.$transaction(async (tx) => {
     const identity = googleSub ? { googleSub } : loginId ? { loginId } : null
     if (identity) {
@@ -354,7 +354,7 @@ async function createAccount({ signupSource, practiceName, name, email, loginId 
       const existing = await tx.user.findFirst({ where: identity, include: { practice: true } })
       if (existing) return Object.assign(existing, { existing: true })
     }
-    const practice = await tx.practice.create({ data: { name: practiceName || defaultPracticeName(name), signupSource, paidUntil } })
+    const practice = await tx.practice.create({ data: { name: practiceName || defaultPracticeName(name), signupSource, paidUntil, trialEndsAt } })
     const user = await tx.user.create({ data: { practiceId: practice.id, name, email: email || '', loginId, googleSub, passwordHash, role: 'OWNER' }, include: { practice: true } })
     await copyCatalog(tx, CATALOG_PRACTICE_ID, practice.id)
     return user
@@ -388,8 +388,9 @@ async function verifyGoogleCredential(request, reply) {
 // Entrar (o registrarse) con Google. La cuenta se busca SÓLO por la identidad de Google (`sub`),
 // nunca por correo: el correo de un usuario se puede editar en Configuración sin verificarlo, y
 // enlazar por correo permitiría que alguien pusiera el Gmail de otra persona y la metiera en su
-// consulta (o le impidiera registrarse). La primera vez se abre una cuenta nueva, sin acceso hasta
-// suscribirse. Una cuenta del panel usa Google vinculándolo desde su sesión (POST /auth/google/link).
+// consulta (o le impidiera registrarse). La primera vez se abre una cuenta nueva con la prueba gratis
+// (TRIAL_DAYS); al terminar pide la suscripción. Una cuenta del panel usa Google vinculándolo desde
+// su sesión (POST /auth/google/link).
 app.post('/api/v1/auth/google', async (request, reply) => {
   const profile = await verifyGoogleCredential(request, reply)
   if (!profile) return reply
@@ -400,7 +401,7 @@ app.post('/api/v1/auth/google', async (request, reply) => {
   if (!user) {
     // Contraseña inutilizable: estas cuentas entran sólo con Google.
     const passwordHash = await bcrypt.hash(generateTempPassword(32), 10)
-    user = await createAccount({ signupSource: 'GOOGLE', name: profile.name || email.split('@')[0], email, googleSub: profile.sub, passwordHash })
+    user = await createAccount({ signupSource: 'GOOGLE', name: profile.name || email.split('@')[0], email, googleSub: profile.sub, passwordHash, trialEndsAt: trialEndFrom() })
     created = !user.existing
     if (created) request.log.info({ practiceId: user.practiceId }, 'Cuenta nueva con Google')
   }
@@ -564,6 +565,7 @@ app.get('/api/v1/admin/practices', async () => {
       owner: practice.users[0] ? { name: practice.users[0].name, email: practice.users[0].email || null, loginId: practice.users[0].loginId, google: Boolean(practice.users[0].googleSub) } : null,
       paymentMethod: practice.paymentMethod,
       paidUntil: practice.paidUntil,
+      trialEndsAt: practice.trialEndsAt,
       createdAt: practice.createdAt,
       patients: practice._count.patients,
       users: practice._count.users,

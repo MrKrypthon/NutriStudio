@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ACCESS_GRACE_DAYS, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId } from './accounts.js'
+import { ACCESS_GRACE_DAYS, TRIAL_DAYS, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId, trialEndFrom } from './accounts.js'
 
 const now = new Date('2026-10-19T12:00:00Z')
 const days = (n) => new Date(now.getTime() + n * 86400000)
@@ -51,6 +51,17 @@ describe('acceso según la suscripción', () => {
     expect(practiceAccess({ status: 'ACTIVE', signupSource: 'ADMIN', paidUntil: days(10) }, now)).toEqual({ allowed: true, inGrace: false })
     expect(practiceAccess({ status: 'ACTIVE', signupSource: 'GOOGLE', paidUntil: days(-3) }, now)).toEqual({ allowed: true, inGrace: true })
     expect(practiceAccess({ status: 'ACTIVE', signupSource: 'GOOGLE', paidUntil: days(-ACCESS_GRACE_DAYS - 1) }, now).allowed).toBe(false)
+  })
+
+  it('el registro con Google entra durante la prueba gratis y al terminar pide la suscripción, sin gracia', () => {
+    expect(trialEndFrom(now)).toEqual(days(TRIAL_DAYS))
+    expect(practiceAccess({ status: 'ACTIVE', signupSource: 'GOOGLE', paidUntil: null, trialEndsAt: days(3) }, now)).toEqual({ allowed: true, inGrace: false, trialEndsAt: days(3).toISOString() })
+    expect(practiceAccess({ status: 'ACTIVE', signupSource: 'GOOGLE', paidUntil: null, trialEndsAt: days(-1) }, now)).toEqual({ allowed: false, reason: 'SUBSCRIPTION_REQUIRED', trialEnded: true })
+  })
+
+  it('con la suscripción pagada deja de contar como prueba', () => {
+    expect(practiceAccess({ status: 'ACTIVE', signupSource: 'GOOGLE', paidUntil: days(30), trialEndsAt: days(3) }, now)).toEqual({ allowed: true, inGrace: false })
+    expect(practiceAccess({ status: 'SUSPENDED', signupSource: 'GOOGLE', paidUntil: null, trialEndsAt: days(3) }, now).allowed).toBe(false)
   })
 })
 

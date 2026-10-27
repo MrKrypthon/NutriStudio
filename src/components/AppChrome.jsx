@@ -39,7 +39,9 @@ const practiceNowMs = (timeZone) => {
 // expediente el menú sigue marcando Pacientes, pero la migaja tiene que decir Expediente, que es lo
 // que el usuario está viendo.
 export default function AppChrome({ active, setActive, crumb, children }) {
-  const { user, practice, logout } = useAuth()
+  const { user, practice, access, logout } = useAuth()
+  // Prueba gratis del registro con Google: días que le quedan (el último cuenta como 1).
+  const trialDaysLeft = access?.trialEndsAt ? Math.max(1, Math.ceil((new Date(access.trialEndsAt) - Date.now()) / 86400000)) : null
   const initials = user ? user.name.split(' ').map((part) => part[0]).slice(0, 2).join('').toUpperCase() : '··'
   const roleLabel = user ? ROLE_LABELS[user.role] || user.role : ''
 
@@ -203,7 +205,7 @@ export default function AppChrome({ active, setActive, crumb, children }) {
         <button className="dropdown-item" onClick={logout}><span className="stat-icon orange">⏻</span><div><b>Cerrar sesión</b></div></button>
       </div>}
     </div>
-  </div></header>{children}</main>
+  </div></header>{trialDaysLeft != null && <div className="sub-notice tone-info trial-banner" role="status"><span><b>Prueba gratis:</b> te {trialDaysLeft === 1 ? 'queda 1 día' : `quedan ${trialDaysLeft} días`}. Suscríbete para seguir usando Milpa después.</span><button type="button" className="link-button" onClick={() => navigate('Configuración')}>Ver suscripción</button></div>}{children}</main>
     {alerts.length > 0 && <div className="appt-alerts" aria-live="polite">{alerts.map((alert) => <div className="appt-alert" key={alert.id} role="status"><span className="appt-alert-icon"><Icon>clock</Icon></span><div className="appt-alert-body"><b>{alert.name}</b><small>En {alert.minutes} min · {alert.time} · {alert.type}</small></div><button type="button" className="appt-alert-close" aria-label="Cerrar aviso" onClick={() => dismissAlert(alert.id)}>×</button><span className="appt-alert-bar" /></div>)}</div>}
   </div>
 }

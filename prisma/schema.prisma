@@ -87,6 +87,9 @@ model Practice {
   status             PracticeStatus      @default(ACTIVE)
   paymentMethod      PaymentMethod?
   paidUntil          DateTime?
+  // Prueba gratis de quien se registra solo con Google: entra sin pagar hasta esta fecha (sin días de
+  // gracia). Va aparte de `paidUntil`, que es cobertura pagada.
+  trialEndsAt        DateTime?
   // Suscripción con Stripe (fase 108). El estado es el de Stripe (trialing, active, past_due,
   // canceled, unpaid, incomplete…); `paidUntil` sigue siendo la cobertura y el webhook la mueve al
   // fin del periodo pagado. `stripeSyncedAt` guarda la fecha del último evento aplicado para no
