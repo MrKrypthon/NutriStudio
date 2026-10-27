@@ -87,7 +87,7 @@ export default function AppChrome({ active, setActive, crumb, children }) {
     const now = practiceNowMs(practiceTz)
     // El día que se consulta es el mismo "ahora" de la práctica con el que se comparan las citas;
     // con el día del equipo, en otra zona las citas cercanas a medianoche quedaban fuera del aviso.
-    dashboardApi.today(practiceTz ? new Date(now).toISOString().slice(0, 10) : todayIso()).then((payload) => {
+    dashboardApi.todayCached(practiceTz ? new Date(now).toISOString().slice(0, 10) : todayIso(), 15_000).then((payload) => {
       if (cancelled) return
       setNotifData(payload)
       const clock = Date.now()

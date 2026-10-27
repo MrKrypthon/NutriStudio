@@ -3,7 +3,10 @@ import { cachedRequest, invalidateCache } from './dataCache.js'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
 // Una mutación deja vieja la caché de esa familia; se invalida sólo cuando termina bien.
-const invalidateAfter = (request, prefix) => request.then((value) => { invalidateCache(prefix); return value })
+const invalidateAfter = (request, prefix) => request.then((value) => {
+  for (const key of Array.isArray(prefix) ? prefix : [prefix]) invalidateCache(key)
+  return value
+})
 
 /**
  * Small fetch boundary for all future modules. Components should not build
@@ -91,8 +94,14 @@ export const legalApi = {
   accept: (documents) => apiRequest('/legal/accept', { method: 'POST', body: JSON.stringify({ documents }) }),
 }
 
+// Clave compartida por "Hoy" y el chrome para no pedir dos veces la misma agenda.
+export const dashboardCacheKey = (date) => `dashboard:today:${date || 'practice'}`
+
 export const dashboardApi = {
   today: (date) => apiRequest(`/dashboard/today?date=${date}`),
+  // `ttl: 0` obliga a refrescar (Hoy siempre se actualiza al entrar); la caché sólo sirve para
+  // pintar de inmediato los últimos datos buenos mientras llega la respuesta fresca.
+  todayCached: (date, ttl = 15_000) => cachedRequest(dashboardCacheKey(date), () => apiRequest(`/dashboard/today?date=${date}`), { ttl }),
 }
 
 export const practiceApi = {
@@ -129,8 +138,8 @@ export const patientsApi = {
   // descarga en cada pantalla. Las mutaciones de paciente la invalidan.
   active: () => cachedRequest('patients:active', () => apiRequest('/patients?status=ACTIVE&pageSize=5000&lite=1'), { ttl: 2 * 60_000 }),
   get: (id) => apiRequest(`/patients/${id}`),
-  create: (payload) => invalidateAfter(apiRequest('/patients', { method: 'POST', body: JSON.stringify(payload) }), 'patients:'),
-  update: (id, payload) => invalidateAfter(apiRequest(`/patients/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }), 'patients:'),
+  create: (payload) => invalidateAfter(apiRequest('/patients', { method: 'POST', body: JSON.stringify(payload) }), ['patients:', 'dashboard:']),
+  update: (id, payload) => invalidateAfter(apiRequest(`/patients/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }), ['patients:', 'dashboard:']),
   consultations: (id) => apiRequest(`/patients/${id}/consultations`),
   // Sólo mediciones y estado de las consultas, para el Constructor de plan (no el expediente).
   consultationsLite: (id) => apiRequest(`/patients/${id}/consultations?lite=1`),
@@ -150,12 +159,12 @@ export const suggestionsApi = {
 
 export const appointmentsApi = {
   list: (from, to) => apiRequest(`/appointments?from=${from}&to=${to}`),
-  create: (payload) => apiRequest('/appointments', { method: 'POST', body: JSON.stringify(payload) }),
-  confirm: (id) => apiRequest(`/appointments/${id}/confirm`, { method: 'POST' }),
-  complete: (id) => apiRequest(`/appointments/${id}/complete`, { method: 'POST' }),
-  cancel: (id) => apiRequest(`/appointments/${id}/cancel`, { method: 'POST' }),
-  noShow: (id) => apiRequest(`/appointments/${id}/no-show`, { method: 'POST' }),
-  move: (id, startAt, durationMinutes) => apiRequest(`/appointments/${id}`, { method: 'PATCH', body: JSON.stringify({ startAt, durationMinutes }) }),
+  create: (payload) => invalidateAfter(apiRequest('/appointments', { method: 'POST', body: JSON.stringify(payload) }), 'dashboard:'),
+  confirm: (id) => invalidateAfter(apiRequest(`/appointments/${id}/confirm`, { method: 'POST' }), 'dashboard:'),
+  complete: (id) => invalidateAfter(apiRequest(`/appointments/${id}/complete`, { method: 'POST' }), 'dashboard:'),
+  cancel: (id) => invalidateAfter(apiRequest(`/appointments/${id}/cancel`, { method: 'POST' }), 'dashboard:'),
+  noShow: (id) => invalidateAfter(apiRequest(`/appointments/${id}/no-show`, { method: 'POST' }), 'dashboard:'),
+  move: (id, startAt, durationMinutes) => invalidateAfter(apiRequest(`/appointments/${id}`, { method: 'PATCH', body: JSON.stringify({ startAt, durationMinutes }) }), 'dashboard:'),
 }
 
 export const nutritionApi = {
@@ -251,8 +260,8 @@ export const labAttachmentsApi = {
 
 export const tasksApi = {
   list: (query = '') => apiRequest(`/tasks${query}`),
-  create: (payload) => apiRequest('/tasks', { method: 'POST', body: JSON.stringify(payload) }),
-  complete: (id) => apiRequest(`/tasks/${id}/complete`, { method: 'POST' }),
+  create: (payload) => invalidateAfter(apiRequest('/tasks', { method: 'POST', body: JSON.stringify(payload) }), 'dashboard:'),
+  complete: (id) => invalidateAfter(apiRequest(`/tasks/${id}/complete`, { method: 'POST' }), 'dashboard:'),
 }
 
 export const recipesApi = {
