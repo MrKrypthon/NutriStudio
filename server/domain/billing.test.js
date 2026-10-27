@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { invoiceConcept, subscriptionPeriodPaid, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription, subscriptionInterval, subscriptionPeriodEnd } from './billing.js'
+import { checkoutTrialEnd, invoiceConcept, subscriptionPeriodPaid, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription, subscriptionInterval, subscriptionPeriodEnd } from './billing.js'
 
 const sub = (overrides = {}) => ({
   id: 'sub_1',
@@ -96,5 +96,13 @@ describe('facturas y eventos', () => {
     expect(invoiceConcept('year')).toBe('Suscripción anual (Stripe)')
     expect(invoiceConcept('month')).toBe('Suscripción mensual (Stripe)')
     expect(invoiceConcept(null)).toBe('Suscripción (Stripe)')
+  })
+
+  it('la prueba gratis que queda pasa a Stripe sólo si faltan 48 horas o más', () => {
+    const now = new Date('2026-10-27T12:00:00Z')
+    expect(checkoutTrialEnd(null, now)).toBeNull()
+    expect(checkoutTrialEnd('2026-11-01T12:00:00Z', now)).toBe(Date.parse('2026-11-01T12:00:00Z') / 1000)
+    expect(checkoutTrialEnd('2026-10-29T11:00:00Z', now)).toBeNull()
+    expect(checkoutTrialEnd('2026-10-20T12:00:00Z', now)).toBeNull()
   })
 })
