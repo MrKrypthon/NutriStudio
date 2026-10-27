@@ -25,7 +25,7 @@ import { OAuth2Client } from 'google-auth-library'
 import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId, trialEndFrom } from './domain/accounts.js'
 import { copyCatalog } from './domain/catalogCopy.js'
 import { LEGAL_DOCUMENTS, pendingAcceptances, validateAcceptance } from '../src/lib/legal.js'
-import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
+import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, checkoutTrialEnd, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
 import { foldText, toWinAnsi } from './domain/text.js'
 import { ATTEMPT_RULES, clientKey, corsOriginOption, createAttemptLimiter, createBlockSketch, jwtSecretProblems, parseTrustProxy, tooManyAttemptsMessage } from './domain/security.js'
 
@@ -769,12 +769,13 @@ app.post('/api/v1/billing/checkout', async (request, reply) => {
       const customer = await stripe.customers.create({ email: user?.email || undefined, name: practice.name, metadata: { practiceId: practice.id } })
       practice = await prisma.practice.update({ where: { id: practice.id }, data: { stripeCustomerId: customer.id } })
     }
+    const trialEnd = checkoutTrialEnd(practice.trialEndsAt)
     const session = await stripe.checkout.sessions.create({
       mode: 'subscription',
       customer: practice.stripeCustomerId,
       client_reference_id: practice.id,
       line_items: [{ price: STRIPE_PRICES[interval], quantity: 1 }],
-      subscription_data: { metadata: { practiceId: practice.id } },
+      subscription_data: { metadata: { practiceId: practice.id }, ...(trialEnd ? { trial_end: trialEnd } : {}) },
       metadata: { practiceId: practice.id },
       locale: 'es',
       allow_promotion_codes: true,

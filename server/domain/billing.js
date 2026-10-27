@@ -76,6 +76,17 @@ export function isSupersededSubscription(subscription, practice) {
     && LIVE_SUBSCRIPTION_STATUSES.includes(practice.subscriptionStatus) && !LIVE_SUBSCRIPTION_STATUSES.includes(subscription?.status))
 }
 
+// Quien se suscribe durante su prueba gratis conserva los días que le quedan: la suscripción arranca
+// en prueba y el primer cobro es al terminar. Checkout exige que `trial_end` esté al menos 48 horas
+// adelante; con menos, se cobra de inmediato (sólo pierde horas).
+const CHECKOUT_MIN_TRIAL_MS = 48 * 3600 * 1000
+export function checkoutTrialEnd(trialEndsAt, now = new Date()) {
+  if (!trialEndsAt) return null
+  const end = new Date(trialEndsAt).getTime()
+  if (!Number.isFinite(end) || end - new Date(now).getTime() < CHECKOUT_MIN_TRIAL_MS) return null
+  return Math.floor(end / 1000)
+}
+
 // Un aviso de suscripción más viejo que el último aplicado no debe deshacer el estado actual.
 export function isStaleEvent(eventCreatedSeconds, lastSyncedAt) {
   if (!lastSyncedAt || !Number.isFinite(eventCreatedSeconds)) return false
