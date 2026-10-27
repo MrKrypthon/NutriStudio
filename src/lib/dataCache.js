@@ -10,6 +10,12 @@ export function peekCache(key) {
   return hasValue(entry) ? entry.value : undefined
 }
 
+// Guarda un valor ya conocido (p. ej. tras confirmar una cita) para que la próxima pantalla lo
+// pinte al instante, sin esperar otra petición.
+export function rememberCache(key, value) {
+  entries.set(key, { value, at: Date.now() })
+}
+
 export function invalidateCache(prefix = '') {
   for (const key of [...entries.keys()]) {
     if (!prefix || key.startsWith(prefix)) entries.delete(key)

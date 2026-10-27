@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import FinanceBars from '../../components/FinanceBars.jsx'
-import { appointmentsApi, dashboardApi } from '../../lib/api.js'
+import { appointmentsApi, dashboardApi, dashboardCacheKey } from '../../lib/api.js'
+import { peekCache, rememberCache } from '../../lib/dataCache.js'
 import { useAuth } from '../../lib/AuthContext.jsx'
 import { formatMoney } from '../../lib/finance.js'
 
@@ -14,6 +15,11 @@ const DEMO_APPOINTMENTS = [
 
 const DEMO_TASKS = [{ id: 'demo-t1', type: 'nutrition_plan', dueAt: '2026-08-25T18:00:00.000Z', patient: { firstName: 'Mariana', lastName: 'Torres' } }]
 const DEMO_STATS = { appointments: 4, pendingConfirmations: 1, followUps: 3, activePatients: 5 }
+const DEMO_FINANCE = { today: { incomeCents: 0, expenseCents: 0, balanceCents: 0 }, allTime: { incomeCents: 0, expenseCents: 0, balanceCents: 0 }, last7: [] }
+// Estado inicial sin datos inventados: hasta que llega la API (o la caché de la visita anterior) se
+// muestra "Cargando…", no la agenda de demostración.
+const EMPTY_STATS = { appointments: 0, pendingConfirmations: 0, followUps: 0, activePatients: 0 }
+const emptyDashboard = () => ({ stats: { ...EMPTY_STATS }, appointments: [], tasks: [], finance: null, pendingPlans: [] })
 
 const TASK_TYPE_LABELS = { nutrition_plan: 'Plan de alimentación', consultation_report: 'Informe de consulta', consultation_export: 'Expediente completo' }
 const APPOINTMENT_TYPE_LABELS = { INITIAL: 'Primera consulta', FOLLOW_UP: 'Seguimiento', QUICK_CONTROL: 'Control rápido', EMERGENCY: 'Emergencia', BLOCK: 'Bloqueo' }
@@ -43,8 +49,11 @@ const greetingFor = (d) => {
 
 export default function DashboardPage({ setActive, onStartConsultation, onNewAppointment, onOpenAgendaFiltered, onOpenPlan }) {
   const { user } = useAuth()
-  const [data, setData] = useState({ stats: DEMO_STATS, appointments: DEMO_APPOINTMENTS, tasks: DEMO_TASKS })
-  const [status, setStatus] = useState('loading')
+  // Al volver a "Hoy" se pinta de inmediato la última respuesta buena de esa fecha (si existe) y
+  // se refresca en segundo plano; nunca los datos de demostración mientras hay una sesión real.
+  const [cachedAtMount] = useState(() => peekCache(dashboardCacheKey(todayISO(new Date()))))
+  const [data, setData] = useState(() => cachedAtMount || emptyDashboard())
+  const [status, setStatus] = useState(cachedAtMount ? 'online' : 'loading')
   // Live clock: rolls the date/greeting over at midnight and re-fetches the new day's data.
   const [now, setNow] = useState(() => new Date())
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(t) }, [])
@@ -54,19 +63,39 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
   const TODAY_LONG_LABEL = todayLongLabel(now)
 
   useEffect(() => {
-    dashboardApi.today(TODAY_ISO)
-      .then((response) => { if (response?.stats) setData(response); setStatus('online') })
-      .catch((error) => setStatus(error.code === 'DEMO_MODE' ? 'demo' : 'error'))
+    let cancelled = false
+    // Si no hay caché para este día, se ve "Cargando…" hasta la respuesta. Si sí hay, se conserva
+    // el dato bueno mientras `todayCached(..., 0)` trae el fresco (siempre se refresca al entrar).
+    if (!peekCache(dashboardCacheKey(TODAY_ISO))) setStatus((prev) => (prev === 'demo' ? prev : 'loading'))
+    dashboardApi.todayCached(TODAY_ISO, 0)
+      .then((response) => {
+        if (cancelled) return
+        if (response?.stats) { setData(response); setStatus('online') }
+        else setStatus('error')
+      })
+      .catch((error) => {
+        if (cancelled) return
+        if (error.code === 'DEMO_MODE') {
+          setData({ stats: DEMO_STATS, appointments: DEMO_APPOINTMENTS, tasks: DEMO_TASKS, finance: DEMO_FINANCE, pendingPlans: [] })
+          setStatus('demo')
+        } else setStatus('error')
+      })
+    return () => { cancelled = true }
   }, [TODAY_ISO])
 
   const firstName = user?.name ? user.name.split(' ')[0] : 'Gabriela'
+  const stats = data.stats || EMPTY_STATS
+  const appointments = data.appointments || []
+  const loading = status === 'loading'
   const nextTask = (data.tasks || [])[0]
   const moreTasks = Math.max((data.tasks || []).length - 1, 0)
   const isReal = status === 'online'
-  const footLabel = isReal ? 'Actualizado desde tu API' : 'Datos de demostración'
+  const usingDemo = status === 'demo'
+  const footLabel = loading ? 'Cargando…' : usingDemo ? 'Datos de demostración' : status === 'error' ? 'Sin conexión · últimos datos' : 'Actualizado desde tu API'
   const emptyTotals = { incomeCents: 0, expenseCents: 0, balanceCents: 0 }
   const finance = data.finance || { today: emptyTotals, allTime: emptyTotals, last7: [] }
-  const pendingPlans = isReal ? (data.pendingPlans || []) : []
+  const financeReady = Boolean(data.finance)
+  const pendingPlans = data.pendingPlans || []
   // `updatedAt` es una marca de tiempo real (no la hora "de pared" de una cita), así que va en la hora
   // local del equipo y por día de calendario: antes salía en UTC ("hoy · 01:32" a las 19:32).
   const updatedLabel = (iso) => {
@@ -90,11 +119,16 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
     setConfirmSaving(true); setConfirmError('')
     try {
       const updated = await appointmentsApi.confirm(confirmTarget.id)
-      setData((prev) => ({
-        ...prev,
-        stats: { ...prev.stats, pendingConfirmations: Math.max(0, (prev.stats?.pendingConfirmations || 0) - 1) },
-        appointments: (prev.appointments || []).map((a) => (a.id === confirmTarget.id ? updated : a)),
-      }))
+      setData((prev) => {
+        const next = {
+          ...prev,
+          stats: { ...prev.stats, pendingConfirmations: Math.max(0, (prev.stats?.pendingConfirmations || 0) - 1) },
+          appointments: (prev.appointments || []).map((a) => (a.id === confirmTarget.id ? updated : a)),
+        }
+        // Se guarda el estado ya confirmado para que al volver a "Hoy" no reaparezca como pendiente.
+        rememberCache(dashboardCacheKey(TODAY_ISO), next)
+        return next
+      })
       setConfirmTarget(null)
     } catch (error) {
       setConfirmError(error.code === 'DEMO_MODE' ? 'Modo demostración: conecta el API para confirmar citas.' : (error.message || 'No se pudo confirmar la cita.'))
@@ -102,16 +136,16 @@ export default function DashboardPage({ setActive, onStartConsultation, onNewApp
   }
 
   return <AppChrome active="Hoy" setActive={setActive}><div className="content dashboard-content"><section className="welcome"><div><p className="eyebrow">{TODAY_EYEBROW}</p><h1>{greetingFor(now)}, {firstName} <span>✦</span></h1><p className="subtitle">Tu práctica, tus pacientes, un solo lugar.</p></div><div className="module-actions"><span className={'sync-label ' + (isReal ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'loading' ? 'Cargando…' : isReal ? 'Sincronizado' : status === 'error' ? 'Sin conexión' : 'Datos de demostración'}</span><button className="primary" onClick={() => onNewAppointment ? onNewAppointment() : setActive('Agenda')}><span>+</span> Nueva cita</button></div></section>
-    <section className="stats-grid">{[['Citas de hoy', data.stats.appointments, '◷', true, 'Agenda', null], ['Por confirmar', data.stats.pendingConfirmations, '◌', false, 'Agenda', () => onOpenAgendaFiltered && onOpenAgendaFiltered('pending')], ['Seguimientos', data.stats.followUps, '◒', false, 'Seguimientos', null], ['Pacientes activos', data.stats.activePatients, '♧', false, 'Pacientes', null]].map(([label, value, icon, featured, target, handler]) => <button type="button" className={featured ? 'stat-card featured' : 'stat-card'} key={label} onClick={() => handler ? handler() : setActive(target)}><div className="stat-head"><span>{label}</span><span className="stat-icon">{icon}</span></div><div className="stat-value">{value}</div><div className="stat-foot"><span>{footLabel}</span></div></button>)}</section>
+    <section className="stats-grid">{[['Citas de hoy', stats.appointments, '◷', true, 'Agenda', null], ['Por confirmar', stats.pendingConfirmations, '◌', false, 'Agenda', () => onOpenAgendaFiltered && onOpenAgendaFiltered('pending')], ['Seguimientos', stats.followUps, '◒', false, 'Seguimientos', null], ['Pacientes activos', stats.activePatients, '♧', false, 'Pacientes', null]].map(([label, value, icon, featured, target, handler]) => <button type="button" className={featured ? 'stat-card featured' : 'stat-card'} key={label} onClick={() => handler ? handler() : setActive(target)}><div className="stat-head"><span>{label}</span><span className="stat-icon">{icon}</span></div><div className="stat-value">{loading ? '—' : value}</div><div className="stat-foot"><span>{footLabel}</span></div></button>)}</section>
     <div className="dashboard-grid">
-      <section className="panel appointments"><div className="panel-title"><div><h2>Agenda de hoy</h2><p>Tus citas programadas</p></div><button className="link-button" onClick={() => setActive('Agenda')}>Abrir agenda →</button></div><div className="day-line"><span className="today-pill">HOY</span><span>{TODAY_LONG_LABEL}</span></div><div className="appointment-list">{data.appointments.length === 0 ? <p className="muted" style={{ padding: '22px 0', textAlign: 'center' }}>{isReal ? 'No tienes citas programadas para hoy.' : 'Sin citas de demostración.'}</p> : data.appointments.map((item, index) => { const isPending = item.status === 'PENDING_CONFIRMATION'; const isConfirmedLike = item.status === 'CONFIRMED' || item.status === 'SCHEDULED'; const startable = isConfirmedLike && item.patient?.id; const durationLabel = item.durationMinutes != null ? `${item.durationMinutes} min` : (() => { const ms = item.endAt && item.startAt ? new Date(item.endAt) - new Date(item.startAt) : NaN; return Number.isFinite(ms) && ms > 0 ? `${Math.round(ms / 60000)} min` : (item.duration || '60 min') })(); const activate = isPending ? () => openConfirm(item) : startable ? () => onStartConsultation?.(item.patient.id, item.id) : null; return <div className="appointment" key={item.id || item.name} onClick={activate || undefined} role={activate ? 'button' : undefined} tabIndex={activate ? 0 : undefined} onKeyDown={activate ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate() } } : undefined} style={activate ? { cursor: 'pointer' } : undefined} title={isPending ? 'Clic para confirmar la cita' : startable ? 'Clic para iniciar la consulta' : undefined}><div className="time"><b>{item.time || formatUTCTime(item.startAt)}</b><small>{durationLabel}</small></div><div className={'person-avatar ' + (item.color || ['coral', 'blue', 'purple', 'yellow'][index % 4])}>{item.initials || item.patient?.firstName?.[0] || 'P'}</div><div className="appointment-info"><b>{item.name || `${item.patient?.firstName || ''} ${item.patient?.lastName || ''}`}</b><span>{item.type ? (APPOINTMENT_TYPE_LABELS[item.type] || item.type) : 'Consulta'}</span></div><span className={'status ' + (isConfirmedLike || item.status === 'COMPLETED' || item.status === 'Confirmada' ? 'confirmed' : 'pending')}>{isConfirmedLike ? 'Confirmada' : item.status === 'PENDING_CONFIRMATION' ? 'Por confirmar' : item.status === 'COMPLETED' ? 'Atendida' : item.status}</span></div> })}</div></section>
-      <section className="panel followups"><div className="panel-title"><div><h2>Próxima acción</h2><p>{nextTask ? 'Un pendiente por resolver' : 'Todo en orden'}</p></div></div>{nextTask && <div className="next-action-card"><span className="stat-icon orange">◌</span><div><b>{TASK_TYPE_LABELS[nextTask.type] || nextTask.type} de {nextTask.patient?.firstName} {nextTask.patient?.lastName}</b><small>{!nextTask.dueAt ? 'Sin fecha límite' : new Date(nextTask.dueAt).toISOString().slice(0, 10) < TODAY_ISO ? `Vencido ${formatUTCDay(nextTask.dueAt)}` : `Vence ${formatUTCDay(nextTask.dueAt)}`}</small></div><button className="message" onClick={() => setActive('Seguimientos')}>Ver ↗</button></div>}<div className="empty-note"><span>{moreTasks ? '◷' : '✓'}</span><p>{moreTasks ? `${moreTasks} pendiente(s) más en Seguimientos` : 'El resto de tu agenda está en orden'}</p></div></section>
+      <section className="panel appointments"><div className="panel-title"><div><h2>Agenda de hoy</h2><p>Tus citas programadas</p></div><button className="link-button" onClick={() => setActive('Agenda')}>Abrir agenda →</button></div><div className="day-line"><span className="today-pill">HOY</span><span>{TODAY_LONG_LABEL}</span></div><div className="appointment-list">{appointments.length === 0 ? <p className="muted" style={{ padding: '22px 0', textAlign: 'center' }}>{loading ? 'Cargando agenda…' : usingDemo ? 'Sin citas de demostración.' : 'No tienes citas programadas para hoy.'}</p> : appointments.map((item, index) => { const isPending = item.status === 'PENDING_CONFIRMATION'; const isConfirmedLike = item.status === 'CONFIRMED' || item.status === 'SCHEDULED'; const startable = isConfirmedLike && item.patient?.id; const durationLabel = item.durationMinutes != null ? `${item.durationMinutes} min` : (() => { const ms = item.endAt && item.startAt ? new Date(item.endAt) - new Date(item.startAt) : NaN; return Number.isFinite(ms) && ms > 0 ? `${Math.round(ms / 60000)} min` : (item.duration || '60 min') })(); const activate = isPending ? () => openConfirm(item) : startable ? () => onStartConsultation?.(item.patient.id, item.id) : null; return <div className="appointment" key={item.id || item.name} onClick={activate || undefined} role={activate ? 'button' : undefined} tabIndex={activate ? 0 : undefined} onKeyDown={activate ? (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); activate() } } : undefined} style={activate ? { cursor: 'pointer' } : undefined} title={isPending ? 'Clic para confirmar la cita' : startable ? 'Clic para iniciar la consulta' : undefined}><div className="time"><b>{item.time || formatUTCTime(item.startAt)}</b><small>{durationLabel}</small></div><div className={'person-avatar ' + (item.color || ['coral', 'blue', 'purple', 'yellow'][index % 4])}>{item.initials || item.patient?.firstName?.[0] || 'P'}</div><div className="appointment-info"><b>{item.name || `${item.patient?.firstName || ''} ${item.patient?.lastName || ''}`}</b><span>{item.type ? (APPOINTMENT_TYPE_LABELS[item.type] || item.type) : 'Consulta'}</span></div><span className={'status ' + (isConfirmedLike || item.status === 'COMPLETED' || item.status === 'Confirmada' ? 'confirmed' : 'pending')}>{isConfirmedLike ? 'Confirmada' : item.status === 'PENDING_CONFIRMATION' ? 'Por confirmar' : item.status === 'COMPLETED' ? 'Atendida' : item.status}</span></div> })}</div></section>
+      <section className="panel followups"><div className="panel-title"><div><h2>Próxima acción</h2><p>{loading ? 'Cargando pendientes…' : nextTask ? 'Un pendiente por resolver' : 'Todo en orden'}</p></div></div>{loading ? <p className="muted" style={{ padding: '18px 0' }}>Espera un momento…</p> : nextTask && <div className="next-action-card"><span className="stat-icon orange">◌</span><div><b>{TASK_TYPE_LABELS[nextTask.type] || nextTask.type} de {nextTask.patient?.firstName} {nextTask.patient?.lastName}</b><small>{!nextTask.dueAt ? 'Sin fecha límite' : new Date(nextTask.dueAt).toISOString().slice(0, 10) < TODAY_ISO ? `Vencido ${formatUTCDay(nextTask.dueAt)}` : `Vence ${formatUTCDay(nextTask.dueAt)}`}</small></div><button className="message" onClick={() => setActive('Seguimientos')}>Ver ↗</button></div>}{!loading && <div className="empty-note"><span>{moreTasks ? '◷' : '✓'}</span><p>{moreTasks ? `${moreTasks} pendiente(s) más en Seguimientos` : 'El resto de tu agenda está en orden'}</p></div>}</section>
       <section className="panel finance-today">
         <div className="panel-title"><div><h2>Finanzas de hoy</h2><p>Ingresos, egresos y saldo disponible</p></div><button className="link-button" onClick={() => setActive('Finanzas')}>Ver finanzas →</button></div>
         <div className="finance-today-stats">
-          <div className="income"><small>Ingresos hoy</small><b>{formatMoney(finance.today.incomeCents)}</b></div>
-          <div className="expense"><small>Egresos hoy</small><b>{formatMoney(finance.today.expenseCents)}</b></div>
-          <div className="balance"><small>Disponible</small><b>{formatMoney(finance.allTime.balanceCents)}</b></div>
+          <div className="income"><small>Ingresos hoy</small><b>{financeReady ? formatMoney(finance.today.incomeCents) : '—'}</b></div>
+          <div className="expense"><small>Egresos hoy</small><b>{financeReady ? formatMoney(finance.today.expenseCents) : '—'}</b></div>
+          <div className="balance"><small>Disponible</small><b>{financeReady ? formatMoney(finance.allTime.balanceCents) : '—'}</b></div>
         </div>
         <FinanceBars series={finance.last7} compact />
         <p className="finance-today-note">Últimos 7 días · los ingresos se registran solos al terminar cada consulta.</p>
