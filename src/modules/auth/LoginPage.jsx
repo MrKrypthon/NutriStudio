@@ -62,7 +62,7 @@ export default function LoginPage() {
         {googleClientId && <>
           <div className="login-google" ref={googleButtonRef} aria-busy={state === 'google'} />
           {state === 'google' && <p className="login-hint">Preparando tu cuenta…</p>}
-          {googleError ? <div className="form-error">⚠ {googleError}</div> : <p className="login-hint">¿Primera vez? Crea tu cuenta con Google.</p>}
+          {googleError ? <div className="form-error">⚠ {googleError}</div> : <p className="login-hint">¿Primera vez? Crea tu cuenta con Google y pruébala 7 días gratis.</p>}
           <div className="login-divider"><span>o con tu identificador</span></div>
         </>}
         <label style={{ display: 'block', color: 'var(--muted)', fontSize: 12, fontWeight: 500, marginBottom: 15 }}>Correo o identificador

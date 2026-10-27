@@ -213,10 +213,17 @@ aparte con Caddy (`dev-edge`), así que no toca las imágenes ni el Nginx de pro
 
 ## 6. Integraciones
 
-- **Google:** en Google Cloud Console (APIs y servicios → Credenciales), en tu ID de cliente de OAuth:
-  1. Agrega `https://app.milpa.mx` a «Orígenes de JavaScript autorizados».
-  2. Pon el ID en `GOOGLE_CLIENT_ID`.
-  3. Corre `deploy/deploy.sh`.
+- **Google** (entrar y registrarse con Google; quien se registra así tiene 7 días de prueba gratis):
+  1. En Google Cloud Console, crea un proyecto y configura la «Pantalla de consentimiento de OAuth»:
+     tipo «Externo», nombre de la app, correo de soporte y el dominio. Publícala («En producción»):
+     en «Prueba» sólo entran los usuarios de prueba que agregues.
+  2. En APIs y servicios → Credenciales → «Crear credenciales» → «ID de cliente de OAuth», de tipo
+     «Aplicación web». En «Orígenes de JavaScript autorizados» agrega `https://milpa.com.mx` (y
+     `https://dev.milpa.com.mx` y `http://localhost:5173` si usas el mismo ID en dev y en local).
+     No hace falta «URI de redireccionamiento»: el botón usa ventana emergente.
+  3. Pon el ID (`….apps.googleusercontent.com`) en `GOOGLE_CLIENT_ID` de `.env.docker`. No es
+     secreto: el navegador lo recibe. No hay «secreto de cliente» que guardar.
+  4. Corre `deploy/deploy.sh` (en dev: `milpa-dev up -d --build --wait`).
 - **Stripe:**
   1. Crea un endpoint de webhook en `https://app.milpa.mx/api/v1/stripe/webhook`, con los eventos de suscripción y de factura.
   2. Copia su secreto a `STRIPE_WEBHOOK_SECRET`.

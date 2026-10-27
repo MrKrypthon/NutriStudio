@@ -2347,6 +2347,8 @@ input:not([type=checkbox]):not([type=radio]):focus,select:focus,textarea:focus{o
 .sub-status.tone-danger,.sub-notice.tone-danger{background:var(--danger-tint);color:var(--danger)}
 .sub-status.tone-info,.sub-notice.tone-info{background:var(--info-tint);color:var(--info)}
 .sub-notice{border-radius:var(--radius-control);padding:10px 14px;font-size:13.5px;line-height:1.45;background:var(--sunken);color:var(--ink)}
+.trial-banner{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 14px;margin:12px 24px 0}
+@media (max-width:640px){.trial-banner{margin:10px 16px 0}}
 .sub-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .sub-facts>div{background:var(--sunken);border-radius:var(--radius-control);padding:12px 14px;display:grid;gap:3px}
 .sub-facts small{color:var(--muted);font-size:12.5px}.sub-facts b{font:600 16px Outfit;color:var(--ink)}
