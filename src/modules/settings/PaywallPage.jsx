@@ -7,7 +7,7 @@ import SubscriptionCard from './SubscriptionCard.jsx'
 // Stripe la tarjeta sincroniza el estado y aquí se vuelve a pedir el acceso; si ya quedó pagada, la
 // app entra sola.
 export default function PaywallPage() {
-  const { user, practice, logout, refreshPractice } = useAuth()
+  const { user, practice, access, logout, refreshPractice } = useAuth()
   const [checking, setChecking] = useState(false)
   const [stillBlocked, setStillBlocked] = useState(false)
 
@@ -24,7 +24,9 @@ export default function PaywallPage() {
       <div className="paywall-brand"><BrandMark size={40} /><div><strong>milpa</strong><small>Atención Integral</small></div></div>
       <div className="paywall-intro">
         <p className="eyebrow">{practice?.name || 'TU CONSULTA'}</p>
-        <h1>{firstName ? `${firstName}, activa tu suscripción` : 'Activa tu suscripción'}</h1>
+        {access?.trialEnded
+          ? <h1>{firstName ? `${firstName}, terminó tu prueba gratis` : 'Terminó tu prueba gratis'}</h1>
+          : <h1>{firstName ? `${firstName}, activa tu suscripción` : 'Activa tu suscripción'}</h1>}
         <p className="subtitle">Con la suscripción tienes Milpa completo: expedientes, agenda, planes de alimentación, recetas y finanzas. Tus datos se conservan aunque la suscripción esté inactiva.</p>
       </div>
       <SubscriptionCard onLoaded={(_, back) => { if (back) recheck() }} />

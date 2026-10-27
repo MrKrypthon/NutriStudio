@@ -13,8 +13,13 @@ const emptyAccount = (suggestedLoginId = '') => ({ name: '', practiceName: '', e
 // Las cuentas del panel o de Google se bloquean 7 días después de vencer (ACCESS_GRACE_DAYS en el
 // servidor); las anteriores (sin signupSource) nunca se bloquean por falta de pago.
 const GRACE_DAYS = 7
-const coverageLabel = (iso, signupSource) => {
+const coverageLabel = (iso, signupSource, trialEndsAt) => {
   const left = daysLeft(iso)
+  // Registro con Google sin pagar todavía: la prueba gratis (sin días de gracia).
+  if (signupSource && left == null && trialEndsAt) {
+    const trialLeft = daysLeft(trialEndsAt)
+    return trialLeft >= 0 ? { text: `Prueba gratis · ${trialLeft === 0 ? 'termina hoy' : `${trialLeft} día${trialLeft === 1 ? '' : 's'} más`}`, tone: 'warn' } : { text: 'Prueba terminada · sin acceso hasta pagar', tone: 'danger' }
+  }
   if (!signupSource) return left == null ? { text: 'Sin fecha · no se bloquea', tone: '' } : left < 0 ? { text: `Vencida hace ${Math.abs(left)} días · no se bloquea`, tone: 'warn' } : { text: `Cubierto ${left} días más`, tone: 'ok' }
   if (left == null) return { text: 'Sin cobertura · sin acceso hasta pagar', tone: 'danger' }
   if (left < 0) return Math.abs(left) <= GRACE_DAYS ? { text: `Vencida hace ${Math.abs(left)} días · en gracia`, tone: 'warn' } : { text: `Vencida hace ${Math.abs(left)} días · sin acceso`, tone: 'danger' }
@@ -171,7 +176,7 @@ export default function AdminApp() {
         {loadState === 'loading' && <p className="muted">Cargando cuentas…</p>}
         {loadState === 'error' && <div className="form-error">⚠ No se pudieron cargar las cuentas.</div>}
         {actionError && <div className="form-error">⚠ {actionError}</div>}
-        <div className="admin-practice-list">{practices.map((practice) => { const coverage = coverageLabel(practice.paidUntil, practice.signupSource); return <article className={'panel admin-practice' + (practice.status === 'SUSPENDED' ? ' suspended' : '')} key={practice.id}>
+        <div className="admin-practice-list">{practices.map((practice) => { const coverage = coverageLabel(practice.paidUntil, practice.signupSource, practice.trialEndsAt); return <article className={'panel admin-practice' + (practice.status === 'SUSPENDED' ? ' suspended' : '')} key={practice.id}>
           <div className="admin-practice-main">
             <div className="admin-practice-name"><b>{practice.name}</b><span className={'admin-badge ' + (practice.status === 'ACTIVE' ? 'ok' : 'danger')}>{practice.status === 'ACTIVE' ? 'Activa' : 'Suspendida'}</span>{practice.signupSource && <span className="admin-badge">{practice.signupSource === 'ADMIN' ? 'Panel' : 'Google'}</span>}</div>
             {practice.owner && <div className="admin-practice-owner"><span>{practice.owner.name}</span>{practice.owner.loginId && <code>{practice.owner.loginId}</code>}{practice.owner.email && <span className="muted">{practice.owner.email}</span>}{practice.owner.google && <span className="muted">· entra con Google</span>}</div>}
