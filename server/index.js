@@ -2001,10 +2001,26 @@ const RECIPE_LIST_LITE_SELECT = {
   nutrition: true, calculatedNutrition: true, portions: true, ingredientsText: true, instructions: true, status: true,
   ingredients: { select: { id: true, quantity: true, unit: true, equivalence: true, ingredient: { select: { id: true, name: true, nutrition: true, equivalence: true, group: true } } } },
 }
+// Tarjetas de la biblioteca de recetas: no necesitan la nutrición por ingrediente, sólo nombres y
+// cantidades; la nutrición de la receta ya viene calculada.
+const RECIPE_LIST_CARD_SELECT = {
+  id: true, name: true, mealTypes: true, restrictions: true, timeMinutes: true, imageFile: true,
+  nutrition: true, calculatedNutrition: true, portions: true, ingredientsText: true, instructions: true, status: true,
+  ingredients: { select: { id: true, quantity: true, unit: true, equivalence: true, ingredient: { select: { id: true, name: true, group: true, equivalence: true, unit: true } } } },
+}
+// Del JSON de nutrición del ingrediente, el Constructor sólo usa los macros y el azúcar para
+// calcular equivalentes; mandar los 26 nutrimentos de cada ingrediente inflaba el catálogo.
+const BUILDER_NUTRITION_KEYS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'sodium']
+const compactNutrition = (nutrition) => Object.fromEntries(BUILDER_NUTRITION_KEYS.map((key) => [key, Number(nutrition?.[key]) || 0]))
+const compactRecipeIngredients = (recipes) => recipes.map((recipe) => ({
+  ...recipe,
+  ingredients: (recipe.ingredients || []).map((item) => (item.ingredient ? { ...item, ingredient: { ...item.ingredient, nutrition: compactNutrition(item.ingredient.nutrition) } } : item)),
+}))
 
 app.get('/api/v1/recipes', async (request) => {
   const { search = '', mealType, restriction, status = 'ACTIVE', page, pageSize } = request.query
   const lite = request.query.lite === '1'
+  const card = request.query.card === '1'
   const where = await nameSearchWhere(prisma.recipe, {
     practiceId: request.practiceId,
     status: status === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE',
@@ -2017,10 +2033,16 @@ app.get('/api/v1/recipes', async (request) => {
     const currentPage = Math.max(Number(page) || 1, 1)
     const take = Math.min(Math.max(Number(pageSize) || 24, 1), 200)
     const [items, total] = await prisma.$transaction([
-      prisma.recipe.findMany({ where, include: { ingredients: { include: { ingredient: true } } }, orderBy: { name: 'asc' }, skip: (currentPage - 1) * take, take }),
+      prisma.recipe.findMany({
+        where,
+        ...(card ? { select: RECIPE_LIST_CARD_SELECT } : lite ? { select: RECIPE_LIST_LITE_SELECT } : { include: { ingredients: { include: { ingredient: true } } } }),
+        orderBy: { name: 'asc' },
+        skip: (currentPage - 1) * take,
+        take,
+      }),
       prisma.recipe.count({ where }),
     ])
-    return { items, total, page: currentPage, pageSize: take }
+    return { items: lite ? compactRecipeIngredients(items) : items, total, page: currentPage, pageSize: take }
   }
   // Sin tope: el Constructor descarta de la semana las recetas que no vienen aquí (las toma por
   // archivadas), así que el `take: 1000` de antes borraba al guardar las asignaciones de las recetas
@@ -2034,8 +2056,9 @@ app.get('/api/v1/recipes', async (request) => {
     ...(lite ? { select: RECIPE_LIST_LITE_SELECT } : { include: { ingredients: { include: { ingredient: true } } } }),
     orderBy: { name: 'asc' },
   })
-  if (catalogKey) recipeCatalogCache.set(catalogKey, { at: Date.now(), items: recipes })
-  return { items: recipes }
+  const compacted = lite ? compactRecipeIngredients(recipes) : recipes
+  if (catalogKey) recipeCatalogCache.set(catalogKey, { at: Date.now(), items: compacted })
+  return { items: compacted }
 })
 
 app.post('/api/v1/recipes', async (request, reply) => {
@@ -2294,7 +2317,16 @@ app.get('/api/v1/ingredients', async (request) => {
   // para saber si hubo recorte (`hasMore`) y que las pantallas pidan buscar, en vez de cortar en
   // silencio. Un count aparte costaba otro recorrido de la tabla en cada tecla.
   const ingredients = await prisma.ingredient.findMany({ where, orderBy: { name: 'asc' }, take: 201 })
-  return { items: ingredients.slice(0, 200), hasMore: ingredients.length > 200 }
+  const items = ingredients.slice(0, 200)
+  // La lista sólo muestra kcal y la porción; el detalle completo (26 nutrimentos) se pide al
+  // seleccionar el ingrediente. Así la primera carga no arrastra todo el JSON de nutrición.
+  return { items: request.query.lite === '1' ? items.map((item) => ({ ...item, nutrition: compactNutrition(item.nutrition) })) : items, hasMore: ingredients.length > 200 }
+})
+
+app.get('/api/v1/ingredients/:ingredientId', async (request, reply) => {
+  const ingredient = await prisma.ingredient.findFirst({ where: { id: request.params.ingredientId, practiceId: request.practiceId } })
+  if (!ingredient) return reply.code(404).send({ code: 'INGREDIENT_NOT_FOUND', message: 'Ingrediente no encontrado.', fields: {} })
+  return ingredient
 })
 
 app.post('/api/v1/ingredients/import', async (request, reply) => {

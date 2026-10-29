@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { ingredientsApi } from '../../lib/api.js'
@@ -48,15 +48,20 @@ export default function IngredientsPage({ setActive }) {
   const [createError, setCreateError] = useState('')
   const [imageState, setImageState] = useState('idle')
   const [imageError, setImageError] = useState('')
+  // La lista sólo trae macros; el detalle completo (26 nutrimentos) se pide al seleccionar.
+  const [detail, setDetail] = useState(null)
+  const [detailError, setDetailError] = useState(false)
+  const detailCache = useRef(new Map())
 
   useEffect(() => {
     setStatus('loading')
     const params = new URLSearchParams()
     if (search.trim()) params.set('search', search.trim())
     if (group !== 'Todos') params.set('group', group)
-    const query = params.toString() ? `?${params}` : ''
+    params.set('lite', '1')
+    const query = `?${params}`
     const timer = setTimeout(() => {
-      ingredientsApi.list(query)
+      ingredientsApi.listCached(query)
         .then((response) => {
           const list = response.items || []
           setItems(list)
@@ -68,6 +73,20 @@ export default function IngredientsPage({ setActive }) {
     }, 300)
     return () => clearTimeout(timer)
   }, [search, group, reloadKey])
+
+  // Detalle bajo demanda, con caché por ingrediente para no repetirlo al cambiar de filtro.
+  useEffect(() => {
+    if (!selected?.id) { setDetail(null); setDetailError(false); return undefined }
+    const cached = detailCache.current.get(selected.id)
+    if (cached) { setDetail(cached); setDetailError(false); return undefined }
+    let cancelled = false
+    setDetail(null)
+    setDetailError(false)
+    ingredientsApi.get(selected.id)
+      .then((full) => { detailCache.current.set(selected.id, full); if (!cancelled) setDetail(full) })
+      .catch(() => { if (!cancelled) setDetailError(true) })
+    return () => { cancelled = true }
+  }, [selected?.id])
 
   const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
 
@@ -102,20 +121,26 @@ export default function IngredientsPage({ setActive }) {
     }
   }
 
-  const source = selected?.equivalence?.source === 'SMAE' ? 'Sistema Mexicano de Equivalentes' : selected?.equivalence?.source?.provider ? 'Importado de fuente externa' : 'Fuente local revisada'
+  // Mientras llega el detalle completo se usa lo que trae la lista (macros y equivalencia).
+  const displayed = detail?.id === selected?.id ? detail : selected
+  const detailLoading = Boolean(selected) && detail?.id !== selected.id && !detailError
+  const source = displayed?.equivalence?.source === 'SMAE' ? 'Sistema Mexicano de Equivalentes' : displayed?.equivalence?.source?.provider ? 'Importado de fuente externa' : 'Fuente local revisada'
   // La nutrición se guarda por 100 g; para la vista por porción se escala a los gramos del
   // equivalente del SMAE (p. ej. Aceite: 888 kcal/100 g × 5 g = 44 kcal por 1 cdita).
-  const eq = selected?.equivalence || {}
+  const eq = displayed?.equivalence || {}
   const gramsPerEq = Number(eq.grams) > 0 ? Number(eq.grams) : null
   const perPortion = (key) => {
     if (!gramsPerEq) return null
-    const value = Number(selected?.nutrition?.[key] ?? 0) * (gramsPerEq / 100)
+    const value = Number(displayed?.nutrition?.[key] ?? 0) * (gramsPerEq / 100)
     return Math.round(value * 100) / 100
   }
 
   const applyImage = (id, imageFile) => {
     setSelected((prev) => (prev && prev.id === id ? { ...prev, imageFile } : prev))
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, imageFile } : item)))
+    setDetail((prev) => (prev && prev.id === id ? { ...prev, imageFile } : prev))
+    const cached = detailCache.current.get(id)
+    if (cached) detailCache.current.set(id, { ...cached, imageFile })
   }
   const uploadIngredientImage = async (file) => {
     if (!file || !selected) return
@@ -184,7 +209,7 @@ export default function IngredientsPage({ setActive }) {
           {status !== 'loading' && status !== 'error' && items.length === 0 && <div className="result-empty"><span>◌</span><h3>No hay ingredientes con esos filtros</h3><p>Ajusta la búsqueda o el grupo.</p></div>}
           {status === 'online' && hasMore && <p className="muted docs-note">Se muestran los primeros {items.length}. Busca por nombre para encontrar los demás.</p>}
           {items.map((item) => <button className={'ingredient-row ' + (selected?.id === item.id ? 'ingredient-selected' : '')} onClick={() => setSelected(item)} key={item.id}>
-            <span className="ingredient-icon">{item.imageFile ? <img src={ingredientsApi.imageUrl(item.imageFile)} alt="" /> : groupIcon(item)}</span>
+            <span className="ingredient-icon">{item.imageFile ? <img src={ingredientsApi.imageUrl(item.imageFile)} alt="" loading="lazy" decoding="async" /> : groupIcon(item)}</span>
             <div><b>{item.name}</b><small>{item.group} · Porción {item.equivalence?.serving || 'por definir'}</small></div>
             <span className="muted">{Math.round(item.nutrition?.kcal || 0)} kcal</span>
             <span className="row-arrow">→</span>
@@ -194,8 +219,8 @@ export default function IngredientsPage({ setActive }) {
 
       {selected && <aside className="ingredient-detail panel">
         <div className="ingredient-detail-head">
-          {selected.imageFile ? <img className="ingredient-photo large-ingredient" src={ingredientsApi.imageUrl(selected.imageFile)} alt={selected.name} /> : <span className="ingredient-icon large-ingredient">{groupIcon(selected)}</span>}
-          <div><p className="eyebrow">{selected.group}</p><h2>{selected.name}</h2><span className="muted">{source}</span></div>
+          {selected.imageFile ? <img className="ingredient-photo large-ingredient" src={ingredientsApi.imageUrl(displayed.imageFile)} alt={displayed.name} /> : <span className="ingredient-icon large-ingredient">{groupIcon(selected)}</span>}
+          <div><p className="eyebrow">{displayed.group}</p><h2>{displayed.name}</h2><span className="muted">{source}</span></div>
         </div>
         <div className="ingredient-image-row">
           <span className="field-label">Imagen</span>
@@ -207,16 +232,20 @@ export default function IngredientsPage({ setActive }) {
         {imageError && <div className="form-error">⚠ {imageError}</div>}
         <div className="serving-box">
           <span>Porción de equivalencia</span>
-          <b>{selected.equivalence?.serving || 'Sin definir'}</b>
-          <small>{selected.equivalence?.grams ? `${selected.equivalence.grams} gramos · 1 equivalente` : 'Gramos por equivalente por definir'}</small>
+          <b>{displayed.equivalence?.serving || 'Sin definir'}</b>
+          <small>{displayed.equivalence?.grams ? `${displayed.equivalence.grams} gramos · 1 equivalente` : 'Gramos por equivalente por definir'}</small>
         </div>
-        <h3>Información nutricional por porción{selected.equivalence?.serving ? ` (${selected.equivalence.serving})` : ''}</h3>
+        <h3>Información nutricional por porción{displayed.equivalence?.serving ? ` (${displayed.equivalence.serving})` : ''}</h3>
         {!gramsPerEq && <p className="muted" style={{ marginTop: -6 }}>Falta el peso del equivalente para calcular la porción.</p>}
-        <div className="nutrient-table">{NUTRIENT_ROWS.map(([key, label, unit]) => <div key={key}><span>{label}</span><b>{perPortion(key) ?? '—'} {unit}</b></div>)}</div>
+        {detailError
+          ? <p className="muted">No se pudo cargar la información nutricional. Vuelve a seleccionar el ingrediente.</p>
+          : detailLoading
+            ? <p className="muted">Cargando información nutricional…</p>
+            : <div className="nutrient-table">{NUTRIENT_ROWS.map(([key, label, unit]) => <div key={key}><span>{label}</span><b>{perPortion(key) ?? '—'} {unit}</b></div>)}</div>}
         <div className="equivalence-box">
           <p className="eyebrow">SISTEMA MEXICANO DE EQUIVALENTES</p>
-          <b>Grupo: {selected.equivalence?.group || selected.group}</b>
-          <p>{selected.equivalence?.glycemicIndex ? `IG ${selected.equivalence.glycemicIndex} · Carga glicémica ${selected.equivalence.glycemicLoad ?? 0}. ` : ''}La equivalencia se conserva en el catálogo local y puede usarse en recetas y planes.</p>
+          <b>Grupo: {displayed.equivalence?.group || displayed.group}</b>
+          <p>{displayed.equivalence?.glycemicIndex ? `IG ${displayed.equivalence.glycemicIndex} · Carga glicémica ${displayed.equivalence.glycemicLoad ?? 0}. ` : ''}La equivalencia se conserva en el catálogo local y puede usarse en recetas y planes.</p>
         </div>
       </aside>}
     </div>

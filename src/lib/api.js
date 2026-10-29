@@ -269,6 +269,9 @@ export const recipesApi = {
   // Catálogo completo que usa el Constructor de plan. Se pide en versión ligera y se guarda en
   // memoria: al volver a un plan no se vuelve a bajar ni a procesar todo el recetario.
   catalog: () => cachedRequest('recipes:catalog', () => apiRequest('/recipes?lite=1'), { ttl: 5 * 60_000 }),
+  // Listado paginado de la biblioteca (tarjetas): se cachea por búsqueda/filtro/página para que
+  // volver a Recetas no repita la descarga.
+  pageCached: (query = '') => cachedRequest(`recipes:page:${query}`, () => apiRequest(`/recipes${query}`), { ttl: 60_000 }),
   get: (id) => apiRequest(`/recipes/${id}`),
   create: (payload) => invalidateAfter(apiRequest('/recipes', { method: 'POST', body: JSON.stringify(payload) }), 'recipes:'),
   update: (id, payload) => invalidateAfter(apiRequest(`/recipes/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }), 'recipes:'),
@@ -296,11 +299,14 @@ export const educationApi = {
 
 export const ingredientsApi = {
   list: (query = '') => apiRequest(`/ingredients${query}`),
-  import: (payload) => apiRequest('/ingredients/import', { method: 'POST', body: JSON.stringify(payload) }),
-  create: (payload) => apiRequest('/ingredients', { method: 'POST', body: JSON.stringify(payload) }),
+  // Lista ligera para la biblioteca y detalle bajo demanda (los 26 nutrimentos no viajan en cada fila).
+  listCached: (query = '') => cachedRequest(`ingredients:page:${query}`, () => apiRequest(`/ingredients${query}`), { ttl: 60_000 }),
+  get: (id) => cachedRequest(`ingredients:item:${id}`, () => apiRequest(`/ingredients/${id}`), { ttl: 5 * 60_000 }),
+  import: (payload) => invalidateAfter(apiRequest('/ingredients/import', { method: 'POST', body: JSON.stringify(payload) }), 'ingredients:'),
+  create: (payload) => invalidateAfter(apiRequest('/ingredients', { method: 'POST', body: JSON.stringify(payload) }), 'ingredients:'),
   imageUrl: (file) => (file ? `${API_BASE}/ingredients/images/${file}` : null),
-  uploadImage: (id, dataUrl) => apiRequest(`/ingredients/${id}/image`, { method: 'POST', body: JSON.stringify({ dataUrl }) }),
-  removeImage: (id) => apiRequest(`/ingredients/${id}/image`, { method: 'DELETE' }),
+  uploadImage: (id, dataUrl) => invalidateAfter(apiRequest(`/ingredients/${id}/image`, { method: 'POST', body: JSON.stringify({ dataUrl }) }), 'ingredients:'),
+  removeImage: (id) => invalidateAfter(apiRequest(`/ingredients/${id}/image`, { method: 'DELETE' }), 'ingredients:'),
 }
 
 export const foodApi = {

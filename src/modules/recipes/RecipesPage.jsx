@@ -52,7 +52,9 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
     if (restriction) params.set('restriction', restriction)
     params.set('page', String(page))
     params.set('pageSize', String(pageSize))
-    recipesApi.list(`?${params}`)
+    // `card=1`: tarjetas sin la nutrición de cada ingrediente; el detalle ya trae la de la receta.
+    params.set('card', '1')
+    recipesApi.pageCached(`?${params}`)
       .then((response) => {
         const list = response.items || []
         setItems(list)
