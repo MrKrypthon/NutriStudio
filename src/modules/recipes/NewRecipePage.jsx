@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { ingredientsApi, recipesApi } from '../../lib/api.js'
+import { shrinkToJpeg } from '../../lib/images.js'
 import { useAuth } from '../../lib/AuthContext.jsx'
 import { clearRecipeDraft, getRecipeDraft, recipeDraftKey, saveRecipeDraft } from './recipeDraftStore.js'
 
@@ -44,6 +45,8 @@ export default function NewRecipePage({ setActive, recipeId }) {
   const [instructions, setInstructions] = useState('')
   const [ingredientsText, setIngredientsText] = useState('')
   const [imageFile, setImageFile] = useState(null)
+  const [imageState, setImageState] = useState('idle')
+  const [imageError, setImageError] = useState('')
   const [loadState, setLoadState] = useState(recipeId ? 'loading' : 'ready')
   const [saved, setSaved] = useState(false)
   const [saveState, setSaveState] = useState('idle')
@@ -125,6 +128,22 @@ export default function NewRecipePage({ setActive, recipeId }) {
 
   const add = (item) => { if (!chosen.some((x) => x.id === item.id)) setChosen([...chosen, { ...item, quantity: 100, equivalence: 1, serving: item.equivalence?.serving }]) }
   const update = (id, key, value) => setChosen(chosen.map((item) => item.id === id ? { ...item, [key]: Number(value) } : item))
+
+  // La foto se guarda en el servidor al instante (no espera al botón Guardar); el nombre y los
+  // ingredientes siguen su propio flujo. Sólo está disponible cuando la receta ya existe.
+  const uploadImage = async (file) => {
+    if (!file || !recipeId) return
+    setImageError('')
+    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { setImageError('Sube una imagen JPG, PNG o WebP.'); return }
+    setImageState('saving')
+    try {
+      const dataUrl = await shrinkToJpeg(file)
+      const updated = await recipesApi.uploadImage(recipeId, dataUrl)
+      setImageFile(updated.imageFile)
+    } catch (error) {
+      setImageError(error.message || 'No se pudo subir la foto.')
+    } finally { setImageState('idle') }
+  }
 
   const discardDraft = () => {
     clearRecipeDraft(draftKey)
@@ -227,7 +246,10 @@ export default function NewRecipePage({ setActive, recipeId }) {
         {missing && <p className="muted form-missing">ⓘ {missing}</p>}
         <div className="form-actions"><button type="button" className="secondary" onClick={() => setActive('Recetas')}>Cancelar</button><button type="button" className="primary" disabled={!!missing || saveState === 'saving'} onClick={save}>{saveState === 'saving' ? 'Guardando…' : recipeId ? 'Guardar cambios' : 'Guardar receta'} <span>→</span></button></div>
       </section>
-      <aside className="panel recipe-preview"><p className="eyebrow">VISTA PREVIA</p><div className={imageFile ? 'recipe-preview-image has-photo' : 'recipe-preview-image coral'}>{imageFile ? <img src={recipesApi.imageUrl(imageFile)} alt={name || 'Receta'} /> : '✦'}</div><span className="recipe-meal">{meal}</span><h2>{name || 'Nombre de tu receta'}</h2><p className="muted">Receta propia · {chosen.length + textIngredientCount} ingredientes</p><div className="preview-note">{chosen.length ? 'La nutrición se calculará automáticamente a partir de las cantidades guardadas.' : 'Los ingredientes en texto libre se escalan al ajustar porciones.'}</div></aside>
+      <aside className="panel recipe-preview"><p className="eyebrow">VISTA PREVIA</p><div className={imageFile ? 'recipe-preview-image has-photo' : 'recipe-preview-image coral'}>{imageFile ? <img src={recipesApi.imageUrl(imageFile)} alt={name || 'Receta'} /> : '✦'}</div>
+        {recipeId && <label className="secondary ingredient-upload" style={{ marginTop: 10 }}>{imageState === 'saving' ? 'Subiendo…' : imageFile ? 'Cambiar foto' : 'Subir foto'}<input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} disabled={imageState === 'saving'} onChange={(event) => { uploadImage(event.target.files?.[0]); event.target.value = '' }} /></label>}
+        {imageError && <div className="form-error">⚠ {imageError}</div>}
+        <span className="recipe-meal">{meal}</span><h2>{name || 'Nombre de tu receta'}</h2><p className="muted">Receta propia · {chosen.length + textIngredientCount} ingredientes</p><div className="preview-note">{chosen.length ? 'La nutrición se calculará automáticamente a partir de las cantidades guardadas.' : 'Los ingredientes en texto libre se escalan al ajustar porciones.'}</div></aside>
     </div>)}
   </div></AppChrome>
 }

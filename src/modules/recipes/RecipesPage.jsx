@@ -3,6 +3,7 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { recipesApi } from '../../lib/api.js'
 import { scaleIngredientLine } from '../../lib/ingredientLines.js'
+import { shrinkToJpeg } from '../../lib/images.js'
 
 const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', lunch: 'Comida', snack: 'Colación', dinner: 'Cena', dessert: 'Postre', sauce: 'Salsa / Paté', base: 'Básico' }
 const MEAL_TYPE_FILTERS = [
@@ -24,29 +25,6 @@ const FALLBACK = [
 ]
 
 const round1 = (value) => Math.round(value * 10) / 10
-
-// Las fotos de receta se guardan siempre como JPEG de a lo más 1600 px: es de sobra para la tarjeta
-// y para el plan impreso, y el servidor sólo acepta JPEG. Así una foto del celular (varios MB) se
-// puede subir tal cual.
-const RECIPE_PHOTO_MAX_SIDE = 1600
-async function shrinkToJpeg(file) {
-  const url = URL.createObjectURL(file)
-  try {
-    const image = await new Promise((resolve, reject) => { const img = new Image(); img.onload = () => resolve(img); img.onerror = () => reject(new Error('No se pudo leer la imagen.')); img.src = url })
-    const scale = Math.min(1, RECIPE_PHOTO_MAX_SIDE / Math.max(image.naturalWidth, image.naturalHeight))
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale))
-    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale))
-    const context = canvas.getContext('2d')
-    // Fondo blanco: el JPEG no tiene transparencia y un PNG recortado saldría con fondo negro.
-    context.fillStyle = '#fff'
-    context.fillRect(0, 0, canvas.width, canvas.height)
-    context.drawImage(image, 0, 0, canvas.width, canvas.height)
-    return canvas.toDataURL('image/jpeg', 0.86)
-  } finally {
-    URL.revokeObjectURL(url)
-  }
-}
 
 const RecipeImage = ({ recipe, colorIndex, className }) => {
   const src = recipe.imageFile ? recipesApi.imageUrl(recipe.imageFile) : null
