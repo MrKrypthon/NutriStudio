@@ -19,6 +19,20 @@ describe('cachedRequest', () => {
     expect(load).toHaveBeenCalledTimes(2)
   })
 
+  it('returns the previous value immediately and refreshes in the background', async () => {
+    let resolveRefresh
+    const load = vi.fn()
+      .mockResolvedValueOnce(['viejo'])
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve }))
+    expect(await cachedRequest('test:swr', load, { ttl: 0, staleWhileRevalidate: true })).toEqual(['viejo'])
+    // Aunque el TTL ya venció, no se espera la red: se devuelve lo anterior.
+    expect(await cachedRequest('test:swr', load, { ttl: 0, staleWhileRevalidate: true })).toEqual(['viejo'])
+    resolveRefresh(['nuevo'])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(await cachedRequest('test:swr', load, { ttl: 0, staleWhileRevalidate: true })).toEqual(['nuevo'])
+  })
+
   it('deduplicates concurrent requests for the same key', async () => {
     const load = vi.fn(() => Promise.resolve({ ok: true }))
     const [first, second] = await Promise.all([

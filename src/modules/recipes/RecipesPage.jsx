@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { recipesApi } from '../../lib/api.js'
+import { peekCache } from '../../lib/dataCache.js'
 import { scaleIngredientLine } from '../../lib/ingredientLines.js'
 
 const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', lunch: 'Comida', snack: 'Colación', dinner: 'Cena', dessert: 'Postre', sauce: 'Salsa / Paté', base: 'Básico' }
@@ -24,6 +25,17 @@ const FALLBACK = [
 ]
 
 const round1 = (value) => Math.round(value * 10) / 10
+const pageQuery = ({ search, mealType, restriction, page, pageSize }) => {
+  const params = new URLSearchParams()
+  if (search.trim()) params.set('search', search.trim())
+  if (mealType) params.set('mealType', mealType)
+  if (restriction) params.set('restriction', restriction)
+  params.set('page', String(page))
+  params.set('pageSize', String(pageSize))
+  // `card=1`: tarjetas sin la nutrición de cada ingrediente; el detalle ya trae la de la receta.
+  params.set('card', '1')
+  return `?${params}`
+}
 
 const RecipeImage = ({ recipe, colorIndex, className }) => {
   // La tarjeta usa la miniatura; el detalle, la foto completa.
@@ -33,45 +45,43 @@ const RecipeImage = ({ recipe, colorIndex, className }) => {
 }
 
 export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe }) {
-  const [items, setItems] = useState(FALLBACK)
-  const [selected, setSelected] = useState(FALLBACK[0])
-  const [status, setStatus] = useState('loading')
+  // Al volver a la vista se pinta de inmediato lo último que quedó en memoria para esa consulta.
+  const [initialCache] = useState(() => peekCache(`recipes:page:${pageQuery({ search: '', mealType: '', restriction: '', page: 1, pageSize: 12 })}`))
+  const [items, setItems] = useState(initialCache?.items || FALLBACK)
+  const [selected, setSelected] = useState(initialCache?.items?.[0] || FALLBACK[0])
+  const [status, setStatus] = useState(initialCache ? 'online' : 'loading')
   const [search, setSearch] = useState('')
   const [mealType, setMealType] = useState('')
   const [restriction, setRestriction] = useState('')
   const [servings, setServings] = useState(1)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(12)
-  const [total, setTotal] = useState(FALLBACK.length)
-  const [restrictionOptions, setRestrictionOptions] = useState(() => [...new Set(FALLBACK.flatMap((recipe) => recipe.restrictions || []))])
+  const [total, setTotal] = useState(initialCache?.total ?? FALLBACK.length)
+  const [restrictionOptions, setRestrictionOptions] = useState(() => [...new Set((initialCache?.items || FALLBACK).flatMap((recipe) => recipe.restrictions || []))])
 
-  const load = () => {
-    setStatus('loading')
-    const params = new URLSearchParams()
-    if (search.trim()) params.set('search', search.trim())
-    if (mealType) params.set('mealType', mealType)
-    if (restriction) params.set('restriction', restriction)
-    params.set('page', String(page))
-    params.set('pageSize', String(pageSize))
-    // `card=1`: tarjetas sin la nutrición de cada ingrediente; el detalle ya trae la de la receta.
-    params.set('card', '1')
-    recipesApi.pageCached(`?${params}`)
-      .then((response) => {
-        const list = response.items || []
-        setItems(list)
-        // Acumular las restricciones (no derivarlas de `items`, que viene ya filtrado por
-        // restricción): si no, al elegir una el <select> se queda solo con esa opción y no se puede
-        // cambiar a otra sin recargar.
-        setRestrictionOptions((prev) => [...new Set([...prev, ...list.flatMap((recipe) => recipe.restrictions || [])])])
-        setTotal(response.total ?? list.length)
-        setSelected((prev) => list.find((recipe) => recipe.id === prev?.id) || list[0] || null)
-        setStatus('online')
-      })
-      .catch((error) => { if (error.code === 'DEMO_MODE') setStatus('demo'); else { setItems([]); setSelected(null); setTotal(0); setStatus('error') } })
+  const applyResponse = (response) => {
+    const list = response.items || []
+    setItems(list)
+    // Acumular las restricciones (no derivarlas de `items`, que viene ya filtrado por
+    // restricción): si no, al elegir una el <select> se queda solo con esa opción y no se puede
+    // cambiar a otra sin recargar.
+    setRestrictionOptions((prev) => [...new Set([...prev, ...list.flatMap((recipe) => recipe.restrictions || [])])])
+    setTotal(response.total ?? list.length)
+    setSelected((prev) => list.find((recipe) => recipe.id === prev?.id) || list[0] || null)
+    setStatus('online')
   }
 
   useEffect(() => {
-    const timer = setTimeout(load, 300)
+    const query = pageQuery({ search, mealType, restriction, page, pageSize })
+    const cached = peekCache(`recipes:page:${query}`)
+    // Si ya hay una respuesta para esta consulta, se muestra YA; la petición (si toca) va después.
+    if (cached) applyResponse(cached)
+    else setStatus('loading')
+    const timer = setTimeout(() => {
+      recipesApi.pageCached(query)
+        .then(applyResponse)
+        .catch((error) => { if (error.code === 'DEMO_MODE') setStatus('demo'); else if (!cached) { setItems([]); setSelected(null); setTotal(0); setStatus('error') } })
+    }, cached ? 0 : 300)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, mealType, restriction, page, pageSize])

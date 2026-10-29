@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { ingredientsApi } from '../../lib/api.js'
+import { peekCache } from '../../lib/dataCache.js'
 
 const APPROX_GROUP = 'Aproximados Menu 500'
 const GROUPS = ['Todos', 'Verduras', 'Frutas', 'Cereales S/G', 'Cereales C/G', 'AOA MBAG', 'AOA BAG', 'AOA MAG', 'AOA AAG', 'Leguminosas', 'Leche entera', 'Leche semidescremada', 'Leche descremada', 'Leche con azúcar', 'Grasas sin proteínas', 'Grasas con proteínas', 'Azucares sin grasa', 'Azucares con grasa', 'Libres en energía', 'Alcohol', APPROX_GROUP]
@@ -16,6 +17,13 @@ const GROUP_ICON = {
   'Libres en energía': '🌿', Alcohol: '🍷', [APPROX_GROUP]: '🧺',
 }
 const groupIcon = (item) => GROUP_ICON[item?.group] || '◉'
+const listQuery = (search, group) => {
+  const params = new URLSearchParams()
+  if (search.trim()) params.set('search', search.trim())
+  if (group !== 'Todos') params.set('group', group)
+  params.set('lite', '1')
+  return `?${params}`
+}
 
 const EMPTY_FORM = { name: '', group: APPROX_GROUP, unit: 'gramos', kcal: '', protein: '', carbs: '', fat: '', fiber: '', serving: '', grams: '' }
 
@@ -35,10 +43,11 @@ const NUTRIENT_ROWS = [
 ]
 
 export default function IngredientsPage({ setActive }) {
-  const [items, setItems] = useState(FALLBACK)
-  const [selected, setSelected] = useState(FALLBACK[0])
-  const [status, setStatus] = useState('loading')
-  const [hasMore, setHasMore] = useState(false)
+  const [initialCache] = useState(() => peekCache(`ingredients:page:${listQuery('', 'Todos')}`))
+  const [items, setItems] = useState(initialCache?.items || FALLBACK)
+  const [selected, setSelected] = useState(initialCache?.items?.[0] || FALLBACK[0])
+  const [status, setStatus] = useState(initialCache ? 'online' : 'loading')
+  const [hasMore, setHasMore] = useState(Boolean(initialCache?.hasMore))
   const [search, setSearch] = useState('')
   const [group, setGroup] = useState('Todos')
   const [reloadKey, setReloadKey] = useState(0)
@@ -54,12 +63,17 @@ export default function IngredientsPage({ setActive }) {
   const detailCache = useRef(new Map())
 
   useEffect(() => {
-    setStatus('loading')
-    const params = new URLSearchParams()
-    if (search.trim()) params.set('search', search.trim())
-    if (group !== 'Todos') params.set('group', group)
-    params.set('lite', '1')
-    const query = `?${params}`
+    const query = listQuery(search, group)
+    const cached = peekCache(`ingredients:page:${query}`)
+    if (cached) {
+      const list = cached.items || []
+      setItems(list)
+      setHasMore(Boolean(cached.hasMore))
+      setSelected((prev) => list.find((item) => item.id === prev?.id) || list[0] || null)
+      setStatus('online')
+    } else {
+      setStatus('loading')
+    }
     const timer = setTimeout(() => {
       ingredientsApi.listCached(query)
         .then((response) => {
@@ -69,24 +83,10 @@ export default function IngredientsPage({ setActive }) {
           setSelected((prev) => list.find((item) => item.id === prev?.id) || list[0] || null)
           setStatus('online')
         })
-        .catch((error) => { if (error.code === 'DEMO_MODE') setStatus('demo'); else { setItems([]); setSelected(null); setStatus('error') } })
-    }, 300)
+        .catch((error) => { if (error.code === 'DEMO_MODE') setStatus('demo'); else if (!cached) { setItems([]); setSelected(null); setStatus('error') } })
+    }, cached ? 0 : 300)
     return () => clearTimeout(timer)
   }, [search, group, reloadKey])
-
-  // Detalle bajo demanda, con caché por ingrediente para no repetirlo al cambiar de filtro.
-  useEffect(() => {
-    if (!selected?.id) { setDetail(null); setDetailError(false); return undefined }
-    const cached = detailCache.current.get(selected.id)
-    if (cached) { setDetail(cached); setDetailError(false); return undefined }
-    let cancelled = false
-    setDetail(null)
-    setDetailError(false)
-    ingredientsApi.get(selected.id)
-      .then((full) => { detailCache.current.set(selected.id, full); if (!cancelled) setDetail(full) })
-      .catch(() => { if (!cancelled) setDetailError(true) })
-    return () => { cancelled = true }
-  }, [selected?.id])
 
   const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }))
 

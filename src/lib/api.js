@@ -1,7 +1,19 @@
 import { getToken, notifyLegalRequired, notifySubscriptionRequired, notifyUnauthorized } from './auth.js'
-import { cachedRequest, invalidateCache } from './dataCache.js'
+import { cachedRequest, invalidateCache, setCacheScope } from './dataCache.js'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
+// La caché persistente se separa por práctica: al cambiar de cuenta no se muestran datos de otra.
+const currentCacheScope = () => {
+  const token = getToken()
+  if (!token) return null
+  try {
+    const part = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(part.padEnd(Math.ceil(part.length / 4) * 4, '=')))
+    return payload?.practiceId || null
+  } catch { return null }
+}
+// Con la sesión ya guardada, la caché persistente puede hidratarse desde la primera petición.
+setCacheScope(currentCacheScope())
 // Una mutación deja vieja la caché de esa familia; se invalida sólo cuando termina bien.
 const invalidateAfter = (request, prefix) => request.then((value) => {
   for (const key of Array.isArray(prefix) ? prefix : [prefix]) invalidateCache(key)
@@ -36,6 +48,7 @@ export async function apiRequest(path, options = {}) {
     throw Object.assign(new Error('API no configurada: usando datos de demostración.'), { code: 'DEMO_MODE' })
   }
   const token = getToken()
+  setCacheScope(currentCacheScope())
   const response = await fetchWithTimeout(`${API_BASE}${path}`, {
     ...options,
     headers: {
@@ -67,6 +80,7 @@ export async function apiRequest(path, options = {}) {
 // failing silently.
 async function downloadBlobRequest(path, fallbackMessage) {
   const token = getToken()
+  setCacheScope(currentCacheScope())
   const response = await fetchWithTimeout(`${API_BASE}${path}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
   if (!response.ok) {
     let error = null
@@ -268,10 +282,10 @@ export const recipesApi = {
   list: (query = '') => apiRequest(`/recipes${query}`),
   // Catálogo completo que usa el Constructor de plan. Se pide en versión ligera y se guarda en
   // memoria: al volver a un plan no se vuelve a bajar ni a procesar todo el recetario.
-  catalog: () => cachedRequest('recipes:catalog', () => apiRequest('/recipes?lite=1'), { ttl: 5 * 60_000 }),
+  catalog: () => cachedRequest('recipes:catalog', () => apiRequest('/recipes?lite=1'), { ttl: 5 * 60_000, persist: true, staleWhileRevalidate: true }),
   // Listado paginado de la biblioteca (tarjetas): se cachea por búsqueda/filtro/página para que
   // volver a Recetas no repita la descarga.
-  pageCached: (query = '') => cachedRequest(`recipes:page:${query}`, () => apiRequest(`/recipes${query}`), { ttl: 60_000 }),
+  pageCached: (query = '') => cachedRequest(`recipes:page:${query}`, () => apiRequest(`/recipes${query}`), { ttl: 60_000, persist: true, staleWhileRevalidate: true }),
   get: (id) => apiRequest(`/recipes/${id}`),
   create: (payload) => invalidateAfter(apiRequest('/recipes', { method: 'POST', body: JSON.stringify(payload) }), 'recipes:'),
   update: (id, payload) => invalidateAfter(apiRequest(`/recipes/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }), 'recipes:'),
@@ -301,8 +315,8 @@ export const educationApi = {
 export const ingredientsApi = {
   list: (query = '') => apiRequest(`/ingredients${query}`),
   // Lista ligera para la biblioteca y detalle bajo demanda (los 26 nutrimentos no viajan en cada fila).
-  listCached: (query = '') => cachedRequest(`ingredients:page:${query}`, () => apiRequest(`/ingredients${query}`), { ttl: 60_000 }),
-  get: (id) => cachedRequest(`ingredients:item:${id}`, () => apiRequest(`/ingredients/${id}`), { ttl: 5 * 60_000 }),
+  listCached: (query = '') => cachedRequest(`ingredients:page:${query}`, () => apiRequest(`/ingredients${query}`), { ttl: 60_000, persist: true, staleWhileRevalidate: true }),
+  get: (id) => cachedRequest(`ingredients:item:${id}`, () => apiRequest(`/ingredients/${id}`), { ttl: 5 * 60_000, persist: true, staleWhileRevalidate: true }),
   import: (payload) => invalidateAfter(apiRequest('/ingredients/import', { method: 'POST', body: JSON.stringify(payload) }), 'ingredients:'),
   create: (payload) => invalidateAfter(apiRequest('/ingredients', { method: 'POST', body: JSON.stringify(payload) }), 'ingredients:'),
   imageUrl: (file) => (file ? `${API_BASE}/ingredients/images/${file}` : null),
