@@ -115,8 +115,8 @@ export default function CatalogAdmin() {
     try {
       const dataUrl = await shrinkToJpeg(file)
       const updated = await adminApi.uploadCatalogImage(recipe.id, dataUrl)
-      setRecipe((prev) => ({ ...prev, imageFile: updated.imageFile }))
-      setItems((prev) => prev.map((item) => (item.id === updated.id ? { ...item, imageFile: updated.imageFile } : item)))
+      setRecipe((prev) => ({ ...prev, imageFile: updated.imageFile, catalogSyncedAt: null }))
+      setItems((prev) => prev.map((item) => (item.id === updated.id ? { ...item, imageFile: updated.imageFile, catalogSyncedAt: null } : item)))
     } catch (error) {
       setSaveMessage(error.message || 'No se pudo subir la foto.')
     } finally { setImageState('idle') }
@@ -156,7 +156,9 @@ export default function CatalogAdmin() {
       const result = await adminApi.publishCatalogRecipe(recipe.id)
       setPublishResult(result)
       setPublishState('idle')
-      setItems((prev) => prev.map((item) => (item.id === recipe.id ? { ...item, catalogId: result.catalogId, catalogSyncedAt: new Date().toISOString() } : item)))
+      const publishedAt = new Date().toISOString()
+      setRecipe((prev) => (prev ? { ...prev, catalogId: result.catalogId, catalogSyncedAt: publishedAt } : prev))
+      setItems((prev) => prev.map((item) => (item.id === recipe.id ? { ...item, catalogId: result.catalogId, catalogSyncedAt: publishedAt } : item)))
       adminApi.catalogPublishPreview(recipe.id).then(setPreview).catch(() => {})
     } catch (error) {
       setPublishState('error')
