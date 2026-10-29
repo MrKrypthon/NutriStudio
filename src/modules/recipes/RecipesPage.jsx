@@ -3,7 +3,6 @@ import AppChrome from '../../components/AppChrome.jsx'
 import ModuleHeader from '../../components/ModuleHeader.jsx'
 import { recipesApi } from '../../lib/api.js'
 import { scaleIngredientLine } from '../../lib/ingredientLines.js'
-import { shrinkToJpeg } from '../../lib/images.js'
 
 const MEAL_TYPE_LABELS = { breakfast: 'Desayuno', lunch: 'Comida', snack: 'Colación', dinner: 'Cena', dessert: 'Postre', sauce: 'Salsa / Paté', base: 'Básico' }
 const MEAL_TYPE_FILTERS = [
@@ -39,10 +38,6 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   const [search, setSearch] = useState('')
   const [mealType, setMealType] = useState('')
   const [restriction, setRestriction] = useState('')
-  const [archiveState, setArchiveState] = useState('idle')
-  const [archiveError, setArchiveError] = useState('')
-  const [imageState, setImageState] = useState('idle')
-  const [imageError, setImageError] = useState('')
   const [servings, setServings] = useState(1)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(12)
@@ -84,57 +79,9 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   // A new recipe starts at one serving; re-selecting one shouldn't silently keep a previous scale.
   useEffect(() => { setServings(1) }, [selected?.id])
 
-  const isReal = status === 'online' && selected && !String(selected.id).startsWith('demo-')
   const totalPages = Math.max(Math.ceil(total / pageSize), 1)
   const firstOnPage = total === 0 ? 0 : (page - 1) * pageSize + 1
   const lastOnPage = Math.min(page * pageSize, total)
-
-  const startCreate = () => { onSelectRecipe?.(null); setActive('Nueva receta') }
-  const startEdit = () => { if (!isReal) return; onSelectRecipe?.(selected.id); setActive('Editar receta') }
-
-  const applyImage = (id, imageFile) => {
-    setSelected((prev) => (prev && prev.id === id ? { ...prev, imageFile } : prev))
-    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, imageFile } : item)))
-  }
-  const uploadRecipeImage = async (file) => {
-    if (!file || !isReal) return
-    setImageError('')
-    if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) { setImageError('Sube una imagen JPG, PNG o WebP.'); return }
-    if (file.size > 20 * 1024 * 1024) { setImageError('La imagen no puede pesar más de 20 MB.'); return }
-    setImageState('saving')
-    try {
-      const dataUrl = await shrinkToJpeg(file)
-      const updated = await recipesApi.uploadImage(selected.id, dataUrl)
-      applyImage(selected.id, updated.imageFile)
-    } catch (error) {
-      setImageError(error.message || 'No se pudo subir la foto.')
-    } finally {
-      setImageState('idle')
-    }
-  }
-  const removeRecipeImage = async () => {
-    if (!isReal) return
-    if (!window.confirm(`¿Quitar la foto de "${selected.name}"? También dejará de salir en los planes.`)) return
-    setImageError('')
-    setImageState('saving')
-    try {
-      await recipesApi.removeImage(selected.id)
-      applyImage(selected.id, null)
-    } catch (error) {
-      setImageError(error.message || 'No se pudo quitar la foto.')
-    } finally {
-      setImageState('idle')
-    }
-  }
-
-  const archive = async () => {
-    if (!isReal) return
-    if (!window.confirm(`¿Archivar "${selected.name}"? Ya no aparecerá en el catálogo ni en las sugerencias; los planes que la usan no cambian.`)) return
-    setArchiveState('archiving')
-    setArchiveError('')
-    try { await recipesApi.archive(selected.id); setArchiveState('idle'); load() }
-    catch (error) { setArchiveState('idle'); setArchiveError(error.code === 'DEMO_MODE' ? 'Modo demostración: no se guardará.' : (error.message || 'No se pudo archivar la receta.')) }
-  }
 
   const changeServings = (delta) => setServings((value) => Math.max(0.5, round1(value + delta)))
 
@@ -158,7 +105,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
   const hasApproxIngredients = linkedIngredients.some((item) => item.ingredient.group === 'Aproximados Menu 500')
 
   return <AppChrome active="Recetas" setActive={setActive}><div className="content recipe-workspace">
-    <ModuleHeader eyebrow="BIBLIOTECA · RECETAS LOCALES" title="Recetas" subtitle="Tu catálogo propio, listo para personalizar en cada plan." action={<div className="module-actions"><span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizado' : status === 'loading' ? 'Cargando…' : status === 'error' ? 'Sin conexión' : 'Vista demo'}</span><button className="primary" onClick={startCreate}><span>+</span> Nueva receta</button></div>} />
+    <ModuleHeader eyebrow="BIBLIOTECA · RECETAS" title="Recetas" subtitle="Catálogo de consulta. Las cantidades y los ingredientes se personalizan por paciente en el Constructor del plan." action={<span className={'sync-label ' + (status === 'online' ? 'online' : status === 'loading' ? '' : 'demo')}>● {status === 'online' ? 'Sincronizado' : status === 'loading' ? 'Cargando…' : status === 'error' ? 'Sin conexión' : 'Vista demo'}</span>} />
 
     <div className="recipe-toolbar panel">
       <div className="search-field">⌕ <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre..." /></div>
@@ -185,13 +132,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
       {selected && <aside className="recipe-detail panel">
         <RecipeImage recipe={selected} colorIndex={items.indexOf(selected)} className="detail-image" />
         <div className="detail-content">
-          {isReal && <div className="recipe-photo-actions">
-            <label className="secondary ingredient-upload">{imageState === 'saving' ? 'Subiendo…' : selected.imageFile ? 'Cambiar foto' : 'Subir foto'}<input type="file" accept="image/png,image/jpeg,image/webp" style={{ display: 'none' }} disabled={imageState === 'saving'} onChange={(event) => { uploadRecipeImage(event.target.files?.[0]); event.target.value = '' }} /></label>
-            {selected.imageFile && <button type="button" className="link-button" disabled={imageState === 'saving'} onClick={removeRecipeImage}>Quitar</button>}
-            {!selected.imageFile && <small className="muted">La foto sale en el plan de alimentación de la paciente.</small>}
-          </div>}
-          {imageError && <div className="form-error">⚠ {imageError}</div>}
-          <div className="detail-title"><div><span className="recipe-meal">{MEAL_TYPE_LABELS[selected.mealTypes?.[0]] || selected.mealTypes?.[0]}{selected.timeMinutes ? ` · ${selected.timeMinutes} min` : ''}</span><h2>{selected.name}</h2></div><button className="secondary" disabled={!isReal} onClick={startEdit}>Editar</button></div>
+          <div className="detail-title"><div><span className="recipe-meal">{MEAL_TYPE_LABELS[selected.mealTypes?.[0]] || selected.mealTypes?.[0]}{selected.timeMinutes ? ` · ${selected.timeMinutes} min` : ''}</span><h2>{selected.name}</h2></div></div>
 
           {yieldPortions && <p className="muted recipe-yield">Rinde {yieldPortions} {yieldPortions === 1 ? 'porción' : 'porciones'} · valores por porción</p>}
 
@@ -207,7 +148,7 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
             <div className="smae-summary-head"><span>Calculado según SMAE{hasApproxIngredients ? ' + aprox.' : ''}</span><small>{servings === 1 ? 'por porción' : `por ${servings} porciones`}</small></div>
             <div className="smae-summary-values"><b>{contrastValue(calculatedNutrition, 'kcal')} kcal</b><span>{contrastValue(calculatedNutrition, 'carbs')} g carb · {contrastValue(calculatedNutrition, 'protein')} g prot · {contrastValue(calculatedNutrition, 'fat')} g grasa</span></div>
             {linkedIngredients.length > 0 && <small className="smae-summary-ingredients">Con {linkedIngredients.length} ingrediente{linkedIngredients.length === 1 ? '' : 's'}{hasApproxIngredients ? ' (incluye aproximados)' : ''}: {linkedIngredients.map((item) => item.ingredient.name).join(', ')}</small>}
-          </div> : <div className="smae-summary empty"><span>Sin cálculo SMAE todavía.</span><button type="button" className="link-button" onClick={startEdit}>Vincular ingredientes →</button></div>)}
+          </div> : <div className="smae-summary empty"><span>Sin cálculo SMAE todavía.</span><small className="muted">El cálculo con ingredientes del catálogo lo administra Milpa.</small></div>)}
 
           <div className={selected.instructions ? 'detail-columns' : undefined}>
           <div className="detail-section">
@@ -223,9 +164,8 @@ export default function RecipesPage({ setActive, onSelectRecipe, onAssignRecipe 
           </div>}
           </div>
 
+          <div className="recipe-readonly-note">ⓘ El catálogo de recetas es de solo lectura. Para ajustar cantidades o ingredientes para un paciente, usa el <b>Constructor del plan</b>.</div>
           <button className="primary detail-assign" onClick={() => onAssignRecipe ? onAssignRecipe(selected.name) : setActive('Constructor de plan')}>Asignar al plan <span>→</span></button>
-          {isReal && <button className="link-button" disabled={archiveState === 'archiving'} onClick={archive}>{archiveState === 'archiving' ? 'Archivando…' : 'Archivar receta'}</button>}
-          {archiveError && <div className="form-error">⚠ {archiveError}</div>}
         </div>
       </aside>}
     </div>

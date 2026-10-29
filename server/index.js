@@ -1096,10 +1096,21 @@ app.get('/api/v1/recipes/images/:fileName', async (request, reply) => {
 // porque el importador las vuelve a vincular por nombre de archivo.
 const removeUploadedRecipeImage = (imageFile) => (imageFile?.startsWith('u-') ? unlink(path.join(recipeImageDir(), imageFile)).catch(() => {}) : Promise.resolve())
 
+// El catálogo de recetas es de solo lectura para los usuarios de la app: la personalización se
+// hace por paciente en el Constructor del plan (`recipeAdjustments`) y la corrección del catálogo
+// global sólo desde el panel de admin (`/admin/catalog`). Así una edición no cambia la receta de
+// todos los planes ni de otras cuentas.
+const rejectRecipeWrite = (reply) => reply.code(403).send({
+  code: 'RECIPE_READ_ONLY',
+  message: 'El catálogo de recetas es de solo lectura. Para ajustar una receta a un paciente, usa el Constructor del plan.',
+  fields: {},
+})
+
 // Foto de una receta. Sale en la tarjeta de la receta y en el plan de alimentación entregado. Sólo
 // JPEG, comprobado con los bytes del archivo y no con el tipo declarado (ver sanitizeJpeg). El
 // nombre lleva una marca de tiempo para que al cambiarla no se quede la anterior en la caché.
 app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
+  return rejectRecipeWrite(reply)
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   const { dataUrl } = request.body || {}
@@ -1123,6 +1134,7 @@ app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
 })
 
 app.delete('/api/v1/recipes/:recipeId/image', async (request, reply) => {
+  return rejectRecipeWrite(reply)
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   await removeUploadedRecipeImage(recipe.imageFile)
@@ -2027,6 +2039,7 @@ app.get('/api/v1/recipes', async (request) => {
 })
 
 app.post('/api/v1/recipes', async (request, reply) => {
+  return rejectRecipeWrite(reply)
   const { name, mealTypes = [], portions, instructions, nutrition = {}, restrictions = [], imageUrl, ingredientsText, timeMinutes, ingredients = [] } = request.body || {}
   if (!name || !isStringList(mealTypes) || !mealTypes.length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Nombre y al menos un tiempo de comida son obligatorios.', fields: { name: !name, mealTypes: true } })
   const invalid = invalidRecipeFields({ name, portions, restrictions, timeMinutes })
@@ -2047,6 +2060,7 @@ app.get('/api/v1/recipes/:recipeId', async (request, reply) => {
 })
 
 app.patch('/api/v1/recipes/:recipeId', async (request, reply) => {
+  return rejectRecipeWrite(reply)
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   const { name, mealTypes, portions, instructions, restrictions, imageUrl, ingredientsText, timeMinutes, status } = request.body || {}
@@ -2076,6 +2090,7 @@ app.patch('/api/v1/recipes/:recipeId', async (request, reply) => {
 })
 
 app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
+  return rejectRecipeWrite(reply)
   const { ingredients = [] } = request.body || {}
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
@@ -2113,6 +2128,7 @@ app.get('/api/v1/recipes/:recipeId/nutrition', async (request, reply) => {
 })
 
 app.post('/api/v1/recipes/:recipeId/recalculate', async (request, reply) => {
+  return rejectRecipeWrite(reply)
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId }, include: { ingredients: { include: { ingredient: true } } } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   const computed = perServingFromIngredients(recipe.ingredients, recipe.portions)
