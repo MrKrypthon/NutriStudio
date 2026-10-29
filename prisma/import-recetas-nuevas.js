@@ -34,7 +34,11 @@ const main = async () => {
   const items = only ? recipes.filter((item) => item.source === only) : recipes
   const sources = [...new Set(items.map((item) => item.source))]
 
+  // Igual que en el recetario: un --reset no debe perder la identidad compartida del catálogo.
+  const previousCatalogIds = new Map()
   if (reset) {
+    const previous = await prisma.recipe.findMany({ where: { practiceId, source: { in: sources } }, select: { name: true, mealTypes: true, catalogId: true } })
+    for (const recipe of previous) if (recipe.catalogId) previousCatalogIds.set(`${recipe.name}\u0000${recipe.mealTypes?.[0] || ''}`, recipe.catalogId)
     const deleted = await prisma.recipe.deleteMany({ where: { practiceId, source: { in: sources } } })
     console.log(`--reset: ${deleted.count} recetas eliminadas de ${sources.length} fuente(s).`)
   }
@@ -64,6 +68,7 @@ const main = async () => {
       ingredientsText: item.ingredientsText || [],
       timeMinutes: item.timeMinutes ?? null,
       source: item.source,
+      ...(previousCatalogIds.has(`${item.name}\u0000${mealType}`) ? { catalogId: previousCatalogIds.get(`${item.name}\u0000${mealType}`) } : {}),
     }
     const existing = await prisma.recipe.findFirst({ where: { practiceId, source: item.source, name: item.name, mealTypes: { has: mealType } }, select: { id: true } })
     if (existing) { await prisma.recipe.update({ where: { id: existing.id }, data }); updated += 1 }

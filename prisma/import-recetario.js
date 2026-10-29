@@ -35,7 +35,12 @@ const main = async () => {
   const practice = await prisma.practice.findUnique({ where: { id: practiceId } })
   if (!practice) throw new Error(`No existe la práctica ${practiceId}. Corre primero npm run db:seed.`)
 
+  // Al reimportar con --reset se conserva la identidad de catálogo de cada receta: sus copias en
+  // otros consultorios se publican por `catalogId` y perderlo las desconectaría.
+  const previousCatalogIds = new Map()
   if (reset) {
+    const previous = await prisma.recipe.findMany({ where: { practiceId, source: SOURCE }, select: { name: true, mealTypes: true, catalogId: true } })
+    for (const recipe of previous) if (recipe.catalogId) previousCatalogIds.set(`${recipe.name}\u0000${recipe.mealTypes?.[0] || ''}`, recipe.catalogId)
     const deleted = await prisma.recipe.deleteMany({ where: { practiceId, source: SOURCE } })
     console.log(`--reset: ${deleted.count} recetas importadas eliminadas.`)
   }
@@ -65,6 +70,7 @@ const main = async () => {
       ingredientsText: item.ingredientsText || [],
       timeMinutes: item.timeMinutes ?? null,
       source: SOURCE,
+      ...(previousCatalogIds.has(`${item.name}\u0000${item.mealType}`) ? { catalogId: previousCatalogIds.get(`${item.name}\u0000${item.mealType}`) } : {}),
     }
 
     const existing = await prisma.recipe.findFirst({
