@@ -729,7 +729,7 @@ app.post('/api/v1/admin/catalog/recipes/:recipeId/image', async (request, reply)
 app.get('/api/v1/admin/catalog/recipes/:recipeId/publish-preview', async (request) => {
   const recipe = await catalogRecipeForAdmin(request.params.recipeId)
   if (!recipe) return { recipe: null }
-  const copies = await prisma.recipe.findMany({ where: { catalogId: recipe.catalogId || '__none__' }, select: { practiceId: true, catalogCustomizedAt: true, status: true, practice: { select: { name: true } } } })
+  const copies = await prisma.recipe.findMany({ where: { catalogId: recipe.catalogId || '__none__', practiceId: { not: CATALOG_PRACTICE_ID } }, select: { practiceId: true, catalogCustomizedAt: true, status: true, practice: { select: { name: true } } } })
   return { recipe: { id: recipe.id, catalogId: recipe.catalogId }, copies: copies.map((copy) => ({ practiceId: copy.practiceId, practiceName: copy.practice.name, modified: Boolean(copy.catalogCustomizedAt), archived: copy.status === 'ARCHIVED' })) }
 })
 

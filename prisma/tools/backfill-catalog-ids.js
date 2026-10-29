@@ -13,7 +13,7 @@ import { recipeContentSignature } from '../../server/domain/catalogPublish.js'
 const prisma = new PrismaClient()
 const write = process.argv.includes('--write')
 const catalogId = process.env.CATALOG_PRACTICE_ID || process.env.DEFAULT_PRACTICE_ID || '00000000-0000-0000-0000-000000000001'
-const key = (recipe) => `${recipe.source ?? ''}\u0000${recipe.name}`
+const key = (recipe) => `${recipe.source ?? ''}\u0000${recipe.name}\u0000${recipe.mealTypes?.[0] || ''}`
 const ingredientKey = (ingredient) => `${ingredient.name}\u0000${ingredient.group}`
 
 async function main() {
@@ -51,14 +51,18 @@ async function main() {
       prisma.ingredient.findMany({ where: { practiceId: practice.id }, select: { id: true, name: true, group: true, catalogId: true } }),
     ])
     for (const recipe of recipes) {
-      if (recipe.catalogId) continue
       const base = byKey.get(key(recipe))
       if (!base) continue
       const same = recipeContentSignature(recipe) === recipeContentSignature(base)
-      copiesLinked += 1
-      if (!same) copiesMarked += 1
-      if (write) {
-        await prisma.recipe.update({ where: { id: recipe.id }, data: { catalogId: base.catalogId, ...(same ? { catalogSyncedAt: base.catalogSyncedAt } : { catalogCustomizedAt: new Date() }) } })
+      const patch = {}
+      // Corrige también vínculos viejos que se hicieron sólo por nombre (dos recetas pueden
+      // llamarse igual y ser de tiempos de comida distintos).
+      if (recipe.catalogId !== base.catalogId) patch.catalogId = base.catalogId
+      if (!same && !recipe.catalogCustomizedAt) { patch.catalogCustomizedAt = new Date(); copiesMarked += 1 }
+      if (same && !recipe.catalogCustomizedAt && !recipe.catalogSyncedAt) patch.catalogSyncedAt = base.catalogSyncedAt
+      if (Object.keys(patch).length) {
+        copiesLinked += 1
+        if (write) await prisma.recipe.update({ where: { id: recipe.id }, data: patch })
       }
     }
     const localByName = new Map(ingredients.map((item) => [ingredientKey(item), item]))
