@@ -439,6 +439,13 @@ model Recipe {
   // the recipe view can contrast "Original (PDF)" against "Calculado (SMAE)".
   calculatedNutrition  Json?
   calculationUpdatedAt DateTime?
+  // Identidad compartida entre la receta del catálogo global y sus copias en cada consultorio.
+  // Permite que el admin publique una corrección sin depender del nombre ni del origen.
+  catalogId            String?
+  // Se marca cuando la copia se edita localmente: al publicar el catálogo se respeta y se avisa.
+  catalogCustomizedAt  DateTime?
+  // Última publicación del catálogo que tocó esta fila (para saber si hay cambios sin publicar).
+  catalogSyncedAt      DateTime?
   status               RecordStatus       @default(ACTIVE)
   version              Int                @default(1)
   createdAt            DateTime           @default(now())
@@ -448,6 +455,7 @@ model Recipe {
 
   @@index([practiceId, source])
   @@index([practiceId, status, name])
+  @@index([catalogId])
 }
 
 model EducationMaterial {
@@ -482,6 +490,8 @@ model Ingredient {
   nutrition   Json
   equivalence Json?
   imageFile   String?
+  // Misma identidad que el ingrediente del catálogo global, para reenlazar las recetas al publicar.
+  catalogId   String?
   status      RecordStatus       @default(ACTIVE)
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
@@ -490,6 +500,7 @@ model Ingredient {
   // Cada cuenta tiene su copia del catálogo (~3,000 ingredientes): sin este índice cada búsqueda
   // recorría los ingredientes de todas las cuentas.
   @@index([practiceId, status, name])
+  @@index([catalogId])
 }
 
 model RecipeIngredient {

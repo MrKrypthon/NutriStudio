@@ -8,6 +8,11 @@ describe('copia del catálogo para una cuenta nueva', () => {
     expect(ingredientCopy({ name: 'C', imageFile: 'x.jpg' }, 'p2')).not.toHaveProperty('imageFile')
   })
 
+  it('conserva la identidad compartida del catálogo', () => {
+    expect(recipeCopy({ name: 'A', catalogId: 'cat-1' }, 'p2').catalogId).toBe('cat-1')
+    expect(ingredientCopy({ name: 'Avena', catalogId: 'ing-1' }, 'p2').catalogId).toBe('ing-1')
+  })
+
   it('copia ingredientes, libro SMAE y recetas importadas, con los ingredientes de cada receta reenlazados', async () => {
     const created = { ingredient: [], smaeFood: [], recipe: [], recipeIngredient: [] }
     const delegate = (name, rows) => ({ findMany: async () => rows, createMany: async ({ data }) => { created[name].push(...data) } })

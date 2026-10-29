@@ -34,6 +34,7 @@ export const ingredientCopy = (ingredient, practiceId, id = randomUUID()) => ({
   unit: ingredient.unit,
   nutrition: ingredient.nutrition,
   equivalence: ingredient.equivalence ?? undefined,
+  catalogId: ingredient.catalogId ?? undefined,
   status: 'ACTIVE',
 })
 
@@ -68,6 +69,8 @@ export const recipeCopy = (recipe, practiceId, id = randomUUID()) => ({
   source: recipe.source,
   calculatedNutrition: recipe.calculatedNutrition ?? undefined,
   calculationUpdatedAt: recipe.calculationUpdatedAt,
+  catalogId: recipe.catalogId ?? undefined,
+  catalogSyncedAt: recipe.catalogSyncedAt ?? undefined,
 })
 
 async function createInChunks(delegate, rows) {
