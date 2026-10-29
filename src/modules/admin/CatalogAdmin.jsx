@@ -48,6 +48,7 @@ export default function CatalogAdmin() {
   const [imageState, setImageState] = useState('idle')
   const [publishState, setPublishState] = useState('idle')
   const [publishResult, setPublishResult] = useState(null)
+  const [preview, setPreview] = useState(null)
   const [ingredientQuery, setIngredientQuery] = useState('')
   const [ingredientResults, setIngredientResults] = useState([])
   const [ingredientState, setIngredientState] = useState('idle')
@@ -71,12 +72,13 @@ export default function CatalogAdmin() {
   }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const openRecipe = async (id) => {
-    setSelectedId(id); setLoadState('loading'); setRecipe(null); setForm(null); setChosen([]); setPublishResult(null); setSaveMessage('')
+    setSelectedId(id); setLoadState('loading'); setRecipe(null); setForm(null); setChosen([]); setPublishResult(null); setSaveMessage(''); setPreview(null)
     try {
-      const detail = await adminApi.catalogRecipe(id)
+      const [detail, previewResponse] = await Promise.all([adminApi.catalogRecipe(id), adminApi.catalogPublishPreview(id).catch(() => null)])
       setRecipe(detail)
       setForm(formFromRecipe(detail))
       setChosen(chosenFromRecipe(detail))
+      setPreview(previewResponse)
       setLoadState('ready')
     } catch (error) {
       setLoadState('error')
@@ -155,6 +157,7 @@ export default function CatalogAdmin() {
       setPublishResult(result)
       setPublishState('idle')
       setItems((prev) => prev.map((item) => (item.id === recipe.id ? { ...item, catalogId: result.catalogId, catalogSyncedAt: new Date().toISOString() } : item)))
+      adminApi.catalogPublishPreview(recipe.id).then(setPreview).catch(() => {})
     } catch (error) {
       setPublishState('error')
       setSaveMessage(error.message || 'No se pudo publicar el catálogo.')
@@ -192,6 +195,12 @@ export default function CatalogAdmin() {
               <div><p className="eyebrow">RECETA DEL CATÁLOGO</p><h3>{recipe.name}</h3><small className="muted">{recipe.source ? `Origen: ${recipe.source}` : 'Receta del catálogo'} · {recipe.catalogSyncedAt ? `Publicada ${formatDate(recipe.catalogSyncedAt)}` : 'Nunca publicada'}</small></div>
               <button type="button" className="secondary" disabled={publishState === 'publishing'} onClick={publish}>{publishState === 'publishing' ? 'Publicando…' : 'Publicar cambios'}</button>
             </div>
+
+            {(preview?.copies || []).some((copy) => copy.modified) && <div className="catalog-warning">
+              <b>Copias que se respetarán al publicar</b>
+              <p>{(preview.copies || []).filter((copy) => copy.modified).map((copy) => copy.practiceName).join(' · ')}</p>
+              <small>Su nutrióloga las editó; no se sobrescribirán y aparecerán en el resumen de la publicación.</small>
+            </div>}
 
             <div className="catalog-editor-grid">
               <div className="catalog-form">

@@ -47,6 +47,7 @@ export const adminApi = {
   replaceCatalogIngredients: (id, ingredients) => adminRequest(`/admin/catalog/recipes/${id}/ingredients`, { method: 'PUT', body: JSON.stringify({ ingredients }) }),
   uploadCatalogImage: (id, dataUrl) => adminRequest(`/admin/catalog/recipes/${id}/image`, { method: 'POST', body: JSON.stringify({ dataUrl }) }),
   publishCatalogRecipe: (id) => adminRequest(`/admin/catalog/recipes/${id}/publish`, { method: 'POST' }),
+  catalogPublishPreview: (id) => adminRequest(`/admin/catalog/recipes/${id}/publish-preview`),
   catalogIngredients: (search) => adminRequest(`/admin/catalog/ingredients?search=${encodeURIComponent(search)}`),
   catalogImageUrl: (file) => (file ? `${API_BASE}/recipes/images/${file}` : null),
 }

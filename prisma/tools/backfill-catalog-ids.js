@@ -26,8 +26,11 @@ async function main() {
     if (!recipe.catalogId) {
       recipe.catalogId = randomUUID()
       baseAssigned += 1
-      if (write) await prisma.recipe.update({ where: { id: recipe.id }, data: { catalogId: recipe.catalogId } })
     }
+    // Las recetas que ya existían se consideran publicadas en su versión actual: sólo los cambios
+    // posteriores del admin deben aparecer como "sin publicar".
+    if (!recipe.catalogSyncedAt) recipe.catalogSyncedAt = recipe.updatedAt
+    if (write) await prisma.recipe.update({ where: { id: recipe.id }, data: { catalogId: recipe.catalogId, catalogSyncedAt: recipe.catalogSyncedAt } })
     for (const item of recipe.ingredients) {
       if (item.ingredient.catalogId) continue
       item.ingredient.catalogId = randomUUID()
@@ -55,7 +58,7 @@ async function main() {
       copiesLinked += 1
       if (!same) copiesMarked += 1
       if (write) {
-        await prisma.recipe.update({ where: { id: recipe.id }, data: { catalogId: base.catalogId, ...(same ? {} : { catalogCustomizedAt: new Date() }) } })
+        await prisma.recipe.update({ where: { id: recipe.id }, data: { catalogId: base.catalogId, ...(same ? { catalogSyncedAt: base.catalogSyncedAt } : { catalogCustomizedAt: new Date() }) } })
       }
     }
     const localByName = new Map(ingredients.map((item) => [ingredientKey(item), item]))
