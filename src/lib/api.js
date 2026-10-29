@@ -281,7 +281,8 @@ export const recipesApi = {
   replaceIngredients: (id, ingredients) => invalidateAfter(apiRequest(`/recipes/${id}/ingredients`, { method: 'PUT', body: JSON.stringify({ ingredients }) }), 'recipes:'),
   // Imported cookbook recipes store only the file name (see prisma/import-recetario.js); build
   // the public URL here so the same relative API base works in dev and production.
-  imageUrl: (file) => (file ? `${API_BASE}/recipes/images/${file}` : null),
+  // `thumb` pide la miniatura de 480 px para tarjetas; el detalle/PDF usan la original.
+  imageUrl: (file, { thumb = false } = {}) => (file ? `${API_BASE}/recipes/images/${file}${thumb ? '?thumb=1' : ''}` : null),
   uploadImage: (id, dataUrl) => invalidateAfter(apiRequest(`/recipes/${id}/image`, { method: 'POST', body: JSON.stringify({ dataUrl }) }), 'recipes:'),
   removeImage: (id) => invalidateAfter(apiRequest(`/recipes/${id}/image`, { method: 'DELETE' }), 'recipes:'),
 }

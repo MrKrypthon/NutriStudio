@@ -722,7 +722,10 @@ app.post('/api/v1/admin/catalog/recipes/:recipeId/image', async (request, reply)
   await writeFile(path.join(directory, storageKey), size.data)
   const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey, catalogSyncedAt: null } })
   // La foto anterior del catálogo se puede borrar: las copias tienen su propio archivo.
-  if (recipe.imageFile && recipe.imageFile !== storageKey && /^[cu]-/.test(recipe.imageFile)) await unlink(path.join(directory, recipe.imageFile)).catch(() => {})
+  if (recipe.imageFile && recipe.imageFile !== storageKey && /^[cu]-/.test(recipe.imageFile)) {
+    await unlink(path.join(directory, recipe.imageFile)).catch(() => {})
+    await unlink(thumbPathFor(path.join(directory, recipe.imageFile))).catch(() => {})
+  }
   return updated
 })
 
@@ -1079,6 +1082,32 @@ const recipeCatalogCache = new Map()
 const invalidateRecipeCatalog = (practiceId) => recipeCatalogCache.delete(practiceId)
 
 const recipeImageDir = () => path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH || './storage/recipes')
+// Miniatura para tarjetas y galerías: 480 px es de sobra para una tarjeta y baja de ~35 KB a ~8 KB.
+// Se genera la primera vez que se pide y queda en disco; si `sharp` no está disponible se sirve la
+// original, sin romper la app. La foto completa se sigue usando en el detalle y en el PDF.
+const THUMB_PREFIX = 'thumb-'
+const thumbPathFor = (filePath) => path.join(path.dirname(filePath), `${THUMB_PREFIX}${path.basename(filePath)}`)
+let sharpPromise = null
+const loadSharp = () => {
+  if (!sharpPromise) sharpPromise = import('sharp').then((module) => module.default).catch(() => null)
+  return sharpPromise
+}
+async function ensureThumb(filePath) {
+  const thumbPath = thumbPathFor(filePath)
+  try {
+    const [source, thumb] = await Promise.all([stat(filePath), stat(thumbPath)])
+    // Si reimportaron la foto con el mismo nombre, la miniatura vieja se regenera.
+    if (thumb.mtimeMs >= source.mtimeMs) return thumbPath
+  } catch { /* todavía no existe o no se pudo leer */ }
+  const sharp = await loadSharp()
+  if (!sharp) return null
+  try {
+    await sharp(filePath).rotate().resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toFile(thumbPath)
+    return thumbPath
+  } catch {
+    return null
+  }
+}
 // La app reduce la foto antes de subirla (1600 px), así que estos topes sólo frenan lo que llegue
 // por fuera de ella. Se limita el total de pixeles, no sólo cada lado: es lo que cuesta memoria a
 // quien la descomprime.
@@ -1089,12 +1118,21 @@ const RECIPE_IMAGE_MAX_PIXELS = 4_000_000
 app.get('/api/v1/recipes/images/:fileName', async (request, reply) => {
   const { fileName } = request.params
   if (!/^[a-z0-9][a-z0-9-]*\.jpg$/.test(fileName)) return reply.code(404).send({ code: 'IMAGE_NOT_FOUND', message: 'Imagen no encontrada.', fields: {} })
-  return sendImageFile(request, reply, path.join(recipeImageDir(), fileName), 'image/jpeg', { immutable: fileName.startsWith('u-') })
+  const filePath = path.join(recipeImageDir(), fileName)
+  // `?thumb=1` para tarjetas: reusa la miniatura si ya existe o la genera una vez.
+  const servedPath = request.query.thumb === '1' ? (await ensureThumb(filePath)) || filePath : filePath
+  return sendImageFile(request, reply, servedPath, 'image/jpeg', { immutable: fileName.startsWith('u-') })
 })
 
 // Sólo se borran del disco las fotos subidas a mano; las del recetario importado se conservan
 // porque el importador las vuelve a vincular por nombre de archivo.
-const removeUploadedRecipeImage = (imageFile) => (imageFile?.startsWith('u-') ? unlink(path.join(recipeImageDir(), imageFile)).catch(() => {}) : Promise.resolve())
+const removeUploadedRecipeImage = (imageFile) => {
+  if (!imageFile?.startsWith('u-')) return Promise.resolve()
+  return Promise.all([
+    unlink(path.join(recipeImageDir(), imageFile)).catch(() => {}),
+    unlink(thumbPathFor(path.join(recipeImageDir(), imageFile))).catch(() => {}),
+  ])
+}
 
 // El catálogo de recetas es de solo lectura para los usuarios de la app: la personalización se
 // hace por paciente en el Constructor del plan (`recipeAdjustments`) y la corrección del catálogo

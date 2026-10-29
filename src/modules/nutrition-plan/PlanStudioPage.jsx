@@ -1136,7 +1136,8 @@ export default function PlanStudioPage({ setActive, patientId, onSelectPatient, 
 
   // Imported cookbook recipes have real photos (`imageFile`); handmade ones keep the color block.
   const recipeThumb = (recipe, index, className = 'recipe-image') => {
-    if (recipe?.imageFile) return <div className={className + ' has-photo'}><img src={recipesApi.imageUrl(recipe.imageFile)} alt={recipe.name} loading="lazy" decoding="async" fetchPriority="low" /></div>
+    // Todas las tarjetas usan la miniatura; la foto grande sólo en el detalle de la receta.
+    if (recipe?.imageFile) return <div className={className + ' has-photo'}><img src={recipesApi.imageUrl(recipe.imageFile, { thumb: className !== 'gallery-hero-photo' })} alt={recipe.name} loading="lazy" decoding="async" fetchPriority="low" /></div>
     return <div className={className + ' ' + RECIPE_COLORS[index % RECIPE_COLORS.length]}><span>✦</span></div>
   }
 

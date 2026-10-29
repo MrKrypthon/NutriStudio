@@ -180,7 +180,7 @@ export default function CatalogAdmin() {
           <div className="catalog-list">{items.map((item) => {
             const pending = !item.catalogSyncedAt
             return <button type="button" className={'catalog-list-item' + (item.id === selectedId ? ' selected' : '')} key={item.id} onClick={() => openRecipe(item.id)}>
-              <span className="catalog-list-thumb">{item.imageFile ? <img src={adminApi.catalogImageUrl(item.imageFile)} alt="" loading="lazy" decoding="async" /> : <span>✦</span>}</span>
+              <span className="catalog-list-thumb">{item.imageFile ? <img src={adminApi.catalogImageUrl(item.imageFile, { thumb: true })} alt="" loading="lazy" decoding="async" /> : <span>✦</span>}</span>
               <span className="catalog-list-info"><b>{item.name}</b><small>{MEAL_LABEL[item.mealTypes?.[0]] || 'Receta'} · {item._count?.ingredients ?? 0} ingredientes</small></span>
               {pending && <i className="catalog-pending" title="Hay cambios sin publicar">Sin publicar</i>}
             </button>

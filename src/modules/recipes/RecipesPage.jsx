@@ -26,7 +26,8 @@ const FALLBACK = [
 const round1 = (value) => Math.round(value * 10) / 10
 
 const RecipeImage = ({ recipe, colorIndex, className }) => {
-  const src = recipe.imageFile ? recipesApi.imageUrl(recipe.imageFile) : null
+  // La tarjeta usa la miniatura; el detalle, la foto completa.
+  const src = recipe.imageFile ? recipesApi.imageUrl(recipe.imageFile, { thumb: className !== 'detail-image' }) : null
   if (src) return <div className={className + ' has-photo'}><img src={src} alt={recipe.name} loading="lazy" decoding="async" fetchPriority="low" /></div>
   return <div className={className + ' ' + CARD_COLORS[colorIndex % 4]}><span>✦</span></div>
 }

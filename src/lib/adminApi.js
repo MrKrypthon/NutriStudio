@@ -49,5 +49,5 @@ export const adminApi = {
   publishCatalogRecipe: (id) => adminRequest(`/admin/catalog/recipes/${id}/publish`, { method: 'POST' }),
   catalogPublishPreview: (id) => adminRequest(`/admin/catalog/recipes/${id}/publish-preview`),
   catalogIngredients: (search) => adminRequest(`/admin/catalog/ingredients?search=${encodeURIComponent(search)}`),
-  catalogImageUrl: (file) => (file ? `${API_BASE}/recipes/images/${file}` : null),
+  catalogImageUrl: (file, { thumb = false } = {}) => (file ? `${API_BASE}/recipes/images/${file}${thumb ? '?thumb=1' : ''}` : null),
 }

@@ -57,14 +57,20 @@ async function syncCopyImage({ copyId, oldImageFile, baseImageBytes, baseImageFi
   // La base no tiene foto: se quita en las copias. Si tiene foto pero el archivo no se pudo leer,
   // se deja la copia como está en vez de borrarle la suya.
   if (!baseImageFile) {
-    if (oldImageFile?.startsWith('u-')) await unlink(path.join(imageDir, oldImageFile)).catch(() => {})
+    if (oldImageFile?.startsWith('u-')) {
+      await unlink(path.join(imageDir, oldImageFile)).catch(() => {})
+      await unlink(path.join(imageDir, `thumb-${oldImageFile}`)).catch(() => {})
+    }
     return null
   }
   if (!baseImageBytes) return oldImageFile
   const fileName = `u-${copyId}-${Date.now().toString(36)}.jpg`
   await mkdir(imageDir, { recursive: true })
   await writeFile(path.join(imageDir, fileName), baseImageBytes)
-  if (oldImageFile && oldImageFile !== fileName && oldImageFile.startsWith('u-')) await unlink(path.join(imageDir, oldImageFile)).catch(() => {})
+  if (oldImageFile && oldImageFile !== fileName && oldImageFile.startsWith('u-')) {
+    await unlink(path.join(imageDir, oldImageFile)).catch(() => {})
+    await unlink(path.join(imageDir, `thumb-${oldImageFile}`)).catch(() => {})
+  }
   return fileName
 }
 
