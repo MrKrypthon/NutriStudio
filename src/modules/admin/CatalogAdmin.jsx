@@ -137,7 +137,7 @@ export default function CatalogAdmin() {
       setRecipe(withIngredients)
       setForm(formFromRecipe(withIngredients))
       setChosen(chosenFromRecipe(withIngredients))
-      setItems((prev) => prev.map((item) => (item.id === updated.id ? { ...item, name: updated.name, updatedAt: updated.updatedAt } : item)))
+      setItems((prev) => prev.map((item) => (item.id === updated.id ? { ...item, name: updated.name, updatedAt: updated.updatedAt, catalogSyncedAt: null } : item)))
       setSaveMessage('Cambios guardados en el catálogo base. Ahora publícalos para llevarlos a las cuentas.')
       setSaveState('saved')
     } catch (error) {
@@ -173,7 +173,7 @@ export default function CatalogAdmin() {
           {listState === 'loading' && <p className="muted">Cargando catálogo…</p>}
           {listState === 'error' && <div className="form-error">⚠ {listError}</div>}
           <div className="catalog-list">{items.map((item) => {
-            const pending = !item.catalogSyncedAt || new Date(item.updatedAt) > new Date(item.catalogSyncedAt)
+            const pending = !item.catalogSyncedAt
             return <button type="button" className={'catalog-list-item' + (item.id === selectedId ? ' selected' : '')} key={item.id} onClick={() => openRecipe(item.id)}>
               <span className="catalog-list-thumb">{item.imageFile ? <img src={adminApi.catalogImageUrl(item.imageFile)} alt="" loading="lazy" decoding="async" /> : <span>✦</span>}</span>
               <span className="catalog-list-info"><b>{item.name}</b><small>{MEAL_LABEL[item.mealTypes?.[0]] || 'Receta'} · {item._count?.ingredients ?? 0} ingredientes</small></span>

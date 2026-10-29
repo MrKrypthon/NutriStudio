@@ -678,6 +678,8 @@ app.patch('/api/v1/admin/catalog/recipes/:recipeId', async (request, reply) => {
       ...(restrictions !== undefined ? { restrictions } : {}),
       ...(ingredientsText !== undefined ? { ingredientsText: Array.isArray(ingredientsText) ? ingredientsText.map((line) => String(line).trim()).filter(Boolean) : [] } : {}),
       ...(timeMinutes !== undefined ? { timeMinutes } : {}),
+      // Cualquier cambio deja la receta pendiente de publicar.
+      catalogSyncedAt: null,
     },
     include: { ingredients: { include: { ingredient: true } } },
   })
@@ -700,7 +702,7 @@ app.put('/api/v1/admin/catalog/recipes/:recipeId/ingredients', async (request, r
     // Las recetas importadas conservan los valores originales del libro en `nutrition`; el cálculo
     // con el catálogo SMAE va en `calculatedNutrition`, igual que en la app.
     const nutrition = full.source ? { calculatedNutrition: filtered.length ? computed : null, calculationUpdatedAt: new Date() } : { nutrition: computed }
-    return tx.recipe.update({ where: { id: recipe.id }, data: nutrition, include: { ingredients: { include: { ingredient: true } } } })
+    return tx.recipe.update({ where: { id: recipe.id }, data: { ...nutrition, catalogSyncedAt: null }, include: { ingredients: { include: { ingredient: true } } } })
   })
   return updated
 })
@@ -718,7 +720,7 @@ app.post('/api/v1/admin/catalog/recipes/:recipeId/image', async (request, reply)
   const directory = recipeImageDir()
   await mkdir(directory, { recursive: true })
   await writeFile(path.join(directory, storageKey), size.data)
-  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey } })
+  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey, catalogSyncedAt: null } })
   // La foto anterior del catálogo se puede borrar: las copias tienen su propio archivo.
   if (recipe.imageFile && recipe.imageFile !== storageKey && /^[cu]-/.test(recipe.imageFile)) await unlink(path.join(directory, recipe.imageFile)).catch(() => {})
   return updated
