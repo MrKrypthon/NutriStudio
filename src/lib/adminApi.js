@@ -40,4 +40,13 @@ export const adminApi = {
   resetPassword: (id) => adminRequest(`/admin/practices/${id}/reset-password`, { method: 'POST' }),
   transactions: () => adminRequest('/admin/transactions'),
   addTransaction: (payload) => adminRequest('/admin/transactions', { method: 'POST', body: JSON.stringify(payload) }),
+  // Catálogo global: se edita en la práctica base y se publica a las copias de las cuentas.
+  catalogRecipes: (search = '') => adminRequest(`/admin/catalog/recipes${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  catalogRecipe: (id) => adminRequest(`/admin/catalog/recipes/${id}`),
+  updateCatalogRecipe: (id, payload) => adminRequest(`/admin/catalog/recipes/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  replaceCatalogIngredients: (id, ingredients) => adminRequest(`/admin/catalog/recipes/${id}/ingredients`, { method: 'PUT', body: JSON.stringify({ ingredients }) }),
+  uploadCatalogImage: (id, dataUrl) => adminRequest(`/admin/catalog/recipes/${id}/image`, { method: 'POST', body: JSON.stringify({ dataUrl }) }),
+  publishCatalogRecipe: (id) => adminRequest(`/admin/catalog/recipes/${id}/publish`, { method: 'POST' }),
+  catalogIngredients: (search) => adminRequest(`/admin/catalog/ingredients?search=${encodeURIComponent(search)}`),
+  catalogImageUrl: (file) => (file ? `${API_BASE}/recipes/images/${file}` : null),
 }

@@ -23,7 +23,8 @@ import { computeMicronutrientAdequacy } from './domain/micronutrients.js'
 import Stripe from 'stripe'
 import { OAuth2Client } from 'google-auth-library'
 import { ADMIN_ACCOUNT_LIMIT, defaultPracticeName, generateTempPassword, isValidLoginId, normalizeLoginId, practiceAccess, suggestLoginId, trialEndFrom } from './domain/accounts.js'
-import { copyCatalog } from './domain/catalogCopy.js'
+import { catalogRecipeWhere, copyCatalog } from './domain/catalogCopy.js'
+import { publishCatalogRecipe } from './domain/catalogPublish.js'
 import { LEGAL_DOCUMENTS, pendingAcceptances, validateAcceptance } from '../src/lib/legal.js'
 import { LIVE_SUBSCRIPTION_STATUSES, SUBSCRIPTION_INTERVALS, checkoutTrialEnd, invoiceConcept, invoicePeriodEnd, invoiceSubscriptionId, isStaleEvent, isSupersededSubscription, practiceIdFromMetadata, practicePatchFromSubscription } from './domain/billing.js'
 import { foldText, toWinAnsi } from './domain/text.js'
@@ -635,6 +636,126 @@ app.patch('/api/v1/admin/practices/:practiceId', async (request, reply) => {
   return updated
 })
 
+// ── Catálogo global (solo admin) ─────────────────────────────────────────────
+// El admin edita la copia de la práctica base y publica los cambios a las copias de cada cuenta.
+// Las copias modificadas por una nutrióloga no se tocan: se informan en `skipped`.
+const catalogRecipeForAdmin = (recipeId) => prisma.recipe.findFirst({ where: { id: recipeId, practiceId: CATALOG_PRACTICE_ID }, include: { ingredients: { include: { ingredient: true } } } })
+
+app.get('/api/v1/admin/catalog/recipes', async (request) => {
+  const search = String(request.query.search || '').trim().slice(0, 120)
+  const recipes = await prisma.recipe.findMany({
+    where: { ...catalogRecipeWhere(CATALOG_PRACTICE_ID), ...(search ? { name: { contains: search, mode: 'insensitive' } } : {}) },
+    select: {
+      id: true, name: true, mealTypes: true, imageFile: true, source: true, catalogId: true,
+      catalogSyncedAt: true, catalogCustomizedAt: true, updatedAt: true, nutrition: true, calculatedNutrition: true,
+      _count: { select: { ingredients: true } },
+    },
+    orderBy: { name: 'asc' },
+    take: 300,
+  })
+  return { items: recipes }
+})
+
+app.get('/api/v1/admin/catalog/recipes/:recipeId', async (request, reply) => {
+  const recipe = await catalogRecipeForAdmin(request.params.recipeId)
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta del catálogo no encontrada.', fields: {} })
+  return recipe
+})
+
+app.patch('/api/v1/admin/catalog/recipes/:recipeId', async (request, reply) => {
+  const recipe = await catalogRecipeForAdmin(request.params.recipeId)
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta del catálogo no encontrada.', fields: {} })
+  const { name, mealTypes, portions, instructions, restrictions, ingredientsText, timeMinutes } = request.body || {}
+  const invalid = invalidRecipeFields({ name, mealTypes, portions, restrictions, timeMinutes })
+  if (Object.keys(invalid).length) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Revisa los datos de la receta.', fields: invalid })
+  const updated = await prisma.recipe.update({
+    where: { id: recipe.id },
+    data: {
+      ...(name !== undefined ? { name: name.trim() } : {}),
+      ...(mealTypes !== undefined ? { mealTypes } : {}),
+      ...(portions !== undefined ? { portions } : {}),
+      ...(instructions !== undefined ? { instructions } : {}),
+      ...(restrictions !== undefined ? { restrictions } : {}),
+      ...(ingredientsText !== undefined ? { ingredientsText: Array.isArray(ingredientsText) ? ingredientsText.map((line) => String(line).trim()).filter(Boolean) : [] } : {}),
+      ...(timeMinutes !== undefined ? { timeMinutes } : {}),
+    },
+    include: { ingredients: { include: { ingredient: true } } },
+  })
+  return updated
+})
+
+app.put('/api/v1/admin/catalog/recipes/:recipeId/ingredients', async (request, reply) => {
+  const recipe = await catalogRecipeForAdmin(request.params.recipeId)
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta del catálogo no encontrada.', fields: {} })
+  const rows = normalizeRecipeIngredientRows(request.body?.ingredients)
+  if (!rows) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Cada ingrediente necesita una cantidad mayor a 0 y no puede repetirse.', fields: { ingredients: true } })
+  const valid = rows.length ? await prisma.ingredient.findMany({ where: { id: { in: rows.map((row) => row.ingredientId) }, practiceId: CATALOG_PRACTICE_ID }, select: { id: true } }) : []
+  const validIds = new Set(valid.map((item) => item.id))
+  const filtered = rows.filter((row) => validIds.has(row.ingredientId))
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.recipeIngredient.deleteMany({ where: { recipeId: recipe.id } })
+    if (filtered.length) await tx.recipeIngredient.createMany({ data: filtered.map((row) => ({ recipeId: recipe.id, ...row })) })
+    const full = await tx.recipe.findUnique({ where: { id: recipe.id }, include: { ingredients: { include: { ingredient: true } } } })
+    const computed = perServingFromIngredients(full.ingredients, full.portions)
+    // Las recetas importadas conservan los valores originales del libro en `nutrition`; el cálculo
+    // con el catálogo SMAE va en `calculatedNutrition`, igual que en la app.
+    const nutrition = full.source ? { calculatedNutrition: filtered.length ? computed : null, calculationUpdatedAt: new Date() } : { nutrition: computed }
+    return tx.recipe.update({ where: { id: recipe.id }, data: nutrition, include: { ingredients: { include: { ingredient: true } } } })
+  })
+  return updated
+})
+
+app.post('/api/v1/admin/catalog/recipes/:recipeId/image', async (request, reply) => {
+  const recipe = await catalogRecipeForAdmin(request.params.recipeId)
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta del catálogo no encontrada.', fields: {} })
+  const match = typeof request.body?.dataUrl === 'string' && request.body.dataUrl.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=]+)$/)
+  if (!match) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'Sube una imagen JPG.', fields: { dataUrl: true } })
+  if (match[1].length > Math.ceil(RECIPE_IMAGE_MAX_BYTES / 3) * 4) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'La imagen no puede pesar más de 3 MB.', fields: { dataUrl: true } })
+  const size = sanitizeJpeg(Buffer.from(match[1], 'base64'))
+  if (!size) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: 'El archivo no es una imagen JPG válida.', fields: { dataUrl: true } })
+  if (size.width > RECIPE_IMAGE_MAX_SIDE || size.height > RECIPE_IMAGE_MAX_SIDE || size.width * size.height > RECIPE_IMAGE_MAX_PIXELS) return reply.code(400).send({ code: 'VALIDATION_ERROR', message: `La imagen es demasiado grande: máximo ${RECIPE_IMAGE_MAX_SIDE} px por lado.`, fields: { dataUrl: true } })
+  const storageKey = `c-${recipe.catalogId || recipe.id}-${Date.now().toString(36)}.jpg`
+  const directory = recipeImageDir()
+  await mkdir(directory, { recursive: true })
+  await writeFile(path.join(directory, storageKey), size.data)
+  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey } })
+  // La foto anterior del catálogo se puede borrar: las copias tienen su propio archivo.
+  if (recipe.imageFile && recipe.imageFile !== storageKey && /^[cu]-/.test(recipe.imageFile)) await unlink(path.join(directory, recipe.imageFile)).catch(() => {})
+  return updated
+})
+
+app.get('/api/v1/admin/catalog/recipes/:recipeId/publish-preview', async (request) => {
+  const recipe = await catalogRecipeForAdmin(request.params.recipeId)
+  if (!recipe) return { recipe: null }
+  const copies = await prisma.recipe.findMany({ where: { catalogId: recipe.catalogId || '__none__' }, select: { practiceId: true, catalogCustomizedAt: true, status: true, practice: { select: { name: true } } } })
+  return { recipe: { id: recipe.id, catalogId: recipe.catalogId }, copies: copies.map((copy) => ({ practiceId: copy.practiceId, practiceName: copy.practice.name, modified: Boolean(copy.catalogCustomizedAt), archived: copy.status === 'ARCHIVED' })) }
+})
+
+app.post('/api/v1/admin/catalog/recipes/:recipeId/publish', async (request, reply) => {
+  const recipe = await catalogRecipeForAdmin(request.params.recipeId)
+  if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta del catálogo no encontrada.', fields: {} })
+  try {
+    const result = await publishCatalogRecipe(prisma, { basePracticeId: CATALOG_PRACTICE_ID, recipeId: recipe.id, imageDir: recipeImageDir() })
+    request.log.info({ recipeId: recipe.id, adminId: request.adminId, updated: result.updated.length, skipped: result.skipped.length }, 'Catálogo publicado')
+    return result
+  } catch (error) {
+    request.log.error(error)
+    return reply.code(500).send({ code: 'CATALOG_PUBLISH_FAILED', message: error.message || 'No se pudo publicar el catálogo.', fields: {} })
+  }
+})
+
+app.get('/api/v1/admin/catalog/ingredients', async (request) => {
+  const search = String(request.query.search || '').trim().slice(0, 120)
+  if (search.length < 2) return { items: [] }
+  const items = await prisma.ingredient.findMany({
+    where: { practiceId: CATALOG_PRACTICE_ID, status: 'ACTIVE', name: { contains: search, mode: 'insensitive' } },
+    select: { id: true, name: true, group: true, unit: true, nutrition: true, equivalence: true, catalogId: true },
+    orderBy: { name: 'asc' },
+    take: 40,
+  })
+  return { items }
+})
+
 app.get('/api/v1/admin/transactions', async () => {
   const [items, aggregate] = await prisma.$transaction([
     prisma.transaction.findMany({ include: { practice: { select: { id: true, name: true } } }, orderBy: { occurredAt: 'desc' }, take: 200 }),
@@ -993,7 +1114,7 @@ app.post('/api/v1/recipes/:recipeId/image', async (request, reply) => {
   await writeFile(path.join(recipeImageDir(), storageKey), size.data)
   // La foto anterior se borra después de apuntar la receta a la nueva (como en ingredientes): antes
   // se borraba primero y, si el guardado fallaba, la receta quedaba apuntando a un archivo inexistente.
-  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey } })
+  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: storageKey, ...(recipe.catalogId ? { catalogCustomizedAt: new Date() } : {}) } })
   await removeUploadedRecipeImage(recipe.imageFile)
   invalidateRecipeCatalog(request.practiceId)
   return updated
@@ -1003,7 +1124,7 @@ app.delete('/api/v1/recipes/:recipeId/image', async (request, reply) => {
   const recipe = await prisma.recipe.findFirst({ where: { id: request.params.recipeId, practiceId: request.practiceId } })
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   await removeUploadedRecipeImage(recipe.imageFile)
-  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: null } })
+  const updated = await prisma.recipe.update({ where: { id: recipe.id }, data: { imageFile: null, ...(recipe.catalogId ? { catalogCustomizedAt: new Date() } : {}) } })
   invalidateRecipeCatalog(request.practiceId)
   return updated
 })
@@ -1943,6 +2064,8 @@ app.patch('/api/v1/recipes/:recipeId', async (request, reply) => {
       ...(ingredientsText !== undefined ? { ingredientsText } : {}),
       ...(timeMinutes !== undefined ? { timeMinutes } : {}),
       ...(status !== undefined ? { status } : {}),
+      // Una copia del catálogo editada por la nutrióloga queda marcada: el admin la respetará.
+      ...(recipe.catalogId ? { catalogCustomizedAt: new Date() } : {}),
     },
     include: { ingredients: { include: { ingredient: true } } },
   })
@@ -1973,8 +2096,8 @@ app.put('/api/v1/recipes/:recipeId/ingredients', async (request, reply) => {
     // Imported recipes keep their original per-serving values in `nutrition` and store the SMAE
     // result in `calculatedNutrition`; handmade recipes keep the old behavior (nutrition = computed).
     const data = updated.source
-      ? { calculatedNutrition: filteredIngredients.length ? computed : null, calculationUpdatedAt: new Date(), version: { increment: 1 } }
-      : { nutrition: computed, version: { increment: 1 } }
+      ? { calculatedNutrition: filteredIngredients.length ? computed : null, calculationUpdatedAt: new Date(), version: { increment: 1 }, ...(recipe.catalogId ? { catalogCustomizedAt: new Date() } : {}) }
+      : { nutrition: computed, version: { increment: 1 }, ...(recipe.catalogId ? { catalogCustomizedAt: new Date() } : {}) }
     return transaction.recipe.update({ where: { id: updated.id }, data, include: { ingredients: { include: { ingredient: true } } } })
   })
 })
@@ -1992,8 +2115,8 @@ app.post('/api/v1/recipes/:recipeId/recalculate', async (request, reply) => {
   if (!recipe) return reply.code(404).send({ code: 'RECIPE_NOT_FOUND', message: 'Receta no encontrada.', fields: {} })
   const computed = perServingFromIngredients(recipe.ingredients, recipe.portions)
   const data = recipe.source
-    ? { calculatedNutrition: recipe.ingredients.length ? computed : null, calculationUpdatedAt: new Date(), version: { increment: 1 } }
-    : { nutrition: computed, version: { increment: 1 } }
+    ? { calculatedNutrition: recipe.ingredients.length ? computed : null, calculationUpdatedAt: new Date(), version: { increment: 1 }, ...(recipe.catalogId ? { catalogCustomizedAt: new Date() } : {}) }
+    : { nutrition: computed, version: { increment: 1 }, ...(recipe.catalogId ? { catalogCustomizedAt: new Date() } : {}) }
   const updated = await prisma.recipe.update({ where: { id: recipe.id }, data })
   invalidateRecipeCatalog(request.practiceId)
   return { recipe: updated, nutrition: recipe.source ? recipe.nutrition : computed, calculatedNutrition: recipe.source ? updated.calculatedNutrition : null, version: updated.version }

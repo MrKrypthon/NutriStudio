@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { adminApi, clearAdminToken, getAdminToken, setAdminToken } from '../../lib/adminApi.js'
 import { formatMoney, PAYMENT_METHODS, PAYMENT_METHOD_LABELS, pesosToCents } from '../../lib/finance.js'
 import BrandMark from '../../components/BrandMark.jsx'
+import CatalogAdmin from './CatalogAdmin.jsx'
 
 const formatDateUTC = (iso) => (iso ? new Date(iso).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '—')
 const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
@@ -29,6 +30,7 @@ const coverageLabel = (iso, signupSource, trialEndsAt) => {
 
 export default function AdminApp() {
   const [authed, setAuthed] = useState(Boolean(getAdminToken()))
+  const [view, setView] = useState('accounts')
   const [admin, setAdmin] = useState(null)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -162,8 +164,9 @@ export default function AdminApp() {
   const suspendedCount = practices.filter((practice) => practice.status === 'SUSPENDED').length
 
   return <div className="admin-shell">
-    <header className="admin-topbar"><div className="admin-brand"><BrandMark size={30} /><div><strong>milpa</strong><small>ADMINISTRACIÓN · SAAS</small></div></div><div className="admin-user"><span className="avatar">{(admin?.name || 'A').slice(0, 1)}</span><b>{admin?.name || 'Administrador'}</b><button className="secondary" onClick={logout}>Salir</button></div></header>
-    <main className="admin-content">
+    <header className="admin-topbar"><div className="admin-brand"><BrandMark size={30} /><div><strong>milpa</strong><small>ADMINISTRACIÓN · SAAS</small></div></div><nav className="admin-view-nav"><button type="button" className={view === 'accounts' ? 'active' : ''} onClick={() => setView('accounts')}>Cuentas</button><button type="button" className={view === 'catalog' ? 'active' : ''} onClick={() => setView('catalog')}>Catálogo global</button></nav><div className="admin-user"><span className="avatar">{(admin?.name || 'A').slice(0, 1)}</span><b>{admin?.name || 'Administrador'}</b><button className="secondary" onClick={logout}>Salir</button></div></header>
+    {view === 'catalog' && <CatalogAdmin />}
+    {view === 'accounts' && <main className="admin-content">
       <section className="admin-stats">
         <div className="panel admin-stat"><small>Total recaudado</small><b>{formatMoney(totals.totalCents)}</b><span>{totals.count} transacción(es)</span></div>
         <div className="panel admin-stat"><small>Cuentas activas</small><b>{activeCount}</b><span>de {practices.length} cuenta(s)</span></div>
@@ -199,7 +202,7 @@ export default function AdminApp() {
           {transactions.map((item) => <div className="admin-row" key={item.id}><span>{formatDateUTC(item.occurredAt)}</span><span>{item.practice?.name || '—'}</span><span className="muted">{item.concept || '—'}</span><span>{item.method ? PAYMENT_METHOD_LABELS[item.method] : '—'}</span><span className="admin-right admin-amount">{formatMoney(item.amountCents)}</span></div>)}
         </div>}
       </section>
-    </main>
+    </main>}
 
     {payFor && <div className="modal-backdrop" onClick={() => setPayFor(null)}><div className="modal" onClick={(e) => e.stopPropagation()}>
       <div className="modal-head"><div><p className="eyebrow">REGISTRAR PAGO</p><h2>{payFor.name}</h2><span className="modal-subtitle">Queda en la lista de transacciones y suma al total recaudado.</span></div><button onClick={() => setPayFor(null)}>×</button></div>
