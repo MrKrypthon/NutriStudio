@@ -1999,7 +1999,9 @@ function invalidRecipeFields({ name, mealTypes, portions, restrictions, timeMinu
 const RECIPE_LIST_LITE_SELECT = {
   id: true, name: true, mealTypes: true, restrictions: true, timeMinutes: true, imageFile: true,
   nutrition: true, calculatedNutrition: true, portions: true, ingredientsText: true, instructions: true, status: true,
-  ingredients: { select: { id: true, quantity: true, unit: true, equivalence: true, ingredient: { select: { id: true, name: true, nutrition: true, equivalence: true, group: true } } } },
+  // Sin id ni equivalencia del renglón: el Constructor sólo usa la cantidad, la unidad y los datos
+  // del ingrediente. Ahorra dos UUID por ingrediente en un catálogo de cientos de recetas.
+  ingredients: { select: { quantity: true, unit: true, ingredient: { select: { id: true, name: true, nutrition: true, equivalence: true, group: true } } } },
 }
 // Tarjetas de la biblioteca de recetas: no necesitan la nutrición por ingrediente, sólo nombres y
 // cantidades; la nutrición de la receta ya viene calculada.
@@ -2012,9 +2014,21 @@ const RECIPE_LIST_CARD_SELECT = {
 // calcular equivalentes; mandar los 26 nutrimentos de cada ingrediente inflaba el catálogo.
 const BUILDER_NUTRITION_KEYS = ['kcal', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'sodium']
 const compactNutrition = (nutrition) => Object.fromEntries(BUILDER_NUTRITION_KEYS.map((key) => [key, Number(nutrition?.[key]) || 0]))
+// La equivalencia del ingrediente sólo necesita grupo, gramos, porción y de dónde viene. El objeto
+// `source` de los importados (con proveedor, id externo y fecha) se resume en 'external' y
+// `deriveEquivalence` lo sigue tratando como no confiable.
+const compactEquivalence = (equivalence) => {
+  if (!equivalence || typeof equivalence !== 'object') return equivalence
+  return {
+    group: equivalence.group,
+    grams: equivalence.grams,
+    serving: equivalence.serving,
+    source: equivalence.source && typeof equivalence.source === 'object' ? 'external' : equivalence.source,
+  }
+}
 const compactRecipeIngredients = (recipes) => recipes.map((recipe) => ({
   ...recipe,
-  ingredients: (recipe.ingredients || []).map((item) => (item.ingredient ? { ...item, ingredient: { ...item.ingredient, nutrition: compactNutrition(item.ingredient.nutrition) } } : item)),
+  ingredients: (recipe.ingredients || []).map((item) => (item.ingredient ? { ...item, ingredient: { ...item.ingredient, nutrition: compactNutrition(item.ingredient.nutrition), equivalence: compactEquivalence(item.ingredient.equivalence) } } : item)),
 }))
 
 app.get('/api/v1/recipes', async (request) => {
@@ -2316,11 +2330,24 @@ app.get('/api/v1/ingredients', async (request) => {
   // Tope de 200 (el catálogo base trae ~3,000 y varios grupos pasan de 200): se pide uno de más
   // para saber si hubo recorte (`hasMore`) y que las pantallas pidan buscar, en vez de cortar en
   // silencio. Un count aparte costaba otro recorrido de la tabla en cada tecla.
-  const ingredients = await prisma.ingredient.findMany({ where, orderBy: { name: 'asc' }, take: 201 })
+  const lite = request.query.lite === '1'
+  const ingredients = await prisma.ingredient.findMany({
+    where,
+    orderBy: { name: 'asc' },
+    take: 201,
+    ...(lite ? { select: { id: true, name: true, group: true, unit: true, nutrition: true, equivalence: true, imageFile: true } } : {}),
+  })
   const items = ingredients.slice(0, 200)
   // La lista sólo muestra kcal y la porción; el detalle completo (26 nutrimentos) se pide al
   // seleccionar el ingrediente. Así la primera carga no arrastra todo el JSON de nutrición.
-  return { items: request.query.lite === '1' ? items.map((item) => ({ ...item, nutrition: compactNutrition(item.nutrition) })) : items, hasMore: ingredients.length > 200 }
+  return {
+    items: lite ? items.map((item) => ({
+      ...item,
+      nutrition: compactNutrition(item.nutrition),
+      equivalence: item.equivalence && typeof item.equivalence === 'object' ? { serving: item.equivalence.serving, grams: item.equivalence.grams, group: item.equivalence.group } : item.equivalence,
+    })) : items,
+    hasMore: ingredients.length > 200,
+  }
 })
 
 app.get('/api/v1/ingredients/:ingredientId', async (request, reply) => {

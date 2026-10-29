@@ -104,7 +104,9 @@ function deriveEquivalence(ingredient) {
   // La porción guardada es un equivalente de verdad cuando viene del SMAE o la capturó la
   // nutrióloga. En los alimentos importados (USDA, Open Food Facts), la base de alimentos y los
   // "aproximados" esa porción es sólo "100 g": no es un equivalente y hay que calcularlo.
-  const trusted = typeof equivalence.source !== 'object' && !CALCULATED_SOURCES.has(equivalence.source) && !/^100\s*g/i.test(String(equivalence.serving || '').trim())
+  // 'external' es el resumen del objeto source de los alimentos importados que manda el catálogo
+  // ligero del Constructor: no es una equivalencia confiable, igual que el objeto original.
+  const trusted = typeof equivalence.source !== 'object' && equivalence.source !== 'external' && !CALCULATED_SOURCES.has(equivalence.source) && !/^100\s*g/i.test(String(equivalence.serving || '').trim())
   if (trusted && named && Number(equivalence.grams) > 0) {
     return { code: named, gramsPerEq: Number(equivalence.grams), serving: equivalence.serving ? String(equivalence.serving) : null, basis: 'smae' }
   }
