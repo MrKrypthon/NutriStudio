@@ -186,6 +186,7 @@ export default function CatalogAdmin() {
             </button>
           })}</div>
           {listState === 'ready' && items.length === 0 && <p className="muted">No hay recetas con ese nombre.</p>}
+          {listState === 'ready' && items.length >= 300 && <p className="muted">Se muestran las primeras 300; usa la búsqueda para encontrar otra.</p>}
         </aside>
 
         <section className="panel catalog-editor">
