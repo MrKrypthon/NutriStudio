@@ -1085,7 +1085,7 @@ const recipeImageDir = () => path.resolve(process.env.RECIPE_IMAGE_STORAGE_PATH 
 // Miniatura para tarjetas y galerías: 480 px es de sobra para una tarjeta y baja de ~35 KB a ~8 KB.
 // Se genera la primera vez que se pide y queda en disco; si `sharp` no está disponible se sirve la
 // original, sin romper la app. La foto completa se sigue usando en el detalle y en el PDF.
-const THUMB_PREFIX = 'thumb-'
+const THUMB_PREFIX = 'thumb-360-'
 const thumbPathFor = (filePath) => path.join(path.dirname(filePath), `${THUMB_PREFIX}${path.basename(filePath)}`)
 let sharpPromise = null
 const loadSharp = () => {
@@ -1102,7 +1102,10 @@ async function ensureThumb(filePath) {
   const sharp = await loadSharp()
   if (!sharp) return null
   try {
-    await sharp(filePath).rotate().resize({ width: 480, height: 480, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toFile(thumbPath)
+    // Las fotos que ya son pequeñas se sirven tal cual: una miniatura saldría igual o más pesada.
+    const metadata = await sharp(filePath).metadata()
+    if (Math.max(Number(metadata.width) || 0, Number(metadata.height) || 0) <= 420) return null
+    await sharp(filePath).rotate().resize({ width: 360, height: 360, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 72 }).toFile(thumbPath)
     return thumbPath
   } catch {
     return null
